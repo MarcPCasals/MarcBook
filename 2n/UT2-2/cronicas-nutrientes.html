@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Biomoléculas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #fff7ed; }
+        
+        /* Semáforo CSS */
+        .traffic-light { background: #2d3748; padding: 15px; border-radius: 20px; width: 100px; display: flex; flex-direction: column; align-items: center; gap: 15px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
+        .light { width: 60px; height: 60px; border-radius: 50%; background: #4a5568; opacity: 0.3; transition: all 0.4s ease; }
+        .light.red.active { background: #ff4d4d; opacity: 1; box-shadow: 0 0 25px #ff4d4d; }
+        .light.amber.active { background: #fbbf24; opacity: 1; box-shadow: 0 0 25px #fbbf24; }
+        .light.green.active { background: #48bb78; opacity: 1; box-shadow: 0 0 25px #48bb78; }
+
+        /* Botones Rúbrica */
+        .rubric-btn { transition: all 0.2s; border: 2px solid #fed7aa; background-color: white; }
+        .rubric-btn:hover { transform: translateY(-2px); border-color: #f97316; }
+        .rubric-btn.selected-good { border-color: #48bb78; background-color: #f0fff4; ring: 2px solid #48bb78; }
+        .rubric-btn.selected-mid { border-color: #fbbf24; background-color: #fffbeb; ring: 2px solid #fbbf24; }
+        .rubric-btn.selected-bad { border-color: #f56565; background-color: #fff5f5; ring: 2px solid #f56565; }
+        
+        /* Categorías */
+        .cat-btn.active { background-color: #ea580c; color: white; border-color: #ea580c; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.5); }
+
+        /* Barra de Salud */
+        .health-bar-container { height: 24px; background: #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+        .health-bar { height: 100%; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Animación Botón Evaluar */
+        @keyframes pulse-orange { 0% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(234, 88, 12, 0); } 100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); } }
+        .btn-evaluate { animation: pulse-orange 2s infinite; }
+
+        /* Estilos Toggle Queso */
+        .cheese-toggle-btn { padding: 10px 20px; border-radius: 10px; border: 2px solid #fdba74; color: #c2410c; font-weight: bold; transition: all 0.2s; background: white; }
+        .cheese-toggle-btn:hover { background: #fff7ed; }
+        .cheese-toggle-btn.active { background: #f97316; color: white; border-color: #f97316; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="pb-20 text-gray-800">
+
+    <header class="bg-orange-600 text-white p-6 shadow-lg border-b-4 border-orange-800">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <div class="bg-white text-orange-600 p-3 rounded-full h-12 w-12 flex items-center justify-center font-bold text-2xl shadow-inner"><i class="fas fa-carrot"></i></div>
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight">Detective de Etiquetas Alimentarias</h1>
+                    <p class="text-orange-100 text-sm">Calculadora de Biomoléculas</p>
+                </div>
+            </div>
+            <div class="text-center md:text-right text-sm">
+                <p class="opacity-90">Creado por <span class="font-bold text-white border-b border-orange-300">Marc Pérez Casals</span></p>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-4 md:p-6 space-y-8">
+
+        <!-- PASO 1 -->
+        <section class="bg-white p-6 rounded-2xl shadow-md border border-orange-100">
+            <h2 class="text-xl font-bold text-orange-800 mb-4 flex items-center gap-2">
+                <span class="bg-orange-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">1</span> ¿Qué estás analizando?
+            </h2>
+            
+            <div class="mb-6">
+                <label class="block text-gray-600 font-bold mb-2 text-sm uppercase tracking-wide">Nombre del Producto:</label>
+                <input type="text" id="productName" placeholder="Ej: Pizza, Cereales, Yogur..." class="w-full p-3 border-2 border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition text-lg">
+            </div>
+
+            <p class="text-gray-500 mb-3 text-sm font-medium">Selecciona la categoría:</p>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                <button onclick="setCategory('bebidas', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-wine-bottle text-2xl"></i> <span>Bebidas</span></button>
+                <button onclick="setCategory('dulces', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-cookie-bite text-2xl"></i> <span>Dulces</span></button>
+                <button onclick="setCategory('embutidos', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-bacon text-2xl"></i> <span>Embutidos</span></button>
+                <button onclick="setCategory('lacteos', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-cheese text-2xl"></i> <span>Lácteos</span></button>
+                <button onclick="setCategory('cereales', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-bread-slice text-2xl"></i> <span>Pan/Pasta</span></button>
+                <button onclick="setCategory('platos', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-pizza-slice text-2xl"></i> <span>Platos Prep.</span></button>
+                <button onclick="setCategory('carnes', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-fish text-2xl"></i> <span>Carnes/Pescado</span></button>
+                <button onclick="setCategory('otros', this)" class="cat-btn p-3 border-2 rounded-xl text-center hover:bg-orange-50 transition flex flex-col items-center gap-2 text-gray-600 font-semibold"><i class="fas fa-box-open text-2xl"></i> <span>Otros</span></button>
+            </div>
+
+            <!-- TOGGLE QUESO (Aparece solo con Lácteos) -->
+            <div id="cheeseSection" class="hidden mt-6 bg-orange-50 p-6 rounded-xl border border-orange-200 text-center animate-fade-in shadow-inner">
+                <p class="text-orange-900 font-bold mb-4 text-lg"><i class="fas fa-question-circle"></i> ¿Es un Queso o un Lácteo fresco?</p>
+                <div class="flex flex-col sm:flex-row justify-center gap-4">
+                    <button onclick="setCheeseMode(false)" id="btnNoCheese" class="cheese-toggle-btn active flex-1">
+                        <i class="fas fa-glass-whiskey"></i> Yogur / Leche / Postre
+                    </button>
+                    <button onclick="setCheeseMode(true)" id="btnYesCheese" class="cheese-toggle-btn flex-1">
+                        <i class="fas fa-cheese"></i> Queso (Curado/Lonchas)
+                    </button>
+                </div>
+                <p class="text-xs text-orange-600 mt-2 italic">*El queso se evalúa diferente porque es leche concentrada.</p>
+            </div>
+        </section>
+
+        <!-- PASO 2 -->
+        <section class="bg-white p-6 rounded-2xl shadow-md border border-orange-100 opacity-50 pointer-events-none transition duration-500" id="rubricSection">
+            <h2 class="text-xl font-bold text-orange-800 mb-6 flex items-center gap-2">
+                <span class="bg-orange-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">2</span> Analiza los Datos (por 100g)
+            </h2>
+
+            <div class="mb-8 p-4 bg-orange-50 rounded-xl border border-orange-200 flex flex-col md:flex-row items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="bg-white p-3 rounded-full shadow-sm text-orange-500"><i class="fas fa-fire-alt text-2xl"></i></div>
+                    <div><h3 class="font-bold text-gray-800">Valor Energético</h3><p class="text-xs text-gray-500">Kcal por 100g</p></div>
+                </div>
+                <input type="number" id="kcalInput" placeholder="Ej: 262" class="flex-1 p-3 text-2xl font-bold text-center border-2 border-orange-300 rounded-lg focus:ring-4 focus:ring-orange-200 outline-none w-full md:w-auto">
+                <span class="text-xl font-bold text-orange-700">Kcal</span>
+            </div>
+            
+            <div class="space-y-8">
+                <!-- AZÚCARES -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-gray-700 flex items-center gap-2 mb-2 text-lg"><i class="fas fa-cubes text-pink-500"></i> Azúcares (De los cuales...)</h3>
+                    <p class="text-xs text-gray-500 mb-2 -mt-2 ml-8"><i class="fas fa-exclamation-triangle"></i> ¡Ojo! No mires "Hidratos de Carbono", mira la fila de abajo: "De los cuales azúcares".</p>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="toggleSelection('sugar', 0)" class="rubric-btn p-3 rounded-lg text-center" id="btn-sugar-0"><span class="block font-bold text-gray-400">0 g</span><span class="text-[10px] text-gray-400 uppercase">Nada</span></button>
+                        <button onclick="toggleSelection('sugar', 1)" class="rubric-btn p-3 rounded-lg text-center" id="btn-sugar-1"><span class="block font-bold text-green-600">&lt; 5 g</span><span class="text-[10px] text-gray-500 uppercase">Bajo</span></button>
+                        <button onclick="toggleSelection('sugar', 2)" class="rubric-btn p-3 rounded-lg text-center" id="btn-sugar-2"><span class="block font-bold text-yellow-600">5 - 10 g</span><span class="text-[10px] text-gray-500 uppercase">Medio</span></button>
+                        <button onclick="toggleSelection('sugar', 3)" class="rubric-btn p-3 rounded-lg text-center" id="btn-sugar-3"><span class="block font-bold text-red-600">&gt; 10 g</span><span class="text-[10px] text-gray-500 uppercase">Alto</span></button>
+                    </div>
+                </div>
+                <!-- GRASAS -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-gray-700 flex items-center gap-2 mb-2 text-lg"><i class="fas fa-hamburger text-yellow-600"></i> Grasas Saturadas</h3>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="toggleSelection('fat', 0)" class="rubric-btn p-3 rounded-lg text-center" id="btn-fat-0"><span class="block font-bold text-gray-400">0 g</span><span class="text-[10px] text-gray-400 uppercase">Nada</span></button>
+                        <button onclick="toggleSelection('fat', 1)" class="rubric-btn p-3 rounded-lg text-center" id="btn-fat-1"><span class="block font-bold text-green-600">&lt; 1.5 g</span><span class="text-[10px] text-gray-500 uppercase">Bajo</span></button>
+                        <button onclick="toggleSelection('fat', 2)" class="rubric-btn p-3 rounded-lg text-center" id="btn-fat-2"><span class="block font-bold text-yellow-600">1.5 - 5 g</span><span class="text-[10px] text-gray-500 uppercase">Medio</span></button>
+                        <button onclick="toggleSelection('fat', 3)" class="rubric-btn p-3 rounded-lg text-center" id="btn-fat-3"><span class="block font-bold text-red-600">&gt; 5 g</span><span class="text-[10px] text-gray-500 uppercase">Alto</span></button>
+                    </div>
+                </div>
+                <!-- PROTEÍNAS -->
+                <div class="rubric-row bg-orange-50 p-4 rounded-xl border border-orange-100">
+                    <h3 class="font-bold text-gray-700 flex items-center gap-2 mb-2 text-lg"><i class="fas fa-drumstick-bite text-blue-500"></i> Proteínas</h3>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="toggleSelection('prot', 0)" class="rubric-btn p-3 rounded-lg text-center" id="btn-prot-0"><span class="block font-bold text-gray-400">0 - 1 g</span><span class="text-[10px] text-gray-400 uppercase">Mínimo</span></button>
+                        <button onclick="toggleSelection('prot', 1)" class="rubric-btn p-3 rounded-lg text-center" id="btn-prot-1"><span class="block font-bold text-blue-600">2 - 10 g</span><span class="text-[10px] text-gray-500 uppercase">Normal</span></button>
+                        <button onclick="toggleSelection('prot', 2)" class="rubric-btn p-3 rounded-lg text-center" id="btn-prot-2"><span class="block font-bold text-blue-800">10 - 20 g</span><span class="text-[10px] text-gray-500 uppercase">Alto</span></button>
+                        <button onclick="toggleSelection('prot', 3)" class="rubric-btn p-3 rounded-lg text-center" id="btn-prot-3"><span class="block font-bold text-indigo-900">&gt; 20 g</span><span class="text-[10px] text-gray-500 uppercase">Muy Alto</span></button>
+                    </div>
+                </div>
+                <!-- SAL -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-gray-700 flex items-center gap-2 mb-2 text-lg"><i class="fas fa-shaker text-gray-400"></i> Sal</h3>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="toggleSelection('salt', 0)" class="rubric-btn p-3 rounded-lg text-center" id="btn-salt-0"><span class="block font-bold text-gray-400">0 g</span><span class="text-[10px] text-gray-400 uppercase">Nada</span></button>
+                        <button onclick="toggleSelection('salt', 1)" class="rubric-btn p-3 rounded-lg text-center" id="btn-salt-1"><span class="block font-bold text-green-600">&lt; 0.25 g</span><span class="text-[10px] text-gray-500 uppercase">Bajo</span></button>
+                        <button onclick="toggleSelection('salt', 2)" class="rubric-btn p-3 rounded-lg text-center" id="btn-salt-2"><span class="block font-bold text-yellow-600">0.25-1.25</span><span class="text-[10px] text-gray-500 uppercase">Medio</span></button>
+                        <button onclick="toggleSelection('salt', 3)" class="rubric-btn p-3 rounded-lg text-center" id="btn-salt-3"><span class="block font-bold text-red-600">&gt; 1.25 g</span><span class="text-[10px] text-gray-500 uppercase">Alto</span></button>
+                    </div>
+                </div>
+                <!-- INGREDIENTES -->
+                <div class="rubric-row">
+                    <div class="flex items-center gap-3 mb-3">
+                        <h3 class="font-bold text-gray-700 flex items-center gap-2 text-lg"><i class="fas fa-flask text-purple-500"></i> Ingredientes</h3>
+                        <button onclick="openIngInfo()" class="text-orange-600 hover:text-orange-800 bg-orange-100 hover:bg-orange-200 px-3 py-1 rounded-full text-xs font-bold transition"><i class="fas fa-info-circle"></i> Info</button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <button onclick="toggleSelection('ing', 1)" class="rubric-btn p-4 rounded-xl text-center shadow-sm" id="btn-ing-1"><span class="block font-bold text-lg text-green-700 mb-1">1-5 Ingred.</span><span class="text-xs text-gray-500">Natural</span></button>
+                        <button onclick="toggleSelection('ing', 2)" class="rubric-btn p-4 rounded-xl text-center shadow-sm" id="btn-ing-2"><span class="block font-bold text-lg text-yellow-700 mb-1">5-10 Ingred.</span><span class="text-xs text-gray-500">Procesado</span></button>
+                        <button onclick="toggleSelection('ing', 3)" class="rubric-btn p-4 rounded-xl text-center shadow-sm" id="btn-ing-3"><span class="block font-bold text-lg text-red-700 mb-1">&gt; 10 Ingred.</span><span class="text-xs text-gray-500">Ultraprocesado</span></button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 text-center" id="evaluateBtnContainer">
+                <button onclick="calculateResult()" class="btn-evaluate bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xl py-4 px-12 rounded-full shadow-xl transform transition hover:scale-105 flex items-center justify-center gap-3 mx-auto"><i class="fas fa-search"></i> ¡EVALUAR!</button>
+            </div>
+        </section>
+
+        <!-- PASO 3 -->
+        <section class="bg-gray-900 text-white p-6 md:p-8 rounded-2xl shadow-2xl hidden transform transition-all duration-500" id="resultSection">
+            <h2 class="text-2xl font-bold mb-8 text-center border-b border-gray-700 pb-4 text-orange-400">📊 Veredicto Final</h2>
+            <div class="flex flex-col md:flex-row gap-8 items-start justify-center">
+                <div class="flex flex-col items-center">
+                    <div class="traffic-light mb-2 border-4 border-gray-700">
+                        <div class="light red" id="light-red"></div>
+                        <div class="light amber" id="light-amber"></div>
+                        <div class="light green active" id="light-green"></div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <span class="block text-gray-400 text-xs uppercase">Valor Energético</span>
+                        <span id="kcalDisplay" class="text-2xl font-bold text-white">0 Kcal</span>
+                        <div id="kcalBadge" class="mt-1 px-2 py-1 rounded text-xs font-bold bg-gray-700">--</div>
+                    </div>
+                </div>
+                <div class="flex-1 w-full space-y-6">
+                    <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                        <div class="flex justify-between text-sm mb-2 font-bold text-gray-300"><span>Calidad Nutricional Global</span><span id="scoreValue" class="text-xl text-white">100%</span></div>
+                        <div class="health-bar-container bg-gray-700"><div class="health-bar bg-green-500" style="width: 0%" id="healthBar"></div></div>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-xl border-l-4 border-orange-500 shadow-inner">
+                        <h4 class="text-orange-300 font-bold mb-3 flex items-center gap-2"><i class="fas fa-microscope"></i> Análisis Científico:</h4>
+                        <div id="argumentText" class="text-gray-300 text-sm md:text-base leading-relaxed space-y-2"></div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                         <button onclick="copyToClipboard()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg"><i class="fas fa-copy"></i> Copiar Texto</button>
+                         <button onclick="resetCalculator()" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg"><i class="fas fa-redo"></i> Nuevo Análisis</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modales -->
+    <div id="suspiciousModal" class="fixed inset-0 bg-black bg-opacity-80 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-white p-6 rounded-2xl max-w-sm w-full shadow-2xl transform scale-100 border-t-8 border-yellow-400">
+            <h3 class="text-xl font-bold text-gray-800 text-center mb-2">Un momento...</h3>
+            <p class="text-gray-600 mb-6 text-center font-medium" id="suspiciousText">Texto.</p>
+            <div class="flex gap-3">
+                <button onclick="confirmSuspicion(false)" class="flex-1 bg-gray-100 p-3 rounded-xl font-bold text-gray-800">Revisar</button>
+                <button onclick="confirmSuspicion(true)" class="flex-1 bg-yellow-500 p-3 rounded-xl font-bold text-white">Es verdad</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="ingInfoModal" class="fixed inset-0 bg-black bg-opacity-80 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-white p-6 rounded-2xl max-w-lg w-full shadow-2xl border-t-8 border-purple-500">
+            <h3 class="text-xl font-bold text-purple-800 mb-4 flex gap-2 items-center"><i class="fas fa-robot"></i> Ultraprocesados</h3>
+            <ul class="list-disc pl-5 space-y-2 text-gray-700 text-sm">
+                <li>Más de 5-10 ingredientes.</li>
+                <li>Ingredientes químicos (E-...) o desconocidos.</li>
+                <li>Múltiples procesos industriales (fritura, extrusión...).</li>
+            </ul>
+            <button onclick="closeIngInfo()" class="mt-6 w-full bg-purple-600 text-white font-bold py-3 rounded-xl">Entendido</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        let currentCategory = null;
+        let isCheeseMode = false;
+        let selections = { sugar: null, fat: null, prot: null, salt: null, ing: null };
+        let pendingSelection = null; 
+
+        const kcalLimits = {
+            bebidas:   { yellow: 20, red: 40 },
+            dulces:    { yellow: 300, red: 450 },
+            embutidos: { yellow: 150, red: 300 },
+            lacteos:   { yellow: 70, red: 130 },
+            cereales:  { yellow: 260, red: 380 },
+            platos:    { yellow: 250, red: 350 },
+            carnes:    { yellow: 180, red: 250 },
+            otros:     { yellow: 200, red: 400 }
+        };
+
+        const suspiciousMap = {
+            bebidas: { fat: [false, false, true, true], salt: [false, false, true, true], prot: [false, false, true, true] },
+            dulces:  { fat: [true, false, false, false], salt: [false, false, true, true], prot: [false, false, true, true] },
+            embutidos: { sugar: [false, false, true, true], prot: [true, false, false, false], fat: [true, false, false, false] },
+            cereales: { fat: [false, false, true, true] },
+            platos: { sugar: [false, true, true, true] },
+            carnes: { sugar: [false, false, true, true], prot: [true, false, false, false] },
+            lacteos: {}, otros: {}
+        };
+
+        // --- UI ---
+        function setCategory(cat, btnElement) {
+            currentCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+            document.getElementById('rubricSection').classList.remove('opacity-50', 'pointer-events-none');
+            document.getElementById('resultSection').classList.add('hidden');
+            
+            // Toggle de Queso
+            const cheeseSection = document.getElementById('cheeseSection');
+            if (cat === 'lacteos') {
+                cheeseSection.classList.remove('hidden');
+                setCheeseMode(false); 
+            } else {
+                cheeseSection.classList.add('hidden');
+                isCheeseMode = false;
+            }
+        }
+
+        function setCheeseMode(mode) {
+            isCheeseMode = mode;
+            const btnYes = document.getElementById('btnYesCheese');
+            const btnNo = document.getElementById('btnNoCheese');
+            if(mode) {
+                btnYes.classList.add('active');
+                btnNo.classList.remove('active');
+            } else {
+                btnYes.classList.remove('active');
+                btnNo.classList.add('active');
+            }
+        }
+
+        function toggleSelection(type, index) {
+            document.getElementById('resultSection').classList.add('hidden');
+            if (selections[type] === index) {
+                selections[type] = null; updateButtonVisuals(type, null);
+            } else {
+                if (isSuspicious(type, index)) { pendingSelection = { type, index }; showModal(type, index); } 
+                else { applySelection(type, index); }
+            }
+        }
+
+        function isSuspicious(type, index) {
+            if (!currentCategory || !suspiciousMap[currentCategory] || !suspiciousMap[currentCategory][type]) return false;
+            return suspiciousMap[currentCategory][type][index];
+        }
+
+        function showModal(type, index) {
+            let msg = "Es un valor extraño para esta categoría. ¿Estás seguro?";
+            if(type === 'prot' && index === 0 && currentCategory === 'embutidos') msg = "🚨 ¿Embutido sin proteína? Eso es grasa pura o fécula, no carne.";
+            if(type === 'prot' && index === 0 && currentCategory === 'carnes') msg = "🚨 ¿Carne/Pescado sin proteína? No es producto real, es un preparado de féculas.";
+            if(type === 'sugar' && index > 1 && currentCategory === 'platos') msg = "¿Tanto azúcar en un plato salado (pizza/lasaña)? Verifica la etiqueta.";
+            if(type === 'sugar' && index > 1 && currentCategory === 'carnes') msg = "⚠️ ¿Azúcar en carne/pescado? La carne fresca NO tiene azúcar, revisa si es un marinado.";
+            document.getElementById('suspiciousText').innerText = msg;
+            document.getElementById('suspiciousModal').classList.replace('hidden', 'flex');
+        }
+
+        function confirmSuspicion(isConfirmed) {
+            document.getElementById('suspiciousModal').classList.replace('flex', 'hidden');
+            if (isConfirmed && pendingSelection) applySelection(pendingSelection.type, pendingSelection.index);
+            pendingSelection = null;
+        }
+
+        function applySelection(type, index) {
+            selections[type] = index;
+            updateButtonVisuals(type, index);
+        }
+
+        function updateButtonVisuals(type, index) {
+            for(let i=0; i<4; i++) {
+                const btn = document.getElementById(`btn-${type}-${i}`);
+                if(btn) {
+                    btn.className = 'rubric-btn p-3 rounded-lg text-center';
+                    if(index === i) {
+                        let cls = 'selected-bad';
+                        if((type==='prot' && i>1) || (type!=='prot' && i<=1)) cls = 'selected-good';
+                        if(type==='ing' && i===1) cls='selected-good';
+                        if(type==='ing' && i===2) cls='selected-mid';
+                        if(i===2 && type!=='ing') cls='selected-mid';
+                        
+                        btn.classList.add(cls);
+                        btn.style.transform = "scale(1.05)";
+                    }
+                }
+            }
+        }
+
+        // --- CÁLCULO ---
+        function calculateResult() {
+            const kcalVal = parseFloat(document.getElementById('kcalInput').value);
+            if (isNaN(kcalVal) || Object.values(selections).some(v => v === null)) {
+                alert("⚠️ Por favor, introduce las Kcal y marca todas las opciones.");
+                return;
+            }
+
+            document.getElementById('resultSection').classList.remove('hidden');
+            document.getElementById('resultSection').scrollIntoView({behavior: 'smooth'});
+
+            let score = 100;
+            let worstLevel = 0; 
+            
+            // Flags
+            const isCuredMeat = (currentCategory === 'embutidos' && selections.ing <= 1);
+            const isReadyMeal = (currentCategory === 'platos');
+            const isFreshMeat = (currentCategory === 'carnes');
+
+            // 1. Evaluar Kcal
+            let limits = kcalLimits[currentCategory];
+            if (isCheeseMode) limits = { yellow: 350, red: 450 };
+
+            let kcalLevel = 0;
+            if (kcalVal > limits.yellow) kcalLevel = 1;
+            if (kcalVal > limits.red) kcalLevel = 2;
+
+            if (kcalLevel === 1) score -= 10;
+            if (kcalLevel === 2) score -= 20;
+            if (kcalLevel > worstLevel) worstLevel = kcalLevel;
+
+            // 2. Evaluar Rúbrica
+            ['sugar', 'fat', 'salt'].forEach(k => {
+                let penaltyMedium = 15;
+                let penaltyHigh = 35;
+
+                // AJUSTES TOLERANCIA
+                if (isCheeseMode || isCuredMeat) {
+                    if (k === 'fat') { penaltyMedium = 5; penaltyHigh = 10; }
+                    if (k === 'salt') { penaltyMedium = 5; penaltyHigh = 15; }
+                }
+                
+                if (isFreshMeat) {
+                    if (k === 'fat') { 
+                        penaltyMedium = 10;
+                        penaltyHigh = 20;
+                    }
+                    if (k === 'salt') { 
+                        penaltyMedium = 5; penaltyHigh = 15;
+                    }
+                }
+                
+                // Platos prep: Tolera grasa media
+                if (isReadyMeal && k === 'fat') {
+                     if(selections[k] === 2) { penaltyMedium = 10; }
+                }
+
+                if(selections[k] === 2) { score -= penaltyMedium; worstLevel = Math.max(worstLevel, 1); }
+                if(selections[k] === 3) { score -= penaltyHigh; worstLevel = 2; }
+            });
+
+            // Lógica Ingredientes
+            if(selections.ing === 2) { 
+                let pen = 15;
+                if(isReadyMeal) pen = 5;
+                score -= pen; 
+                worstLevel = Math.max(worstLevel, 1); 
+            }
+            if(selections.ing === 3) { 
+                let pen = 40;
+                if(isReadyMeal) pen = 10;
+                score -= pen; 
+                
+                if(isReadyMeal) worstLevel = Math.max(worstLevel, 1); 
+                else worstLevel = 2; 
+            }
+
+            if((currentCategory === 'embutidos' || currentCategory === 'lacteos' || currentCategory === 'carnes') && selections.prot === 0) {
+                score -= 20; worstLevel = Math.max(worstLevel, 1);
+            }
+
+            // --- LÓGICA DE CAP ---
+            if ((isCheeseMode || isCuredMeat || isFreshMeat) && selections.ing <= 1 && worstLevel === 2) {
+                if (selections.sugar < 3 && selections.ing < 3) {
+                    worstLevel = 1; 
+                }
+            }
+
+            if (score < 0) score = 0;
+
+            updateVisuals(worstLevel, score, kcalVal, kcalLevel);
+            generateArgument(score, worstLevel, kcalVal, kcalLevel, isCuredMeat, isReadyMeal, isFreshMeat);
+        }
+
+        function updateVisuals(level, score, kcal, kcalLevel) {
+            const colors = ['green', 'amber', 'red'];
+            document.querySelectorAll('.light').forEach(l => l.classList.remove('active'));
+            document.getElementById(`light-${colors[level]}`).classList.add('active');
+
+            document.getElementById('kcalDisplay').innerText = kcal + " Kcal";
+            const kBadge = document.getElementById('kcalBadge');
+            
+            if(kcalLevel === 0) { kBadge.innerText = "BAJO"; kBadge.className = "mt-1 px-2 py-1 rounded text-xs font-bold bg-green-600"; }
+            else if(kcalLevel === 1) { kBadge.innerText = "MODERADO"; kBadge.className = "mt-1 px-2 py-1 rounded text-xs font-bold bg-yellow-600"; }
+            else { kBadge.innerText = "ALTO"; kBadge.className = "mt-1 px-2 py-1 rounded text-xs font-bold bg-red-600"; }
+
+            const bar = document.getElementById('healthBar');
+            document.getElementById('scoreValue').innerText = score + "%";
+            bar.style.width = "0%"; setTimeout(() => bar.style.width = score + "%", 100);
+            bar.className = 'health-bar ' + (score > 70 ? 'bg-green-500' : score > 40 ? 'bg-yellow-500' : 'bg-red-600');
+        }
+
+        function generateArgument(score, worstLevel, kcal, kcalLevel, isCuredMeat, isReadyMeal, isFreshMeat) {
+            const name = document.getElementById('productName').value || "el producto";
+            let intro = `He analizado **${name}** (${kcal} Kcal/100g). `;
+            
+            if (isCheeseMode && selections.ing <= 1) {
+                intro += "🧀 Es un **QUESO NATURAL/PROCESADO**.";
+            } else if (isCuredMeat) {
+                intro += "🥩 Es un **EMBUTIDO CURADO / PROCESADO** (No Ultraprocesado).";
+            } else if (isFreshMeat && selections.ing <= 1) {
+                intro += "🍖 Es **CARNE/PESCADO FRESCO** (Materia prima sin procesar).";
+            } else {
+                if (worstLevel === 0) intro += "Es una opción **SALUDABLE**.";
+                else if (worstLevel === 1) intro += "Es de **CONSUMO MODERADO**.";
+                else intro += "Parece **ULTRAPROCESADO** o de consumo muy ocasional.";
+            }
+
+            let pros = [];
+            let cons = [];
+            let industryNotes = []; 
+
+            if (isCheeseMode) {
+                pros.push("🧀 **Queso Real:** Al tener proteínas y pocos ingredientes, es una buena fuente de nutrientes.");
+                if (selections.fat >= 2) {
+                    cons.push("⚠️ **Grasas:** Altas (propias de la leche).");
+                    industryNotes.push("💡 **¿Por qué tanta grasa?** El queso es leche concentrada. Para hacer 1kg de queso curado hacen falta unos 10 litros de leche.");
+                }
+                if (selections.salt >= 2) {
+                    cons.push("🧂 **Sal:** Contenido alto.");
+                    industryNotes.push("💡 **¿Por qué sal en el queso?** Se añade para deshidratar la cuajada (quitar el suero) y evitar que crezcan bacterias malas durante la curación.");
+                }
+            } else if (isCuredMeat) {
+                pros.push("🥩 **Materia Prima:** Al tener pocos ingredientes, es carne real curada, no una mezcla de restos.");
+                if (selections.salt >= 2) {
+                    cons.push("🧂 **Sal:** Muy alta.");
+                    industryNotes.push("💡 **Salazón:** La sal en el jamón/cecina no es un capricho, es la única forma de curar la carne cruda para que no se pudra sin usar frío.");
+                }
+                if (selections.fat >= 2) {
+                     cons.push("⚠️ **Grasas:** Contenido graso elevado (origen animal).");
+                }
+            } else if (isReadyMeal) {
+                if (kcalLevel >= 1) cons.push("🔥 **Densidad Calórica:** Al ser una mezcla de harinas, grasas y salsas, suma muchas calorías en poca cantidad.");
+                if (selections.fat >= 2) cons.push("🫀 **Grasas:** Probablemente del queso fundido o carnes procesadas (pepperoni, bacon).");
+                if (selections.salt >= 2) cons.push("🧂 **Sal Oculta:** Las masas y salsas industriales suelen tener muchísima sal.");
+                if (selections.ing >= 2) industryNotes.push("💡 **Ingredientes:** Es normal que un plato preparado tenga muchos ingredientes (>10) debido a la complejidad de la receta, pero vigila que sean 'comida real' y no aditivos.");
+            } else if (isFreshMeat) {
+                pros.push("🍖 **Proteína de Alto Valor Biológico:** La carne y pescado aportan todos los aminoácidos esenciales.");
+                if (selections.prot >= 2) pros.push("💪 **Contenido Proteico Excelente:** Ideal para construcción y reparación muscular.");
+                
+                if (selections.fat === 2) {
+                    cons.push("⚠️ **Grasa Moderada:** Corte no magro (ej: pechuga con piel, solomillo con vetas).");
+                    industryNotes.push("💡 **Grasa Natural:** La grasa en carne fresca es parte del animal. Pescados grasos (salmón, sardinas) tienen omega-3 beneficioso.");
+                }
+                if (selections.fat === 3) {
+                    cons.push("🫀 **Alto en Grasa:** Corte muy graso (ej: panceta, costillas, piel de pollo).");
+                }
+                if (selections.salt >= 2) {
+                    cons.push("🧂 **Sal Añadida:** La carne fresca natural tiene muy poca sal (~0.1g/100g).");
+                    industryNotes.push("💡 **Alerta:** Si tiene sal alta, puede estar inyectada con salmuera para retener agua y aumentar peso (práctica común en pechuga de pollo).");
+                }
+                if (selections.sugar >= 2) {
+                    cons.push("⚠️ **Azúcar Sospechoso:** La carne/pescado natural NO tiene azúcar.");
+                    industryNotes.push("💡 **Marinados Industriales:** Si aparece azúcar, está marinada o tiene adobo industrial añadido.");
+                }
+                if (selections.ing >= 2) {
+                    cons.push("🏭 **Procesado:** Si tiene muchos ingredientes, no es carne fresca, es un preparado (nuggets, hamburguesas procesadas).");
+                }
+            } else {
+                if (selections.fat === 3) cons.push("🫀 **Grasas:** Exceso de grasas saturadas.");
+                if (selections.salt === 3) {
+                    cons.push("👅 **Sal:** Exceso de sodio.");
+                    if(currentCategory === 'dulces') industryNotes.push("💡 **Truco Industrial:** Añaden sal a los dulces para aumentar el contraste de sabor (palatabilidad) y que comas más.");
+                }
+            }
+
+            if (currentCategory === 'embutidos' && !isCuredMeat && selections.sugar > 1) {
+                industryNotes.push("💡 **¿Azúcar en la carne?** La industria añade dextrosa o lactosa para retener agua (que pese más el producto) y conservar el color rosado.");
+            }
+            
+            if (currentCategory === 'carnes' && selections.prot === 0) {
+                industryNotes.push("🚨 **Sin Proteína = No es Carne:** Si un producto de la sección de carnes no tiene proteínas, es un preparado de féculas y grasa (ej: salchichas muy baratas).");
+            }
+
+            if (kcalLevel === 2 && !isCheeseMode && !isCuredMeat && !isReadyMeal && !isFreshMeat) cons.push("🔥 **Energía:** Aporta demasiadas calorías.");
+            if (selections.sugar === 3) cons.push("📉 **Azúcar:** Contenido muy alto (Picos de insulina).");
+            if (selections.ing === 3 && !isReadyMeal) cons.push("🭭 **Ultraprocesado:** Exceso de ingredientes industriales.");
+            
+            if (selections.prot >= 2 && !isFreshMeat) pros.push("💪 **Proteínas:** Buen aporte constructivo.");
+            if (selections.ing <= 1) pros.push("🃏 **Natural:** Pocos ingredientes, eso es excelente.");
+
+            let html = `<p class="mb-4">${intro}</p>`;
+            
+            if (industryNotes.length) html += `<div class="mb-3 bg-blue-900 bg-opacity-30 p-3 rounded-lg border-l-4 border-blue-400"><h5 class="text-blue-300 font-bold mb-1">🭭 El "Porqué" de la Industria:</h5><ul class="list-none text-gray-300 text-sm space-y-2">` + industryNotes.map(n=>`<li>${n}</li>`).join('') + `</ul></div>`;
+
+            if (pros.length) html += `<div class="mb-3"><h5 class="text-green-400 font-bold border-b border-green-700 pb-1 mb-2">✅ Puntos Fuertes:</h5><ul class="list-disc pl-5 text-gray-300">` + pros.map(p=>`<li>${p}</li>`).join('') + `</ul></div>`;
+            if (cons.length) html += `<div><h5 class="text-red-400 font-bold border-b border-red-800 pb-1 mb-2">❌ A tener en cuenta:</h5><ul class="list-disc pl-5 text-gray-300">` + cons.map(c=>`<li>${c}</li>`).join('') + `</ul></div>`;
+            
+            document.getElementById('argumentText').innerHTML = html.replace(/\*\*(.*?)\*\*/g, "<strong class='text-white'>$1</strong>");
+        }
+
+        function resetCalculator() {
+            selections = { sugar: null, fat: null, prot: null, salt: null, ing: null };
+            document.getElementById('productName').value = '';
+            document.getElementById('kcalInput').value = '';
+            document.getElementById('resultSection').classList.add('hidden');
+            document.querySelectorAll('.rubric-btn').forEach(btn => btn.className = 'rubric-btn p-3 rounded-lg text-center');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function copyToClipboard() { navigator.clipboard.writeText(document.getElementById('argumentText').innerText).then(()=>alert("Copiado")); }
+        function openIngInfo() { document.getElementById('ingInfoModal').classList.replace('hidden', 'flex'); }
+        function closeIngInfo() { document.getElementById('ingInfoModal').classList.replace('flex', 'hidden'); }
+
+    </script>
+</body>
+</html>
