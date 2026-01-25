@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Las Crónicas de los Nutrientes</title>
+
+</div>
+            <div class="text-center md:text-right text-sm">
+                <p class="opacity-90">Creado por <span class="font-bold text-black border-b border-orange-300">Marc Pérez Casals</span></p>
+            </div>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fuente Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Nunito', sans-serif; background-color: #fff7ed; color: #431407; overflow-x: hidden; }
+        
+        /* Animaciones */
+        .card-enter { animation: slideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; opacity: 0; transform: translateY(40px) scale(0.95); }
+        @keyframes slideIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+        
+        .tooltip-enter { animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; transform-origin: bottom center; }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.9) translateX(-50%); } to { opacity: 1; transform: scale(1) translateX(-50%); } }
+
+        .modal-enter { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Efecto de puntos flotantes */
+        .floating-points { 
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            animation: floatPointsBig 2s ease-out forwards; 
+            pointer-events: none; 
+            font-weight: 900; 
+            color: #fbbf24; 
+            text-shadow: 4px 4px 0 #b45309, 0 0 20px rgba(251, 191, 36, 0.5); 
+            z-index: 9999; 
+            font-size: 5rem; 
+            white-space: nowrap;
+        }
+        @keyframes floatPointsBig { 
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-10deg); } 
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotate(0deg); }
+            80% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -150%) scale(0.8); } 
+        }
+
+        .locked-card { filter: blur(5px) grayscale(0.8); opacity: 0.6; pointer-events: none; user-select: none; transform: scale(0.95); transition: all 0.5s ease; }
+        
+        /* Estilos contenido HTML */
+        .content-html ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+        .content-html li { margin-bottom: 0.5rem; }
+        .content-html strong { color: #ea580c; font-weight: 800; }
+        .content-html img { 
+            border-radius: 1rem; 
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); 
+            margin-top: 1rem; 
+            margin-bottom: 1rem; 
+            width: 100%; 
+            object-fit: cover; 
+            border: 4px solid #fff; 
+            cursor: zoom-in; 
+            transition: transform 0.2s; 
+        }
+        .content-html img:hover { transform: scale(1.02); }
+
+        /* FONDO ANIMADO */
+        .bubbles { position: fixed; width: 100%; height: 100%; z-index: -1; top: 0; left: 0; overflow: hidden; pointer-events: none; }
+        .bubble { position: absolute; bottom: -100px; border-radius: 50%; animation: floatUp infinite ease-in-out; }
+        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 0.6; } 100% { transform: translateY(-120vh) scale(1.5); opacity: 0; } }
+        
+        .bubble-red { background-color: rgba(252, 165, 165, 0.4); } 
+        .bubble-pink { background-color: rgba(253, 164, 175, 0.4); } 
+        .bubble-brown { background-color: rgba(214, 211, 209, 0.4); } 
+        .bubble-orange { background-color: rgba(254, 215, 170, 0.4); } 
+        
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #fff7ed; }
+        ::-webkit-scrollbar-thumb { background: #fdba74; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #fb923c; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // =========================================================================
+        //  GALERÍA DE IMÁGENES (Enlaces ibb.co directos)
+        // =========================================================================
+        const GALERIA_IMAGENES = {
+            BOCA: "https://i.ibb.co/JRXsHw3y/Gla-ndulas-salivales.png",
+            ESOFAGO: "https://i.ibb.co/d0VLX0V9/PER.png",
+            ESTOMAGO: "https://i.ibb.co/qMvBtVS6/EST.png",
+            DUODENO: "https://i.ibb.co/zV7B93DP/Anexo.png",
+            INTESTINO_DELGADO: "https://i.ibb.co/jZTwtpvM/istockphoto-1644655913-612x612.jpg",
+            INTESTINO_GRUESO: "https://i.ibb.co/q3VhdtRy/licensed-image.jpg",
+            
+            GIF_ENZIMA: "https://i.ibb.co/J8TKgQF/Tijeras.gif",
+            VELLOSIDADES: "https://i.ibb.co/Df0LnT8b/pili.png",
+            VELLOSIDAD_DETALLE: "https://i.ibb.co/Df0LnT8b/pili.png", // Reusada ya que es la misma URL
+            FLORA_INTESTINAL: "https://i.ibb.co/wFypHrQM/microbiota.jpg"
+        };
+
+        // --- ICONOS ---
+        const Settings = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+        const Activity = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+        const BookOpen = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>;
+        const FlaskConical = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>;
+        const Move = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 15 22 12 19 9"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>;
+        const HeartPulse = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>;
+        const ChevronDown = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m6 9 6 6 6-6"/></svg>;
+        const ChevronUp = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="m18 15-6-6-6 6"/></svg>;
+        const Info = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
+        const Lock = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+        const Unlock = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>;
+        const ArrowRight = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>;
+        const Stethoscope = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4.8 2.3A.3.3 0 0 1 5 2h14a.3.3 0 0 1 .2.3v3.4a3 3 0 0 1-3 3v0a3 3 0 0 1-3-3V2"/><path d="M12 2v10"/><path d="M11 12v3a2.5 2.5 0 0 0 2.5 2.5h.5a4.5 4.5 0 0 1 4.5 4.5v3"/><path d="M5 2v3.4a3 3 0 0 0 3 3v0a3 3 0 0 0 3-3V2"/><circle cx="12" cy="12" r="2"/><path d="M5 2h14"/></svg>;
+        const ZoomIn = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>;
+        const X = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M18 6 6 18"/><path d="m6 6 18 18"/></svg>;
+        const Bulb = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 16.5 8 4.5 4.5 0 0 0 12 3.5 4.5 4.5 0 0 0 7.5 8c0 1.57.78 3.03 2 4 .76.76 1.23 1.52 1.41 2.5H15.09Z"/></svg>;
+        const Award = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>;
+        const GraduationCap = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>;
+        const Medal = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15"/><path d="M11 12 5.12 2.2"/><path d="m13 12 5.88-9.8"/><path d="M8 7h8"/><circle cx="12" cy="17" r="5"/><path d="M12 18v-2h-.5"/></svg>;
+        const CheckCircle = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+        const XCircle = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>;
+        const Flag = (p) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>;
+
+        // --- DATOS DEL TEMARIO ---
+        const STEPS = [
+            {
+                id: 'boca',
+                title: '1. La Boca: El Inicio',
+                subtitle: 'Ingestión y Preparación',
+                imgUrl: GALERIA_IMAGENES.BOCA, 
+                icon: '🍎',
+                processes: [
+                    { type: 'mechanical', text: 'Masticación', desc: 'Los dientes incisivos cortan, caninos desgarran y molares trituran.' },
+                    { type: 'chemical', text: 'Insalivación', desc: 'La amilasa salival inicia la digestión del almidón.' }
+                ],
+                pathology: {
+                    name: 'Caries Dental',
+                    desc: 'Destrucción del esmalte por ácidos bacterianos. Las bacterias fermentan los restos de azúcar, creando ácido y desmineralizando el diente.'
+                },
+                curiosity: '¡Producimos entre 1 y 1.5 litros de saliva al día! Eso es suficiente para llenar dos botellas grandes de agua cada día.',
+                expert: {
+                    title: 'Deglución y Amilasa',
+                    content: 'La <strong>amilasa salival</strong> necesita una acidez neutra (pH alrededor de 7) para funcionar. Se inactiva cuando llega al ácido del estómago. La deglución tiene una fase voluntaria (boca) y dos involuntarias (faríngea y esofágica).',
+                    quiz: {
+                        q: "¿Qué tipo de músculo inicia la deglución en la boca?",
+                        opts: ["Liso (Involuntario)", "Estriado (Voluntario)", "Cardíaco"],
+                        a: 1
+                    }
+                },
+                details: {
+                    glandulas: 'Glándulas Salivales (parótidas, submandibulares, sublinguales)',
+                    sustancias: 'Saliva',
+                    enzimas: 'Amilasa',
+                    sustrato: 'Almidón (Azúcar complejo)',
+                    molecula: 'Glucosa (Azúcar simple)',
+                    producto: 'BOLO ALIMENTICIO'
+                },
+                content: `
+                    <p>La boca no es solo una entrada, es una <strong>planta de procesamiento</strong>:</p>
+                    <ul>
+                        <li><strong>Dientes:</strong> Trituran el alimento para aumentar su superficie de contacto.</li>
+                        <li><strong>Lengua:</strong> Órgano muscular que mezcla el alimento con la saliva y ayuda en la deglución.</li>
+                        <li><strong>Saliva:</strong> Contiene <strong>Amilasa</strong> (digiere carbohidratos) y <strong>Lisozima</strong> (bactericida que desinfecta).</li>
+                    </ul>
+                    <p><strong>Acción Enzimática (GIF):</strong></p>
+                    <img src="${GALERIA_IMAGENES.GIF_ENZIMA}" alt="Animación de enzima actuando" />
+                `,
+                quiz: {
+                    question: "Detectamos un trozo de pan (almidón) en la boca. ¿Qué enzima debemos activar?",
+                    options: [
+                        { text: "Pepsina", correct: false, feedback: "Incorrecto. La pepsina actúa en el estómago sobre las proteínas." },
+                        { text: "Amilasa Salival", correct: true, feedback: "¡Correcto! La amilasa rompe las cadenas largas de almidón." },
+                        { text: "Bilis", correct: false, feedback: "La bilis se produce en el hígado y actúa sobre las grasas." }
+                    ]
+                }
+            },
+            {
+                id: 'esofago',
+                title: '2. El Esófago: Transporte',
+                subtitle: 'El puente hacia el estómago',
+                imgUrl: GALERIA_IMAGENES.ESOFAGO,
+                icon: '🥣',
+                processes: [
+                    { type: 'mechanical', text: 'Peristaltismo', desc: 'Contracciones musculares rítmicas.' },
+                    { type: 'mechanical', text: 'Deglución', desc: 'Paso voluntario e involuntario del bolo.' }
+                ],
+                pathology: {
+                    name: 'Reflujo Gastroesofágico',
+                    desc: 'Fallo en el esfínter esofágico inferior (cardias). El ácido del estómago sube y quema las paredes del esófago (que no tienen protección mucosa).'
+                },
+                curiosity: 'Gracias a los movimientos peristálticos (fuerza muscular), la comida llegaría al estómago aunque estuvieras comiendo boca abajo haciendo el pino.',
+                expert: {
+                    title: 'Histología del Esófago',
+                    content: 'El tercio superior del esófago es músculo estriado (voluntario), mientras que los dos tercios inferiores son músculo liso (involuntario). El <strong>Esfínter Esofágico Inferior (EEI)</strong> es una zona de alta presión que evita el reflujo.',
+                    quiz: {
+                        q: "¿Qué estructura evita que el ácido suba al esófago?",
+                        opts: ["La Epiglotis", "El Esfínter Esofágico Inferior", "El Píloro"],
+                        a: 1
+                    }
+                },
+                details: {
+                    glandulas: 'Glándulas mucosas (solo protección)',
+                    sustancias: 'Moco',
+                    enzimas: 'Ninguna (solo transporte)',
+                    sustrato: '-',
+                    molecula: '-',
+                    producto: 'BOLO ALIMENTICIO'
+                },
+                content: `
+                    <p>Un tubo muscular de unos 25 cm que conecta la faringe con el estómago. Puntos clave:</p>
+                    <ul>
+                        <li><strong>Epiglotis:</strong> Válvula de seguridad que se cierra al tragar para evitar que la comida vaya a los pulmones.</li>
+                        <li><strong>Peristaltismo:</strong> Contracciones musculares "en ola" que empujan el bolo. Es tan potente que podrías comer haciendo el pino.</li>
+                        <li><strong>Cardias:</strong> Válvula de entrada al estómago que evita el retroceso de la comida.</li>
+                    </ul>
+                `,
+                quiz: {
+                    question: "¿Por qué no se nos va la comida a los pulmones al tragar?",
+                    options: [
+                        { text: "Porque dejamos de respirar", correct: false, feedback: "Dejamos de respirar momentáneamente, pero necesitamos una barrera física." },
+                        { text: "Gracias a la Epiglotis", correct: true, feedback: "¡Exacto! Esta válvula cartilaginosa tapa la tráquea." },
+                        { text: "Gracias a la úvula", correct: false, feedback: "La úvula tapa las fosas nasales, no los pulmones." }
+                    ]
+                }
+            },
+            {
+                id: 'estomago',
+                title: '3. El Estómago: Digestión Ácida',
+                subtitle: 'El tanque de mezcla',
+                imgUrl: GALERIA_IMAGENES.ESTOMAGO,
+                icon: '🥣',
+                processes: [
+                    { type: 'chemical', text: 'Jugo Gástrico', desc: 'Ácido Clorhídrico + Pepsina.' },
+                    { type: 'mechanical', text: 'Movimientos de mezcla', desc: 'Batido muscular intenso.' }
+                ],
+                pathology: {
+                    name: 'Gastritis y Úlceras',
+                    desc: 'Inflamación o heridas en la mucosa estomacal. Si la capa de moco protector falla, el propio ácido del estómago digiere sus paredes.'
+                },
+                curiosity: 'El revestimiento de tu estómago se regenera completamente cada pocos días. Si no lo hiciera, ¡el ácido lo digeriría junto con tu comida!',
+                expert: {
+                    title: 'Fisiología Gástrica',
+                    content: 'Las <strong>Células Parietales</strong> secretan Ácido Clorhídrico y Factor Intrínseco (vital para absorber vitamina B12). Las <strong>Células Principales</strong> secretan Pepsinógeno, que es inactivo. Solo al contactar con el ácido se convierte en Pepsina activa.',
+                    quiz: {
+                        q: "¿Por qué se secreta pepsinógeno inactivo?",
+                        opts: ["Para ahorrar energía", "Para no digerir la propia célula", "Porque el ácido lo destruye"],
+                        a: 1
+                    }
+                },
+                details: {
+                    glandulas: 'Glándulas Gástricas',
+                    sustancias: 'Jugo Gástrico (Ácido Clorhídrico)',
+                    enzimas: 'Pepsina',
+                    sustrato: 'Proteínas',
+                    molecula: 'Cadenas cortas (Péptidos = "proteínas digeridas")',
+                    producto: 'QUIMO (Papilla ácida)'
+                },
+                content: `
+                    <p>Una bolsa muscular con un ambiente extremo. Aquí ocurre:</p>
+                    <ul>
+                        <li><strong>Ataque Químico (Acidez):</strong> El Ácido Clorhídrico (HCl) tiene un pH de 1.5. El zumo de limón tiene un pH de 2.5. Como la escala es logarítmica, ¡tu estómago es <strong>10 veces más ácido</strong> que el limón puro! Esto mata bacterias y desnaturaliza proteínas.</li>
+                        <li><strong>Digestión Enzimática:</strong> La <strong>Pepsina</strong> corta las proteínas en cadenas más cortas (péptidos).</li>
+                        <li><strong>Protección:</strong> Las paredes segregan moco para no autodigerirse.</li>
+                    </ul>
+                `,
+                quiz: {
+                    question: "El estómago es muy ácido. ¿Qué función principal tiene este ácido?",
+                    options: [
+                        { text: "Digerir los azúcares", correct: false, feedback: "Los azúcares se digieren principalmente en boca e intestino." },
+                        { text: "Emulsionar grasas", correct: false, feedback: "Eso lo hace la bilis en el duodeno." },
+                        { text: "Desnaturalizar proteínas y desinfectar", correct: true, feedback: "¡Correcto! Prepara las proteínas para la pepsina y mata patógenos." }
+                    ]
+                }
+            },
+            {
+                id: 'duodeno',
+                title: '4. Duodeno: Digestión Final',
+                subtitle: 'Hígado y Páncreas en acción',
+                imgUrl: GALERIA_IMAGENES.DUODENO,
+                icon: '⚡',
+                processes: [
+                    { type: 'chemical', text: 'Emulsión (Bilis)', desc: 'Rompe grandes gotas de grasa en microgotas.' },
+                    { type: 'chemical', text: 'Neutralización', desc: 'El bicarbonato pancreático anula el ácido del estómago.' }
+                ],
+                pathology: {
+                    name: 'Cálculos Biliares',
+                    desc: 'Piedras formadas en la vesícula biliar. Pueden bloquear la salida de la bilis, impidiendo la correcta digestión de las grasas.'
+                },
+                curiosity: 'El intestino delgado mide entre 6 y 7 metros de largo. ¡Eso es más largo que una furgoneta grande puesta de pie!',
+                expert: {
+                    title: 'Regulación Hormonal',
+                    content: 'El conducto colédoco (bilis) y el conducto de Wirsung (páncreas) se unen y desembocan juntos en el duodeno a través de la <strong>Ampolla de Vater</strong>. Esto está regulado por hormonas como la CCK y la Secretina.',
+                    quiz: {
+                        q: "¿Dónde desembocan finalmente la bilis y el jugo pancreático?",
+                        opts: ["En el Píloro", "En la Ampolla de Vater", "En el Ciego"],
+                        a: 1
+                    }
+                },
+                details: {
+                    glandulas: 'Hígado y Páncreas',
+                    sustancias: 'Bilis y Jugo Pancreático',
+                    enzimas: 'Lipasa, Amilasa, Tripsina',
+                    sustrato: 'Grasas, Glúcidos, Proteínas',
+                    molecula: 'Ácidos grasos ("grasas simples"), Glucosa, Aminoácidos ("proteínas digeridas")',
+                    producto: 'QUILO (Líquido lechoso)'
+                },
+                content: `
+                    <p>El "laboratorio químico" del cuerpo. Aquí vierten sus secreciones dos órganos vitales:</p>
+                    <ul>
+                        <li><strong>Hígado (Bilis):</strong> No contiene enzimas. Actúa como un detergente (emulsión) rompiendo las grasas en gotitas minúsculas para que las enzimas puedan atacarlas mejor.</li>
+                        <li><strong>Páncreas:</strong> Segrega bicarbonato (neutraliza el ácido del quimo) y enzimas potentes: <strong>Lipasa</strong> (grasas), <strong>Tripsina</strong> (proteínas) y <strong>Amilasa</strong>.</li>
+                    </ul>
+                `,
+                quiz: {
+                    question: "Si a una persona le extirpan la vesícula biliar, ¿qué alimento debe moderar?",
+                    options: [
+                        { text: "Alimentos grasos", correct: true, feedback: "¡Bien pensado! Sin reserva de bilis, cuesta más digerir muchas grasas de golpe." },
+                        { text: "Azúcares", correct: false, feedback: "La bilis no interviene en la digestión de azúcares." },
+                        { text: "Verduras", correct: false, feedback: "Las verduras se digieren bien sin bilis." }
+                    ]
+                }
+            },
+            {
+                id: 'yeyuno',
+                title: '5. Yeyuno e Íleon: Absorción',
+                subtitle: 'Paso a la sangre',
+                imgUrl: GALERIA_IMAGENES.INTESTINO_DELGADO,
+                icon: '⚡',
+                processes: [
+                    { type: 'mechanical', text: 'Difusión y Transporte', desc: 'Paso a través de membranas celulares.' }
+                ],
+                pathology: {
+                    name: 'Enfermedad Celíaca',
+                    desc: 'Reacción inmune al gluten que daña las vellosidades intestinales. Al "aplanarse" las vellosidades, se pierde superficie de absorción y hay malnutrición.'
+                },
+                curiosity: 'Si estiraras todas las vellosidades y microvellosidades de tu intestino, cubrirían una superficie de 300 metros cuadrados. ¡Eso es tan grande como una pista de tenis!',
+                expert: {
+                    title: 'Transporte de Nutrientes',
+                    content: 'La glucosa y los aminoácidos van a la sangre y viajan directos al hígado por la <strong>Vena Porta</strong>. Las grasas, al ser moléculas grandes, entran en los vasos quilíferos (linfa) y evitan el hígado inicialmente.',
+                    quiz: {
+                        q: "¿A qué órgano van primero los nutrientes absorbidos en sangre?",
+                        opts: ["Al Corazón", "Al Hígado", "A los Riñones"],
+                        a: 1
+                    }
+                },
+                details: {
+                    glandulas: 'Glándulas Intestinales',
+                    sustancias: 'Jugo Intestinal',
+                    enzimas: 'Peptidasas, Disacaridasas',
+                    sustrato: 'Restos de nutrientes',
+                    molecula: 'Nutrientes elementales',
+                    producto: 'Nutrientes en Sangre/Linfa'
+                },
+                content: `
+                    <p>6-7 metros de tubo especializado en capturar nutrientes. Su secreto es la <strong>Superficie</strong>:</p>
+                    <ul>
+                        <li><strong>Pliegues y Vellosidades:</strong> La pared interna no es lisa, tiene millones de "dedos" microscópicos. Esto multiplica la superficie de absorción.</li>
+                        <li><strong>Destino:</strong> Glucosa y aminoácidos van a la <strong>sangre</strong>. Las grasas van al sistema <strong>linfático</strong>.</li>
+                    </ul>
+                    <p><strong>Así son por dentro (Conjunto y Detalle):</strong></p>
+                    <img src="${GALERIA_IMAGENES.VELLOSIDADES}" alt="Conjunto de vellosidades" />
+                    <img src="${GALERIA_IMAGENES.VELLOSIDAD_DETALLE}" alt="Detalle de vellosidad" />
+                `,
+                quiz: {
+                    question: "¿Para qué sirven las vellosidades intestinales?",
+                    options: [
+                        { text: "Para mover el alimento", correct: false, feedback: "El movimiento lo hace el músculo (peristaltismo)." },
+                        { text: "Aumentar la superficie de absorción", correct: true, feedback: "¡Exacto! Más superficie significa capturar más nutrientes." },
+                        { text: "Filtrar toxinas", correct: false, feedback: "El filtrado principal lo hace el hígado y los riñones." }
+                    ]
+                }
+            },
+            {
+                id: 'colon',
+                title: '6. Intestino Grueso: Residuos',
+                subtitle: 'Agua y Microbiota',
+                imgUrl: GALERIA_IMAGENES.INTESTINO_GRUESO,
+                icon: '💩',
+                processes: [
+                    { type: 'mechanical', text: 'Reabsorción', desc: 'Recuperación de agua y sales.' },
+                    { type: 'chemical', text: 'Fermentación', desc: 'Acción bacteriana sobre fibra.' }
+                ],
+                pathology: {
+                    name: 'Apendicitis',
+                    desc: 'Inflamación del apéndice (al inicio del colon). Si se bloquea y se infecta, puede estallar (peritonitis), siendo una urgencia médica.'
+                },
+                curiosity: '¡Llevas pasajeros! Tienes entre 1.5 y 2 kg de bacterias viviendo en tu intestino. Pesan casi tanto como tu cerebro.',
+                expert: {
+                    title: 'Simbiosis y Vitaminas',
+                    content: 'Nuestra relación con la microbiota es una simbiosis: nosotros les damos casa y comida (fibra), y ellas nos dan vitaminas. La <strong>Vitamina K</strong> producida aquí es esencial para la coagulación de la sangre.',
+                    quiz: {
+                        q: "¿Qué vitamina esencial produce nuestra flora intestinal?",
+                        opts: ["Vitamina C", "Vitamina D", "Vitamina K"],
+                        a: 2
+                    }
+                },
+                details: {
+                    glandulas: '(Microbiota bacteriana)',
+                    sustancias: '-',
+                    enzimas: 'Fermentación bacteriana',
+                    sustrato: 'Restos no digeridos (Celulosa/Fibra)',
+                    molecula: 'Vitaminas (K y B), Gases',
+                    producto: 'HECES FECALES'
+                },
+                content: `
+                    <p>Aquí llegan los restos no digeribles (principalmente fibra vegetal). Funciones finales:</p>
+                    <ul>
+                        <li><strong>Última Digestión:</strong> La <strong>Microbiota</strong> (bacterias buenas) fermenta la fibra y produce vitaminas (K, B12) que luego absorbemos.</li>
+                        <li><strong>Recuperar Agua:</strong> Convierte los residuos líquidos en sólidos (heces). Si esto falla, tenemos diarrea.</li>
+                        <li><strong>Defecación:</strong> Acumulación en el recto y expulsión por el ano.</li>
+                    </ul>
+                    <p><strong>Nuestra Flora Intestinal:</strong></p>
+                    <img src="${GALERIA_IMAGENES.FLORA_INTESTINAL}" alt="Flora intestinal" />
+                `,
+                quiz: {
+                    question: "¿Qué papel crucial juegan nuestras bacterias intestinales?",
+                    options: [
+                        { text: "Ninguno, son parásitos", correct: false, feedback: "¡Falso! Son vitales para nuestra salud." },
+                        { text: "Digerir proteínas", correct: false, feedback: "Las proteínas se digieren antes." },
+                        { text: "Producir vitaminas y proteger", correct: true, feedback: "¡Correcto! Nos dan vitaminas y evitan que crezcan bacterias malas." }
+                    ]
+                }
+            }
+        ];
+
+        // --- COMPONENTES ---
+
+        const BackgroundBubbles = () => {
+            const bubbles = Array.from({ length: 20 }).map((_, i) => ({
+                id: i,
+                left: `${Math.random() * 100}%`,
+                size: `${Math.random() * 60 + 20}px`,
+                duration: `${Math.random() * 10 + 15}s`,
+                delay: `${Math.random() * 5}s`,
+                color: ['bubble-red', 'bubble-pink', 'bubble-brown', 'bubble-orange'][Math.floor(Math.random() * 4)]
+            }));
+            return (
+                <div className="bubbles">
+                    {bubbles.map(b => (
+                        <div key={b.id} className={`bubble ${b.color}`} style={{ left: b.left, width: b.size, height: b.size, animationDuration: b.duration, animationDelay: b.delay }} />
+                    ))}
+                </div>
+            );
+        };
+
+        const ImageModal = ({ src, alt, onClose }) => (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 modal-enter" onClick={onClose}>
+                <div className="relative max-w-7xl max-h-screen w-full h-full flex items-center justify-center">
+                    <img src={src} alt={alt} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+                    <button onClick={onClose} className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 18 18"/></svg>
+                    </button>
+                </div>
+            </div>
+        );
+
+        const ProcessBadge = ({ type, text, desc }) => {
+            const [showTooltip, setShowTooltip] = useState(false);
+            return (
+                <div className="relative inline-block m-1">
+                    <button onClick={() => setShowTooltip(!showTooltip)} className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border-2 transition-all shadow-sm hover:scale-105 active:scale-95 ${type === 'mechanical' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-blue-100 text-blue-800 border-blue-300'}`}>
+                        {type === 'mechanical' ? <Settings size={14}/> : <FlaskConical size={14}/>}
+                        <span>{text}</span>
+                        <Info size={12} className="opacity-50 ml-1"/>
+                    </button>
+                    {showTooltip && (
+                        <div className="absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 bg-slate-800 text-white text-sm p-4 rounded-2xl shadow-xl z-50 text-center tooltip-enter">
+                            <p>{desc}</p>
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800"></div>
+                        </div>
+                    )}
+                    {showTooltip && <div className="fixed inset-0 z-40" onClick={() => setShowTooltip(false)}></div>}
+                </div>
+            );
+        };
+
+        const QuizModal = ({ quiz, onComplete, onClose }) => {
+            const [selected, setSelected] = useState(null);
+            const [feedback, setFeedback] = useState(null);
+            const [isCorrect, setIsCorrect] = useState(false);
+
+            const handleCheck = (option, index) => {
+                setSelected(index);
+                setFeedback(option.feedback);
+                setIsCorrect(option.correct);
+                if (option.correct) {
+                    setTimeout(() => {
+                        onComplete(); 
+                    }, 1000);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border-4 border-white/50">
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-5 flex justify-between items-center">
+                            <h3 className="font-black text-lg flex items-center gap-2"><Lock size={20} className="text-orange-400"/> Checkpoint</h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white bg-white/10 p-2 rounded-full">✕</button>
+                        </div>
+                        <div className="p-6 md:p-8 bg-slate-50">
+                            <p className="text-xl font-bold text-slate-800 mb-6 leading-snug">{quiz.question}</p>
+                            <div className="space-y-3">
+                                {quiz.options.map((opt, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => !isCorrect && handleCheck(opt, i)}
+                                        className={`w-full text-left p-4 rounded-xl border-2 font-bold transition-all transform ${
+                                            selected === i 
+                                            ? (opt.correct ? 'border-emerald-500 bg-emerald-100 text-emerald-800 scale-105' : 'border-rose-500 bg-rose-100 text-rose-800 shake')
+                                            : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50 text-slate-600'
+                                        }`}
+                                    >
+                                        {opt.text}
+                                    </button>
+                                ))}
+                            </div>
+                            {feedback && (
+                                <div className={`mt-6 p-4 rounded-2xl text-sm font-bold text-center animate-bounce shadow-lg ${isCorrect ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                                    {feedback}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Card = ({ step, index, isLocked, isCompleted, onUnlock, isLast, onImageClick, onAddPoints }) => {
+            const [open, setOpen] = useState(false);
+            const [showCuriosity, setShowCuriosity] = useState(false);
+            const [showExpert, setShowExpert] = useState(false);
+            const [showQuiz, setShowQuiz] = useState(false);
+            
+            const [pointsAwarded, setPointsAwarded] = useState({ curiosity: false, expertQuiz: false });
+            const [expertQuizStatus, setExpertQuizStatus] = useState('pending');
+
+            const handleContentClick = (e) => {
+                if (e.target.tagName === 'IMG') {
+                    onImageClick(e.target.src, e.target.alt);
+                }
+            };
+
+            const handleCuriosity = () => {
+                if (!showCuriosity && !pointsAwarded.curiosity) {
+                    onAddPoints(5);
+                    setPointsAwarded(prev => ({...prev, curiosity: true}));
+                }
+                setShowCuriosity(!showCuriosity);
+            };
+
+            const handleExpert = () => {
+                setShowExpert(!showExpert);
+            };
+
+            const handleExpertQuiz = (isCorrectAnswer) => {
+                if (isCorrectAnswer) {
+                    setExpertQuizStatus('correct');
+                    if (!pointsAwarded.expertQuiz) {
+                        onAddPoints(10);
+                        setPointsAwarded(prev => ({...prev, expertQuiz: true}));
+                    }
+                } else {
+                    setExpertQuizStatus('failed');
+                }
+            };
+
+            if (isLocked) {
+                return (
+                    <div className="mb-12 relative pl-8 md:pl-12 locked-card">
+                        <div className="absolute left-[-8px] top-8 w-4 h-4 rounded-full bg-slate-300 border-4 border-white z-10"></div>
+                        <div className="bg-white/50 rounded-3xl border border-white p-8 flex flex-col items-center justify-center text-center shadow-none">
+                            <div className="bg-slate-200 p-4 rounded-full mb-4"><Lock className="text-slate-400" size={32}/></div>
+                            <h3 className="font-bold text-slate-400 text-xl">Etapa Bloqueada</h3>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div id={`card-${index}`} className="mb-16 relative pl-8 md:pl-12 group card-enter" style={{animationDelay: '0.1s'}}>
+                    <div className="absolute left-[-20px] top-6 w-10 h-10 rounded-full bg-white border-4 border-orange-200 z-10 shadow-lg flex items-center justify-center text-xl transform transition-transform hover:scale-125 cursor-pointer">
+                        {step.icon}
+                    </div>
+
+                    <div className="bg-white rounded-3xl shadow-xl shadow-orange-100/50 border border-white overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-1">
+                        <div className="flex flex-col md:flex-row">
+                            <div className="md:w-1/2 relative h-64 md:h-auto bg-orange-50 overflow-hidden cursor-zoom-in group-image" onClick={() => onImageClick(step.imgUrl, step.title)}>
+                                <img src={step.imgUrl} alt={step.title} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                                <div className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                </div>
+                            </div>
+                            
+                            <div className="md:w-1/2 p-6 md:p-8 flex flex-col justify-center">
+                                <div className="hidden md:block mb-4">
+                                    <h3 className="text-xs font-black text-orange-500 uppercase tracking-widest mb-1">{step.title}</h3>
+                                    <h2 className="text-3xl font-black text-slate-800 leading-tight">{step.subtitle}</h2>
+                                </div>
+                                <div className="flex flex-wrap mb-6 gap-2">{step.processes.map((p, i) => <ProcessBadge key={i} {...p} />)}</div>
+                                
+                                <div className="bg-rose-50 p-5 rounded-2xl border border-rose-100 mb-4 flex gap-4 items-start shadow-sm">
+                                    <div className="bg-white p-2 rounded-full shadow-sm text-rose-500 shrink-0"><Stethoscope size={20}/></div>
+                                    <div>
+                                        <h4 className="text-xs font-black text-rose-400 uppercase mb-1">Consulta Médica: {step.pathology.name}</h4>
+                                        <p className="text-sm font-bold text-slate-700 leading-snug">{step.pathology.desc}</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="relative">
+                                        <button onClick={handleCuriosity} className="w-full flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-4 py-3 rounded-xl text-sm font-bold transition-all">
+                                            <Bulb size={18}/> <span>💡 ¿Sabías qué? (Curiosidad)</span>
+                                            {showCuriosity ? <ChevronUp size={16} className="ml-auto"/> : <ChevronDown size={16} className="ml-auto"/>}
+                                        </button>
+                                        {showCuriosity && <div className="mt-2 p-4 bg-amber-50 border-2 border-amber-100 rounded-xl text-sm text-amber-900 font-medium animate-fade-in shadow-inner">{step.curiosity}</div>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-100">
+                            <button onClick={() => setOpen(!open)} className="w-full flex justify-between items-center p-4 px-8 text-slate-500 hover:text-orange-600 hover:bg-orange-50 transition-colors font-bold text-sm uppercase tracking-wide group-btn">
+                                <span>Ver explicación científica</span>
+                                {open ? <ChevronUp className="text-orange-400"/> : <ChevronDown className="group-btn-hover:translate-y-1 transition-transform"/>}
+                            </button>
+                            {open && (
+                                <div className="p-8 bg-orange-50/50 text-slate-700 leading-relaxed text-lg border-t border-orange-100 animate-fade-in content-html" onClick={handleContentClick}>
+                                    <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm mb-6">
+                                        <h3 className="text-sm font-black text-orange-500 uppercase tracking-wider mb-4 border-b border-orange-100 pb-2 flex items-center gap-2">
+                                            <Activity size={16}/> 🔬 Análisis Detallado del Proceso
+                                        </h3>
+                                        <ul className="text-sm space-y-2 m-0 p-0 list-none">
+                                            <li><strong className="text-slate-900">Glándulas:</strong> {step.details.glandulas}</li>
+                                            <li><strong className="text-slate-900">Sustancias:</strong> {step.details.sustancias}</li>
+                                            <li><strong className="text-slate-900">Enzimas:</strong> {step.details.enzimas}</li>
+                                            <li><strong className="text-slate-900">Actúa sobre:</strong> {step.details.sustrato}</li>
+                                            <li><strong className="text-slate-900">Molécula:</strong> {step.details.molecula}</li>
+                                            <li className="mt-2 pt-2 border-t border-orange-100 flex justify-between items-center">
+                                                <strong className="text-slate-900">Producto Final:</strong> 
+                                                <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-black text-xs uppercase tracking-wide">{step.details.producto}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div dangerouslySetInnerHTML={{__html: step.content}}></div>
+
+                                    {/* NIVEL EXPERTO MOVIDO AQUÍ */}
+                                    <div className="mt-8 relative border-t-2 border-purple-100 pt-6">
+                                        <button onClick={handleExpert} className="w-full flex items-center gap-2 bg-purple-100 hover:bg-purple-200 text-purple-900 px-4 py-3 rounded-xl text-sm font-bold transition-all">
+                                            <GraduationCap size={18}/> <span>🎓 Nivel Experto (Avanzado)</span>
+                                            {showExpert ? <ChevronUp size={16} className="ml-auto"/> : <ChevronDown size={16} className="ml-auto"/>}
+                                        </button>
+                                        {showExpert && (
+                                            <div className="mt-2 p-5 bg-purple-50 border-2 border-purple-100 rounded-xl text-sm text-purple-900 animate-fade-in shadow-inner">
+                                                <h4 className="font-black text-purple-700 mb-2 uppercase text-xs tracking-wider">{step.expert.title}</h4>
+                                                <p className="mb-4" dangerouslySetInnerHTML={{__html: step.expert.content}}></p>
+                                                
+                                                {/* Mini Quiz Experto Lógica Muerte Súbita */}
+                                                {expertQuizStatus === 'pending' && (
+                                                    <div className="bg-white p-4 rounded-lg border border-purple-200 shadow-sm">
+                                                        <p className="font-bold text-slate-800 mb-2">🧠 Reto Experto: {step.expert.quiz.q}</p>
+                                                        <div className="space-y-2">
+                                                            {step.expert.quiz.opts.map((opt, i) => (
+                                                                <button key={i} 
+                                                                    onClick={() => handleExpertQuiz(i === step.expert.quiz.a)}
+                                                                    className="w-full text-left p-2 rounded bg-purple-50 hover:bg-purple-100 text-xs font-bold transition-colors">
+                                                                    {opt}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {expertQuizStatus === 'correct' && (
+                                                    <div className="bg-green-100 text-green-800 p-3 rounded-lg font-bold text-center text-xs flex flex-col items-center justify-center gap-2 animate-fade-in">
+                                                        <div className="flex items-center gap-2">
+                                                            <CheckCircle size={18}/> ¡Correcto! +10 Puntos
+                                                        </div>
+                                                        <p className="text-green-700 font-normal">Respuesta correcta. ¡Sigue así!</p>
+                                                        <button 
+                                                            onClick={() => setShowExpert(false)}
+                                                            className="mt-2 text-green-700 underline hover:text-green-900"
+                                                        >
+                                                            Cerrar sección experto
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {expertQuizStatus === 'failed' && (
+                                                    <div className="bg-rose-100 text-rose-800 p-3 rounded-lg font-bold text-center text-xs flex flex-col items-center justify-center gap-2 animate-fade-in">
+                                                        <div className="flex items-center gap-2">
+                                                            <XCircle size={18}/> Fallaste esta vez
+                                                        </div>
+                                                        <p className="text-rose-700 font-normal">No puedes volver a intentarlo en este turno.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Botón de desbloqueo/finalización con lógica de bloqueo tras completar */}
+                        <div className="p-4 bg-white border-t border-slate-100 flex justify-center md:justify-end">
+                            {isCompleted ? (
+                                <div className="flex items-center gap-2 text-emerald-600 font-bold py-3 px-6 bg-emerald-50 rounded-xl border-2 border-emerald-100">
+                                    <CheckCircle size={24}/> <span>Etapa Superada</span>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={() => setShowQuiz(true)}
+                                    className={`w-full md:w-auto text-white px-8 py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all shadow-xl hover:-translate-y-1 ${
+                                        isLast 
+                                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-emerald-500/30" 
+                                        : "bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 shadow-orange-500/30"
+                                    }`}
+                                >
+                                    {isLast ? (
+                                        <> <Flag size={20}/> Finalizar Recorrido 🏁 <CheckCircle size={20}/> </>
+                                    ) : (
+                                        <> <Unlock size={20}/> Completar Etapa y Continuar <ArrowRight size={20}/> </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {showQuiz && (
+                        <QuizModal 
+                            quiz={step.quiz} 
+                            onClose={() => setShowQuiz(false)} 
+                            onComplete={() => {
+                                onAddPoints(10);
+                                setTimeout(() => {
+                                    setShowQuiz(false);
+                                    onUnlock();
+                                }, 1500); 
+                            }} 
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [unlockedStep, setUnlockedStep] = useState(0);
+            const [modalImage, setModalImage] = useState(null);
+            const [score, setScore] = useState(0);
+            const [pointsAnim, setPointsAnim] = useState(null);
+
+            const handleUnlock = (index) => {
+                const nextStep = index + 1;
+                setUnlockedStep(nextStep);
+                if (nextStep < STEPS.length) {
+                    setTimeout(() => {
+                        document.getElementById(`card-${nextStep}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300);
+                } else {
+                    setTimeout(() => {
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    }, 300);
+                }
+            };
+
+            const addPoints = (amount) => {
+                setScore(prev => prev + amount);
+                setPointsAnim(amount);
+                setTimeout(() => setPointsAnim(null), 2000);
+            };
+
+            const getRank = () => {
+                if (score < 50) return "Novato Digestivo";
+                if (score < 100) return "Experto en Nutrición";
+                return "Maestro del Metabolismo";
+            };
+
+            return (
+                <div className="min-h-screen pb-20 relative">
+                    <BackgroundBubbles />
+                    {modalImage && <ImageModal src={modalImage.src} alt={modalImage.alt} onClose={() => setModalImage(null)} />}
+                    {pointsAnim && <div className="floating-points">+{pointsAnim}</div>}
+
+                    <div className="bg-white/90 backdrop-blur-md text-slate-800 py-4 px-4 mb-10 sticky top-0 z-40 shadow-sm border-b border-orange-100">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white shadow-lg">
+                                    <Activity size={24}/>
+                                </div>
+                                <div>
+                                    <span className="text-orange-500 font-black tracking-widest text-[10px] uppercase block mb-0.5">UT2.2</span>
+                                    <h1 className="text-lg md:text-xl font-black leading-none">Las Crónicas de los Nutrientes</h1>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="relative bg-slate-900 text-white px-4 py-2 rounded-full font-black flex items-center gap-2 shadow-lg">
+                                    <Medal size={18} className="text-yellow-400"/>
+                                    <span>{score} pts</span>
+                                </div>
+                            </div>
+                        </div>
+                        {/* Progress Bar */}
+                        <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-100">
+                            <div className="h-full bg-gradient-to-r from-orange-400 to-rose-500 transition-all duration-1000" style={{width: `${((unlockedStep + 1) / STEPS.length) * 100}%`}}></div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto px-4 md:px-8">
+                        <div className="flex">
+                            <div className="relative mr-6 md:mr-10 shrink-0 hidden md:block">
+                                <div className="absolute left-[9px] top-6 bottom-0 w-1 bg-orange-100 rounded-full"></div>
+                                <div className="absolute left-[9px] top-6 w-1 bg-gradient-to-b from-orange-400 to-rose-600 rounded-full transition-all duration-1000" style={{height: `${(unlockedStep / (STEPS.length - 1)) * 100}%`}}></div>
+                            </div>
+                            <div className="flex-1">
+                                {STEPS.map((step, index) => (
+                                    <Card 
+                                        key={step.id} 
+                                        step={step} 
+                                        index={index} 
+                                        isLocked={index > unlockedStep} 
+                                        isCompleted={index < unlockedStep}
+                                        onUnlock={() => handleUnlock(index)}
+                                        isLast={index === STEPS.length - 1}
+                                        onImageClick={(src, alt) => setModalImage({src, alt})}
+                                        onAddPoints={addPoints}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {unlockedStep === STEPS.length && (
+                            <div className="mt-16 animate-fade-in">
+                                <div className="text-center py-12 pl-8 mb-12 bg-white rounded-3xl shadow-xl border-4 border-orange-100 mx-4">
+                                    <div className="inline-block p-6 rounded-full bg-emerald-100 text-emerald-600 mb-6 animate-bounce shadow-lg">
+                                        <Award size={64}/>
+                                    </div>
+                                    <h3 className="text-4xl font-black text-slate-800 mb-2">¡Misión Cumplida!</h3>
+                                    <p className="text-slate-500 font-bold text-lg mb-6">Has completado el viaje por el sistema digestivo.</p>
+                                    <div className="inline-block bg-slate-900 text-white px-8 py-4 rounded-2xl shadow-xl">
+                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Puntuación Final</div>
+                                        <div className="text-5xl font-black text-yellow-400 mb-2">{score} pts</div>
+                                        <div className="text-emerald-400 font-bold text-lg">{getRank()}</div>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-3xl shadow-xl border border-white overflow-hidden mx-4">
+                                    <div className="bg-slate-900 text-white p-6 flex items-center gap-3">
+                                        <div className="bg-orange-500 p-2 rounded-lg"><Activity size={24}/></div>
+                                        <h3 className="font-black text-xl">Tabla Maestra de Procesos</h3>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead className="text-xs text-slate-400 uppercase bg-slate-50 border-b font-bold tracking-wider">
+                                                <tr><th className="px-6 py-4">Órgano</th><th className="px-6 py-4">Jugo/Secreción</th><th className="px-6 py-4">Enzima</th><th className="px-6 py-4">Acción sobre...</th><th className="px-6 py-4">Resultado</th><th className="px-6 py-4 text-emerald-600">Producto Final</th></tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 text-sm font-medium">
+                                                <tr className="hover:bg-orange-50/50"><td className="px-6 py-4 font-bold text-slate-800">Boca</td><td>Saliva</td><td className="italic text-orange-600">Amilasa</td><td>Almidón (Glúcidos)</td><td>Azúcares simples</td><td className="text-emerald-600 font-bold bg-emerald-50 rounded-lg px-2">Bolo Alimenticio</td></tr>
+                                                <tr className="hover:bg-orange-50/50"><td className="px-6 py-4 font-bold text-slate-800">Estómago</td><td>Jugo Gástrico</td><td className="italic text-orange-600">Pepsina (+Ácido Clorhídrico)</td><td>Proteínas</td><td>Péptidos</td><td className="text-emerald-600 font-bold bg-emerald-50 rounded-lg px-2">Quimo</td></tr>
+                                                <tr className="hover:bg-orange-50/50"><td className="px-6 py-4 font-bold text-slate-800">Hígado*</td><td>Bilis</td><td className="italic text-slate-400">Sin enzimas</td><td>Grasas (Lípidos)</td><td>Emulsión</td><td className="text-emerald-600 font-bold bg-emerald-50 rounded-lg px-2">Quilo</td></tr>
+                                                <tr className="hover:bg-orange-50/50"><td className="px-6 py-4 font-bold text-slate-800">Páncreas*</td><td>Jugo Pancreático</td><td className="italic text-orange-600">Lipasa, Tripsina...</td><td>Grasas, Proteínas...</td><td>Nutrientes</td><td className="text-emerald-600 font-bold bg-emerald-50 rounded-lg px-2">Quilo</td></tr>
+                                                <tr className="hover:bg-orange-50/50"><td className="px-6 py-4 font-bold text-slate-800">Intestino</td><td>Jugo Intestinal</td><td className="italic text-orange-600">Peptidasas...</td><td>Péptidos</td><td>Aminoácidos</td><td className="text-emerald-600 font-bold bg-emerald-50 rounded-lg px-2">Nutrientes/Heces</td></tr>
+                                            </tbody>
+                                        </table>
+                                        <div className="px-6 py-4 text-xs text-slate-400 bg-slate-50 italic font-bold text-right border-t">* Vierten al Duodeno</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
