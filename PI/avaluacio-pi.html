@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avaluació individual del Projecte Integrador | EASEO</title>
+</div>
+            <div class="text-center md:text-right text-sm">
+                <p class="opacity-90">Creat per <span class="font-bold text-black border-b border-orange-300">Marc Pérez Casals</span></p>
+            </div>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Grid Layout per a les Rúbriques */
+        .rubric-grid {
+            display: grid;
+            grid-template-columns: 150px repeat(4, 1fr);
+            gap: 2px;
+            background-color: #e2e8f0;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Capçaleres de Nivell */
+        .header-cell {
+            padding: 12px;
+            text-align: center;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+        .header-title { background-color: #f8fafc; color: #64748b; }
+        .header-A { background-color: #dcfce7; color: #166534; }
+        .header-B { background-color: #dbeafe; color: #1e40af; }
+        .header-C { background-color: #ffedd5; color: #9a3412; }
+        .header-D { background-color: #fee2e2; color: #991b1b; }
+
+        /* Cel·les de Criteri */
+        .criterion-row-title {
+            background-color: #f1f5f9;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #475569;
+            border-right: 1px solid #e2e8f0;
+        }
+
+        .criterion-cell {
+            background-color: white;
+            padding: 12px;
+            font-size: 0.85rem;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.2s;
+            line-height: 1.4;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .criterion-cell:hover { background-color: #f8fafc; }
+
+        /* Estats de Selecció UI */
+        .criterion-cell.selected-A { background-color: #dcfce7; color: #14532d; box-shadow: inset 0 0 0 2px #22c55e; font-weight: 500; }
+        .criterion-cell.selected-B { background-color: #dbeafe; color: #1e3a8a; box-shadow: inset 0 0 0 2px #3b82f6; font-weight: 500; }
+        .criterion-cell.selected-C { background-color: #ffedd5; color: #7c2d12; box-shadow: inset 0 0 0 2px #f97316; font-weight: 500; }
+        .criterion-cell.selected-D { background-color: #fee2e2; color: #7f1d1d; box-shadow: inset 0 0 0 2px #ef4444; font-weight: 500; }
+
+        /* Print Specific Styles */
+        #printable-view { display: none; }
+        
+        #printable-view .pdf-rubric-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            margin-bottom: 20px;
+        }
+        #printable-view .pdf-rubric-table th {
+            border: 1px solid #cbd5e1;
+            padding: 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+        /* Capçaleres PDF amb color */
+        #printable-view .pdf-rubric-table th:nth-child(1) { background-color: #f8fafc; color: #64748b; }
+        #printable-view .pdf-rubric-table th:nth-child(2) { background-color: #f0fdf4; color: #166534; } /* A */
+        #printable-view .pdf-rubric-table th:nth-child(3) { background-color: #eff6ff; color: #1e40af; } /* B */
+        #printable-view .pdf-rubric-table th:nth-child(4) { background-color: #fff7ed; color: #9a3412; } /* C */
+        #printable-view .pdf-rubric-table th:nth-child(5) { background-color: #fef2f2; color: #991b1b; } /* D */
+
+        #printable-view .pdf-rubric-table td {
+            border: 1px solid #cbd5e1;
+            padding: 6px;
+            vertical-align: top;
+            color: #94a3b8; /* Gris clar per defecte (no seleccionat) */
+        }
+        #printable-view .pdf-rubric-table td.row-title {
+            background-color: #f8fafc;
+            color: #334155;
+            font-weight: bold;
+            width: 15%;
+        }
+        
+        /* Highlight selected in PDF with COLORS */
+        #printable-view .pdf-rubric-table td.selected-A { background-color: #dcfce7 !important; border: 2px solid #166534; color: #14532d; font-weight: bold; }
+        #printable-view .pdf-rubric-table td.selected-B { background-color: #dbeafe !important; border: 2px solid #1e40af; color: #1e3a8a; font-weight: bold; }
+        #printable-view .pdf-rubric-table td.selected-C { background-color: #ffedd5 !important; border: 2px solid #9a3412; color: #7c2d12; font-weight: bold; }
+        #printable-view .pdf-rubric-table td.selected-D { background-color: #fee2e2 !important; border: 2px solid #991b1b; color: #7f1d1d; font-weight: bold; }
+
+        /* Toast & Modal */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 16px;
+            position: fixed;
+            z-index: 9999;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s, bottom 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+
+        #customModal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <div id="toast">Missatge aquí</div>
+    <div id="customModal">
+        <div class="modal-content">
+            <h3 class="text-lg font-bold text-slate-900 mb-2">Vols reiniciar?</h3>
+            <p class="text-slate-600 mb-6">Esborraràs totes les dades.</p>
+            <div class="flex justify-center gap-4">
+                <button onclick="closeModal()" class="px-4 py-2 rounded text-slate-600 hover:bg-slate-100 font-medium">Cancel·lar</button>
+                <button onclick="confirmReset()" class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 font-bold shadow">Sí, esborrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="interactive-view">
+        <nav class="bg-indigo-800 text-white p-4 shadow-lg sticky top-0 z-50">
+            <div class="max-w-[1400px] mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-school text-2xl"></i>
+                    <h1 class="text-xl font-bold">Avaluació PI <span class="text-indigo-200 font-normal">| EASEO</span></h1>
+                </div>
+                <div class="flex items-center gap-6 text-sm">
+                    <button onclick="copySourceCode()" class="flex items-center gap-2 hover:text-indigo-200 transition font-medium"><i class="fas fa-code"></i> <span>Clonar Eina</span></button>
+                    <div class="h-4 w-px bg-indigo-600"></div>
+                    <button onclick="openResetModal()" class="hover:text-indigo-200 transition flex items-center gap-2"><i class="fas fa-rotate-left"></i> Reiniciar</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-[1400px] mx-auto p-6 grid grid-cols-1 xl:grid-cols-4 gap-8">
+            <div class="xl:col-span-3 space-y-8">
+                <!-- Student Info -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2"><i class="fas fa-user-graduate"></i> Dades de l'Alumne</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Nom de l'Alumne</label>
+                            <input type="text" id="studentName" placeholder="Ex: Marc Pérez" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Títol del Projecte</label>
+                            <input type="text" id="projectTitle" placeholder="Ex: No volem més llet de vaca!" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Rubric Container -->
+                <div id="rubricContainer" class="space-y-8"></div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="xl:col-span-1 space-y-6">
+                <div class="sticky top-24 space-y-6">
+                    <!-- Score Summary -->
+                    <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
+                        <h2 class="text-lg font-bold text-slate-800 mb-4">Resum</h2>
+                        <div class="overflow-hidden rounded-lg border border-slate-200 mb-4">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-slate-100 text-slate-600">
+                                    <tr><th class="px-4 py-2 text-left">Apartat</th><th class="px-2 py-2 text-center">Nota</th></tr>
+                                </thead>
+                                <tbody id="summaryTableBody" class="divide-y divide-slate-100">
+                                    <tr><td colspan="2" class="p-4 text-center text-slate-400 italic">Comença a avaluar...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-100">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Nota Final (Global)</label>
+                            <input type="text" id="finalGradeInput" placeholder="Ex: B" class="w-full text-2xl font-bold text-indigo-700 p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 text-right">
+                        </div>
+                    </div>
+
+                    <!-- Checklist -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h2 class="text-sm font-bold text-rose-600 mb-3 uppercase tracking-wide flex items-center gap-2"><i class="fas fa-clipboard-check"></i> Errors Freqüents</h2>
+                        <div id="checklistContainer" class="space-y-2"></div>
+                    </div>
+
+                    <!-- Output & Actions -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="mb-4">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Feedback generat</label>
+                            <textarea id="feedbackOutput" class="w-full h-96 p-3 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 font-mono leading-relaxed" spellcheck="false"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="copyFeedback()" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition flex justify-center items-center gap-2 text-sm font-semibold shadow-sm"><i class="fas fa-copy"></i> Copiar</button>
+                            <button onclick="downloadPDF()" id="pdfBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 px-4 rounded transition flex justify-center items-center gap-2 text-sm font-semibold shadow-sm"><i class="fas fa-file-pdf text-red-600"></i> <span id="pdfBtnText">PDF</span></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Printable View -->
+    <div id="printable-view" style="background: white; padding: 40px; max-width: 800px; margin: 0 auto;">
+        <div class="border-b-2 border-slate-800 pb-4 mb-8 flex justify-between items-end">
+            <div>
+                <h1 class="text-3xl font-bold uppercase tracking-tight text-slate-900">Rúbrica Avaluació PI</h1>
+                <p class="text-slate-600 text-lg">Escola de Segona Ensenyança d'Ordino</p>
+            </div>
+            <div class="text-right"><p class="text-sm text-slate-500">Data: <span id="printDate"></span></p></div>
+        </div>
+        <div class="flex justify-between items-center mb-8 bg-slate-50 p-4 rounded border border-slate-200">
+            <div>
+                <span class="text-xs font-bold uppercase text-slate-500 block">Alumne/a</span>
+                <span class="text-xl font-bold text-slate-900" id="printName"></span>
+            </div>
+            <div class="text-right">
+                <span class="text-xs font-bold uppercase text-slate-500 block">Nota Global</span>
+                <span id="printFinalGrade" class="text-xl font-bold text-slate-900 border-2 border-slate-800 px-3 py-0.5 rounded bg-white"></span>
+            </div>
+        </div>
+        <div id="printRubricContainer"></div>
+        <div class="mt-8 pt-6 border-t-2 border-slate-200">
+            <h3 class="text-md font-bold uppercase text-slate-800 mb-4">Comentaris i Observacions</h3>
+            <div id="printFeedback" class="whitespace-pre-wrap text-justify font-serif text-sm text-black leading-relaxed bg-slate-50 p-4 rounded border border-slate-100"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓ DE DADES ---
+        const LEVELS = { 4: 'A', 3: 'B', 2: 'C', 1: 'D' };
+        
+        const rubricData = [
+            {
+                id: 'format',
+                title: 'Format i Presentació',
+                icon: 'fa-ruler-combined',
+                rows: [
+                    { title: "Estètica i Maquetació", values: { 
+                        4: "Maquetació professional i atractiva. Convida a llegir.", 
+                        3: "Maquetació correcta i neta, sense elements trencats.", 
+                        2: "Aspecte simple o poc cuidat. Inconsistències visuals.", 
+                        1: "Aspecte descurat o caòtic que dificulta la lectura." 
+                    }},
+                    { title: "Normativa (Arial 12...)", values: { 
+                        4: "Segueix la normativa (tipografia, interlineat) a la perfecció.", 
+                        3: "Segueix la major part de la normativa amb algun error menor.", 
+                        2: "No justifica el text o falla en la tipografia en diversos punts.", 
+                        1: "No segueix la normativa d'estil demanada (marges, lletra...)." 
+                    }},
+                    { title: "Estructura (Índex/Portada)", values: { 
+                        4: "Portada completa i índex paginat correctament.", 
+                        3: "Portada correcta. Índex present amb algun error de format.", 
+                        2: "Falten dades a la portada o l'índex no coincideix.", 
+                        1: "No hi ha portada o no hi ha índex." 
+                    }},
+                    { title: "Imatges i Gràfics", values: { 
+                        4: "Imatges de qualitat, ben integrades i amb peu de foto.", 
+                        3: "Imatges adequades, la majoria amb peu de foto.", 
+                        2: "Imatges deformades, pixelades o sense peu explicatiu.", 
+                        1: "No hi ha imatges o són purament decoratives i innecessàries." 
+                    }}
+                ],
+                feedback: {
+                    4: "Presentació impecable. Has aconseguit un document professional que entra pels ulls. La maquetació és neta i l'estructura perfecta facilita molt la lectura. Enhorabona per la cura en els detalls.",
+                    3: "Bona presentació general. El treball compleix amb la normativa i té un aspecte correcte. Per arribar a l'excel·lència, revisa els petits detalls de maquetació (espais en blanc, salts de pàgina) i assegura't que totes les imatges tinguin el seu peu.",
+                    2: "La presentació té aspectes a millorar. Tot i que l'estructura hi és, hi ha errors de format (text no justificat, tipografies diferents) que resten professionalitat. Recorda que la forma és tan important com el contingut.",
+                    1: "La presentació és deficient. No se segueix la normativa bàsica (lletra, marges, justificació). Això dificulta la lectura i dóna sensació de deixadesa. Cal refer el format completament."
+                }
+            },
+            {
+                id: 'intro',
+                title: 'Introducció',
+                icon: 'fa-bullseye',
+                rows: [
+                    { title: "Narrativa / Ganxo", values: { 
+                        4: "Intro atrapant que desperta interès genuí pel tema.", 
+                        3: "Intro correcta que explica de què va el treball.", 
+                        2: "Intro confusa, costa entendre l'objectiu del treball.", 
+                        1: "Intro inexistent o telegràfica (1-2 línies)." 
+                    }},
+                    { title: "Contingut (Pauta)", values: { 
+                        4: "Inclou Motivació, Àmbit, Llengua i Tipologia ben lligats.", 
+                        3: "Inclou tots els apartats de la pauta de forma esquemàtica.", 
+                        2: "Falta algun dels apartats obligatoris (ex: àmbit).", 
+                        1: "Falten la majoria d'apartats de la pauta." 
+                    }},
+                    { title: "Reptes i Indicadors", values: { 
+                        4: "Reptes ambiciosos i vinculats als indicadors d'avaluació.", 
+                        3: "Reptes clars i relacionats amb el projecte.", 
+                        2: "Reptes genèrics ('aprovar') o poc definits.", 
+                        1: "No es plantegen reptes personals." 
+                    }}
+                ],
+                feedback: {
+                    4: "Una introducció excel·lent. Has sabut explicar el 'perquè' del teu projecte amb passió i claredat. Els reptes que et marques demostren ambició i ganes d'aprendre.",
+                    3: "Introducció correcta. Trobem tota la informació necessària. Intenta que la redacció sigui més fluida i menys esquemàtica; connecta la motivació amb els reptes per crear un relat més sòlid.",
+                    2: "La introducció és fluixa. Hi ha la informació, però està desordenada o és massa breu. No queda clar per què has triat aquest tema ni què vols aconseguir. Revisa la pauta.",
+                    1: "Introducció insuficient. No s'explica de què va el projecte ni quins són els objectius. Has de reescriure-la seguint punt per punt la guia."
+                }
+            },
+            {
+                id: 'process',
+                title: 'Procés de Treball',
+                icon: 'fa-cogs',
+                rows: [
+                    { title: "Planificació i Format", values: { 
+                        4: "Planificació realista, detallada i amb format visual clar (Gantt/Calendari).", 
+                        3: "Planificació correcta amb format adequat.", 
+                        2: "Planificació poc realista o format confús.", 
+                        1: "Sense planificació prèvia o molt deficient." 
+                    }},
+                    { title: "Relat del Procés", values: { 
+                        4: "Narrativa detallada del 'viatge': què, com i per què.", 
+                        3: "Explicació clara dels passos seguits (fase a fase).", 
+                        2: "Llista cronològica simple ('primer vaig fer això...').", 
+                        1: "Explicació telegràfica o molt pobra." 
+                    }},
+                    { title: "Gestió Dificultats", values: { 
+                        4: "Anàlisi madura dels problemes i com es van solucionar.", 
+                        3: "Esmenta les dificultats i les solucions aplicades.", 
+                        2: "Diu 'no he tingut problemes' o no explica la solució.", 
+                        1: "No parla de les dificultats o obstacles." 
+                    }},
+                    { title: "Evidències", values: { 
+                        4: "Fotos pròpies del procés (esbossos, proves) ben integrades.", 
+                        3: "Hi ha evidències gràfiques suficients del procés.", 
+                        2: "Poques evidències o imatges genèriques d'internet.", 
+                        1: "Sense evidències gràfiques que demostrin la feina." 
+                    }}
+                ],
+                feedback: {
+                    4: "La millor part del treball. Has documentat el procés de manera excel·lent, mostrant no només els encerts sinó també com has superat els obstacles. La planificació i les evidències demostren gran autonomia.",
+                    3: "Bona explicació del procés. S'entén perfectament què has fet. Per millorar, aprofundeix més en el 'com' vas resoldre els problemes concrets i assegura't que la planificació tingui un format més visual.",
+                    2: "L'explicació del procés és massa simple o llistada. Sembla una agenda. Has d'explicar la història del projecte: la planificació, les decisions preses i els canvis. Falten evidències reals.",
+                    1: "No s'entén com has fet el projecte. Falta informació sobre la planificació, els passos i les dificultats. Sense evidències del procés, no es pot avaluar la feina feta."
+                }
+            },
+            {
+                id: 'result',
+                title: 'Conclusió',
+                icon: 'fa-flag-checkered',
+                rows: [
+                    { title: "Profunditat", values: { 
+                        4: "Reflexió profunda i personal, no un simple resum.", 
+                        3: "Respon a totes les preguntes de la pauta correctament.", 
+                        2: "Més aviat un resum del que s'ha fet o molt breu.", 
+                        1: "Conclusió inexistent o de 2 línies." 
+                    }},
+                    { title: "Autocrítica", values: { 
+                        4: "Anàlisi crítica de millora: 'què faria diferent?'.", 
+                        3: "Admet errors de planificació o execució.", 
+                        2: "Poca autocrítica ('tot ha anat perfecte').", 
+                        1: "Sense autocrítica ni valoració personal." 
+                    }},
+                    { title: "Tancament", values: { 
+                        4: "Connecta el resultat final amb els reptes inicials.", 
+                        3: "Valora si s'han assolit els objectius.", 
+                        2: "Valoració superficial ('m'ha agradat').", 
+                        1: "No tanca el treball adequadament." 
+                    }}
+                ],
+                feedback: {
+                    4: "Una conclusió molt madura. M'ha agradat molt la teva capacitat d'autocrítica i com has analitzat què milloraries. Has tancat el cercle connectant amb els reptes inicials. Molt bé.",
+                    3: "Conclusió correcta i completa. Has respost al que es demanava. Intenta anar més enllà de les preguntes i fer una reflexió més global sobre el teu aprenentatge personal.",
+                    2: "La conclusió és una mica justa. Et limites a dir que t'ha agradat o a fer un resum. Cal que reflexionis seriosament sobre si la planificació va ser realista i què has après dels errors.",
+                    1: "La conclusió és insuficient. Un treball d'aquest tipus requereix una reflexió final seriosa. Has de valorar la teva feina, la gestió del temps i el resultat obtingut."
+                }
+            },
+            {
+                id: 'language',
+                title: 'Expressió Escrita',
+                icon: 'fa-pen-nib',
+                rows: [
+                    { title: "Correcció", values: { 
+                        4: "Text impecable, sense faltes d'ortografia.", 
+                        3: "Text correcte, algun error puntual.", 
+                        2: "Errors freqüents que dificulten la comprensió.", 
+                        1: "Errors greus i constants (ortografia i gramàtica)." 
+                    }},
+                    { title: "Estil i Registre", values: { 
+                        4: "Vocabulari ric, precís i variat. To formal excel·lent.", 
+                        3: "Registre formal adequat i vocabulari correcte.", 
+                        2: "Repeticions, frases confuses o to massa col·loquial.", 
+                        1: "To vulgar o frases sense sentit. Costa de llegir." 
+                    }}
+                ],
+                feedback: {
+                    4: "Expressió escrita excel·lent. És un plaer llegir un text tan ben redactat, fluid i amb un vocabulari tan ric. Enhorabona.",
+                    3: "Redacció correcta i formal. El text s'entén bé. Vigila algunes repeticions i la puntuació per millorar la fluïdesa, però el nivell és bo.",
+                    2: "Hi ha problemes d'expressió. Revisa l'ortografia i intenta fer frases més curtes i clares. El to de vegades és massa parlat. Passa el corrector.",
+                    1: "El nivell d'expressió és preocupant. Hi ha moltes faltes i costa d'entendre el que vols dir. Necessites una revisió profunda i ajuda amb la correcció."
+                }
+            }
+        ];
+
+        const checklistData = [
+            { id: 'justificat', label: 'Text no justificat', advice: "⚠️ Detall important: Justifica tot el text (alineat a esquerra i dreta) per donar aspecte de llibre." },
+            { id: 'peusfoto', label: 'Imatges sense peu', advice: "⚠️ Recorda que totes les imatges han de tenir un peu de foto explicatiu i estar numerades (Fig. 1...)." },
+            { id: 'totbe', label: "Falta realisme (Síndrome 'Tot bé')", advice: "⚠️ A les dificultats dius que no n'hi ha hagut. Això no és creïble; reflexiona sobre els petits obstacles del dia a dia." },
+            { id: 'llista', label: "Narració tipus 'Llista'", advice: "⚠️ El procés sembla una llista de la compra. Explica-ho com una història connectada, usant connectors temporals." },
+            { id: 'index', label: "Paginació incorrecta", advice: "⚠️ L'índex no coincideix amb les pàgines reals. Actualitza'l automàticament amb el processador de textos." },
+            { id: 'bibliografia', label: "Bibliografia malament (URLs)", advice: "⚠️ No posis només l'enllaç blau. Has de posar: Autor, Títol de l'article, Nom de la web i Data." },
+            { id: 'portada', label: "Portada incompleta", advice: "⚠️ A la portada hi falten dades obligatòries (nom conductor, curs, número PI...). Revisa la plantilla." }
+        ];
+
+        let state = {}; 
+        let activeChecklist = new Set();
+        let isUserEditing = false;
+
+        function init() {
+            renderInteractiveRubric();
+            renderChecklist();
+            document.getElementById('printDate').innerText = new Date().toLocaleDateString('ca-AD');
+        }
+
+        function renderInteractiveRubric() {
+            const container = document.getElementById('rubricContainer');
+            let html = '';
+            
+            rubricData.forEach(cat => {
+                html += `
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+                    <div class="bg-white p-4 border-b border-slate-200 flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-indigo-100 w-10 h-10 flex items-center justify-center rounded-lg text-indigo-700"><i class="fas ${cat.icon} text-lg"></i></div>
+                            <h3 class="font-bold text-lg text-slate-800">${cat.title}</h3>
+                        </div>
+                        <div id="badge-${cat.id}" class="hidden px-3 py-1 rounded bg-slate-100 text-slate-600 font-bold border border-slate-300"></div>
+                    </div>
+                    
+                    <div class="rubric-grid">
+                        <!-- Headers -->
+                        <div class="header-cell header-title">CRITERI</div>
+                        <div class="header-cell header-A">A - EXPERT</div>
+                        <div class="header-cell header-B">B - AVANÇAT</div>
+                        <div class="header-cell header-C">C - APRENENT</div>
+                        <div class="header-cell header-D">D - NOVELL</div>
+
+                        <!-- Rows -->
+                        ${cat.rows.map((row, rIdx) => `
+                            <div class="criterion-row-title">${row.title}</div>
+                            ${[4, 3, 2, 1].map(lvl => `
+                                <div id="cell-${cat.id}-${rIdx}-${lvl}" 
+                                     class="criterion-cell" 
+                                     onclick="selectCell('${cat.id}', ${rIdx}, ${lvl})">
+                                    ${row.values[lvl]}
+                                </div>
+                            `).join('')}
+                        `).join('')}
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderChecklist() {
+            const container = document.getElementById('checklistContainer');
+            container.innerHTML = checklistData.map(item => `
+                <label class="flex items-center gap-3 p-2 hover:bg-rose-50 rounded cursor-pointer transition">
+                    <input type="checkbox" id="check-${item.id}" onchange="toggleChecklist('${item.id}')" class="w-4 h-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded">
+                    <span class="text-sm text-slate-700 font-medium">${item.label}</span>
+                </label>
+            `).join('');
+        }
+
+        function selectCell(catId, rowIdx, level) {
+            if (!state[catId]) state[catId] = {};
+            if (state[catId][rowIdx] === level) {
+                delete state[catId][rowIdx];
+            } else {
+                state[catId][rowIdx] = level;
+            }
+            updateUI(catId);
+            updateSummary();
+            isUserEditing = false;
+            generateFeedback();
+        }
+
+        function updateUI(catId) {
+            document.querySelectorAll(`[id^="cell-${catId}-"]`).forEach(el => {
+                el.classList.remove('selected-A', 'selected-B', 'selected-C', 'selected-D');
+                el.style.opacity = '1';
+            });
+            if (state[catId]) {
+                Object.entries(state[catId]).forEach(([rIdx, lvl]) => {
+                    const el = document.getElementById(`cell-${catId}-${rIdx}-${lvl}`);
+                    if (el) el.classList.add(`selected-${LEVELS[lvl]}`);
+                });
+            }
+            const score = calculateCategoryScore(catId);
+            const badge = document.getElementById(`badge-${catId}`);
+            if (score) {
+                badge.innerText = `Nivell ${LEVELS[score]}`;
+                badge.classList.remove('hidden');
+                badge.className = `px-3 py-1 rounded font-bold border ${score===4?'bg-green-100 text-green-800 border-green-300':score===3?'bg-blue-100 text-blue-800 border-blue-300':score===2?'bg-orange-100 text-orange-800 border-orange-300':'bg-red-100 text-red-800 border-red-300'}`;
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function calculateCategoryScore(catId) {
+            if (!state[catId]) return null;
+            const values = Object.values(state[catId]);
+            if (values.length === 0) return null;
+            const sum = values.reduce((a, b) => a + b, 0);
+            return Math.round(sum / values.length);
+        }
+
+        function toggleChecklist(id) {
+            if (activeChecklist.has(id)) activeChecklist.delete(id); else activeChecklist.add(id);
+            isUserEditing = false;
+            generateFeedback();
+        }
+
+        function updateSummary() {
+            const tbody = document.getElementById('summaryTableBody');
+            let html = '';
+            let hasData = false;
+            rubricData.forEach(cat => {
+                const score = calculateCategoryScore(cat.id);
+                if (score) {
+                    hasData = true;
+                    const letter = LEVELS[score];
+                    const bg = score===4?'bg-green-100 text-green-800':score===3?'bg-blue-100 text-blue-800':score===2?'bg-orange-100 text-orange-800':'bg-red-100 text-red-800';
+                    html += `<tr><td class="px-4 py-3 font-medium text-slate-700">${cat.title}</td><td class="px-2 py-3 text-center"><span class="px-2 py-1 rounded font-bold text-xs border ${bg}">${letter}</span></td></tr>`;
+                }
+            });
+            tbody.innerHTML = hasData ? html : '<tr><td colspan="2" class="p-4 text-center text-slate-400 italic">Selecciona criteris...</td></tr>';
+        }
+
+        function generateFeedback() {
+            const name = document.getElementById('studentName').value || "Alumne";
+            let text = `Hola ${name},\n\nAquí tens la correcció de la teva memòria del PI. He revisat el treball a fons i aquests són els punts clau:\n\n`;
+            
+            rubricData.forEach(cat => {
+                const score = calculateCategoryScore(cat.id);
+                if (score) {
+                    const letter = LEVELS[score];
+                    const fb = cat.feedback[score];
+                    text += `🔹 [${cat.title}]: Nivell ${letter}\n${fb}\n\n`;
+                }
+            });
+
+            if (activeChecklist.size > 0) {
+                text += `⚠️ PUNTS D'ATENCIÓ (Checklist):\n`;
+                activeChecklist.forEach(id => {
+                    const item = checklistData.find(i => i.id === id);
+                    text += `- ${item.advice}\n`;
+                });
+            } else if (!text.includes('🔹')) {
+                text += "Utilitza la rúbrica per generar els comentaris.";
+            } 
+            
+            text += `\nÀnims amb la recta final, ${name}!`;
+
+            document.getElementById('feedbackOutput').value = text;
+            syncPrintData();
+        }
+
+        function syncPrintData() {
+            document.getElementById('printName').innerText = document.getElementById('studentName').value || 'Alumne';
+            document.getElementById('printFinalGrade').innerText = document.getElementById('finalGradeInput').value;
+            document.getElementById('printFeedback').innerText = document.getElementById('feedbackOutput').value;
+        }
+
+        function preparePrint() {
+            const container = document.getElementById('printRubricContainer');
+            let html = '';
+            
+            rubricData.forEach(cat => {
+                html += `<div style="margin-bottom: 20px; break-inside: avoid;">
+                    <h4 style="font-weight:bold; color:#334155; margin-bottom:5px; font-size:12px; border-bottom:1px solid #ccc;">${cat.title}</h4>
+                    <table class="pdf-rubric-table">
+                        <tr>
+                            <th style="width:15%">Aspecte</th>
+                            <th style="width:21%">A - Expert</th>
+                            <th style="width:21%">B - Avançat</th>
+                            <th style="width:21%">C - Aprenent</th>
+                            <th style="width:21%">D - Novell</th>
+                        </tr>`;
+                
+                cat.rows.forEach((row, rIdx) => {
+                    const selectedLvl = state[cat.id] ? state[cat.id][rIdx] : null;
+                    html += `<tr>
+                        <td class="row-title">${row.title}</td>
+                        <td class="${selectedLvl===4?'selected-A':''}">${row.values[4]}</td>
+                        <td class="${selectedLvl===3?'selected-B':''}">${row.values[3]}</td>
+                        <td class="${selectedLvl===2?'selected-C':''}">${row.values[2]}</td>
+                        <td class="${selectedLvl===1?'selected-D':''}">${row.values[1]}</td>
+                    </tr>`;
+                });
+                html += `</table></div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function downloadPDF() {
+            syncPrintData();
+            preparePrint();
+            
+            const mainView = document.getElementById('interactive-view');
+            const printView = document.getElementById('printable-view');
+            const btnText = document.getElementById('pdfBtnText');
+            const originalText = btnText.innerText;
+            const name = document.getElementById('studentName').value || 'Alumne';
+
+            btnText.innerText = "...";
+            mainView.style.display = 'none';
+            printView.style.display = 'block';
+            window.scrollTo(0,0);
+
+            setTimeout(() => {
+                const opt = {
+                    margin: [10, 10, 15, 10], 
+                    filename: `PI_${name.replace(/\s+/g, '_')}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+                };
+
+                html2pdf().set(opt).from(printView).save().then(() => {
+                    printView.style.display = 'none';
+                    mainView.style.display = 'block';
+                    btnText.innerText = originalText;
+                    showToast("PDF Guardat!");
+                }).catch(err => {
+                    console.error(err);
+                    printView.style.display = 'none';
+                    mainView.style.display = 'block';
+                    btnText.innerText = originalText;
+                    showToast("Error. Prova amb navegador Chrome.");
+                });
+            }, 500);
+        }
+
+        function copySourceCode() {
+            const html = document.documentElement.outerHTML;
+            const el = document.createElement('textarea');
+            el.value = html;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast("Codi copiat!");
+        }
+        function copyFeedback() {
+            const copyText = document.getElementById("feedbackOutput");
+            copyText.select();
+            document.execCommand('copy');
+            showToast("Text copiat!");
+        }
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.className = "show";
+            setTimeout(() => t.className = "", 3000);
+        }
+        function openResetModal() { document.getElementById('customModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('customModal').style.display = 'none'; }
+        function confirmReset() {
+            state = {}; activeChecklist.clear();
+            document.getElementById('studentName').value = '';
+            document.getElementById('projectTitle').value = '';
+            document.getElementById('finalGradeInput').value = '';
+            document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            rubricData.forEach(c => updateUI(c.id));
+            updateSummary();
+            generateFeedback();
+            closeModal();
+            showToast("Reiniciat");
+        }
+
+        document.getElementById('studentName').addEventListener('input', () => {
+            if(!isUserEditing) generateFeedback();
+        });
+        document.getElementById('finalGradeInput').addEventListener('input', () => {
+            document.getElementById('printFinalGrade').innerText = document.getElementById('finalGradeInput').value;
+        });
+
+        init();
+    </script>
+</body>
+</html>
