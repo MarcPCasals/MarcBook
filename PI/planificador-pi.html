@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Planificador del PI</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- HTML2PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'heading': ['Fredoka', 'sans-serif'], 'body': ['Inter', 'sans-serif'] },
+                    colors: { orange: { 50: '#fff7ed', 100: '#ffedd5', 500: '#f97316', 600: '#ea580c' }, blue: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 900: '#1e3a8a' }, slate: { 850: '#1e293b', 900: '#0f172a' }, purple: { 50: '#faf5ff', 100: '#f3e8ff', 500: '#a855f7', 600: '#9333ea' } },
+                    animation: { 'pop-up': 'popUp 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards', 'bounce-in': 'bounceIn 0.5s cubic-bezier(0.8, 0, 1, 1)', 'fade-out': 'fadeOut 0.5s ease-in forwards 1s' },
+                    keyframes: { popUp: { '0%': { opacity: '0', transform: 'translate(-50%, -50%) scale(0.5)' }, '50%': { opacity: '1', transform: 'translate(-50%, -50%) scale(1.1)' }, '100%': { opacity: '1', transform: 'translate(-50%, -50%) scale(1)' } }, fadeOut: { '0%': { opacity: '1' }, '100%': { opacity: '0' } }, bounceIn: { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.05)' } } }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f8fafc; touch-action: manipulation; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .card-pulse { animation: pulse-border 2s infinite; }
+        @keyframes pulse-border { 0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); } 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
+        .score-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; pointer-events: none; text-shadow: 0px 4px 10px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- ICONS ---
+        const IconCheck = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12"></polyline></svg>;
+        const IconLock = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>;
+        const IconArrowLeft = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>;
+        const IconArrowRight = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>;
+        const IconTrash = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        const IconPlus = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+        const IconMinus = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+        const IconCoffee = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>;
+        const IconBack = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
+        const IconBook = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>;
+        const IconInfo = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
+        const IconClock = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
+        const IconCopy = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>;
+        const IconAlert = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
+        const IconStar = ({ className }) => <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>;
+        const IconDownload = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>;
+        const IconFileJson = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
+        const IconFilePdf = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
+
+        // --- CONSTANTS ---
+        const PHASE_DEFS = {
+            1: { name: 'Autoconeixement', color: 'bg-blue-500', bgLight: 'bg-blue-50', text: 'text-blue-600', borderColor: 'border-blue-200' },
+            2: { name: 'Planificació', color: 'bg-purple-500', bgLight: 'bg-purple-50', text: 'text-purple-600', borderColor: 'border-purple-200' },
+            3: { name: 'Realització', color: 'bg-orange-500', bgLight: 'bg-orange-50', text: 'text-orange-600', borderColor: 'border-orange-200' },
+            4: { name: 'Comunicació', color: 'bg-green-500', bgLight: 'bg-green-50', text: 'text-green-600', borderColor: 'border-green-200' }
+        };
+
+        const STORAGE_KEY = 'pi_flow_v5';
+
+        const formatDate = (date) => new Date(date).toLocaleDateString('ca-ES', { day: 'numeric', month: 'short' });
+        const getWeekRange = (startDateStr, weekIndex) => {
+            if (!startDateStr) return '';
+            const start = new Date(startDateStr);
+            const weekStart = new Date(start);
+            weekStart.setDate(start.getDate() + (weekIndex * 7));
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 4); 
+            return `${formatDate(weekStart)} - ${formatDate(weekEnd)}`;
+        };
+
+        const generateInitialWeeks = () => {
+            const config = [
+                { phaseId: 1, count: 1 },  
+                { phaseId: 2, count: 2 },  
+                { phaseId: 3, count: 12 }, 
+                { phaseId: 4, count: 3 }   
+            ];
+            
+            let weeks = [];
+            let globalId = 1;
+
+            config.forEach(cfg => {
+                for(let i=0; i<cfg.count; i++) {
+                    let initialTasks = [
+                        { id: crypto.randomUUID(), text: '', column: 'todo' },
+                        { id: crypto.randomUUID(), text: '', column: 'todo' },
+                        { id: crypto.randomUUID(), text: '', column: 'todo' }
+                    ];
+
+                    weeks.push({
+                        id: globalId++,
+                        phaseId: cfg.phaseId,
+                        status: 'locked', 
+                        tasks: initialTasks,
+                        reflection: { difficulties: '', learned: '' },
+                        completedAt: null
+                    });
+                }
+            });
+            return weeks;
+        };
+
+        // --- COMPONENTS ---
+
+        // KANBAN COLUMN COMPONENT
+        const KanbanColumn = ({ title, color, titleColor, tasks, onDelete, onMove, isDoneCol }) => (
+            <div className={`rounded-xl p-3 ${color} border-b-4 flex-1 min-w-[280px]`}>
+                <h3 className={`font-bold uppercase text-xs mb-3 ${titleColor} flex justify-between`}>{title} <span className="bg-white/50 px-2 rounded-full">{tasks.length}</span></h3>
+                <div className="space-y-3">
+                    {tasks.map(task => (
+                        <div key={task.id} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 relative group transition-transform hover:-translate-y-1">
+                            {task.tag && <span className="absolute -top-2 -right-1 bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded border border-red-200">{task.tag}</span>}
+                            <p className="text-sm font-medium text-slate-800 mb-3">{task.text}</p>
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                                <button onClick={() => onDelete(task.id)} className="text-slate-300 hover:text-red-500"><IconTrash className="w-4 h-4" /></button>
+                                <div className="flex gap-2">
+                                    {!isDoneCol && task.column !== 'todo' && <button onClick={() => onMove(task.id, -1)} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200"><IconArrowLeft className="w-4 h-4" /></button>}
+                                    {task.column === 'todo' && <button onClick={() => onMove(task.id, 1)} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200"><IconArrowRight className="w-4 h-4" /></button>}
+                                    {task.column === 'doing' && <button onClick={() => onMove(task.id, 1)} className="p-1.5 bg-green-100 rounded hover:bg-green-200 text-green-600"><IconCheck className="w-4 h-4" /></button>}
+                                    {isDoneCol && <button onClick={() => onMove(task.id, -1)} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200"><IconArrowLeft className="w-4 h-4" /></button>}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {tasks.length === 0 && <div className="text-center py-4 text-slate-400 text-xs italic opacity-50">Buit</div>}
+                </div>
+            </div>
+        );
+
+        const ScoreAnimation = ({ points, onEnd }) => {
+            useEffect(() => { const t = setTimeout(onEnd, 1500); return () => clearTimeout(t); }, []);
+            const isPositive = points >= 0;
+            return (
+                <div className="score-overlay animate-pop-up flex flex-col items-center justify-center">
+                    <div className={`text-6xl md:text-8xl font-heading font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                        {isPositive ? '+' : ''}{points}
+                    </div>
+                    <div className={`text-2xl md:text-3xl font-heading font-bold uppercase mt-2 text-white bg-black/20 px-4 py-1 rounded-full backdrop-blur-sm`}>
+                        Punts
+                    </div>
+                </div>
+            );
+        };
+
+        const MetaLogModal = ({ weeks, onClose, startDate }) => {
+            const completedWeeks = weeks.filter(w => w.status === 'completed' || w.completedAt).sort((a,b) => a.id - b.id);
+
+            const handleCopy = () => {
+                const text = completedWeeks.map(w => {
+                    const range = getWeekRange(startDate, w.id - 1);
+                    return `SETMANA ${w.id} (${range})\n-------------------------------\nDIFICULTATS I SOLUCIONS:\n${w.reflection.difficulties || 'Cap registre.'}\n\nAPRENENTATGES:\n${w.reflection.learned || 'Cap registre.'}\n`;
+                }).join('\n\n');
+                
+                navigator.clipboard.writeText(text).then(() => alert("Tot el diari s'ha copiat al porta-retalls! Ja pots enganxar-lo a la teva memòria."));
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col animate-bounce-in">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50 rounded-t-2xl">
+                            <div>
+                                <h2 className="text-2xl font-heading font-bold text-slate-800 flex items-center gap-2">
+                                    <IconBook className="w-6 h-6 text-orange-500"/> Diari de Metacognició
+                                </h2>
+                                <p className="text-xs text-slate-500 mt-1">Aquest diari et servirà per tenir recollides les dificultats i els aprenentatges del dia a dia.</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={handleCopy} className="text-blue-500 hover:text-blue-700 font-bold text-sm bg-blue-50 px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-100 transition-colors">
+                                    <IconCopy className="w-4 h-4"/> Copiar Tot
+                                </button>
+                                <button onClick={onClose} className="text-slate-400 hover:text-slate-800 font-bold text-xl px-2">&times;</button>
+                            </div>
+                        </div>
+                        <div className="overflow-y-auto p-6 space-y-6 flex-1">
+                            {completedWeeks.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400">Encara no has tancat cap setmana.</div>
+                            ) : (
+                                completedWeeks.map(week => (
+                                    <div key={week.id} className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${PHASE_DEFS[week.phaseId].bgLight} ${PHASE_DEFS[week.phaseId].text}`}>
+                                                Setmana {week.id} - {PHASE_DEFS[week.phaseId].name}
+                                            </span>
+                                            {/* DATA ORIGINAL DE LA SETMANA */}
+                                            <span className="text-xs text-slate-400 font-mono">
+                                                {getWeekRange(startDate, week.id - 1)}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <h4 className="text-xs font-bold text-red-500 uppercase mb-1">Dificultats i Solucions</h4>
+                                                <p className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-100 italic whitespace-pre-wrap">
+                                                    "{week.reflection?.difficulties || 'Sense registres'}"
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-bold text-green-600 uppercase mb-1">Aprenentatges</h4>
+                                                <p className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-100 italic whitespace-pre-wrap">
+                                                    "{week.reflection?.learned || 'Sense registres'}"
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- NEW: DOWNLOAD MODAL ---
+        const DownloadModal = ({ onClose, onExportJSON, onExportPDF }) => {
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col animate-bounce-in overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h2 className="text-xl font-heading font-bold text-slate-800 flex items-center gap-2">
+                                <IconDownload className="w-5 h-5 text-orange-500"/> Descarrega el teu PI
+                            </h2>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-800 font-bold text-xl">&times;</button>
+                        </div>
+                        <div className="p-6">
+                            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 text-sm text-orange-800">
+                                <strong>Avís:</strong> Dades locals. Descarregar per veure-ho a un altre dispositiu!
+                            </div>
+
+                            <div className="space-y-4">
+                                <button onClick={onExportJSON} className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all group">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <div className="bg-blue-100 text-blue-600 p-2 rounded-lg"><IconFileJson className="w-5 h-5"/></div>
+                                        <span className="font-bold text-slate-700 group-hover:text-blue-700">Arxiu JSON</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 pl-[52px]">Còpia de seguretat. Fes-lo servir per carregar les teves dades en un altre dispositiu (iPad, ordinador...).</p>
+                                </button>
+
+                                <button onClick={onExportPDF} className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-red-400 hover:bg-red-50 transition-all group">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <div className="bg-red-100 text-red-600 p-2 rounded-lg"><IconFilePdf className="w-5 h-5"/></div>
+                                        <span className="font-bold text-slate-700 group-hover:text-red-700">Informe PDF</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 pl-[52px]">Previsualització visual de tota la feina feta fins ara. Ideal per entregar al professor.</p>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- NEW: RESET MODAL ---
+        const ResetModal = ({ onClose, onConfirm }) => {
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col animate-bounce-in overflow-hidden border-4 border-red-500">
+                        <div className="p-6 text-center">
+                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 text-red-600 mb-4">
+                                <IconAlert className="w-8 h-8" />
+                            </div>
+                            <h2 className="text-xl font-heading font-bold text-slate-800 mb-2">Atenció!</h2>
+                            <p className="text-slate-600 text-sm mb-6">Aquesta acció esborrarà tot el document i es ressetejarà, segur que vols fer-ho?</p>
+                            
+                            <div className="flex flex-col gap-2">
+                                <button onClick={onConfirm} className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold shadow-md transition-colors">
+                                    Sí, segur
+                                </button>
+                                <button onClick={onClose} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors">
+                                    No, m'he equivocat!
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- COMPONENT: TASK INPUT LIST ---
+        const TaskInputList = ({ tasks, onChange }) => {
+            const handleInputChange = (id, newText) => {
+                const newTasks = tasks.map(t => t.id === id ? { ...t, text: newText } : t);
+                const lastTask = newTasks[newTasks.length - 1];
+                if (lastTask.text.trim() !== '') {
+                    newTasks.push({ id: crypto.randomUUID(), text: '', column: 'todo' });
+                }
+                onChange(newTasks);
+            };
+
+            const handleRemove = (id) => {
+                if (tasks.length <= 1) return; 
+                const newTasks = tasks.filter(t => t.id !== id);
+                onChange(newTasks);
+            };
+
+            return (
+                <div className="space-y-2">
+                    {tasks.map((task, index) => (
+                        <div key={task.id} className="flex items-center gap-2 group">
+                            <span className="text-slate-300 font-bold select-none">-</span>
+                            <input 
+                                type="text" 
+                                value={task.text}
+                                onChange={(e) => handleInputChange(task.id, e.target.value)}
+                                placeholder="Escriu una tasca..."
+                                className="flex-1 bg-transparent border-b border-slate-200 focus:border-blue-500 outline-none py-1 text-slate-700 text-sm transition-colors"
+                            />
+                            {index !== tasks.length - 1 && (
+                                <button onClick={() => handleRemove(task.id)} className="text-slate-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <IconTrash className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        // --- PHASE I: PLANNING VIEW ---
+        const PlanningView = ({ weeks, setWeeks, onConfirm }) => {
+            const weeksByPhase = useMemo(() => {
+                const grouped = {};
+                Object.keys(PHASE_DEFS).forEach(id => grouped[id] = []);
+                weeks.forEach(w => { if (grouped[w.phaseId]) grouped[w.phaseId].push(w); });
+                return grouped;
+            }, [weeks]);
+
+            const handleAddWeek = (phaseIdStr) => {
+                const phaseId = parseInt(phaseIdStr);
+                const currentPhaseWeeks = weeksByPhase[phaseId];
+                const lastWeekOfPhase = currentPhaseWeeks[currentPhaseWeeks.length - 1];
+                const insertionIdx = weeks.indexOf(lastWeekOfPhase);
+                
+                const newWeek = {
+                    id: 0, 
+                    phaseId: phaseId,
+                    status: 'locked',
+                    tasks: [
+                        { id: crypto.randomUUID(), text: '', column: 'todo' },
+                        { id: crypto.randomUUID(), text: '', column: 'todo' },
+                        { id: crypto.randomUUID(), text: '', column: 'todo' }
+                    ],
+                    reflection: { difficulties: '', learned: '' },
+                    completedAt: null
+                };
+
+                const newWeeks = [...weeks];
+                newWeeks.splice(insertionIdx + 1, 0, newWeek);
+                const reindexed = newWeeks.map((w, i) => ({ ...w, id: i + 1 }));
+                setWeeks(reindexed);
+            };
+
+            const handleRemoveWeek = (phaseIdStr) => {
+                const phaseId = parseInt(phaseIdStr);
+                const currentPhaseWeeks = weeksByPhase[phaseId];
+                if (currentPhaseWeeks.length <= 1) return alert("Mínim 1 setmana per fase.");
+                const lastWeek = currentPhaseWeeks[currentPhaseWeeks.length - 1];
+                const hasRealTasks = lastWeek.tasks.some(t => t.text.trim() !== '');
+                if (hasRealTasks) {
+                    if(!confirm("Aquesta setmana té tasques definides. Vols eliminar-la igualment?")) return;
+                }
+                const newWeeks = weeks.filter(w => w !== lastWeek).map((w, i) => ({ ...w, id: i + 1 }));
+                setWeeks(newWeeks);
+            };
+
+            const updateTasksForWeek = (weekId, newTasks) => {
+                const newWeeks = weeks.map(w => w.id === weekId ? { ...w, tasks: newTasks } : w);
+                setWeeks(newWeeks);
+            };
+
+            return (
+                <div className="min-h-screen bg-blue-50 pb-20">
+                    <div className="bg-white shadow-sm border-b border-blue-100 p-6 sticky top-0 z-30">
+                        <div className="max-w-4xl mx-auto flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-heading font-bold text-blue-900">Fase I: La meva Planificació</h1>
+                                <p className="text-blue-600 mt-1 text-sm">Defineix l'estructura i les tasques de cada setmana.</p>
+                            </div>
+                            <div className="text-xs text-slate-400 font-bold text-right">
+                                Creat per Marc Pérez Casals
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-4xl mx-auto p-6 space-y-8">
+                        {Object.entries(weeksByPhase).map(([phaseId, phaseWeeks]) => {
+                            const def = PHASE_DEFS[phaseId];
+                            return (
+                                <div key={phaseId} className="bg-white rounded-2xl shadow-sm border border-blue-100 overflow-hidden">
+                                    <div className={`${def.bgLight} p-4 border-b ${def.borderColor} flex justify-between items-center`}>
+                                        <h2 className={`font-bold font-heading text-xl ${def.text}`}>{def.name}</h2>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleRemoveWeek(phaseId)} className="p-2 bg-white rounded-lg text-slate-400 hover:text-red-500 border border-slate-200 shadow-sm" title="Treure setmana">
+                                                <IconMinus className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleAddWeek(phaseId)} className="p-2 bg-white rounded-lg text-blue-500 hover:text-blue-700 border border-slate-200 shadow-sm" title="Afegir setmana">
+                                                <IconPlus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                        {phaseWeeks.map(week => (
+                                            <div key={week.id} className="p-4 flex flex-col md:flex-row gap-4">
+                                                <div className="w-32 pt-2">
+                                                    <span className="text-sm font-bold text-slate-500 uppercase">Setmana {week.id}</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <TaskInputList 
+                                                        tasks={week.tasks} 
+                                                        onChange={(newTasks) => updateTasksForWeek(week.id, newTasks)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        <div className="bg-blue-900 text-white p-6 rounded-2xl shadow-xl text-center">
+                            <h3 className="font-heading font-bold text-xl mb-2">Tot a punt?</h3>
+                            <p className="opacity-80 mb-6 text-sm">Les tasques buides s'eliminaran automàticament en confirmar.</p>
+                            <button onClick={onConfirm} className="bg-white text-blue-900 font-bold px-8 py-4 rounded-xl shadow-lg hover:scale-105 transition-transform text-lg">
+                                Confirmar Planificació i Començar Seguiment
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- PHASE II: TRACKING ---
+        const MapView = ({ userData, weeks, onSelectWeek, score, onOpenMeta, onOpenReset, onOpenDownload }) => {
+            const totalTasks = weeks.reduce((acc, w) => acc + w.tasks.length, 0);
+            const completedTasks = weeks.reduce((acc, w) => acc + w.tasks.filter(t => t.column === 'done').length, 0);
+            
+            // MODIFICAT: Progrés global basat en setmanes completades (no tasques)
+            const completedWeeksCount = weeks.filter(w => w.status === 'completed').length;
+            const progress = Math.round((completedWeeksCount / weeks.length) * 100);
+            
+            const totalMinutes = completedWeeksCount * 150; 
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+
+            const getScoreIcon = (points) => {
+                if (points >= 200) return '⭐'; // Star
+                if (points >= 100) return '🌍'; // Planet
+                if (points >= 50) return '🌳'; // Tree
+                if (points >= 20) return '🌿'; // Seedling
+                return '🌱'; // Seed
+            };
+
+            const weeksByPhase = useMemo(() => {
+                const grouped = {};
+                Object.keys(PHASE_DEFS).forEach(id => grouped[id] = []);
+                weeks.forEach(w => { if (grouped[w.phaseId]) grouped[w.phaseId].push(w); });
+                return grouped;
+            }, [weeks]);
+
+            const currentWeekIdx = weeks.findIndex(w => w.status === 'active');
+            const safeCurrentWeekIdx = currentWeekIdx === -1 ? weeks.length - 1 : currentWeekIdx;
+            const currentWeekData = weeks[safeCurrentWeekIdx];
+            const nextWeekData = weeks[safeCurrentWeekIdx + 1];
+            const allDoneTasks = weeks.flatMap(w => w.tasks.filter(t => t.column === 'done').map(t => ({...t, week: w.id})));
+
+            return (
+                <div className="min-h-screen pb-10 bg-orange-50 flex flex-col">
+                    <div className="bg-white shadow-sm sticky top-0 z-30 px-6 py-3 flex flex-col md:flex-row justify-between items-center border-b border-orange-100 gap-4 md:gap-0">
+                        <div className="flex items-center gap-3">
+                            <span className="text-3xl bg-orange-100 p-2 rounded-full">{userData.avatar}</span>
+                            <div>
+                                <h2 className="font-heading font-bold text-slate-800 leading-tight">{userData.name}</h2>
+                                <p className="text-xs text-slate-500">Creat per Marc Pérez Casals</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex flex-col md:flex-row items-center gap-3 md:gap-6">
+                            
+                            <div className="flex gap-2">
+                                <button onClick={onOpenDownload} className="flex flex-col items-center group">
+                                    <div className="p-2 bg-orange-50 rounded-full text-orange-500 group-hover:text-orange-600 group-hover:bg-orange-100 transition-colors">
+                                        <IconDownload className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 group-hover:text-orange-500">Descarrega</span>
+                                </button>
+
+                                <button onClick={onOpenMeta} className="flex flex-col items-center group">
+                                    <div className="p-2 bg-slate-100 rounded-full text-slate-500 group-hover:text-orange-500 group-hover:bg-orange-50 transition-colors">
+                                        <IconBook className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 group-hover:text-orange-500">Diari</span>
+                                </button>
+                            </div>
+                            
+                            {/* Spacer for reset button */}
+                            <div className="hidden md:block w-4"></div>
+
+                            <button onClick={onOpenReset} className="flex flex-col items-center group">
+                                <div className="p-2 bg-red-50 rounded-full text-red-400 group-hover:text-red-600 group-hover:bg-red-100 transition-colors">
+                                    <IconAlert className="w-5 h-5" />
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-400 group-hover:text-red-500">Reiniciar</span>
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                             <div className="flex flex-col items-center">
+                                <span className="text-xs font-bold text-slate-400 uppercase">Punts</span>
+                                <div className="flex items-center gap-1 text-orange-500 bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
+                                    <span className="text-xl">{getScoreIcon(score)}</span>
+                                    <span className="font-heading font-bold text-xl">{score}</span>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs font-bold text-slate-400 uppercase">Temps</span>
+                                <div className="flex items-center gap-1 text-purple-600 bg-purple-50 px-3 py-1 rounded-full border border-purple-100">
+                                    <IconClock className="w-5 h-5" />
+                                    <span className="font-heading font-bold text-xl">
+                                        {hours}h{minutes > 0 ? ` ${minutes}m` : ''}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* PROGRESS BAR */}
+                            <div className="hidden sm:block text-right">
+                                <div className="text-xs font-bold text-slate-400 uppercase">Progrés</div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-24 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-gradient-to-r from-orange-400 to-red-500 transition-all duration-500" style={{width: `${progress}%`}}></div>
+                                    </div>
+                                    <span className="font-heading font-bold text-orange-600">{progress}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 p-4 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-12 gap-6">
+                        {/* LEFT: ACHIEVEMENTS */}
+                        <div className="md:col-span-3 hidden md:block">
+                            <div className="bg-white rounded-2xl shadow-sm p-4 sticky top-24 max-h-[80vh] overflow-y-auto no-scrollbar border border-slate-100">
+                                <h3 className="font-heading font-bold text-slate-800 mb-4 flex items-center gap-2"><IconCheck className="w-5 h-5 text-green-500" /> Fites</h3>
+                                {allDoneTasks.length === 0 ? <p className="text-sm text-slate-400 italic">Encara no has acabat cap tasca.</p> : 
+                                    <div className="space-y-3">{allDoneTasks.slice().reverse().map(t => (
+                                        <div key={t.id} className="text-sm p-3 bg-green-50 border border-green-100 rounded-xl">
+                                            <p className="font-medium text-slate-700 leading-tight">{t.text}</p>
+                                            <span className="text-[10px] text-green-600 font-bold uppercase mt-1 block">Setmana {t.week}</span>
+                                        </div>
+                                    ))}</div>
+                                }
+                            </div>
+                        </div>
+
+                        {/* CENTER: MAP */}
+                        <div className="md:col-span-6 space-y-6">
+                            <h1 className="text-center font-heading font-bold text-2xl text-slate-800 mb-2">Seguiment del PI</h1>
+                            {Object.entries(weeksByPhase).map(([phaseId, phaseWeeks]) => {
+                                const def = PHASE_DEFS[phaseId];
+                                return (
+                                    <div key={phaseId} className="relative bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
+                                        <div className={`inline-block px-3 py-1 rounded-lg text-xs font-bold uppercase mb-4 ${def.color} text-white shadow-md`}>
+                                            {def.name}
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            {phaseWeeks.map(weekData => {
+                                                const isLocked = weekData.status === 'locked';
+                                                const isCompleted = weekData.status === 'completed';
+                                                // Progrés individual de la setmana
+                                                const wProg = weekData.tasks.length === 0 ? (isCompleted ? 100 : 0) : (weekData.tasks.filter(t => t.column === 'done').length / weekData.tasks.length) * 100;
+
+                                                return (
+                                                    <button key={weekData.id} onClick={() => !isLocked && onSelectWeek(weekData.id - 1)} disabled={isLocked}
+                                                        className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center p-2 border-b-4 transition-all transform active:scale-95
+                                                        ${isLocked ? 'bg-slate-100 border-slate-200 text-slate-400' : isCompleted ? 'bg-green-50 border-green-500 text-slate-800 shadow-md' : 'bg-white border-orange-400 text-slate-800 card-pulse shadow-lg ring-2 ring-orange-100'}`}>
+                                                        {isLocked ? <IconLock className="w-6 h-6 mb-1 opacity-30" /> : isCompleted ? <div className="bg-green-500 text-white rounded-full p-1 mb-1 shadow"><IconCheck className="w-4 h-4" /></div> : <span className="text-2xl font-heading font-bold mb-1">{weekData.id}</span>}
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide">Setmana {weekData.id}</span>
+                                                        {!isLocked && <div className="absolute bottom-3 left-3 right-3 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full ${isCompleted ? 'bg-green-500' : 'bg-orange-500'}`} style={{width: `${wProg}%`}}></div></div>}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* RIGHT: RADAR */}
+                        <div className="md:col-span-3">
+                             <div className="bg-white rounded-2xl shadow-sm p-4 sticky top-24 border border-slate-100">
+                                <h3 className="font-heading font-bold text-slate-800 mb-4 flex items-center gap-2"><span className="text-2xl">📡</span> Radar</h3>
+                                <div className="mb-6">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-xs font-bold uppercase text-orange-600">Ara (Setmana {currentWeekData.id})</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {currentWeekData.tasks.filter(t => t.column !== 'done').length === 0 ? <p className="text-xs text-slate-400">Tot net! 🎉</p> : 
+                                            currentWeekData.tasks.filter(t => t.column !== 'done').map(t => (
+                                                <div key={t.id} className="text-sm p-2 bg-slate-50 border-l-2 border-orange-400 rounded-r-lg">{t.text}</div>
+                                            ))
+                                        }
+                                    </div>
+                                </div>
+                                {nextWeekData && (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2"><h4 className="text-xs font-bold uppercase text-slate-500">Futur (Setmana {nextWeekData.id})</h4></div>
+                                        <div className="space-y-2 opacity-75">
+                                            {nextWeekData.tasks.length === 0 ? <p className="text-xs text-slate-400">Sense tasques.</p> : nextWeekData.tasks.map(t => <div key={t.id} className="text-sm p-2 bg-slate-50 border-l-2 border-slate-300 rounded-r-lg">{t.text}</div>)}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const KanbanView = ({ weekIndex, weekData, startDate, onBack, onUpdateWeek, onCloseWeek, onScoreChange, totalScore }) => {
+            const [localTasks, setLocalTasks] = useState(weekData.tasks || []);
+            const [isHoliday, setIsHoliday] = useState(weekData.isHoliday);
+            const [newTask, setNewTask] = useState("");
+            const [showCloseModal, setShowCloseModal] = useState(false);
+            const [reflection, setReflection] = useState(weekData.reflection || { difficulties: '', learned: '' });
+            const [scoreAnims, setScoreAnims] = useState([]);
+
+            const triggerScoreAnim = (points) => {
+                const id = Date.now();
+                setScoreAnims(prev => [...prev, { id, points }]);
+                setTimeout(() => setScoreAnims(prev => prev.filter(a => a.id !== id)), 1600);
+            };
+
+            useEffect(() => { setLocalTasks(weekData.tasks || []); setIsHoliday(weekData.isHoliday); }, [weekData]);
+
+            const saveChanges = (updatedTasks, holidayStatus) => {
+                setLocalTasks(updatedTasks);
+                setIsHoliday(holidayStatus);
+                onUpdateWeek(weekIndex, { tasks: updatedTasks, isHoliday: holidayStatus });
+            };
+
+            const moveTask = (taskId, direction, e) => {
+                const cols = ['todo', 'doing', 'done'];
+                const task = localTasks.find(t => t.id === taskId);
+                const currIdx = cols.indexOf(task.column);
+                let newIdx = Math.max(0, Math.min(2, currIdx + direction));
+                const newCol = cols[newIdx];
+
+                if (newCol === 'done' && task.column !== 'done') {
+                    const points = task.tag === 'PENDENT' ? 0 : 5;
+                    if (points > 0) {
+                        triggerScoreAnim(points);
+                        onScoreChange(points);
+                        confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 }, colors: ['#22c55e'] });
+                    }
+                } else if (task.column === 'done' && newCol !== 'done') {
+                     const points = task.tag === 'PENDENT' ? 0 : -5;
+                     if (points < 0) {
+                        triggerScoreAnim(points);
+                        onScoreChange(points);
+                     }
+                }
+                saveChanges(localTasks.map(t => t.id === taskId ? { ...t, column: newCol } : t), isHoliday);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col bg-slate-50 relative">
+                    {scoreAnims.map(anim => <ScoreAnimation key={anim.id} points={anim.points} onEnd={() => setScoreAnims(prev => prev.filter(a => a.id !== anim.id))} />)}
+                    
+                    <div className="bg-white shadow-sm px-4 py-3 flex items-center justify-between border-b border-slate-200 sticky top-0 z-20">
+                        <button onClick={onBack} className="p-2 -ml-2 text-slate-500 hover:text-slate-800"><IconBack className="w-6 h-6" /></button>
+                        <div className="text-center">
+                            <h2 className="font-heading font-bold text-xl text-slate-800">Setmana {weekIndex + 1}</h2>
+                            <p className="text-xs text-slate-500 font-mono">{getWeekRange(startDate, weekIndex)}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1 text-orange-500 bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
+                                <IconStar className="w-4 h-4" /><span className="font-heading font-bold">{totalScore}</span>
+                            </div>
+                            <button onClick={() => setShowCloseModal(true)} className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg shadow hover:bg-black transition">Acabar la setmana</button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 p-2 overflow-y-auto no-scrollbar relative">
+                        <div className="px-4 py-2 flex justify-end mr-8">
+                             <label className="flex items-center gap-2 text-sm text-slate-600 font-medium cursor-pointer">
+                                <span>Mode Vacances? 🏖️</span>
+                                <div className={`w-12 h-6 rounded-full p-1 transition-colors ${isHoliday ? 'bg-green-500' : 'bg-slate-300'}`} onClick={() => saveChanges(localTasks, !isHoliday)}>
+                                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isHoliday ? 'translate-x-6' : ''}`}></div>
+                                </div>
+                            </label>
+                        </div>
+
+                        {isHoliday ? 
+                            <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-60"><IconCoffee className="w-24 h-24 text-slate-400 mb-4" /><h3 className="text-2xl font-heading font-bold text-slate-600">A descansar!</h3></div> 
+                        :
+                            <div className="max-w-6xl mx-auto pt-4 h-full flex flex-col">
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4 text-xs text-slate-600 space-y-2 mx-2">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-blue-500 font-bold text-sm">ℹ️</span>
+                                        <p>Fletxes per moure endavant o enrere la tasca.</p>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-green-500 font-bold text-sm">★</span>
+                                        <p><strong>+5 Punts</strong> si acabes a temps.</p>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-red-500 font-bold text-sm">⚠️</span>
+                                        <p>Penalització de <strong>-2 punts</strong> si no acabes a temps una tasca (passarà a prioritat 1 de realització per la següent setmana).</p>
+                                    </div>
+                                </div>
+
+                                <form onSubmit={(e) => { e.preventDefault(); if(newTask.trim()) { saveChanges([...localTasks, {id:crypto.randomUUID(), text:newTask, column:'todo'}], isHoliday); setNewTask(""); }}} className="flex gap-2 mb-4 px-2">
+                                    <input type="text" value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder="Nova tasca..." className="flex-1 p-3 rounded-xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-orange-500 outline-none" />
+                                    <button type="submit" className="bg-orange-500 text-white p-3 rounded-xl shadow-md"><IconPlus className="w-6 h-6" /></button>
+                                </form>
+                                
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 items-start pb-4 px-2">
+                                    <KanbanColumn title="Per fer" color="bg-red-50 border-red-200" titleColor="text-red-600" tasks={localTasks.filter(t => t.column === 'todo')} onDelete={(id) => confirm("Esborrar?") && saveChanges(localTasks.filter(t => t.id !== id), isHoliday)} onMove={moveTask} />
+                                    <KanbanColumn title="En procés" color="bg-yellow-50 border-yellow-200" titleColor="text-yellow-600" tasks={localTasks.filter(t => t.column === 'doing')} onDelete={(id) => confirm("Esborrar?") && saveChanges(localTasks.filter(t => t.id !== id), isHoliday)} onMove={moveTask} />
+                                    <KanbanColumn title="Fet!" color="bg-green-50 border-green-200" titleColor="text-green-600" tasks={localTasks.filter(t => t.column === 'done')} onDelete={(id) => confirm("Esborrar?") && saveChanges(localTasks.filter(t => t.id !== id), isHoliday)} onMove={moveTask} isDoneCol />
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    {showCloseModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg animate-bounce-in">
+                                <h3 className="text-xl font-heading font-bold mb-4 text-slate-800">Tancar la setmana</h3>
+                                {isHoliday ? <p className="text-slate-600 mb-6">Confirma per continuar.</p> : 
+                                    <div className="space-y-4 mb-6">
+                                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Dificultats i Solucions</label><textarea className="w-full p-3 bg-slate-50 border rounded-xl text-sm h-20" value={reflection.difficulties} onChange={(e) => setReflection({...reflection, difficulties: e.target.value})} /></div>
+                                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Aprenentatges</label><textarea className="w-full p-3 bg-slate-50 border rounded-xl text-sm h-20" value={reflection.learned} onChange={(e) => setReflection({...reflection, learned: e.target.value})} /></div>
+                                    </div>
+                                }
+                                <div className="flex gap-2"><button onClick={() => setShowCloseModal(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl">Cancel·lar</button><button onClick={() => { onCloseWeek(weekIndex, reflection); setShowCloseModal(false); }} disabled={!isHoliday && (!reflection.difficulties || !reflection.learned)} className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg disabled:opacity-50">Confirmar</button></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const Onboarding = ({ onComplete }) => {
+            const [d, setD] = useState({ name: '', project: '', avatar: '🧑‍🎓', startDate: new Date().toISOString().split('T')[0] });
+            const emojis = ['🧑‍🎓', '🚀', '🧠', '🦁', '🦊', '🦉', '⚡', '🌟', '🎨', '🔬'];
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4 bg-blue-50">
+                    <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md border-b-4 border-blue-500">
+                        <h1 className="text-4xl font-heading text-blue-500 mb-2 text-center">Planificador del PI</h1>
+                        <p className="text-slate-500 text-center mb-6">Configura el teu projecte</p>
+                        <form onSubmit={(e) => { e.preventDefault(); if(d.name && d.project) onComplete(d); }} className="space-y-6">
+                            <input required type="text" className="w-full p-3 bg-slate-50 border rounded-xl" value={d.name} onChange={e => setD({...d, name: e.target.value})} placeholder="El teu nom" />
+                            <input required type="text" className="w-full p-3 bg-slate-50 border rounded-xl" value={d.project} onChange={e => setD({...d, project: e.target.value})} placeholder="Títol del Projecte" />
+                            <input required type="date" className="w-full p-3 bg-slate-50 border rounded-xl" value={d.startDate} onChange={e => setD({...d, startDate: e.target.value})} />
+                            <div className="grid grid-cols-5 gap-2">{emojis.map(em => <button key={em} type="button" onClick={() => setD({...d, avatar: em})} className={`text-2xl p-2 rounded-lg ${d.avatar === em ? 'bg-blue-100 ring-2 ring-blue-500' : 'bg-slate-50'}`}>{em}</button>)}</div>
+                            <button type="submit" className="w-full bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg">Començar</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [weeks, setWeeks] = useState([]);
+            const [score, setScore] = useState(0);
+            const [appPhase, setAppPhase] = useState('setup'); 
+            const [selectedWeekIdx, setSelectedWeekIdx] = useState(null);
+            const [msgHalfwayShown, setMsgHalfwayShown] = useState(false);
+            const [showMeta, setShowMeta] = useState(false);
+            const [showReset, setShowReset] = useState(false);
+            const [showDownload, setShowDownload] = useState(false); // NEW STATE
+            const [penaltyAnim, setPenaltyAnim] = useState(null);
+
+            useEffect(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        setUser(parsed.user);
+                        setWeeks(parsed.weeks);
+                        setScore(parsed.score || 0);
+                        setAppPhase(parsed.appPhase || 'setup');
+                        setMsgHalfwayShown(parsed.msgHalfwayShown || false);
+                    } catch (e) { localStorage.removeItem(STORAGE_KEY); }
+                }
+            }, []);
+
+            useEffect(() => {
+                if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, weeks, score, appPhase, msgHalfwayShown }));
+            }, [user, weeks, score, appPhase, msgHalfwayShown]);
+
+            const handleOnboarding = (u) => { setUser(u); setWeeks(generateInitialWeeks()); setAppPhase('planning'); };
+            
+            const handleConfirmPlanning = () => {
+                const cleanedWeeks = weeks.map((w, i) => ({
+                    ...w,
+                    status: i === 0 ? 'active' : 'locked', // Unlock first week
+                    tasks: w.tasks.filter(t => t.text.trim() !== '')
+                }));
+                setWeeks(cleanedWeeks);
+                setAppPhase('tracking');
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            };
+
+            const handleExportJSON = () => {
+                const dataStr = JSON.stringify({ user, weeks, score, appPhase, msgHalfwayShown });
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `Planificador_PI_${user.name.replace(/\s+/g, '_')}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setShowDownload(false);
+            };
+
+            // MODIFIED PDF GENERATION - TABLE FORMAT
+            const handleExportPDF = () => {
+                const completedWeeksCount = weeks.filter(w => w.status === 'completed').length;
+                const totalMinutes = completedWeeksCount * 150; 
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                // Progrés per setmanes
+                const progress = Math.round((completedWeeksCount / weeks.length) * 100);
+
+                // Collect all completed tasks
+                const allDoneTasks = weeks.flatMap(w => w.tasks.filter(t => t.column === 'done').map(t => ({...t, week: w.id})));
+                
+                // Collect "Pending/Antena" tasks (from current active week)
+                const currentWeekIdx = weeks.findIndex(w => w.status === 'active');
+                const activeWeekTasks = currentWeekIdx !== -1 ? weeks[currentWeekIdx].tasks.filter(t => t.column !== 'done') : [];
+
+                const container = document.createElement('div');
+                container.style.width = '800px';
+                container.style.padding = '40px';
+                container.style.fontFamily = 'Inter, sans-serif';
+                container.style.color = '#1e293b';
+                container.style.background = '#ffffff';
+
+                let html = `
+                    <div style="border-bottom: 4px solid #f97316; padding-bottom: 20px; margin-bottom: 30px;">
+                        <h1 style="font-family: 'Fredoka', sans-serif; color: #f97316; font-size: 32px; margin: 0;">Informe de Seguiment</h1>
+                        <p style="color: #64748b; font-size: 14px; margin-top: 5px;">Planificador del PI - Generat automàticament</p>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 40px;">
+                        <div>
+                            <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Alumne</p>
+                            <h2 style="font-size: 24px; margin: 0; font-weight: bold;">${user.name}</h2>
+                            <p style="font-size: 16px; margin: 5px 0 0 0; color: #475569;">${user.project}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; font-weight: bold; margin: 0 0 5px 0;">Estadístiques</p>
+                            <p style="margin: 0; font-size: 14px;"><strong>Punts:</strong> ${score}</p>
+                            <p style="margin: 5px 0; font-size: 14px;"><strong>Temps:</strong> ${hours}h ${minutes}m</p>
+                            <p style="margin: 0; font-size: 14px;"><strong>Progrés Global:</strong> ${progress}%</p>
+                        </div>
+                    </div>
+
+                    <h2 style="font-family: 'Fredoka', sans-serif; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px;">1. Diari de Metacognició</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 40px;">
+                        <thead>
+                            <tr style="background-color: #f1f5f9; text-align: left;">
+                                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 15%;">Setmana</th>
+                                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 42%;">Dificultats i Solucions</th>
+                                <th style="padding: 10px; border: 1px solid #cbd5e1; width: 43%;">Aprenentatges</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${weeks.filter(w => w.status === 'completed' || w.completedAt).map(w => `
+                                <tr style="page-break-inside: avoid;">
+                                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #475569;">
+                                        Setmana ${w.id}<br>
+                                        <span style="font-weight: normal; font-size: 10px;">${getWeekRange(user.startDate, w.id - 1)}</span>
+                                    </td>
+                                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-style: italic; color: #64748b;">${w.reflection.difficulties || '-'}</td>
+                                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-style: italic; color: #64748b;">${w.reflection.learned || '-'}</td>
+                                </tr>
+                            `).join('')}
+                            ${weeks.filter(w => w.status === 'completed').length === 0 ? '<tr><td colspan="3" style="padding:20px; text-align:center; color:#94a3b8;">Encara no hi ha registres.</td></tr>' : ''}
+                        </tbody>
+                    </table>
+
+                    <h2 style="font-family: 'Fredoka', sans-serif; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px;">2. Estat de les Tasques</h2>
+                    <div style="display: flex; gap: 20px; page-break-inside: avoid;">
+                        <div style="flex: 1; border: 1px solid #bbf7d0; background-color: #f0fdf4; border-radius: 8px; padding: 15px;">
+                            <h3 style="margin-top: 0; font-size: 16px; color: #166534; font-family: 'Fredoka', sans-serif;">✅ Tasques Acabades</h3>
+                            <ul style="padding-left: 20px; margin-bottom: 0; font-size: 12px; color: #15803d;">
+                                ${allDoneTasks.length > 0 ? allDoneTasks.map(t => `<li style="margin-bottom: 4px;">${t.text} <span style="color:#86efac; font-size: 10px;">(Set. ${t.week})</span></li>`).join('') : '<li style="list-style: none; opacity: 0.7;">Cap tasca acabada.</li>'}
+                            </ul>
+                        </div>
+                        <div style="flex: 1; border: 1px solid #fed7aa; background-color: #fff7ed; border-radius: 8px; padding: 15px;">
+                            <h3 style="margin-top: 0; font-size: 16px; color: #9a3412; font-family: 'Fredoka', sans-serif;">📡 Antena (Per fer)</h3>
+                            <p style="font-size: 10px; color: #ea580c; margin-top: -10px; margin-bottom: 10px;">Tasques pendents de la setmana actual.</p>
+                            <ul style="padding-left: 20px; margin-bottom: 0; font-size: 12px; color: #c2410c;">
+                                ${activeWeekTasks.length > 0 ? activeWeekTasks.map(t => `<li style="margin-bottom: 4px;">${t.text}</li>`).join('') : '<li style="list-style: none; opacity: 0.7;">Tot al dia!</li>'}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+                document.body.appendChild(container);
+
+                const opt = {
+                    margin: 10,
+                    filename: `Informe_PI_${user.name.replace(/\s+/g, '_')}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                html2pdf().set(opt).from(container).save().then(() => {
+                    document.body.removeChild(container);
+                    setShowDownload(false);
+                });
+            };
+
+            const triggerPenaltyAnim = (points) => {
+                const id = Date.now();
+                setPenaltyAnim({ id, points });
+                setTimeout(() => setPenaltyAnim(null), 1600);
+            };
+
+            const handleCloseWeek = (idx, reflection) => {
+                const newWeeks = [...weeks];
+                const current = newWeeks[idx];
+                current.status = 'completed';
+                current.reflection = reflection;
+                current.completedAt = new Date().toISOString();
+                
+                const incomplete = current.tasks.filter(t => t.column !== 'done');
+                let penalty = 0;
+
+                if (idx < weeks.length - 1) {
+                    const next = newWeeks[idx + 1];
+                    if (PHASE_DEFS[current.phaseId].id !== PHASE_DEFS[next.phaseId].id) {
+                        alert(`Felicitats! Has acabat la fase ${PHASE_DEFS[current.phaseId].name}. \n\nComencem amb la fase de ${PHASE_DEFS[next.phaseId].name}, som-hi!`);
+                    }
+                    next.status = 'active';
+                    if (incomplete.length > 0) {
+                        penalty = incomplete.length * 2;
+                        next.tasks = [...incomplete.map(t => ({...t, column:'todo', tag:'PENDENT'})), ...next.tasks];
+                        current.tasks = current.tasks.filter(t => t.column === 'done');
+                    }
+                } else {
+                    confetti({ particleCount: 200, spread: 100 });
+                    alert("Felicitats! Has acabat tot el projecte!");
+                }
+                
+                if (penalty > 0) { 
+                    setScore(s => s - penalty); 
+                    triggerPenaltyAnim(-penalty);
+                }
+                if (!msgHalfwayShown && newWeeks.filter(w=>w.status==='completed').length >= weeks.length/2) { alert("Ja hem superat la meitat del PI, som-hi!"); setMsgHalfwayShown(true); }
+                
+                setWeeks(newWeeks);
+                setSelectedWeekIdx(null);
+            };
+
+            const handleFullReset = () => {
+                localStorage.removeItem(STORAGE_KEY);
+                window.location.reload();
+            };
+
+            if (appPhase === 'setup') return <Onboarding onComplete={handleOnboarding} />;
+            if (appPhase === 'planning') return <PlanningView weeks={weeks} setWeeks={setWeeks} onConfirm={handleConfirmPlanning} />;
+            
+            return (
+                <>
+                    {/* Global Penalty Animation Layer */}
+                    {penaltyAnim && <ScoreAnimation points={penaltyAnim.points} onEnd={() => setPenaltyAnim(null)} />}
+
+                    {selectedWeekIdx !== null ? 
+                        <KanbanView weekIndex={selectedWeekIdx} weekData={weeks[selectedWeekIdx]} startDate={user.startDate} totalScore={score} onBack={() => setSelectedWeekIdx(null)} onUpdateWeek={(i, d) => { const n = [...weeks]; n[i] = { ...n[i], ...d }; setWeeks(n); }} onCloseWeek={handleCloseWeek} onScoreChange={d => setScore(s => s + d)} /> 
+                    : 
+                        <MapView userData={user} weeks={weeks} score={score} onSelectWeek={setSelectedWeekIdx} onOpenMeta={() => setShowMeta(true)} onOpenReset={() => setShowReset(true)} onOpenDownload={() => setShowDownload(true)} />
+                    }
+                    {showMeta && <MetaLogModal weeks={weeks} startDate={user.startDate} onClose={() => setShowMeta(false)} />}
+                    {showReset && <ResetModal onClose={() => setShowReset(false)} onConfirm={handleFullReset} />}
+                    {showDownload && <DownloadModal onClose={() => setShowDownload(false)} onExportJSON={handleExportJSON} onExportPDF={handleExportPDF} />}
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
