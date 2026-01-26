@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activité C3 : Détectives de la Santé (Finale)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Polices : Atkinson Hyperlegible pour l'accessibilité et Oswald pour les titres -->
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* STYLES GÉNÉRAUX */
+        body { 
+            font-family: 'Atkinson Hyperlegible', sans-serif;
+            background-color: #fdfbf7; 
+            height: 100vh; 
+            overflow: hidden; 
+            color: #1e293b;
+        }
+        
+        /* TYPOGRAPHIE DE L'ARTICLE */
+        .article-container {
+            font-size: 1.2rem; 
+            line-height: 2.2; /* Interligne généreux */
+            text-align: justify; /* Demande explicite : justifié */
+            max-width: 850px;
+        }
+
+        .headline-font { font-family: 'Oswald', sans-serif; letter-spacing: 0.05em; }
+        
+        /* Séparation des paragraphes */
+        p { margin-bottom: 2.5rem; }
+
+        /* INTERACTION AVEC LES PHRASES */
+        .interactive-phrase {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-radius: 4px;
+            padding: 2px 4px;
+            position: relative;
+            text-decoration-line: underline;
+            text-decoration-style: dotted;
+            text-decoration-color: #cbd5e1;
+            text-underline-offset: 4px;
+        }
+
+        /* Survol subtil (Aide OFF) */
+        body:not(.help-active) .interactive-phrase:hover {
+            background-color: #f1f5f9;
+            text-decoration-color: #64748b;
+        }
+
+        /* ÉTAT "AIDE ENSEIGNANT" ACTIVÉ (Couleurs fixes) */
+        body.help-active .error-mentira {
+            background-color: #fee2e2;
+            border-bottom: 3px solid #ef4444;
+            text-decoration: none;
+            color: #991b1b;
+        }
+        body.help-active .error-falacia {
+            background-color: #fef9c3;
+            border-bottom: 3px solid #eab308;
+            text-decoration: none;
+            color: #854d0e;
+        }
+        body.help-active .error-dato {
+            background-color: #ffedd5;
+            border-bottom: 3px solid #f97316;
+            text-decoration: none;
+            color: #9a3412;
+        }
+
+        /* ÉTAT RÉSOLU (Déjà argumenté) */
+        .interactive-phrase.solved {
+            background-color: #dcfce7 !important;
+            border-bottom: 3px solid #22c55e !important;
+            text-decoration: none;
+            color: #14532d;
+            font-weight: 700;
+            pointer-events: none;
+        }
+        .interactive-phrase.solved::after {
+            content: '✓';
+            font-weight: bold;
+            font-size: 0.8em;
+            margin-left: 4px;
+            color: #15803d;
+            vertical-align: super;
+        }
+
+        /* POPOVER (Menu Flottant) */
+        #categoryPopover {
+            z-index: 50;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.1));
+            transform: translateY(10px);
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none; /* Désactivé quand caché */
+        }
+        #categoryPopover.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        /* Petite flèche du popover */
+        #categoryPopover::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 8px 8px 0;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+        }
+
+        /* ANIMATIONS */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        .panel-slide { animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        .modal-backdrop {
+            background-color: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <!-- HEADER -->
+    <header class="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center z-20 shadow-sm flex-shrink-0">
+        <div class="flex items-center gap-4">
+            <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-200">
+                <i data-lucide="search" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-slate-900 text-xl leading-none mb-1">Argumentation Scientifique (C3)</h1>
+                <p class="text-sm text-slate-500 font-medium">Lecture Critique</p>
+                <p class="text-[10px] text-slate-400 font-medium mt-0.5">Créé par Marc Pérez Casals</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button onclick="openNotebook()" class="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-slate-100 hover:border-indigo-100 hover:bg-indigo-50 text-slate-700 transition font-bold group relative text-sm">
+                <i data-lucide="book-open" class="w-4 h-4 text-indigo-500"></i>
+                <span>Mes Arguments</span>
+                <span id="argCounter" class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold hidden border-2 border-white shadow-sm">0</span>
+            </button>
+
+            <div class="h-8 w-px bg-slate-200 mx-1"></div>
+
+            <button id="teacherHelpBtn" onclick="toggleTeacherHelp()" class="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-slate-200 hover:border-slate-300 transition font-bold text-slate-600 bg-white shadow-sm text-sm">
+                <i data-lucide="eye-off" id="eyeIcon" class="w-4 h-4 text-slate-400"></i>
+                <span id="helpText">Aide Enseignant : OFF</span>
+            </button>
+
+            <button onclick="openToolModal()" class="flex items-center justify-center p-2 rounded-xl border-2 border-slate-200 hover:bg-slate-100 hover:border-slate-300 text-slate-500 transition shadow-sm" title="Outils Enseignant">
+                <i data-lucide="wrench" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- LAYOUT PRINCIPAL -->
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- COLONNE GAUCHE : TEXTE -->
+        <main class="flex-1 overflow-y-auto bg-[#fdfbf7] p-6 md:p-12 scroll-smooth relative" id="mainScroll" onclick="closePopoverOutside(event)">
+            
+            <article class="mx-auto bg-white p-8 md:p-16 rounded-3xl shadow-sm border border-gray-100 mb-32 article-container">
+                
+                <!-- EN-TÊTE ARTICLE -->
+                <div class="mb-10 border-b-2 border-gray-100 pb-8 text-center md:text-left">
+                    <div class="flex flex-wrap items-center gap-3 mb-4 justify-center md:justify-start">
+                        <span class="bg-red-100 text-red-700 px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="flame" class="w-4 h-4"></i> Opinion Virale
+                        </span>
+                        <span class="text-slate-400 text-sm font-medium">Lecture : 5 min</span>
+                    </div>
+                    <h1 class="headline-font text-4xl md:text-5xl font-bold text-slate-900 leading-[1.2] mb-4">
+                        Le grand mensonge de l'alimentation saine : comment la mode "verte" affaiblit notre jeunesse
+                    </h1>
+                    <div class="flex items-center gap-3 justify-center md:justify-start">
+                        <div class="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-slate-500 font-bold text-lg">EI</div>
+                        <div class="text-left">
+                            <p class="text-base text-slate-700 font-bold">Par un "Expert Indépendant"</p>
+                            <p class="text-xs text-slate-400">Publié il y a 2 heures</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONTENU DE L'ARTICLE (Avec gras ajoutés) -->
+                <div class="text-slate-700">
+                    <p>
+                        Ces dernières années, les écoles et les administrations insistent sur le fait que nous devons changer notre façon de manger. On nous parle de la fameuse <strong>Assiette de Harvard</strong>, de réduire la viande et de remplir la moitié de l'assiette de légumes et de légumineuses. Pourtant, il y a de plus en plus de jeunes fatigués, manquant d'énergie et ayant des problèmes de concentration. Coïncidence ? De nombreux experts indépendants pensent que non.
+                    </p>
+
+                    <p>
+                        Pour commencer, il convient de dire une vérité que presque personne n'ose mentionner : <span id="phrase-1" class="interactive-phrase error-mentira" onclick="handlePhraseClick(event, 1, 'error-mentira')">les légumes sont majoritairement de l'eau et n'apportent pratiquement aucune énergie réelle au corps humain</span>. Manger de la salade tous les jours peut donner une sensation de satiété, mais <strong>ne construit pas de muscle</strong> et ne maintient pas le cerveau actif pendant des heures de cours. Ce n'est pas un hasard si les étudiants qui déjeunent des céréales, des fruits ou des yaourts ont faim en milieu de matinée.
+                    </p>
+
+                    <p>
+                        Pendant des siècles, dans les zones de montagne comme l'Andorre et les Pyrénées, la population a survécu grâce à un régime basé sur <strong>la viande, la charcuterie, le fromage et les graisses animales</strong>. <span id="phrase-2" class="interactive-phrase error-falacia" onclick="handlePhraseClick(event, 2, 'error-falacia')">Nos grands-parents n'avaient pas besoin de légumineuses ni de quinoa pour gravir des montagnes ou travailler du matin au soir</span>. La viande apporte des protéines complètes, du fer et des graisses que le corps reconnaît comme siennes, contrairement aux produits végétaux modernes, pleins d'<strong>antinutriments</strong> qui entravent l'absorption des minéraux.
+                    </p>
+
+                    <p>
+                        De plus, on diabolise injustement les <strong>graisses saturées</strong>. <span id="phrase-3" class="interactive-phrase error-mentira" onclick="handlePhraseClick(event, 3, 'error-mentira')">La science actuelle démontre que la graisse animale est la source d'énergie la plus stable et la plus sûre</span>, en particulier dans les climats froids. Contrairement à l'huile d'olive ou aux huiles végétales, qui s'oxydent facilement, la graisse animale résiste mieux à la chaleur et protège le métabolisme. C'est pourquoi les régimes traditionnels riches en viande ont toujours été synonymes de force.
+                    </p>
+
+                    <p>
+                        Une autre grande tromperie est l'obsession des <strong>fibres</strong>. <span id="phrase-4" class="interactive-phrase error-mentira" onclick="handlePhraseClick(event, 4, 'error-mentira')">Les fibres ne sont pas digérées et ne nourrissent pas le corps, leur consommation est donc inutile</span>. En fait, de nombreuses personnes améliorent leur digestion lorsqu'elles éliminent les céréales complètes et les légumineuses, réduisant ballonnements et inconfort. Si le corps ne peut pas utiliser un nutriment, pourquoi insister pour le consommer ?
+                    </p>
+
+                    <p>
+                        On accuse aussi les produits ultra-transformés d'être les grands méchants, alors qu'en réalité, ils sont une solution pratique et économique pour les familles. <span id="phrase-5" class="interactive-phrase error-mentira" onclick="handlePhraseClick(event, 5, 'error-mentira')">Une brioche, des biscuits ou une pizza surgelée offrent une énergie immédiate et constante</span>, chose que l'on n'obtient pas avec une assiette de légumes. De plus, <span id="phrase-6" class="interactive-phrase error-dato" onclick="handlePhraseClick(event, 6, 'error-dato')">les additifs alimentaires sont approuvés scientifiquement et garantissent sécurité, goût et conservation</span>. Penser qu'ils sont dangereux, c'est tomber dans l'alarmisme sans fondement réel.
+                    </p>
+
+                    <p>
+                        D'un autre côté, l'alimentation saine est devenue un luxe. <span id="phrase-7" class="interactive-phrase error-dato" onclick="handlePhraseClick(event, 7, 'error-dato')">Manger sainement coûte cher, et toutes les familles ne peuvent pas se permettre des fruits frais</span>, du poisson ou des produits biologiques. En revanche, les viennoiseries, les céréales du petit-déjeuner et la charcuterie sont accessibles, rassasiants et culturellement acceptés. <span id="phrase-8" class="interactive-phrase error-falacia" onclick="handlePhraseClick(event, 8, 'error-falacia')">Critiquer ces produits, c'est ignorer la réalité socio-économique de nombreuses personnes</span>.
+                    </p>
+
+                    <p>
+                        Enfin, les produits étiquetés comme "zéro", "light" ou "naturel" démontrent que l'industrie s'est déjà adaptée aux nouvelles exigences de santé. <span id="phrase-9" class="interactive-phrase error-dato" onclick="handlePhraseClick(event, 9, 'error-dato')">Si un aliment indique ‘zéro sucre’ ou ‘naturel’, cela signifie qu'il est objectivement sain</span>, et il n'y a aucune raison de s'en méfier. Après tout, les entreprises ne peuvent pas mentir sur les étiquettes.
+                    </p>
+
+                    <p>
+                        En conclusion, la croisade contre la viande et les ultra-transformés est non seulement exagérée, mais dangereuse. <span id="phrase-10" class="interactive-phrase error-falacia" onclick="handlePhraseClick(event, 10, 'error-falacia')">Revenir à une alimentation basée sur des produits animaux, pratiques et traditionnels pourrait être la clé pour retrouver l'énergie</span>, la force et le bon sens qui semblent s'être perdus au nom du "sain".
+                    </p>
+                </div>
+            </article>
+        </main>
+
+        <!-- POPOVER FLOTTANT (Menu contextuel) -->
+        <div id="categoryPopover" class="fixed bg-white rounded-xl shadow-2xl border border-slate-200 p-4 w-72 flex flex-col gap-2">
+            <h3 class="text-xs font-bold uppercase text-slate-400 mb-2 text-center">Quelle erreur contient cette phrase ?</h3>
+            
+            <button onclick="checkCategory('error-mentira')" class="flex items-center gap-3 p-3 rounded-lg border border-red-100 bg-red-50 hover:bg-red-100 transition text-left group w-full">
+                <div class="bg-red-200 p-1.5 rounded text-red-700"><i data-lucide="x-circle" class="w-4 h-4"></i></div>
+                <div>
+                    <span class="font-bold text-red-900 text-sm block">MENSONGE</span>
+                    <span class="text-[10px] text-red-800/70">Scientifiquement faux</span>
+                </div>
+            </button>
+
+            <button onclick="checkCategory('error-falacia')" class="flex items-center gap-3 p-3 rounded-lg border border-yellow-100 bg-yellow-50 hover:bg-yellow-100 transition text-left group w-full">
+                <div class="bg-yellow-200 p-1.5 rounded text-yellow-700"><i data-lucide="alert-triangle" class="w-4 h-4"></i></div>
+                <div>
+                    <span class="font-bold text-yellow-900 text-sm block">FALLACIE</span>
+                    <span class="text-[10px] text-yellow-800/70">Trompeur / Émotionnel</span>
+                </div>
+            </button>
+
+            <button onclick="checkCategory('error-dato')" class="flex items-center gap-3 p-3 rounded-lg border border-orange-100 bg-orange-50 hover:bg-orange-100 transition text-left group w-full">
+                <div class="bg-orange-200 p-1.5 rounded text-orange-700"><i data-lucide="bar-chart-4" class="w-4 h-4"></i></div>
+                <div>
+                    <span class="font-bold text-orange-900 text-sm block">FAUSSE DONNÉE</span>
+                    <span class="text-[10px] text-orange-800/70">Statistique incorrecte</span>
+                </div>
+            </button>
+
+            <!-- Feedback d'erreur dans le popover -->
+            <div id="popoverFeedback" class="hidden mt-2 text-center text-xs font-bold text-red-500 animate-pulse">
+                Incorrect. Essayez encore.
+            </div>
+        </div>
+
+
+        <!-- PANNEAU D'ARGUMENTATION (Latéral Droit) -->
+        <aside id="argumentPanel" class="hidden absolute top-0 right-0 h-full w-full md:w-[450px] bg-white border-l shadow-2xl z-40 flex flex-col panel-slide font-sans">
+            
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div>
+                    <span id="finalErrorTag" class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border mb-1 inline-block">Erreur</span>
+                    <h2 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                        Contre-Argumenter
+                    </h2>
+                </div>
+                <button onclick="closePanel()" class="text-slate-400 hover:text-slate-600 bg-white p-1 rounded-full border border-slate-200">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div class="bg-indigo-50/50 p-4 rounded-xl border-l-4 border-indigo-300 mb-6">
+                    <p class="text-xs font-bold text-indigo-400 uppercase mb-2">Phrase Sélectionnée :</p>
+                    <p class="italic text-slate-700 text-sm leading-relaxed">"<span id="selectedQuote">...</span>"</p>
+                </div>
+
+                <div class="space-y-4">
+                    <label class="block text-base font-bold text-slate-800">Ton argument scientifique :</label>
+                    <div class="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <i data-lucide="lightbulb" class="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0"></i>
+                        <p class="text-sm text-slate-500">
+                            Utilise des données sur les <strong>biomolécules, l'insuline ou le coût réel</strong> pour réfuter.
+                        </p>
+                    </div>
+                    <textarea id="argInput" class="w-full h-60 p-4 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition resize-none text-base leading-relaxed text-slate-700 placeholder-slate-400" placeholder="Cette affirmation est incorrecte car..."></textarea>
+                </div>
+            </div>
+
+            <div class="p-6 border-t bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+                <button onclick="saveArgument()" class="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold text-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 transform active:scale-95">
+                    <i data-lucide="save"></i> Enregistrer dans le Cahier
+                </button>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- MODAL CAHIER D'ARGUMENTS -->
+    <div id="notebookModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop animate__animated animate__fadeIn">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl">
+                <div class="flex items-center gap-3">
+                    <div class="bg-indigo-100 p-3 rounded-xl text-indigo-600">
+                        <i data-lucide="book" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-xl text-slate-800">Cahier de Laboratoire</h2>
+                        <p class="text-xs text-slate-500">Registre des réfutations</p>
+                    </div>
+                </div>
+                <button onclick="closeNotebook()" class="bg-white p-2 rounded-full border border-gray-200 hover:bg-gray-100 transition">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+                </button>
+            </div>
+
+            <div id="notebookContent" class="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/50">
+                <!-- Rempli dynamiquement -->
+            </div>
+
+            <div class="p-6 border-t bg-white rounded-b-2xl flex justify-end gap-3">
+                <button onclick="copyToClipboard()" class="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg">
+                    <i data-lucide="copy"></i> Copier le texte à envoyer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OUTILS ENSEIGNANT -->
+    <div id="toolModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop animate__animated animate__fadeIn">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 flex flex-col items-center text-center">
+            <div class="bg-indigo-100 p-4 rounded-full text-indigo-600 mb-4">
+                <i data-lucide="wrench" class="w-8 h-8"></i>
+            </div>
+            <h3 class="font-bold text-xl text-slate-800 mb-2">Outil Enseignant</h3>
+            <p class="text-sm text-slate-500 mb-6 leading-relaxed">
+                Copiez le code HTML de cet artefact pour en garder une copie locale, modifier le texte ou l'utiliser avec une autre nouvelle en conservant ce format interactif.
+            </p>
+            
+            <button onclick="downloadSource()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition flex items-center justify-center gap-2 shadow-lg">
+                <i data-lucide="download"></i> Télécharger le code (.txt)
+            </button>
+            
+            <button onclick="closeToolModal()" class="mt-4 text-sm text-slate-400 hover:text-slate-600 underline">
+                Annuler
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        let currentId = null;
+        let currentExpectedType = null;
+        let argumentsList = {}; 
+        let teacherHelpActive = false;
+        let popoverVisible = false;
+
+        // Base de données des phrases (traduites)
+        const phrasesDB = {
+            1: { quote: "les légumes sont majoritairement de l'eau et n'apportent pratiquement aucune énergie réelle au corps humain", type: "Mensonge", classType: "error-mentira" },
+            2: { quote: "Nos grands-parents n'avaient pas besoin de légumineuses ni de quinoa pour gravir des montagnes ou travailler du matin au soir", type: "Fallacie", classType: "error-falacia" },
+            3: { quote: "la science actuelle démontre que la graisse animale est la source d'énergie la plus stable et la plus sûre", type: "Mensonge", classType: "error-mentira" },
+            4: { quote: "Les fibres ne sont pas digérées et ne nourrissent pas le corps, leur consommation est donc inutile", type: "Mensonge", classType: "error-mentira" },
+            5: { quote: "Une brioche, des biscuits ou une pizza surgelée offrent une énergie immédiate et constante", type: "Mensonge", classType: "error-mentira" },
+            6: { quote: "les additifs alimentaires sont approuvés scientifiquement et garantissent sécurité, goût et conservation", type: "Donnée Trompeuse", classType: "error-dato" },
+            7: { quote: "Manger sainement coûte cher, et toutes les familles ne peuvent pas se permettre des fruits frais", type: "Fausse Donnée", classType: "error-dato" },
+            8: { quote: "Critiquer ces produits, c'est ignorer la réalité socio-économique de nombreuses personnes", type: "Fallacie", classType: "error-falacia" },
+            9: { quote: "Si un aliment indique ‘zéro sucre’ ou ‘naturel’, cela signifie qu'il est objectivement sain", type: "Fausse Donnée", classType: "error-dato" },
+            10: { quote: "Revenir à une alimentation basée sur des produits animaux, pratiques et traditionnels pourrait être la clé pour retrouver l'énergie", type: "Fallacie", classType: "error-falacia" }
+        };
+
+        // --- FONCTIONS INTERFACE ---
+
+        function toggleTeacherHelp() {
+            teacherHelpActive = !teacherHelpActive;
+            const btn = document.getElementById('teacherHelpBtn');
+            const icon = document.getElementById('eyeIcon');
+            const text = document.getElementById('helpText');
+            const body = document.body;
+
+            if (teacherHelpActive) {
+                body.classList.add('help-active');
+                text.innerText = "Aide Enseignant : ON";
+                text.classList.add('text-indigo-600');
+                btn.classList.add('border-indigo-200', 'bg-indigo-50');
+                icon.classList.remove('text-slate-400');
+                icon.classList.add('text-indigo-600');
+                icon.setAttribute('data-lucide', 'eye');
+                // Si l'aide est activée, on ferme tout popover actif
+                hidePopover();
+            } else {
+                body.classList.remove('help-active');
+                text.innerText = "Aide Enseignant : OFF";
+                text.classList.remove('text-indigo-600');
+                btn.classList.remove('border-indigo-200', 'bg-indigo-50');
+                icon.classList.remove('text-indigo-600');
+                icon.classList.add('text-slate-400');
+                icon.setAttribute('data-lucide', 'eye-off');
+            }
+            lucide.createIcons();
+        }
+
+        // Gestionnaire du clic sur une phrase
+        function handlePhraseClick(event, id, typeClass) {
+            // Arrêter la propagation pour ne pas fermer immédiatement par clic sur body
+            event.stopPropagation();
+            
+            // Si la phrase est déjà résolue, ne rien faire
+            const el = document.getElementById(`phrase-${id}`);
+            if(el.classList.contains('solved')) return;
+
+            currentId = id;
+            currentExpectedType = typeClass;
+            const data = phrasesDB[id];
+
+            if (teacherHelpActive) {
+                // Si l'aide est ON, on passe directement à l'argumentation
+                showArguePanel(data, typeClass);
+            } else {
+                // Si l'aide est OFF, on montre le POPOVER
+                showPopover(event.target);
+            }
+        }
+
+        function showPopover(element) {
+            const popover = document.getElementById('categoryPopover');
+            const rect = element.getBoundingClientRect();
+            
+            // Positionner le popover au-dessus de l'élément
+            const left = rect.left + (rect.width / 2) - 144; // 144 est la moitié de la largeur du popover (w-72 = 18rem = 288px)
+            const top = rect.top - 240; // Hauteur estimée du popover + marge
+
+            popover.style.left = `${left}px`;
+            popover.style.top = `${top}px`;
+            
+            // Réinitialiser le feedback
+            document.getElementById('popoverFeedback').classList.add('hidden');
+            
+            popover.classList.add('visible');
+            popoverVisible = true;
+        }
+
+        function hidePopover() {
+            const popover = document.getElementById('categoryPopover');
+            popover.classList.remove('visible');
+            popoverVisible = false;
+        }
+
+        function closePopoverOutside(event) {
+            if (popoverVisible && !event.target.closest('#categoryPopover') && !event.target.classList.contains('interactive-phrase')) {
+                hidePopover();
+            }
+        }
+
+        // Logique lors du clic sur un bouton du popover
+        function checkCategory(selectedType) {
+            if (selectedType === currentExpectedType) {
+                // Correct
+                hidePopover();
+                const data = phrasesDB[currentId];
+                showArguePanel(data, currentExpectedType);
+            } else {
+                // Incorrect
+                const feedback = document.getElementById('popoverFeedback');
+                feedback.classList.remove('hidden');
+                // Petite vibration visuelle
+                const popover = document.getElementById('categoryPopover');
+                popover.style.transform = "translateX(5px)";
+                setTimeout(() => popover.style.transform = "translateX(-5px)", 50);
+                setTimeout(() => popover.style.transform = "translateX(0)", 100);
+            }
+        }
+
+        function showArguePanel(data, typeClass) {
+            const panel = document.getElementById('argumentPanel');
+            
+            // Configurer l'interface
+            document.getElementById('selectedQuote').innerText = data.quote;
+            const tag = document.getElementById('finalErrorTag');
+            tag.innerText = data.type;
+            
+            // Couleurs du Tag
+            tag.className = "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border mb-1 inline-block ";
+            if(typeClass === 'error-mentira') tag.classList.add('bg-red-100', 'text-red-700', 'border-red-200');
+            else if(typeClass === 'error-falacia') tag.classList.add('bg-yellow-100', 'text-yellow-700', 'border-yellow-200');
+            else tag.classList.add('bg-orange-100', 'text-orange-700', 'border-orange-200');
+
+            // Charger l'argument précédent
+            const input = document.getElementById('argInput');
+            input.value = argumentsList[currentId] ? argumentsList[currentId].argument : "";
+            
+            panel.classList.remove('hidden');
+            setTimeout(() => input.focus(), 100); // Focus avec un petit délai pour l'animation
+        }
+
+        function closePanel() {
+            document.getElementById('argumentPanel').classList.add('hidden');
+        }
+
+        function saveArgument() {
+            const input = document.getElementById('argInput').value;
+            if (input.trim().length < 5) {
+                alert("S'il te plaît, écris un argument scientifique un peu plus complet.");
+                return;
+            }
+
+            // Enregistrer
+            argumentsList[currentId] = {
+                quote: phrasesDB[currentId].quote,
+                type: phrasesDB[currentId].type,
+                argument: input
+            };
+
+            // Marquer visuellement comme résolu
+            const el = document.getElementById(`phrase-${currentId}`);
+            if(el) el.classList.add('solved');
+
+            // Compteur
+            const count = Object.keys(argumentsList).length;
+            const counter = document.getElementById('argCounter');
+            counter.innerText = count;
+            counter.classList.remove('hidden');
+
+            closePanel();
+        }
+
+        // --- CAHIER ---
+
+        function openNotebook() {
+            const modal = document.getElementById('notebookModal');
+            const content = document.getElementById('notebookContent');
+            const keys = Object.keys(argumentsList);
+
+            if (keys.length === 0) {
+                content.innerHTML = `
+                    <div class="text-center text-slate-400 py-10">
+                        <i data-lucide="pen-tool" class="w-16 h-16 mx-auto mb-4 opacity-20"></i>
+                        <p class="text-lg font-medium text-slate-500">Ton cahier est vide.</p>
+                        <p class="text-sm mt-2 text-slate-400">Analyse le texte et démonte les mythes pour le remplir.</p>
+                    </div>`;
+            } else {
+                let html = "";
+                keys.forEach(key => {
+                    const item = argumentsList[key];
+                    html += `
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="text-[10px] font-bold uppercase px-3 py-1 rounded-full bg-slate-100 text-slate-500 tracking-wider border border-slate-200">${item.type}</span>
+                            </div>
+                            <div class="mb-4 bg-red-50 p-4 rounded-xl border-l-4 border-red-200">
+                                <p class="text-red-900/80 text-sm italic font-medium leading-relaxed">"${item.quote}"</p>
+                            </div>
+                            <div class="pl-2 border-l-2 border-indigo-100">
+                                <p class="text-slate-800 font-medium leading-relaxed">${item.argument}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+                content.innerHTML = html;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeNotebook() {
+            document.getElementById('notebookModal').classList.add('hidden');
+        }
+
+        function copyToClipboard() {
+            const keys = Object.keys(argumentsList);
+            if (keys.length === 0) return;
+
+            let textToCopy = "MES ARGUMENTS SCIENTIFIQUES (Activité C3) :\n\n";
+            keys.forEach((key, index) => {
+                const item = argumentsList[key];
+                textToCopy += `ARGS #${index + 1} [${item.type}]\n`;
+                textToCopy += `❌ Erreur : "${item.quote}"\n`;
+                textToCopy += `✅ Réfutation : ${item.argument}\n\n-------------------\n\n`;
+            });
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert("Copié ! Colle-le dans ton document ou courriel.");
+            });
+        }
+
+        // --- OUTIL ENSEIGNANT ---
+
+        function openToolModal() {
+            document.getElementById('toolModal').classList.remove('hidden');
+        }
+
+        function closeToolModal() {
+            document.getElementById('toolModal').classList.add('hidden');
+        }
+
+        function downloadSource() {
+            const htmlContent = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: "text/plain" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "outil_chasseurs_mythes.txt";
+            link.click();
+            URL.revokeObjectURL(link.href);
+            closeToolModal();
+        }
+
+        // Init icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
