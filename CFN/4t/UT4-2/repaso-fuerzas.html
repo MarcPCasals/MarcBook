@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newton Quiz: Verdadero o Falso</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .animate-bounce-short { animation: bounceShort 0.5s ease-in-out 1; }
+        @keyframes bounceShort {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .slide-enter { animation: slideIn 0.4s ease-out forwards; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        /* Custom scrollbar for better look */
+        .custom-scroll::-webkit-scrollbar { width: 8px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
+
+    <div id="root" class="w-full h-full flex justify-center"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // --- ICONOS ---
+        const Icons = {
+            ArrowRight: ({size=24}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>,
+            Check: ({size=24}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+            X: ({size=24}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
+            Brain: ({size=24}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 12.36 0 0 1 12 4.5a2.5 12.36 0 0 1 2.5-2.5A2.5 12.36 0 0 1 17 4.5c0 4-5 5.5-5 5.5S7 8.5 7 4.5A2.5 12.36 0 0 1 9.5 2Z"/><path d="M12 10c-5 0-5 5.5-5 5.5 0 4 2.5 6.5 5 6.5s5-2.5 5-6.5c0 0 0-5.5-5-5.5Z"/></svg>,
+            Zap: ({size=24}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>,
+            Target: ({size=24}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+            Scale: ({size=24}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+        };
+
+        const QuizApp = () => {
+            const [currentSlide, setCurrentSlide] = useState(0);
+            const [hasAnswered, setHasAnswered] = useState(false);
+            const [isCorrect, setIsCorrect] = useState(false);
+            const [score, setScore] = useState(0);
+
+            // --- DATA DEL QUIZ ---
+            const slides = [
+                {
+                    type: 'intro',
+                    title: "EXAMEN DE CONCIENCIA FÍSICA",
+                    content: "Vamos a poner a prueba tu intuición. ¿Sabes distinguir la física real de la que te inventas?"
+                },
+                {
+                    type: 'question',
+                    id: 1,
+                    category: "Concepto de Fuerza",
+                    statement: "Un culturista muy fuerte 'tiene' mucha fuerza acumulada en su cuerpo.",
+                    isTrue: false,
+                    correction: "¡FALSO! Los cuerpos NO TIENEN fuerza.",
+                    explanation: "Los cuerpos tienen MASA o ENERGÍA. La fuerza es una INTERACCIÓN entre dos cuerpos. Nadie 'tiene' fuerza, la fuerza 'se hace' sobre otro objeto.",
+                    visual: "Fuerza = Interacción (A sobre B)"
+                },
+                {
+                    type: 'question',
+                    id: 2,
+                    category: "Dinámica",
+                    statement: "Si un objeto se está moviendo, OBLIGATORIAMENTE hay una fuerza empujándolo.",
+                    isTrue: false,
+                    correction: "¡FALSO! Es el error más común (Idea Aristotélica).",
+                    explanation: "Si se mueve a velocidad constante (MRU), la fuerza neta es CERO. Las fuerzas solo son necesarias para acelerar o frenar, no para mantener el movimiento (Inercia).",
+                    visual: "v = cte  ➡️  ∑F = 0"
+                },
+                {
+                    type: 'question',
+                    id: 3,
+                    category: "Lanzamiento",
+                    statement: "Cuando lanzas una pelota hacia arriba, mientras sube por el aire, actúan dos fuerzas: el Peso y la Fuerza de tu mano.",
+                    isTrue: false,
+                    correction: "¡FALSO! La fuerza de la mano DESAPARECE al soltarla.",
+                    explanation: "Las fuerzas de contacto solo existen mientras hay contacto. En el aire, la única fuerza que actúa es el Peso (y el rozamiento). La bola sube por inercia, no porque una fuerza la empuje.",
+                    visual: "En el aire: Solo P ↓"
+                },
+                {
+                    type: 'question',
+                    id: 4,
+                    category: "Rampa (Ficha 5)",
+                    statement: "En una rampa, la fuerza Normal siempre es MENOR que el Peso.",
+                    isTrue: true,
+                    correction: "¡VERDADERO! (Por fin una cierta).",
+                    explanation: "En plano horizontal N = P. Pero en una rampa, la Normal solo contrarresta la componente 'y' del peso (Py). Parte del peso se dedica a hacerte caer, no a apretar el suelo.",
+                    visual: "Rampa: N = Py = P·cos(α)"
+                },
+                {
+                    type: 'question',
+                    id: 5,
+                    category: "Normal en Plano (Ascensor)",
+                    statement: "Si la superficie es PLANA y horizontal (sin rampas), la Normal SIEMPRE vale lo mismo que el Peso, pase lo que pase.",
+                    isTrue: false,
+                    correction: "¡FALSO! Depende de la aceleración vertical.",
+                    explanation: "En un ascensor que arranca hacia arriba, el suelo te 'empuja' más fuerte (N > P) para acelerarte. Si el ascensor cae, el suelo te empuja menos (N < P). Solo es N=P si estás quieto o a velocidad constante.",
+                    visual: "Ascensor subiendo: N > P"
+                },
+                {
+                    type: 'question',
+                    id: 6,
+                    category: "Efectos",
+                    statement: "Una fuerza siempre provoca un cambio en la rapidez (acelera o frena).",
+                    isTrue: false,
+                    correction: "¡FALSO! También puede cambiar la DIRECCIÓN.",
+                    explanation: "En una curva a velocidad constante, hay fuerza (centrípeta). La fuerza es necesaria para cualquier cambio en el vector velocidad, ya sea en módulo (rapidez) o dirección.",
+                    visual: "Curva = Fuerza"
+                },
+                {
+                    type: 'question',
+                    id: 7,
+                    category: "Naturaleza",
+                    statement: "Las fuerzas (vectores) no son objetos reales, son modelos que usamos para representar interacciones.",
+                    isTrue: true,
+                    correction: "¡VERDADERO! Son herramientas matemáticas.",
+                    explanation: "No puedes tocar una fuerza. Usamos flechas para modelar cómo interactúan los cuerpos. Es nuestra forma de 'ver' lo invisible.",
+                    visual: "Mapa ≠ Territorio"
+                },
+                {
+                    type: 'question',
+                    id: 8,
+                    category: "Acción-Reacción",
+                    statement: "Si un camión choca con una mosca, el camión ejerce más fuerza sobre la mosca que la mosca sobre el camión.",
+                    isTrue: false,
+                    correction: "¡FALSO! Las fuerzas son IDÉNTICAS.",
+                    explanation: "3ª Ley de Newton: La acción y la reacción son iguales en magnitud. La mosca se aplasta porque es más blanda y pequeña, no porque reciba más fuerza.",
+                    visual: "|F1| = |F2|"
+                }
+            ];
+
+            const handleAnswer = (userSaysTrue) => {
+                const currentData = slides[currentSlide];
+                const correct = userSaysTrue === currentData.isTrue;
+                setIsCorrect(correct);
+                if(correct) setScore(s => s + 1);
+                setHasAnswered(true);
+            };
+
+            const nextSlide = () => {
+                setHasAnswered(false);
+                setIsCorrect(false);
+                if (currentSlide < slides.length - 1) {
+                    setCurrentSlide(prev => prev + 1);
+                } else {
+                    // Reiniciar o finalizar
+                    setCurrentSlide(0);
+                    setScore(0);
+                }
+            };
+
+            const currentData = slides[currentSlide];
+            const isFinished = currentSlide === slides.length - 1 && hasAnswered;
+
+            return (
+                <div className="w-full max-w-5xl h-[85vh] min-h-[700px] flex flex-col relative">
+                    
+                    {/* Score (Solo visible durante el juego) */}
+                    {currentSlide > 0 && (
+                        <div className="absolute -top-4 right-0 translate-y-[-100%] md:translate-y-0 md:top-6 md:right-6 bg-white px-4 py-2 rounded-full shadow-md font-bold text-slate-700 z-50 flex items-center gap-2 border border-slate-200">
+                            <Icons.Target size={20} className="text-blue-500"/>
+                            Aciertos: {score} / {slides.length - 1}
+                        </div>
+                    )}
+
+                    {/* MAIN CARD CONTAINER */}
+                    <div className="w-full h-full bg-white rounded-3xl shadow-2xl flex flex-col border border-slate-200 relative overflow-hidden">
+                        
+                        {/* HEADER */}
+                        <div className="bg-slate-900 text-white p-6 flex justify-between items-center relative z-10 shrink-0">
+                            <h1 className="text-xl md:text-2xl font-black tracking-wider flex items-center gap-3">
+                                {currentData.type === 'intro' ? <Icons.Brain/> : <span className="bg-blue-600 px-3 py-1 rounded text-sm font-mono">#{currentSlide}</span>}
+                                {currentData.category || "INICIO"}
+                            </h1>
+                            <div className="text-xs text-slate-400 font-mono hidden md:block">
+                                {currentSlide === 0 ? "INTRO" : `PREGUNTA ${currentSlide} DE ${slides.length - 1}`}
+                            </div>
+                        </div>
+
+                        {/* CONTENT AREA */}
+                        <div className="flex-1 p-6 md:p-10 bg-slate-50 relative overflow-y-auto custom-scroll">
+                            <div className="flex flex-col justify-center min-h-full items-center">
+                            
+                                {currentData.type === 'intro' ? (
+                                    <div className="text-center space-y-8 animate-bounce-short max-w-2xl">
+                                        <h2 className="text-4xl md:text-6xl font-extrabold text-slate-800 leading-tight">
+                                            ¿MITO O <br/><span className="text-blue-600">REALIDAD FÍSICA?</span>
+                                        </h2>
+                                        <p className="text-xl md:text-2xl text-slate-600">
+                                            {currentData.content}
+                                        </p>
+                                        <div className="text-base text-slate-400 font-medium">Creado por Marc Pérez Casals</div>
+                                        <button onClick={nextSlide} className="bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-5 px-12 rounded-xl shadow-lg transform transition hover:scale-105 active:scale-95 flex items-center gap-3 mx-auto mt-8">
+                                            EMPEZAR EL RETO <Icons.ArrowRight/>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full max-w-4xl py-4 flex flex-col items-center">
+                                        
+                                        {/* PREGUNTA / STATEMENT */}
+                                        <div className={`transition-all duration-500 w-full ${hasAnswered ? 'opacity-30 blur-[1px]' : 'opacity-100'}`}>
+                                            <div className="bg-white p-8 md:p-12 rounded-3xl shadow-sm border-2 border-slate-200 mb-8 text-center">
+                                                <p className="text-3xl md:text-4xl font-medium text-slate-800 leading-snug">
+                                                    "{currentData.statement}"
+                                                </p>
+                                            </div>
+
+                                            {/* BOTONES DE DECISIÓN */}
+                                            {!hasAnswered && (
+                                                <div className="grid grid-cols-2 gap-8 w-full">
+                                                    <button 
+                                                        onClick={() => handleAnswer(true)}
+                                                        className="bg-green-100 hover:bg-green-200 border-4 border-green-400 text-green-800 py-8 rounded-2xl text-2xl md:text-3xl font-bold flex flex-col items-center gap-3 transition-transform hover:scale-105"
+                                                    >
+                                                        <Icons.Check size={48}/>
+                                                        ES CIERTO
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleAnswer(false)}
+                                                        className="bg-red-100 hover:bg-red-200 border-4 border-red-400 text-red-800 py-8 rounded-2xl text-2xl md:text-3xl font-bold flex flex-col items-center gap-3 transition-transform hover:scale-105"
+                                                    >
+                                                        <Icons.X size={48}/>
+                                                        ES FALSO
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* RESULTADO / FEEDBACK (Overlay ocupando todo el contenido pero respetando header) */}
+                                        {hasAnswered && (
+                                            <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 slide-enter">
+                                                
+                                                {/* Encabezado del resultado (Sticky top) */}
+                                                <div className={`p-5 text-white font-black text-center text-3xl tracking-widest flex items-center justify-center gap-4 shadow-md shrink-0 ${isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
+                                                    {isCorrect ? (
+                                                        <><Icons.Check size={36}/> ¡CORRECTO!</>
+                                                    ) : (
+                                                        <><Icons.X size={36}/> ¡TE PILLÉ!</>
+                                                    )}
+                                                </div>
+
+                                                {/* Cuerpo de la explicación (Scrollable area) */}
+                                                <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-12 flex flex-col items-center">
+                                                    <div className="max-w-3xl w-full text-center space-y-8">
+                                                        <h3 className="text-3xl md:text-4xl font-bold text-slate-800 border-b-2 border-slate-200 pb-6">
+                                                            {currentData.correction}
+                                                        </h3>
+                                                        
+                                                        <div className="text-left bg-white p-6 md:p-8 rounded-2xl text-slate-700 text-xl leading-relaxed shadow-sm border border-slate-100">
+                                                            <span className="font-bold text-blue-600 block mb-3 text-2xl flex items-center gap-2">
+                                                                <Icons.Brain size={28}/> La explicación física:
+                                                            </span>
+                                                            {currentData.explanation}
+                                                        </div>
+
+                                                        <div className="inline-block bg-slate-800 text-yellow-400 font-mono font-bold px-8 py-4 rounded-xl text-xl md:text-2xl shadow-lg border-2 border-slate-600">
+                                                            {currentData.visual}
+                                                        </div>
+                                                        
+                                                        {/* Espacio extra al final para que no se pegue al botón fijo */}
+                                                        <div className="h-24"></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Botón Siguiente (Sticky bottom inside overlay) */}
+                                                <div className="p-4 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 z-30">
+                                                    <div className="max-w-3xl mx-auto">
+                                                        <button 
+                                                            onClick={nextSlide}
+                                                            className="w-full bg-slate-900 text-white font-bold py-5 rounded-xl hover:bg-slate-800 transition shadow-lg flex justify-center items-center gap-3 text-xl"
+                                                        >
+                                                            {isFinished ? "VOLVER AL INICIO" : "SIGUIENTE PREGUNTA"} <Icons.ArrowRight size={24}/>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* FOOTER GENERAL (Oculto cuando hay feedback para ganar espacio) */}
+                        {!hasAnswered && (
+                            <div className="bg-slate-100 p-3 text-center text-slate-400 text-sm border-t border-slate-200 shrink-0">
+                                Física y Química 4º ESO • Preparación Examen
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<QuizApp />);
+    </script>
+</body>
+</html>
