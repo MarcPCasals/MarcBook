@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe d'Auditoria · Project Post-Mortem</title>
+</div>
+            <div class="text-center md:text-right text-sm">
+                <p class="opacity-90">Creat per <span class="font-bold text-black border-b border-orange-300">Marc Pérez Casals</span></p>
+            </div>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Generació PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e5e7eb;
+            color: #1f2937;
+            -webkit-print-color-adjust: exact;
+        }
+
+        /* CONFIGURACIÓ PÀGINA A4 REAL */
+        .document-container {
+            width: 210mm;
+            margin: 20px auto;
+        }
+
+        .page-a4 {
+            width: 210mm;
+            height: 296mm; /* Lleugerament menys que 297 per marges segurs */
+            padding: 15mm 20mm;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ELEMENTS D'INTERACCIÓ (Inputs que semblen text) */
+        input[type="text"], input[type="date"], textarea {
+            border: none;
+            border-bottom: 2px solid #e2e8f0;
+            background: rgba(243, 244, 246, 0.5);
+            padding: 6px 8px;
+            width: 100%;
+            transition: all 0.3s;
+            font-family: 'Inter', sans-serif;
+            color: #111827;
+            border-radius: 4px 4px 0 0;
+        }
+        
+        /* Estil general de focus (per defecte fons clar) */
+        input:focus, textarea:focus {
+            outline: none;
+            border-bottom-color: #6366f1;
+            background-color: #eef2ff;
+        }
+
+        /* EXCEPCIÓ: Inputs sobre fons fosc (Secció Final) */
+        .dark-input {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+            color: white !important;
+            border-bottom-color: rgba(255, 255, 255, 0.5) !important;
+        }
+        .dark-input:focus {
+            background-color: rgba(255, 255, 255, 0.25) !important;
+            border-bottom-color: #ffffff !important;
+            color: white !important;
+            box-shadow: none !important;
+        }
+        .dark-input::placeholder {
+            color: rgba(224, 231, 255, 0.8) !important; /* Més clar i visible */
+        }
+
+        textarea {
+            resize: none;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        /* SLIDERS PERSONALITZATS ("CUTE") */
+        input[type=range] {
+            -webkit-appearance: none; 
+            width: 100%; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+
+        /* RÀDIOS DE NOTES (A, B, C, D) */
+        .grade-radio { display: none; }
+        .grade-label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            font-weight: 800;
+            color: #6b7280;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .grade-radio:checked + .grade-label {
+            background-color: #6366f1;
+            color: white;
+            border-color: #6366f1;
+            transform: scale(1.1);
+        }
+
+        /* UTILITIES IMPRESSIÓ */
+        @media print {
+            body { background: none; margin: 0; }
+            .document-container { margin: 0; width: 100%; }
+            .page-a4 { 
+                margin: 0; 
+                box-shadow: none; 
+                page-break-after: always; 
+                height: 297mm;
+                border: none;
+            }
+            .no-print { display: none !important; }
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #374151;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+            margin-top: 10px;
+        }
+
+        .icon-box {
+            width: 32px; height: 32px;
+            background: #e0e7ff;
+            color: #4338ca;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* TIPOGRAFIA MANUSCRITA PER SIGNATURA */
+        .handwritten {
+            font-family: 'Patrick Hand', cursive;
+            font-size: 1.6rem;
+            color: white;
+        }
+        
+        /* Stop Point Style */
+        .stop-point-box {
+            border: 2px dashed #fca5a5; 
+            background-color: #fef2f2; 
+            border-radius: 0.5rem; 
+            padding: 0.75rem; 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- CONTROL FLOTANT -->
+    <div class="fixed top-5 right-5 z-50 flex gap-3 no-print items-center">
+        <!-- Botó Guia Docent -->
+        <button onclick="toggleGuide()" class="bg-white hover:bg-gray-100 text-indigo-600 font-bold py-3 px-4 rounded-full shadow-lg flex items-center gap-2 transition transform hover:-translate-y-1 border-2 border-indigo-600" title="Guia Docent">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.499 5.84c-1.009.326-2.073.582-3.15.75" />
+            </svg>
+            <span class="hidden md:inline">Guia</span>
+        </button>
+
+        <!-- Botó Descàrrega -->
+        <button onclick="generatePDF()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg flex items-center gap-2 transition transform hover:-translate-y-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Baixar PDF
+        </button>
+    </div>
+
+    <!-- MODAL GUIA DOCENT -->
+    <div id="guide-modal" class="fixed inset-0 z-[60] hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <!-- Fons fosc -->
+        <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity backdrop-blur-sm" onclick="toggleGuide()"></div>
+      
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+          <div class="flex min-h-full items-center justify-center p-4">
+            
+            <div class="relative transform overflow-hidden rounded-xl bg-white text-left shadow-2xl transition-all sm:w-full sm:max-w-2xl border border-indigo-100">
+              
+              <!-- Header Modal -->
+              <div class="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.499 5.84c-1.009.326-2.073.582-3.15.75" />
+                    </svg>
+                    <h3 class="text-lg font-bold text-white">Guia Docent de l'Eina</h3>
+                </div>
+                <button type="button" class="text-indigo-200 hover:text-white transition-colors" onclick="toggleGuide()">
+                  <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+      
+              <!-- Body Modal -->
+              <div class="px-6 py-6 max-h-[75vh] overflow-y-auto text-sm text-gray-700 space-y-6">
+                  
+                  <section>
+                      <h4 class="font-bold text-indigo-700 text-base mb-2">Què és aquest instrument?</h4>
+                      <p class="leading-relaxed">Aquesta metacognició <em>Project Post-Mortem</em> és una auditoria del procés d’aprenentatge. Serveix perquè l’alumnat analitzi com ha treballat, amb dades i evidències, i defineixi millores concretes per a futurs projectes.</p>
+                      <div class="mt-2 text-xs bg-yellow-100 text-yellow-800 p-2 rounded-md border-l-4 border-yellow-400 font-medium">
+                          ⚠️ No avalua el contingut del PI, sinó organització, actitud, autoregulació i qualitat del procés.
+                      </div>
+                  </section>
+      
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <section class="bg-gray-50 p-4 rounded-lg">
+                          <h4 class="font-bold text-indigo-700 mb-2">Quan utilitzar-la</h4>
+                          <ul class="list-disc pl-5 space-y-1 text-gray-600">
+                              <li>Al final d’un PI o projecte llarg.</li>
+                              <li>Després de l’entrega del producte i abans de tancar la nota.</li>
+                              <li><strong>Durada:</strong> 60–90 minuts.</li>
+                          </ul>
+                      </section>
+                      <section class="bg-gray-50 p-4 rounded-lg">
+                          <h4 class="font-bold text-indigo-700 mb-2">Rol del docent</h4>
+                          <p class="mb-2">El docent actua com a <strong>auditor</strong>:</p>
+                          <ul class="list-disc pl-5 space-y-1 text-gray-600">
+                              <li>Valida dades i gràfics.</li>
+                              <li>Contrasta relats amb evidències.</li>
+                              <li>Formula preguntes, no judicis.</li>
+                          </ul>
+                      </section>
+                  </div>
+      
+                  <section class="border-t border-gray-100 pt-4">
+                      <h4 class="font-bold text-indigo-700 mb-3 text-base">Com funciona cada part</h4>
+                      <div class="space-y-4">
+                          <div class="flex gap-3">
+                              <span class="bg-indigo-100 text-indigo-700 font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs">1</span>
+                              <div>
+                                  <span class="font-bold text-gray-900">Radiografia del procés:</span> L’alumne visualitza com ha treballat (organització, qualitat, ritme...).
+                                  <div class="text-indigo-600 font-medium text-xs mt-1">👉 El docent valida coherència (Stop Points).</div>
+                              </div>
+                          </div>
+                          <div class="flex gap-3">
+                              <span class="bg-indigo-100 text-indigo-700 font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs">2</span>
+                              <div>
+                                  <span class="font-bold text-gray-900">Interrogatori metacognitiu:</span> Preguntes sobre estratègies, actitud i decisions.
+                                  <div class="text-indigo-600 font-medium text-xs mt-1">👉 Evitar respostes genèriques; demanar concreció.</div>
+                              </div>
+                          </div>
+                          <div class="flex gap-3">
+                              <span class="bg-indigo-100 text-indigo-700 font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs">3</span>
+                              <div>
+                                  <span class="font-bold text-gray-900">Veredicte:</span> L’alumne es posa nota i la justifica amb evidències.
+                                  <div class="text-indigo-600 font-medium text-xs mt-1">👉 No discutir la nota en aquest moment; analitzar l’argumentació.</div>
+                              </div>
+                          </div>
+                          <div class="flex gap-3">
+                              <span class="bg-indigo-100 text-indigo-700 font-bold rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-xs">4</span>
+                              <div>
+                                  <span class="font-bold text-gray-900">Contracte de millora:</span> Un únic compromís, concret i controlable.
+                                  <div class="text-indigo-600 font-medium text-xs mt-1">👉 Es recupera a l’inici del següent projecte.</div>
+                              </div>
+                          </div>
+                      </div>
+                  </section>
+      
+                  <section class="grid grid-cols-1 sm:grid-cols-2 gap-6 border-t border-gray-100 pt-4">
+                      <div>
+                          <h4 class="font-bold text-indigo-700 mb-2">Criteris clau d'avaluació</h4>
+                          <ul class="list-disc pl-5 space-y-1 text-gray-600">
+                              <li>Coherència del relat.</li>
+                              <li>Capacitat d’anàlisi.</li>
+                              <li>Ús d’evidències.</li>
+                          </ul>
+                          <p class="text-xs text-gray-400 mt-2 italic">Pot usar-se com a evidència de competència personal (C3/C4).</p>
+                      </div>
+                      <div>
+                          <h4 class="font-bold text-red-600 mb-2">Errors habituals a evitar</h4>
+                          <ul class="list-disc pl-5 space-y-1 text-gray-600">
+                              <li>Fer-la de pressa al final de classe.</li>
+                              <li>Convertir-la en un sermó.</li>
+                              <li>Acceptar frases buides ("m'organitzaré millor").</li>
+                          </ul>
+                      </div>
+                  </section>
+      
+                  <section class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                      <h4 class="font-bold text-blue-800 mb-1">Valor pedagògic</h4>
+                      <p class="text-blue-900">Aquest instrument dona llenguatge al procés, redueix conflictes amb la nota i millora projectes futurs sense canviar la metodologia.</p>
+                  </section>
+      
+              </div>
+              
+              <!-- Footer Modal -->
+              <div class="bg-gray-50 px-6 py-4 sm:flex sm:flex-row-reverse border-t border-gray-100">
+                <button type="button" class="inline-flex w-full justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:w-auto transition-colors" onclick="toggleGuide()">Entesos, tancar guia</button>
+              </div>
+            </div>
+          </div>
+        </div>
+    </div>
+
+    <!-- CONTENIDOR PRINCIPAL (TARGET PDF) -->
+    <div id="full-document" class="document-container">
+
+        <!-- ================= PÀGINA 1 ================= -->
+        <div class="page-a4">
+            <!-- CAPÇALERA -->
+            <header class="flex justify-between items-end border-b-4 border-indigo-500 pb-4 mb-6">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">PROJECT POST-MORTEM</h1>
+                    <p class="text-indigo-600 font-semibold uppercase text-sm tracking-wider">Informe d'Auditoria Interna · PI</p>
+                </div>
+            </header>
+
+            <!-- DADES ALUMNE -->
+            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-8 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div>
+                    <label class="text-xs font-bold text-indigo-400 uppercase tracking-wide">Alumne/a</label>
+                    <input type="text" placeholder="El teu nom complet">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-indigo-400 uppercase tracking-wide">Títol del Projecte</label>
+                    <input type="text" placeholder="Nom del projecte">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-indigo-400 uppercase tracking-wide">Grup</label>
+                        <input type="text" placeholder="Ex: 4t A">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-indigo-400 uppercase tracking-wide">Data</label>
+                        <input type="date">
+                    </div>
+                </div>
+                <div class="flex items-end">
+                    <p class="text-xs text-gray-400 italic text-right w-full">⚠️ Respostes honestes obligatòries.</p>
+                </div>
+            </div>
+
+            <!-- SECCIÓ 1: EVIDÈNCIES VISUALS -->
+            <h2 class="section-header">
+                <div class="icon-box"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg></div>
+                1. Radiografia del Procés
+            </h2>
+
+            <!-- 1A. ELS 4 QUADRANTS -->
+            <div class="mb-6 flex-grow">
+                <h3 class="text-sm font-bold text-gray-800 mb-2">1A. El Mapa de Coordenades (Organització vs. Qualitat)</h3>
+                <p class="text-xs text-gray-500 mb-3">On situaries la majoria de sessions de treball d'aquest projecte? Marca amb una <strong>X</strong> a sobre del paper o l'iPad.</p>
+                
+                <div class="relative w-full h-64 border border-gray-200 rounded-xl bg-white shadow-inner p-4">
+                    <svg viewBox="0 0 400 250" class="w-full h-full">
+                        <line x1="200" y1="10" x2="200" y2="240" stroke="#94a3b8" stroke-width="2" />
+                        <line x1="10" y1="125" x2="390" y2="125" stroke="#94a3b8" stroke-width="2" />
+                        
+                        <text x="15" y="120" font-size="9" fill="#64748b" font-weight="bold">← CAOS</text>
+                        <text x="385" y="120" font-size="9" fill="#64748b" font-weight="bold" text-anchor="end">ORDRE →</text>
+                        <text x="200" y="248" font-size="9" fill="#64748b" text-anchor="middle">NIVELL D'ORGANITZACIÓ</text>
+                        <text x="205" y="20" font-size="9" fill="#64748b" font-weight="bold">↑ ALTA QUALITAT</text>
+                        <text x="205" y="235" font-size="9" fill="#64748b" font-weight="bold">↓ BAIXA QUALITAT</text>
+
+                        <rect x="205" y="25" width="180" height="95" fill="#dcfce7" opacity="0.3" rx="4" />
+                        <text x="295" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#166534">TOP CLASS</text>
+                        <text x="295" y="75" text-anchor="middle" font-size="10" fill="#166534">Bona feina i amb temps</text>
+
+                        <rect x="15" y="25" width="180" height="95" fill="#fef9c3" opacity="0.3" rx="4" />
+                        <text x="105" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#854d0e">EL MIRACLE</text>
+                        <text x="105" y="75" text-anchor="middle" font-size="10" fill="#854d0e">Salvat a l'últim minut</text>
+
+                        <rect x="15" y="130" width="180" height="95" fill="#fee2e2" opacity="0.3" rx="4" />
+                        <text x="105" y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#991b1b">ZONA PERILL</text>
+                        <text x="105" y="185" text-anchor="middle" font-size="10" fill="#991b1b">Caos i mal resultat</text>
+
+                        <rect x="205" y="130" width="180" height="95" fill="#ffedd5" opacity="0.3" rx="4" />
+                        <text x="295" y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#9a3412">INEFICIÈNCIA</text>
+                        <text x="295" y="185" text-anchor="middle" font-size="10" fill="#9a3412">Molt temps, poc resultat</text>
+
+                        <g transform="translate(140, 60) rotate(-10)">
+                            <text x="0" y="0" font-family="Verdana" font-size="40" fill="#ef4444" font-weight="bold" opacity="0.8">X</text>
+                            <text x="0" y="20" font-size="10" fill="#ef4444" font-weight="bold">(Exemple)</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- 1B. GRÀFIC DISPERSIÓ -->
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-gray-800 mb-2">1B. L'Electrocardiograma (Flux de Treball)</h3>
+                <div class="flex gap-4">
+                    <div class="w-1/3 bg-gray-50 rounded-lg p-2 border border-gray-200">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-1 text-center">Exemple Visual</p>
+                        <svg viewBox="0 0 150 60" class="w-full h-auto overflow-visible">
+                            <polyline points="0,50 30,50 40,20 70,40 100,10 120,40 150,30" fill="none" stroke="#6366f1" stroke-width="2"/>
+                            <circle cx="40" cy="20" r="3" fill="#ef4444"/>
+                            <circle cx="100" cy="10" r="3" fill="#10b981"/>
+                            <text x="40" y="10" font-size="6" text-anchor="middle" fill="#ef4444">Estrès</text>
+                            <text x="100" y="5" font-size="6" text-anchor="middle" fill="#10b981">Flow</text>
+                        </svg>
+                    </div>
+                    <div class="w-2/3 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-50/50 p-2">
+                        <p class="text-sm font-medium text-gray-600 text-center">
+                            📉 Dibuixa el gràfic en un full a part, fes-li una foto i puja-la al Classroom.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Pàgina 1 -->
+            <div class="mt-auto border-t pt-2 flex justify-between text-xs text-gray-400">
+                <span>Auditoria PI</span>
+                <span>Pàgina 1 de 4</span>
+            </div>
+        </div>
+
+        <!-- ================= PÀGINA 2 ================= -->
+        <div class="page-a4">
+            
+            <!-- STOP POINT 1 -->
+            <div class="stop-point-box mt-4">
+                <div class="flex items-center gap-3">
+                    <div class="bg-red-200 p-2 rounded-full text-red-700">🛑</div>
+                    <div>
+                        <h4 class="font-bold text-red-800 text-sm">STOP POINT 1</h4>
+                        <p class="text-[10px] text-red-700">Abans de calcular percentatges, valida els gràfics amb el profe.</p>
+                    </div>
+                </div>
+                <div class="h-10 w-24 border border-red-300 bg-white rounded flex items-center justify-center">
+                    <span class="text-[10px] text-gray-300 font-bold -rotate-6">VIST-I-PLAU</span>
+                </div>
+            </div>
+
+            <!-- 1C. LLADRES DE TEMPS -->
+            <h2 class="section-header">
+                <div class="icon-box"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                1C. Els "Lladres de Temps"
+            </h2>
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-6">
+                <p class="text-sm text-gray-500 mb-4">Reparteix la culpa de la teva manca de productivitat. <span id="total-percent" class="font-bold text-indigo-600">Total: 0%</span> (Ha de sumar 100%)</p>
+
+                <!-- Llista de Sliders -->
+                <div class="space-y-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-lg">🎮</div>
+                        <div class="flex-grow">
+                            <label class="text-xs font-bold text-gray-600 block mb-1">Distraccions iPad / Jocs</label>
+                            <input type="range" min="0" max="100" value="0" class="percent-slider" oninput="updateTotal()">
+                        </div>
+                        <span class="w-12 text-right font-bold text-gray-700 val-display">0%</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-lg">🗣️</div>
+                        <div class="flex-grow">
+                            <label class="text-xs font-bold text-gray-600 block mb-1">Xerrar / Distraccions Companys</label>
+                            <input type="range" min="0" max="100" value="0" class="percent-slider" oninput="updateTotal()">
+                        </div>
+                        <span class="w-12 text-right font-bold text-gray-700 val-display">0%</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-lg">🔌</div>
+                        <div class="flex-grow">
+                            <label class="text-xs font-bold text-gray-600 block mb-1">Problemes Tècnics / Sense Bateria</label>
+                            <input type="range" min="0" max="100" value="0" class="percent-slider" oninput="updateTotal()">
+                        </div>
+                        <span class="w-12 text-right font-bold text-gray-700 val-display">0%</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-lg">😴</div>
+                        <div class="flex-grow">
+                            <label class="text-xs font-bold text-gray-600 block mb-1">Mandra / Manca de motivació</label>
+                            <input type="range" min="0" max="100" value="0" class="percent-slider" oninput="updateTotal()">
+                        </div>
+                        <span class="w-12 text-right font-bold text-gray-700 val-display">0%</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-lg">🤝</div>
+                        <div class="flex-grow">
+                            <label class="text-xs font-bold text-gray-600 block mb-1">Dependència del grup (Esperar)</label>
+                            <input type="range" min="0" max="100" value="0" class="percent-slider" oninput="updateTotal()">
+                        </div>
+                        <span class="w-12 text-right font-bold text-gray-700 val-display">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STOP POINT 2 -->
+            <div class="stop-point-box">
+                <div class="flex items-center gap-3">
+                    <div class="bg-red-200 p-2 rounded-full text-red-700">🛑</div>
+                    <div>
+                        <h4 class="font-bold text-red-800 text-sm">STOP POINT 2</h4>
+                        <p class="text-[10px] text-red-700">El professor ha de validar els percentatges.</p>
+                    </div>
+                </div>
+                <div class="h-10 w-24 border border-red-300 bg-white rounded flex items-center justify-center">
+                    <span class="text-[10px] text-gray-300 font-bold -rotate-6">SIGNATURA</span>
+                </div>
+            </div>
+
+            <!-- 2. REFLEXIÓ METACOGNITIVA (Part 1) -->
+            <h2 class="section-header">
+                <div class="icon-box"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></div>
+                2. L'Interrogatori (Metacognició)
+            </h2>
+            
+            <div class="space-y-6 flex-grow">
+                <!-- Pregunta 1 -->
+                <div class="bg-indigo-50/50 p-4 rounded-lg border-l-4 border-indigo-400">
+                    <p class="text-sm font-bold text-gray-800 mb-2">🧠 Què he après realment fent aquest PI (no sobre el tema, sinó sobre mi)?</p>
+                    <textarea rows="3" placeholder="Ex: He descobert que quan em bloquegi necessito..."></textarea>
+                </div>
+
+                <!-- Pregunta 2 -->
+                <div>
+                    <p class="text-sm font-bold text-gray-800 mb-2">⚡ Quins projectes tenen més "suc"? Per què el teu el té (o no)?</p>
+                    <textarea rows="3" placeholder="Té suc perquè vaig investigar... O no en té perquè he copiat..."></textarea>
+                </div>
+            </div>
+
+            <!-- Footer Pàgina 2 -->
+            <div class="mt-auto border-t pt-2 flex justify-between text-xs text-gray-400">
+                <span>Auditoria PI</span>
+                <span>Pàgina 2 de 4</span>
+            </div>
+        </div>
+
+        <!-- ================= PÀGINA 3 ================= -->
+        <div class="page-a4">
+            
+            <!-- REFLEXIÓ (Continuació) -->
+            <h2 class="section-header">
+                <div class="icon-box"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg></div>
+                Reflexió (Continuació)
+            </h2>
+
+            <!-- Pregunta 3 (MOVED HERE) -->
+            <div class="grid grid-cols-2 gap-6 mb-8">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p class="text-sm font-bold text-gray-800 mb-2">🐢 Organització</p>
+                    <p class="text-xs text-gray-500 mb-2">Què puc fer diferent en un projecte llarg?</p>
+                    <textarea rows="5" class="bg-white"></textarea>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p class="text-sm font-bold text-gray-800 mb-2">😎 Actitud</p>
+                    <p class="text-xs text-gray-500 mb-2">Com ha afectat la meva actitud a la qualitat final?</p>
+                    <textarea rows="5" class="bg-white"></textarea>
+                </div>
+            </div>
+
+            <!-- 3. VEREDICTE -->
+            <h2 class="section-header">
+                <div class="icon-box"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg></div>
+                3. El Veredicte
+            </h2>
+            <p class="text-xs text-gray-500 mb-4">Marca la nota que creus que mereixes (A=Excel·lent, D=Insuficient) i justifica-ho amb fets.</p>
+
+            <div class="space-y-4 mb-8">
+                <!-- Rúbrica 1 -->
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-bold text-sm text-gray-800">C2. Planificació i Organització</h4>
+                        <div class="flex gap-2">
+                            <label><input type="radio" name="nota1" class="grade-radio"><span class="grade-label">A</span></label>
+                            <label><input type="radio" name="nota1" class="grade-radio"><span class="grade-label">B</span></label>
+                            <label><input type="radio" name="nota1" class="grade-radio"><span class="grade-label">C</span></label>
+                            <label><input type="radio" name="nota1" class="grade-radio"><span class="grade-label">D</span></label>
+                        </div>
+                    </div>
+                    <textarea rows="2" class="text-sm bg-gray-50" placeholder="EVIDÈNCIA: 'Mereixo aquesta nota perquè al gràfic 1A es veu que...'"></textarea>
+                </div>
+
+                <!-- Rúbrica 2 -->
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-bold text-sm text-gray-800">C1. Qualitat del Producte ("Suc")</h4>
+                        <div class="flex gap-2">
+                            <label><input type="radio" name="nota2" class="grade-radio"><span class="grade-label">A</span></label>
+                            <label><input type="radio" name="nota2" class="grade-radio"><span class="grade-label">B</span></label>
+                            <label><input type="radio" name="nota2" class="grade-radio"><span class="grade-label">C</span></label>
+                            <label><input type="radio" name="nota2" class="grade-radio"><span class="grade-label">D</span></label>
+                        </div>
+                    </div>
+                    <textarea rows="2" class="text-sm bg-gray-50" placeholder="EVIDÈNCIA: 'He anat més enllà del mínim en...'"></textarea>
+                </div>
+
+                <!-- Rúbrica 3 -->
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-bold text-sm text-gray-800">C3/C4. Actitud i Aprenentatge</h4>
+                        <div class="flex gap-2">
+                            <label><input type="radio" name="nota3" class="grade-radio"><span class="grade-label">A</span></label>
+                            <label><input type="radio" name="nota3" class="grade-radio"><span class="grade-label">B</span></label>
+                            <label><input type="radio" name="nota3" class="grade-radio"><span class="grade-label">C</span></label>
+                            <label><input type="radio" name="nota3" class="grade-radio"><span class="grade-label">D</span></label>
+                        </div>
+                    </div>
+                    <textarea rows="2" class="text-sm bg-gray-50" placeholder="EVIDÈNCIA: 'He ajudat els companys quan...'"></textarea>
+                </div>
+            </div>
+
+            <!-- Footer Pàgina 3 -->
+            <div class="mt-auto border-t pt-2 flex justify-between text-xs text-gray-400">
+                <span>Auditoria PI</span>
+                <span>Pàgina 3 de 4</span>
+            </div>
+        </div>
+
+        <!-- ================= PÀGINA 4 ================= -->
+        <div class="page-a4 flex flex-col justify-center">
+            
+            <!-- 4. CONTRACTE FINAL (SOL A LA PÀGINA) -->
+            <div class="bg-indigo-900 text-white rounded-xl p-10 shadow-2xl relative overflow-hidden">
+                <!-- Element decoratiu de fons -->
+                <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-indigo-800 rounded-full opacity-50 blur-3xl"></div>
+
+                <div class="flex items-center gap-4 mb-8 border-b border-indigo-700 pb-4">
+                    <div class="bg-indigo-500 p-3 rounded-full text-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold uppercase tracking-widest">Contracte de Millora</h2>
+                        <p class="text-indigo-300 text-sm">Compromís oficial per a la propera avaluació</p>
+                    </div>
+                </div>
+
+                <p class="text-indigo-200 text-lg mb-4">Per a la propera entrega, jo em comprometo formalment a canviar aquesta <strong class="text-white border-b-2 border-yellow-400">ÚNICA</strong> cosa concreta:</p>
+                
+                <div class="mb-12">
+                    <input type="text" class="dark-input w-full bg-transparent border-b-2 border-indigo-500 text-white text-xl font-medium placeholder-indigo-300 py-4 focus:ring-0" placeholder="Escriu aquí el teu compromís (Ex: Deixaré el mòbil...)">
+                </div>
+
+                <div class="flex flex-col md:flex-row justify-between items-end gap-8">
+                    <div class="text-sm text-indigo-400 italic">
+                        * Aquest document queda registrat i es revisarà<br>al principi del següent projecte.
+                    </div>
+                    <div class="text-right w-full md:w-auto">
+                        <p class="text-sm text-indigo-300 mb-2 uppercase tracking-wide">Signat l'alumne/a:</p>
+                        <input type="text" class="dark-input text-right bg-transparent border-none text-3xl handwritten w-full md:w-64 text-white placeholder-indigo-400/50" placeholder="Signa aquí">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Pàgina 4 -->
+            <div class="mt-auto border-t pt-2 flex justify-between text-xs text-gray-400">
+                <span>Auditoria PI</span>
+                <span>Pàgina 4 de 4</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Actualitzar percentatges
+        function updateTotal() {
+            const sliders = document.querySelectorAll('.percent-slider');
+            const displays = document.querySelectorAll('.val-display');
+            let total = 0;
+
+            sliders.forEach((slider, index) => {
+                const val = parseInt(slider.value);
+                displays[index].textContent = val + '%';
+                total += val;
+            });
+
+            const totalDisplay = document.getElementById('total-percent');
+            totalDisplay.textContent = 'Total: ' + total + '%';
+
+            if (total === 100) {
+                totalDisplay.className = 'font-bold text-green-600 bg-green-100 px-2 rounded';
+                totalDisplay.innerHTML = 'Total: 100% ✅';
+            } else if (total > 100) {
+                totalDisplay.className = 'font-bold text-red-600 bg-red-100 px-2 rounded';
+                totalDisplay.innerHTML = 'Total: ' + total + '% ⚠️ (Et passes)';
+            } else {
+                totalDisplay.className = 'font-bold text-indigo-600';
+            }
+        }
+
+        // Toggle Guia Docent
+        function toggleGuide() {
+            const modal = document.getElementById('guide-modal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden'; // Evitar scroll de fons
+            } else {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        }
+
+        // Generar PDF
+        function generatePDF() {
+            const element = document.getElementById('full-document');
+            const btn = document.querySelector('.fixed'); // Amagar botó
+
+            // Obtenir nom alumne per l'arxiu
+            const nomAlumne = document.querySelector('input[type="text"]').value || "Alumne";
+
+            const opt = {
+                margin:       0,
+                filename:     `Auditoria_${nomAlumne}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Amagar elements UI
+            btn.style.display = 'none';
+
+            html2pdf().from(element).set(opt).save().then(() => {
+                btn.style.display = 'flex';
+            });
+        }
+    </script>
+</body>
+</html>
