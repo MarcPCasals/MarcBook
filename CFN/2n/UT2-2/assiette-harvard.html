@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MON ASSIETTE SANTÉ DU HARVARD - Planificateur Diététique</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Animate.css -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Urbanist:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        headings: ['Fredoka', 'sans-serif'],
+                        body: ['Urbanist', 'sans-serif'],
+                    },
+                    colors: {
+                        harvard: {
+                            veg: '#4ade80',   
+                            grain: '#facc15', 
+                            prot: '#f87171',  
+                            bg: '#f0fdf4'     
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Urbanist', sans-serif;
+            overflow-x: hidden; 
+            touch-action: manipulation;
+            transition: background-color 0.5s ease;
+        }
+        
+        h1, h2, h3, h4 { font-family: 'Fredoka', sans-serif; }
+
+        /* L'ASSIETTE */
+        .harvard-plate {
+            background: conic-gradient(
+                #4ade80 0% 50%, 
+                #facc15 50% 75%, 
+                #f87171 75% 100%
+            );
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        /* Étiquettes de l'Assiette */
+        .plate-label {
+            font-family: 'Fredoka', sans-serif;
+            font-weight: bold;
+            font-size: 0.75rem; 
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: #374151;
+            pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            white-space: nowrap;
+        }
+
+        /* Zones Extras */
+        .extra-zone {
+            width: 70px; height: 70px;
+            border: 3px dashed #cbd5e1;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.5);
+            transition: all 0.3s;
+        }
+        .extra-zone.active {
+            border-style: solid;
+            background: white;
+            transform: scale(1.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .extra-zone.drop-target {
+            border-color: #34d399;
+            background: #d1fae5;
+            transform: scale(1.05);
+        }
+
+        /* Boutons Info */
+        .info-btn {
+            width: 24px; height: 24px;
+            background: white; border: 2px solid #e5e7eb;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-weight: bold; color: #4b5563;
+            transition: transform 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 0.7rem;
+        }
+        .info-btn:hover { transform: scale(1.1); background-color: #f3f4f6; }
+
+        /* Élément Déplaçable */
+        .draggable-item {
+            width: 60px; height: 60px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.2rem;
+            cursor: grab;
+            user-select: none;
+            position: absolute; 
+            z-index: 100;
+            touch-action: none;
+        }
+        .draggable-item:active { cursor: grabbing; transform: scale(1.1); }
+        
+        /* Éléments placés */
+        .placed-item {
+            position: absolute;
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; z-index: 20; 
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translate(-50%, -50%);
+        }
+        .placed-item:hover { transform: translate(-50%, -50%) scale(1.15); z-index: 30; }
+        .placed-item .icon { font-size: 2.2rem; filter: drop-shadow(0 4px 3px rgba(0,0,0,0.2)); }
+        .placed-item .label {
+            font-size: 9px; font-weight: 700;
+            background: rgba(255,255,255,0.95); padding: 1px 5px;
+            border-radius: 6px; box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+            margin-top: -8px; white-space: nowrap; color: #374151; pointer-events: none;
+        }
+
+        /* Onglets Sidebar */
+        .nav-btn {
+            width: 100%; text-align: left; padding: 1rem; border-radius: 1rem;
+            transition: all 0.2s ease-out; display: flex; align-items: center; gap: 12px;
+            background-color: white; border: 2px solid #e5e7eb; margin-bottom: 0.5rem;
+            color: #374151; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .nav-btn:hover { transform: translateX(4px); border-color: #d1d5db; }
+        .nav-btn.active {
+            background-color: white !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), inset 0 0 0 2px currentColor;
+            transform: scale(1.02); opacity: 1; border-color: transparent; 
+        }
+        
+        /* États Bloqués */
+        .nav-btn.locked {
+            opacity: 0.5;
+            background-color: #e5e7eb;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+        .nav-btn.locked:hover { transform: none; border-color: transparent; }
+
+        .btn-breakfast.active { color: #ea580c; } 
+        .btn-lunch.active { color: #0284c7; } 
+        .btn-dinner.active { color: #4f46e5; } 
+        .btn-summary.active { color: #1f2937; background: #f8fafc; }
+
+        .modal-overlay { background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        
+        /* Rubrique Sélectionnée */
+        .rubric-card { transition: all 0.2s; border: 2px solid #e5e7eb; }
+        .rubric-card:hover { transform: translateY(-2px); border-color: #d1d5db; }
+        .rubric-card.selected { transform: scale(1.02); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .rubric-novato.selected { background-color: #fee2e2; border-color: #ef4444; color: #991b1b; }
+        .rubric-sous.selected { background-color: #fef9c3; border-color: #eab308; color: #854d0e; }
+        .rubric-chef.selected { background-color: #dcfce7; border-color: #22c55e; color: #14532d; }
+        
+        @media (max-width: 768px) {
+            .nav-scroll { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 10px; width: 100%; }
+            .nav-btn { min-width: 140px; padding: 0.8rem; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+        }
+
+        /* Notification OMS */
+        #oms-toast {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border-left: 5px solid #10b981;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-orange-50 min-h-screen p-2 md:p-6 pb-20">
+
+    <!-- Header -->
+    <header class="w-full max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center mb-4 animate__animated animate__fadeInDown gap-4">
+        
+        <!-- Gauche: Titre -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+            <div class="bg-white p-2 rounded-xl shadow-sm border-2 border-white/50">
+                <i data-lucide="chef-hat" class="text-emerald-600 w-8 h-8"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-3xl font-bold text-gray-800 leading-none tracking-tight">MON ASSIETTE HARVARD</h1>
+                <p class="text-gray-600 text-xs font-medium">Planificateur diététique • <span class="font-bold text-emerald-600">Créé par Marc Pérez Casals</span></p>
+            </div>
+        </div>
+        
+        <!-- Droite: Score et Boutons -->
+        <div class="flex items-center gap-4 w-full md:w-auto justify-end">
+            
+            <!-- Marqueur Global -->
+            <div class="flex flex-col items-center">
+                <div class="bg-white px-4 py-2 rounded-xl shadow-md border border-emerald-100 flex items-center gap-3 min-w-[180px] justify-between">
+                    <div class="text-right">
+                        <span id="score-text" class="block font-black text-sm uppercase text-gray-400">VIDE</span>
+                        <span id="score-val" class="text-xs font-bold text-gray-400">0%</span>
+                    </div>
+                    <div class="h-8 w-px bg-gray-200"></div>
+                    <span id="face-feedback" class="text-3xl">😐</span>
+                </div>
+                <button onclick="showWhy()" id="why-btn" class="text-xs font-bold text-blue-500 bg-blue-50 px-3 py-1 rounded-full mt-1 hover:bg-blue-100 transition-colors hidden">
+                    Pourquoi ?
+                </button>
+            </div>
+
+            <!-- Boutons Action -->
+            <div class="flex gap-2">
+                <button onclick="openDecisionsModal()" class="bg-white hover:bg-gray-50 text-indigo-600 p-3 rounded-full shadow-md border border-indigo-100 transition-all" title="Décisions">
+                    <i data-lucide="book-open" class="w-5 h-5"></i>
+                </button>
+                <button onclick="confirmReset()" class="bg-white hover:bg-red-50 text-red-500 p-3 rounded-full shadow-md border border-gray-200" title="Réinitialiser la Journée">
+                    <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Layout Principal -->
+    <div class="w-full max-w-7xl mx-auto flex flex-col md:flex-row gap-6">
+
+        <!-- 1. BARRE DE NAVIGATION -->
+        <aside class="w-full md:w-64 shrink-0 flex flex-col gap-2">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1 ml-1 md:block hidden">Menu du Jour</p>
+            
+            <div class="nav-scroll">
+                <button onclick="switchTab('breakfast')" id="btn-breakfast" class="nav-btn btn-breakfast active">
+                    <span class="text-2xl">🌅</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">Petit Déj</span>
+                        <span class="text-xs font-medium opacity-70 hidden md:block">Commencer la journée</span>
+                    </div>
+                </button>
+
+                <button onclick="switchTab('lunch')" id="btn-lunch" class="nav-btn btn-lunch locked">
+                    <span class="text-2xl">☀️</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">Déjeuner</span>
+                        <div class="flex items-center gap-1">
+                            <i data-lucide="lock" class="w-3 h-3"></i>
+                            <span class="text-xs font-medium opacity-70 hidden md:block">Bloqué</span>
+                        </div>
+                    </div>
+                </button>
+
+                <button onclick="switchTab('dinner')" id="btn-dinner" class="nav-btn btn-dinner locked">
+                    <span class="text-2xl">🌙</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">Dîner</span>
+                        <div class="flex items-center gap-1">
+                            <i data-lucide="lock" class="w-3 h-3"></i>
+                            <span class="text-xs font-medium opacity-70 hidden md:block">Bloqué</span>
+                        </div>
+                    </div>
+                </button>
+
+                <button onclick="switchTab('summary')" id="btn-summary" class="nav-btn btn-summary locked bg-slate-100">
+                    <span class="text-2xl">📊</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">RÉSUMÉ</span>
+                        <div class="flex items-center gap-1">
+                            <i data-lucide="lock" class="w-3 h-3"></i>
+                            <span class="text-xs font-medium opacity-70 hidden md:block">Bilan Final</span>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </aside>
+
+        <!-- 2. ZONE PRINCIPALE -->
+        <div class="flex-1 relative min-h-[600px]">
+            
+            <!-- Notification OMS (Fermeture Manuelle) -->
+            <div id="oms-toast" class="absolute top-0 right-0 z-50 m-4 p-4 rounded-xl hidden animate__animated animate__fadeInRight max-w-xs bg-white/95 backdrop-blur shadow-xl border-l-4 border-emerald-500">
+                <div class="flex items-start gap-3">
+                    <div class="bg-emerald-100 p-2 rounded-full text-emerald-600 shrink-0">
+                        <i data-lucide="scale" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-sm">Portion OMS</h4>
+                        <p id="oms-text" class="text-xs text-gray-600 mt-1 leading-relaxed">...</p>
+                    </div>
+                    <button onclick="document.getElementById('oms-toast').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 ml-auto"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+
+            <!-- VUE PLANIFICATEUR -->
+            <div id="planner-view" class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate__animated animate__fadeIn">
+                
+                <!-- Contrôles -->
+                <div class="lg:col-span-5 flex flex-col gap-4">
+                    <!-- Recherche -->
+                    <div class="bg-white/90 backdrop-blur p-5 rounded-3xl shadow-lg border border-white/50">
+                        <h2 class="text-lg font-headings font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <span class="bg-gray-100 text-gray-600 p-1.5 rounded-lg"><i data-lucide="search" class="w-4 h-4"></i></span>
+                            Ajouter au <span id="current-meal-name" class="text-emerald-600">Petit Déj</span>
+                        </h2>
+                        <div class="flex gap-2 mb-2 relative z-10">
+                            <input list="food-list" id="food-input" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none text-sm focus:ring-2 focus:ring-emerald-400" placeholder="Chercher un aliment..." autocomplete="off">
+                            <datalist id="food-list"></datalist>
+                            <button onclick="stageFood()" class="bg-emerald-500 text-white rounded-xl px-4 shadow-md hover:bg-emerald-600"><i data-lucide="arrow-down" class="w-5 h-5"></i></button>
+                        </div>
+                        
+                        <!-- Plateau -->
+                        <div class="mt-4">
+                            <div id="staging-area" class="w-full flex items-center justify-center p-4 min-h-[80px] bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl">
+                                <span class="text-gray-400 text-xs italic pointer-events-none">Glisser vers l'assiette...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Extras -->
+                    <div class="bg-white/90 backdrop-blur p-5 rounded-3xl shadow-lg border border-white/50">
+                        <h2 class="text-sm font-bold text-gray-500 uppercase mb-3">N'oubliez pas...</h2>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="stageExtra('water')" class="flex items-center gap-2 p-3 rounded-xl border border-blue-100 bg-blue-50/50 hover:bg-blue-100 transition-colors">
+                                <span class="text-2xl">💧</span>
+                                <span class="text-xs font-bold text-gray-700">Eau</span>
+                            </button>
+                            <button onclick="stageExtra('oil')" class="flex items-center gap-2 p-3 rounded-xl border border-yellow-100 bg-yellow-50/50 hover:bg-yellow-100 transition-colors">
+                                <span class="text-2xl">🫒</span>
+                                <span class="text-xs font-bold text-gray-700">Huile</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bouton Rubrique (GATEKEEPER) -->
+                    <button onclick="openRubricModal()" class="w-full py-4 bg-gray-800 text-white rounded-2xl font-bold text-sm hover:bg-black shadow-lg flex items-center justify-center gap-2 transform hover:-translate-y-1 transition-all">
+                        <i data-lucide="unlock" class="w-5 h-5 text-emerald-400"></i> Auto-évaluation et Débloquer Suivant
+                    </button>
+                </div>
+
+                <!-- Assiette -->
+                <div class="lg:col-span-7 flex flex-col items-center bg-white/60 backdrop-blur-md rounded-[3rem] p-4 border-2 border-white/50 shadow-xl relative">
+                    
+                    <!-- L'ASSIETTE VISUELLE -->
+                    <div class="relative w-full max-w-[500px] mt-8 mb-8 flex items-center justify-center">
+                        <div id="oil-zone" class="extra-zone absolute left-2 md:-left-4 top-1/2 transform -translate-y-1/2 z-10" title="Huile"><span class="opacity-30 text-3xl grayscale">🫒</span></div>
+                        
+                        <div class="relative w-[280px] h-[280px] md:w-[360px] md:h-[360px] select-none mx-auto">
+                            <!-- Boutons Info & Étiquettes -->
+                            
+                            <!-- VEGETALES (Droite) -->
+                            <div class="absolute top-[40%] -right-12 z-20 flex flex-col items-center gap-1">
+                                <button class="info-btn text-emerald-600" onclick="showInfo('veg')">i</button>
+                                <span class="plate-label">Légumes</span>
+                            </div>
+
+                            <!-- PROTEINES (Haut Gauche) -->
+                            <div class="absolute -top-10 -left-6 z-20 flex flex-col items-center gap-1">
+                                <button class="info-btn text-red-600" onclick="showInfo('prot')">i</button>
+                                <span class="plate-label">Protéines</span>
+                            </div>
+
+                            <!-- CÉRÉALES (Bas Gauche) -->
+                            <div class="absolute -bottom-10 -left-6 z-20 flex flex-col items-center gap-1">
+                                <button class="info-btn text-yellow-600" onclick="showInfo('grain')">i</button>
+                                <span class="plate-label">Céréales</span>
+                            </div>
+
+                            <div id="plate-zone" class="harvard-plate w-full h-full rounded-full border-8 border-white overflow-hidden relative shadow-2xl">
+                                <div class="plate-sector sector-prot" data-cat="prot"></div>
+                                <div class="plate-sector sector-veg" data-cat="veg"></div>
+                                <div class="plate-sector sector-grain" data-cat="grain"></div>
+                                <div id="placed-items-container" class="w-full h-full absolute inset-0 pointer-events-none"></div>
+                            </div>
+                        </div>
+
+                        <div id="water-zone" class="extra-zone absolute right-2 md:-right-4 top-1/2 transform -translate-y-1/2 z-10" title="Eau"><span class="opacity-30 text-3xl grayscale">💧</span></div>
+                    </div>
+
+                    <!-- Défis -->
+                    <div class="flex gap-2 justify-center mt-auto w-full px-4 mb-4">
+                        <button onclick="loadPreset('school')" class="text-[10px] bg-white/50 hover:bg-white px-3 py-1 rounded-lg border border-gray-200 transition-colors">🏫 Défi École</button>
+                        <button onclick="loadPreset('fastfood')" class="text-[10px] bg-white/50 hover:bg-white px-3 py-1 rounded-lg border border-gray-200 transition-colors">🍔 Défi Fast-Food</button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- VUE RÉSUMÉ FINAL -->
+            <div id="summary-view" class="hidden bg-white rounded-[3rem] p-8 shadow-2xl border border-gray-100 animate__animated animate__fadeIn">
+                <div class="text-center mb-8">
+                    <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-sm">
+                        <span id="final-medal" class="text-4xl">🏅</span>
+                    </div>
+                    <h2 class="text-3xl font-headings font-bold text-gray-800">Résumé de la Journée</h2>
+                    <p class="text-gray-500">Voici le bilan de tous tes repas</p>
+                    
+                    <!-- RÉSUMÉ NIVEAU MOYEN -->
+                    <div class="mt-4 inline-block bg-indigo-50 border border-indigo-100 px-6 py-2 rounded-full">
+                        <span class="text-xs font-bold text-indigo-400 uppercase tracking-widest">Ton Niveau Aujourd'hui</span>
+                        <div id="global-level-display" class="text-xl font-black text-indigo-700">Calcul en cours...</div>
+                    </div>
+                </div>
+
+                <!-- Cartes Repas -->
+                <div id="final-summary-content" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    <!-- JS remplit ceci -->
+                </div>
+
+                <!-- Réflexion Finale -->
+                <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                    <label class="block text-lg font-bold text-slate-800 mb-3">🤔 Réflexion Finale : Comment as-tu conçu tes menus ?</label>
+                    <textarea id="final-reflection-text" rows="4" class="w-full p-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-400 outline-none text-gray-700 bg-white" placeholder="J'ai conçu ma journée en essayant..."></textarea>
+                    
+                    <div class="mt-4 bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex items-center gap-3 text-yellow-800">
+                        <i data-lucide="camera" class="w-6 h-6"></i>
+                        <span class="font-bold text-sm">Prends une capture d'écran et dépose-la dans le devoir Classroom.</span>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modales -->
+    
+    <!-- Alerte Répétition -->
+    <div id="repetition-toast" class="fixed top-24 left-1/2 transform -translate-x-1/2 bg-amber-100 text-amber-800 border-l-4 border-amber-500 p-4 rounded shadow-xl z-[90] hidden animate__animated animate__shakeX max-w-sm">
+        <div class="flex items-center gap-3">
+            <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            <div><p class="font-bold text-sm">Répétition !</p><p class="text-xs" id="repetition-msg">...</p></div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="info-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-md w-full p-8 relative animate__animated animate__zoomIn">
+            <button onclick="document.getElementById('info-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-black"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <div id="modal-content" class="mt-2"></div>
+        </div>
+    </div>
+
+    <!-- Justification Modal -->
+    <div id="justification-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 animate__animated animate__fadeInUp">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">Décision Nutritionnelle</h3>
+            <p class="text-sm text-gray-500 mb-4">Pourquoi mets-tu <strong id="just-food-name" class="text-emerald-600">...</strong> ici ?</p>
+            <textarea id="just-input" rows="3" class="w-full bg-gray-50 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Parce que..."></textarea>
+            <div class="flex gap-2 mt-4 justify-end">
+                <button onclick="cancelDrop()" class="text-gray-500 text-sm font-bold px-3">Annuler</button>
+                <button onclick="confirmDrop()" class="bg-emerald-600 text-white text-sm font-bold px-5 py-2 rounded-xl">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Enseignant -->
+    <div id="teacher-feedback-modal" class="fixed inset-0 modal-overlay hidden z-[60] flex items-center justify-center p-4">
+        <div class="bg-orange-50 rounded-3xl shadow-2xl max-w-sm w-full p-6 border-4 border-orange-200 text-center animate__animated animate__bounceIn">
+            <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto -mt-12 mb-4 border border-orange-200 shadow"><i data-lucide="graduation-cap" class="w-6 h-6 text-orange-500"></i></div>
+            <h3 class="text-lg font-bold text-orange-900 mb-2">Info Prof</h3>
+            <p id="teacher-feedback-text" class="text-gray-700 italic mb-4 text-sm">...</p>
+            <button onclick="document.getElementById('teacher-feedback-modal').classList.add('hidden')" class="w-full bg-orange-500 text-white font-bold py-2 rounded-xl hover:bg-orange-600">Compris !</button>
+        </div>
+    </div>
+    
+    <!-- Journal de Décisions -->
+    <div id="decisions-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-start justify-center p-4 pt-10">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full p-6 relative h-[70vh] flex flex-col animate__animated animate__slideInDown">
+            <button onclick="document.getElementById('decisions-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>
+            
+            <div class="flex justify-between items-end border-b pb-2 mb-4">
+                <h2 class="text-xl font-headings font-bold text-gray-800">📖 Journal de Décisions</h2>
+                <button onclick="copyDecisionsTable()" class="bg-indigo-50 text-indigo-600 text-xs font-bold px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1">
+                    <i data-lucide="copy" class="w-3 h-3"></i> Copier Tableau
+                </button>
+            </div>
+            
+            <div id="decisions-list" class="flex-1 overflow-y-auto space-y-3"></div>
+        </div>
+    </div>
+
+    <!-- Rubrique Modal (SPÉCIFIQUE PAR REPAS + DÉVERROUILLAGE) -->
+    <div id="rubric-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-3xl w-full p-8 h-[90vh] overflow-y-auto relative">
+             <button onclick="document.getElementById('rubric-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>
+             <h2 class="text-2xl font-bold text-gray-800 mb-2">Auto-évaluation du <span id="rubric-meal-name" class="text-emerald-600">...</span></h2>
+             <p class="text-sm text-gray-500 mb-6">Évalue sincèrement ton assiette pour débloquer le prochain repas.</p>
+             
+             <div class="space-y-6 mb-8">
+                <!-- Critère 1 -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-5 h-5"></i> 1. Proportions Harvard
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="rubric-card rubric-novato rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(1, 0, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-red-400">Novice</span>
+                            <p class="text-sm text-gray-600">Je ne respecte pas les pourcentages.</p>
+                        </div>
+                        <div class="rubric-card rubric-sous rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(1, 1, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-yellow-500">Sous-Chef</span>
+                            <p class="text-sm text-gray-600">Presque parfait, mais il y a une erreur.</p>
+                        </div>
+                        <div class="rubric-card rubric-chef rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(1, 2, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-emerald-600">Chef</span>
+                            <p class="text-sm text-gray-600">Pile poil ! 50/25/25.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Critère 2 -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                        <i data-lucide="star" class="w-5 h-5"></i> 2. Qualité des Ingrédients
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="rubric-card rubric-novato rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(2, 0, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-red-400">Novice</span>
+                            <p class="text-sm text-gray-600">Beaucoup de transformés et de sucre.</p>
+                        </div>
+                        <div class="rubric-card rubric-sous rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(2, 1, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-yellow-500">Sous-Chef</span>
+                            <p class="text-sm text-gray-600">Pas mal, mais améliorable.</p>
+                        </div>
+                        <div class="rubric-card rubric-chef rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(2, 2, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-emerald-600">Chef</span>
+                            <p class="text-sm text-gray-600">Tout complet et frais.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Critère 3 -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                        <i data-lucide="message-square" class="w-5 h-5"></i> 3. Mes Justifications
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="rubric-card rubric-novato rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(3, 0, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-red-400">Novice</span>
+                            <p class="text-sm text-gray-600">Très courtes.</p>
+                        </div>
+                        <div class="rubric-card rubric-sous rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(3, 1, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-yellow-500">Sous-Chef</span>
+                            <p class="text-sm text-gray-600">Je sais quel type d'aliment c'est mais sans plus.</p>
+                        </div>
+                        <div class="rubric-card rubric-chef rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(3, 2, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-emerald-600">Chef</span>
+                            <p class="text-sm text-gray-600">Je justifie mes décisions.</p>
+                        </div>
+                    </div>
+                </div>
+             </div>
+
+             <div class="text-center">
+                 <button onclick="saveRubricAndUnlock()" class="bg-gray-800 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:bg-black transition-transform hover:-translate-y-1 flex items-center gap-2 mx-auto">
+                     <i data-lucide="unlock" class="w-5 h-5"></i> Sauvegarder et Débloquer Suivant
+                 </button>
+             </div>
+        </div>
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        // --- CONFIG & STATE ---
+        const colors = {
+            breakfast: 'bg-orange-50',
+            lunch: 'bg-sky-50',
+            dinner: 'bg-indigo-50',
+            summary: 'bg-slate-100'
+        };
+
+        const dailyMeals = {
+            breakfast: { items: [], water: false, oil: false, rubric: null },
+            lunch: { items: [], water: false, oil: false, rubric: null },
+            dinner: { items: [], water: false, oil: false, rubric: null }
+        };
+        
+        // État de verrouillage
+        const unlockState = {
+            breakfast: true, // Toujours ouvert
+            lunch: false,
+            dinner: false,
+            summary: false
+        };
+
+        let currentTab = 'breakfast';
+        let currentRubricSelection = {1:null, 2:null, 3:null}; // Temp score for modal
+
+        // --- FOOD DB (TRADUCTION COMPLÈTE) ---
+        const foodDB = [
+            { name: "Lait", cat: "prot", subcat: "dairy", icon: "🥛", scoreMod: 20, grams: "200-250 ml", teacherMsg: "Du calcium pour tes os." },
+            { name: "Yaourt", cat: "prot", subcat: "dairy", icon: "🥣", scoreMod: 20, grams: "125 g (1 pot)", teacherMsg: "Des probiotiques bons pour ton ventre." },
+            { name: "Jus d'Orange", cat: "veg", subcat: "fruit", icon: "🍹", scoreMod: 10, grams: "150 ml (1 petit verre)", teacherMsg: "Attention ! En pressant, tu perds les fibres. Mieux vaut l'orange entière." },
+            { name: "Avoine", cat: "grain", subcat: "whole", icon: "🌾", scoreMod: 20, grams: "30-40 g sec", teacherMsg: "Énergie à libération lente. Génial !" },
+            { name: "Confiture", cat: "veg", subcat: "sugar", icon: "🍓", scoreMod: 10, grams: "15 g (1 c.à.s)", teacherMsg: "Contient souvent beaucoup de sucre ajouté." },
+            { name: "Biscuits", cat: "grain", subcat: "sugar", icon: "🍪", scoreMod: -15, grams: "0 g (Éviter consommation habituelle)", teacherMsg: "Beaucoup de sucre et farine raffinée. À éviter." },
+            { name: "Pâte à tartiner", cat: "grain", subcat: "sugar", icon: "🍫", scoreMod: -15, grams: "0 g (Très occasionnel)", teacherMsg: "C'est essentiellement du sucre et de l'huile de palme." },
+            { name: "Croissant", cat: "grain", subcat: "complex", icon: "🥐", scoreMod: -15, grams: "0 g (Occasionnel)", teacherMsg: "Graisses saturées. Seulement pour les jours spéciaux." },
+            { name: "Soupe Légumes", cat: "veg", icon: "🍲", scoreMod: 20, grams: "250 ml", teacherMsg: "Hydratant et plein de vitamines." },
+            { name: "Sauces", cat: "oil", subcat: "fat", icon: "🥫", scoreMod: 5, grams: "10-15 ml (modération)", teacherMsg: "Attention, elles cachent souvent beaucoup de calories." },
+            { name: "Pain Blanc", cat: "grain", subcat: "refined", icon: "🥖", scoreMod: 10, grams: "40-60 g", teacherMsg: "Moins de fibres que le complet. Rassasie moins." },
+            { name: "Pain Complet", cat: "grain", subcat: "whole", icon: "🍞", scoreMod: 20, grams: "40-60 g", teacherMsg: "Parfait. Des fibres pour ta digestion." },
+            { name: "Riz Blanc", cat: "grain", subcat: "refined", icon: "🍚", scoreMod: 10, grams: "60-80 g (sec)", teacherMsg: "Énergie rapide. Combine-le avec des fibres." },
+            { name: "Riz Complet", cat: "grain", subcat: "whole", icon: "🍚", scoreMod: 20, grams: "60-80 g (sec)", teacherMsg: "Excellente source d'énergie stable." },
+            { name: "Pâtes", cat: "grain", subcat: "refined", icon: "🍝", scoreMod: 10, grams: "60-80 g (sec)", teacherMsg: "De l'énergie pour bouger." },
+            { name: "Poulet", cat: "prot", subcat: "lean", icon: "🍗", scoreMod: 20, grams: "120-150 g", teacherMsg: "Excellente protéine maigre." },
+            { name: "Bœuf", cat: "prot", subcat: "red", icon: "🥩", scoreMod: 10, grams: "120 g (Max 1/sem)", teacherMsg: "Riche en fer, mais l'OMS recommande de limiter la viande rouge." },
+            { name: "Porc", cat: "prot", subcat: "red", icon: "🥓", scoreMod: 10, grams: "120 g", teacherMsg: "Choisis les morceaux maigres (filet)." },
+            { name: "Saumon", cat: "prot", subcat: "fish", icon: "🐟", scoreMod: 20, grams: "150 g", teacherMsg: "Graisses Oméga-3 pour le cerveau." },
+            { name: "Œuf", cat: "prot", icon: "🥚", scoreMod: 20, grams: "2 unités", teacherMsg: "Protéine complète et bon marché." },
+            { name: "Lentilles", cat: "prot", subcat: "legume", icon: "🥘", scoreMod: 20, grams: "60-80 g (sec)", teacherMsg: "Fer + Fibres. Super-aliment !" },
+            { name: "Hamburger Ind.", cat: "prot", subcat: "processed", icon: "🍔", scoreMod: 10, grams: "1 unité", teacherMsg: "Si c'est maison OK, si c'est fast-food attention au sel." },
+            { name: "Laitue", cat: "veg", icon: "🥬", scoreMod: 20, grams: "Libre", teacherMsg: "Volume et eau sans calories." },
+            { name: "Tomate", cat: "veg", icon: "🍅", scoreMod: 20, grams: "150-200 g", teacherMsg: "Antioxydants puissants." },
+            { name: "Pomme", cat: "veg", subcat: "fruit", icon: "🍎", scoreMod: 20, grams: "1 unité moyenne", teacherMsg: "La peau contient beaucoup de fibres." },
+            { name: "Banane", cat: "veg", subcat: "fruit", icon: "🍌", scoreMod: 20, grams: "1 unité", teacherMsg: "Potassium pour les muscles." },
+            { name: "Pizza", cat: "grain", subcat: "complex", isComplex: true, icon: "🍕", scoreMod: -15, grams: "Occasionnel", teacherMsg: "Beaucoup de gras et farine raffinée." },
+            { name: "Gâteau", cat: "grain", subcat: "sugar", isComplex: true, icon: "🍰", scoreMod: -15, grams: "Occasionnel", teacherMsg: "Pur sucre. Occasionnel." },
+            { name: "Eau", cat: "water", icon: "💧", scoreMod: 5, grams: "1.5-2 L/jour", teacherMsg: "Essentiel à la vie." },
+            { name: "Huile", cat: "oil", icon: "🫒", scoreMod: 5, grams: "10 ml (1 c.à.s)", teacherMsg: "Graisse saine (Huile d'olive)." }
+        ];
+
+        let pendingFood = null;
+        let draggedElement = null;
+        let isDragging = false;
+        let startX, startY;
+
+        // --- INIT ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initDatalist();
+            updateTabVisuals();
+            switchTab('breakfast');
+            
+            document.addEventListener('mouseup', handleDragEnd);
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('touchend', handleDragEnd, {passive: false});
+            document.addEventListener('touchmove', handleDragMove, {passive: false});
+            
+            document.getElementById('food-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') stageFood();
+            });
+        });
+
+        function initDatalist() {
+            const list = document.getElementById('food-list');
+            foodDB.filter(f => f.cat !== 'water' && f.cat !== 'oil').forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.name;
+                list.appendChild(opt);
+            });
+        }
+
+        // --- LOGIQUE DE NAVIGATION ---
+        function switchTab(tabId) {
+            if(!unlockState[tabId]) {
+                alert("🔒 Complète l'auto-évaluation précédente pour débloquer !");
+                return;
+            }
+
+            currentTab = tabId;
+            document.body.className = `min-h-screen p-2 md:p-6 pb-20 ${colors[tabId]} transition-colors duration-500`;
+            
+            // Visuels
+            updateTabVisuals();
+
+            if (tabId === 'summary') {
+                document.getElementById('planner-view').classList.add('hidden');
+                document.getElementById('summary-view').classList.remove('hidden');
+                renderFinalSummary();
+            } else {
+                document.getElementById('planner-view').classList.remove('hidden');
+                document.getElementById('summary-view').classList.add('hidden');
+                
+                const names = { breakfast: 'Petit Déj', lunch: 'Déjeuner', dinner: 'Dîner' };
+                document.getElementById('current-meal-name').innerText = names[tabId];
+                
+                const container = document.getElementById('placed-items-container');
+                container.innerHTML = '';
+                dailyMeals[tabId].items.forEach(renderPlateItem);
+                updateExtrasVisuals();
+                updateScore();
+            }
+        }
+
+        function updateTabVisuals() {
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const id = btn.id.replace('btn-', '');
+                btn.classList.remove('active', 'locked');
+                
+                if (id === currentTab) btn.classList.add('active');
+                if (!unlockState[id]) btn.classList.add('locked');
+            });
+        }
+
+        function updateExtrasVisuals() {
+            const w = document.getElementById('water-zone');
+            const o = document.getElementById('oil-zone');
+            const meal = dailyMeals[currentTab];
+            w.className = `extra-zone absolute right-2 md:-right-4 top-1/2 transform -translate-y-1/2 z-10 ${meal.water ? 'active' : ''}`;
+            w.innerHTML = meal.water ? '<span class="text-3xl">💧</span>' : '<span class="opacity-30 text-3xl grayscale">💧</span>';
+            o.className = `extra-zone absolute left-2 md:-left-4 top-1/2 transform -translate-y-1/2 z-10 ${meal.oil ? 'active' : ''}`;
+            o.innerHTML = meal.oil ? '<span class="text-3xl">🫒</span>' : '<span class="opacity-30 text-3xl grayscale">🫒</span>';
+        }
+
+        // --- RUBRIQUE & DÉVERROUILLAGE ---
+        function openRubricModal() {
+            if(dailyMeals[currentTab].items.length === 0) {
+                alert("L'assiette est vide ! Ajoute des aliments avant d'évaluer.");
+                return;
+            }
+            
+            const names = { breakfast: 'Petit Déj', lunch: 'Déjeuner', dinner: 'Dîner' };
+            document.getElementById('rubric-meal-name').innerText = names[currentTab];
+            document.getElementById('rubric-modal').classList.remove('hidden');
+            
+            currentRubricSelection = {1:null, 2:null, 3:null};
+            document.querySelectorAll('.rubric-card').forEach(c => c.classList.remove('selected'));
+        }
+
+        function selectRubric(criterion, value, el) {
+            currentRubricSelection[criterion] = value;
+            const parent = el.parentElement;
+            parent.querySelectorAll('.rubric-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            
+            if(value === 0) el.classList.add('rubric-novato');
+            if(value === 1) el.classList.add('rubric-sous');
+            if(value === 2) el.classList.add('rubric-chef');
+        }
+
+        function saveRubricAndUnlock() {
+            if(currentRubricSelection[1] === null || currentRubricSelection[2] === null || currentRubricSelection[3] === null) {
+                alert("S'il te plaît, sélectionne un niveau pour chaque critère.");
+                return;
+            }
+
+            // Save
+            dailyMeals[currentTab].rubric = { ...currentRubricSelection };
+            
+            // Unlock next
+            let nextTab = '';
+            if(currentTab === 'breakfast') nextTab = 'lunch';
+            else if(currentTab === 'lunch') nextTab = 'dinner';
+            else if(currentTab === 'dinner') nextTab = 'summary';
+
+            if(nextTab) {
+                unlockState[nextTab] = true;
+                updateTabVisuals();
+                document.getElementById('rubric-modal').classList.add('hidden');
+                
+                if(nextTab === 'summary') {
+                    alert("Génial ! Tu as terminé la journée. Allons au résumé.");
+                    switchTab('summary');
+                } else {
+                    const names = { lunch: 'Déjeuner', dinner: 'Dîner' };
+                    if(confirm(`Auto-évaluation enregistrée ! Veux-tu passer au ${names[nextTab]} ?`)) {
+                        switchTab(nextTab);
+                    }
+                }
+            }
+        }
+
+        // --- RÉSUMÉ & STATS ---
+        function renderFinalSummary() {
+            const container = document.getElementById('final-summary-content');
+            let html = '';
+            const labels = { breakfast: 'Petit Déj', lunch: 'Déjeuner', dinner: 'Dîner' };
+            const colors = { breakfast: 'orange', lunch: 'sky', dinner: 'indigo' };
+            
+            let totalPoints = 0;
+            let count = 0;
+            
+            for (const [key, meal] of Object.entries(dailyMeals)) {
+                if(meal.rubric) {
+                    totalPoints += (meal.rubric[1] + meal.rubric[2] + meal.rubric[3]); 
+                    count++;
+                }
+                
+                const c = colors[key];
+                let localScore = 0;
+                meal.items.forEach(i => localScore += i.scoreMod);
+                if (meal.items.filter(i => i.cat === 'veg').length >= 2) localScore += 10;
+                if (meal.water) localScore += 5;
+                if (meal.oil) localScore += 5;
+                localScore = Math.max(0, Math.min(100, localScore));
+
+                html += `
+                <div class="bg-${c}-50 p-4 rounded-2xl border border-${c}-100">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-${c}-700 flex items-center gap-2 uppercase text-sm">
+                            ${labels[key]} 
+                            ${meal.water ? '💧' : ''} ${meal.oil ? '🫒' : ''}
+                        </h3>
+                        <span class="text-xs font-bold bg-white px-2 py-1 rounded text-${c}-600">${localScore}%</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">`;
+                
+                meal.items.forEach(i => {
+                    html += `<span class="bg-white text-xs px-2 py-1 rounded shadow-sm border text-gray-700">${i.icon} ${i.name}</span>`;
+                });
+                html += `</div></div>`;
+            }
+            container.innerHTML = html;
+
+            const display = document.getElementById('global-level-display');
+            if (count > 0) {
+                const avg = totalPoints / (count * 3); 
+                let level = "Novice";
+                if(avg > 1.5) level = "CHEF 🏆";
+                else if(avg > 0.8) level = "SOUS-CHEF 👨‍🍳";
+                else level = "NOVICE 👶";
+                
+                display.innerText = level;
+            } else {
+                display.innerText = "En attente";
+            }
+        }
+
+        // --- DRAG & DROP CORE ---
+        function stageFood() {
+            const input = document.getElementById('food-input');
+            const name = input.value.trim();
+            const food = foodDB.find(f => f.name.toLowerCase() === name.toLowerCase());
+            
+            if (!food) { alert("Aliment non trouvé. Essaye un autre de la liste."); return; }
+            if (food.cat === 'water' || food.cat === 'oil') { alert("Utilise les icônes d'extras (Eau/Huile)."); return; }
+            
+            checkRepetition(food.name);
+            createDraggableIcon(food);
+            input.value = '';
+            pendingFood = food;
+        }
+
+        function stageExtra(type) {
+            const food = foodDB.find(f => f.cat === type);
+            createDraggableIcon(food);
+            pendingFood = food;
+        }
+
+        function checkRepetition(name) {
+            let found = false;
+            let where = [];
+            const labels = { breakfast: 'Petit Déj', lunch: 'Déjeuner', dinner: 'Dîner' };
+            for (const [meal, data] of Object.entries(dailyMeals)) {
+                if (data.items.some(i => i.name === name)) { found = true; where.push(labels[meal]); }
+            }
+            if (found) {
+                const toast = document.getElementById('repetition-toast');
+                document.getElementById('repetition-msg').innerText = `Déjà utilisé au : ${where.join(', ')}.`;
+                toast.classList.remove('hidden');
+                setTimeout(() => toast.classList.add('hidden'), 4000);
+            }
+        }
+
+        function createDraggableIcon(food) {
+            const staging = document.getElementById('staging-area');
+            staging.innerHTML = '';
+            const el = document.createElement('div');
+            el.className = 'draggable-item animate__animated animate__zoomIn';
+            el.innerText = food.icon;
+            el.addEventListener('mousedown', handleDragStart);
+            el.addEventListener('touchstart', handleDragStart, {passive: false});
+            staging.appendChild(el);
+        }
+
+        function handleDragStart(e) {
+            e.preventDefault(); if (!pendingFood) return;
+            draggedElement = e.target; isDragging = true;
+            const t = e.touches ? e.touches[0] : e;
+            const rect = draggedElement.getBoundingClientRect();
+            draggedElement.style.position = 'fixed';
+            draggedElement.style.left = rect.left + 'px';
+            draggedElement.style.top = rect.top + 'px';
+            document.body.appendChild(draggedElement);
+            startX = t.clientX - rect.left; startY = t.clientY - rect.top;
+        }
+
+        function handleDragMove(e) {
+            if (!isDragging || !draggedElement) return;
+            e.preventDefault();
+            const t = e.touches ? e.touches[0] : e;
+            draggedElement.style.left = (t.clientX - startX) + 'px';
+            draggedElement.style.top = (t.clientY - startY) + 'px';
+            if (pendingFood.cat === 'water') highlightZone('water-zone');
+            if (pendingFood.cat === 'oil') highlightZone('oil-zone');
+        }
+
+        function highlightZone(id) {
+            const el = document.getElementById(id);
+            const r = el.getBoundingClientRect();
+            const d = draggedElement.getBoundingClientRect();
+            const dist = Math.hypot(r.x - d.x, r.y - d.y);
+            if (dist < 100) el.classList.add('drop-target'); else el.classList.remove('drop-target');
+        }
+
+        function handleDragEnd(e) {
+            if (!isDragging || !draggedElement) return;
+            isDragging = false;
+            document.getElementById('water-zone').classList.remove('drop-target');
+            document.getElementById('oil-zone').classList.remove('drop-target');
+
+            const elmRect = draggedElement.getBoundingClientRect();
+            const itemX = elmRect.left + elmRect.width/2;
+            const itemY = elmRect.top + elmRect.height/2;
+
+            if (pendingFood.cat === 'water') {
+                if (checkZoneDrop('water-zone', itemX, itemY)) { dailyMeals[currentTab].water = true; finishDrop(false); return; }
+            }
+            if (pendingFood.cat === 'oil') {
+                if (checkZoneDrop('oil-zone', itemX, itemY)) { dailyMeals[currentTab].oil = true; finishDrop(false); return; }
+            }
+
+            const plateZone = document.getElementById('plate-zone').getBoundingClientRect();
+            const radius = plateZone.width / 2;
+            const dist = Math.hypot(itemX - (plateZone.left + radius), itemY - (plateZone.top + radius));
+
+            if (dist < radius) {
+                const dx = itemX - (plateZone.left + radius);
+                const dy = itemY - (plateZone.top + radius);
+                let detected = (dx>0)?'veg':(dy<0?'prot':'grain');
+                let valid = (detected === pendingFood.cat);
+                if (pendingFood.isComplex && detected === 'grain') valid = true;
+
+                if (valid) openJustificationModal();
+                else { alert(`❌ Oups, ${pendingFood.name} ne va pas ici.`); resetDrag(); }
+            } else resetDrag();
+        }
+
+        function checkZoneDrop(id, x, y) {
+            const r = document.getElementById(id).getBoundingClientRect();
+            return (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+        }
+
+        function resetDrag() {
+            if (draggedElement) draggedElement.remove();
+            if (pendingFood && pendingFood.cat !== 'water' && pendingFood.cat !== 'oil') {
+                const st = document.getElementById('staging-area');
+                if (st.innerHTML === '') createDraggableIcon(pendingFood);
+            }
+            draggedElement = null;
+        }
+
+        function cancelDrop() {
+            document.getElementById('justification-modal').classList.add('hidden');
+            resetDrag();
+        }
+
+        function openJustificationModal() {
+            document.getElementById('justification-modal').classList.remove('hidden');
+            document.getElementById('just-food-name').innerText = pendingFood.name;
+            document.getElementById('just-input').value = '';
+        }
+
+        function confirmDrop() {
+            const just = document.getElementById('just-input').value;
+            document.getElementById('justification-modal').classList.add('hidden');
+            const item = { ...pendingFood, id: Date.now(), justification: just };
+            dailyMeals[currentTab].items.push(item);
+            
+            renderPlateItem(item);
+            
+            const fbModal = document.getElementById('teacher-feedback-modal');
+            document.getElementById('teacher-feedback-text').innerText = pendingFood.teacherMsg;
+            fbModal.classList.remove('hidden');
+            finishDrop(true);
+        }
+
+        function finishDrop(wasPlate) {
+            if (draggedElement) draggedElement.remove();
+            if (wasPlate) document.getElementById('staging-area').innerHTML = '<span class="text-gray-400 text-xs italic pointer-events-none">Glisser vers l\'assiette...</span>';
+            
+            // Notification OMS (PERSISTANTE)
+            const omsToast = document.getElementById('oms-toast');
+            document.getElementById('oms-text').innerText = `${pendingFood.grams}`;
+            omsToast.classList.remove('hidden');
+
+            pendingFood = null;
+            updateExtrasVisuals();
+            updateScore();
+        }
+
+        function renderPlateItem(item) {
+            const container = document.getElementById('placed-items-container');
+            const el = document.createElement('div');
+            el.className = 'placed-item animate__animated animate__rubberBand';
+            el.innerHTML = `<div class="icon">${item.icon}</div><div class="label">${item.name}</div>`;
+            el.id = `item-${item.id}`;
+            el.title = "Cliquer pour effacer";
+            el.style.pointerEvents = 'auto'; 
+            el.onclick = (e) => { 
+                e.stopPropagation(); 
+                removeItem(item.id); 
+            };
+            
+            const existingInCat = dailyMeals[currentTab].items.filter(i => i.cat === item.cat && i.id !== item.id).length;
+            let pos = getSlotPosition(item.cat, existingInCat);
+            if(item.isComplex) pos = { left: 50, top: 50 }; 
+
+            el.style.left = pos.left + '%'; 
+            el.style.top = pos.top + '%';
+            container.appendChild(el);
+        }
+
+        function getSlotPosition(cat, index) {
+            const slotsVeg = [{l: 65, t: 30}, {l: 75, t: 50}, {l: 65, t: 70}, {l: 55, t: 50}, {l: 85, t: 30}];
+            const slotsProt = [{l: 25, t: 25}, {l: 35, t: 15}, {l: 15, t: 35}, {l: 40, t: 30}];
+            const slotsGrain = [{l: 25, t: 75}, {l: 35, t: 85}, {l: 15, t: 65}, {l: 40, t: 70}];
+
+            let pos = {l: 50, t: 50};
+            if(cat === 'veg') pos = slotsVeg[index % slotsVeg.length];
+            if(cat === 'prot') pos = slotsProt[index % slotsProt.length];
+            if(cat === 'grain') pos = slotsGrain[index % slotsGrain.length];
+            return { left: pos.l, top: pos.t };
+        }
+
+        function removeItem(id) {
+            if(confirm("Enlever l'aliment ?")) {
+                dailyMeals[currentTab].items = dailyMeals[currentTab].items.filter(i => i.id !== id);
+                document.getElementById(`item-${id}`).remove();
+                updateScore();
+            }
+        }
+
+        function updateScore() {
+            const meal = dailyMeals[currentTab];
+            let score = 0;
+            meal.items.forEach(i => { score += i.scoreMod; });
+            if (meal.items.filter(i => i.cat === 'veg').length >= 2) score += 10;
+            if (meal.water) score += 5;
+            if (meal.oil) score += 5;
+            score = Math.max(0, Math.min(100, score));
+            
+            let textLabel = "VIDE";
+            let colorClass = "text-gray-400";
+            if (meal.items.length > 0) {
+                if (score < 40) { textLabel = "DÉSÉQUILIBRÉ"; colorClass = "text-red-500"; }
+                else if (score < 90) { textLabel = "ÉQUILIBRÉ"; colorClass = "text-yellow-500"; }
+                else { textLabel = "PARFAIT"; colorClass = "text-emerald-600"; }
+            }
+
+            document.getElementById('score-text').innerText = textLabel;
+            document.getElementById('score-text').className = `block font-black text-sm uppercase ${colorClass}`;
+            document.getElementById('score-val').innerText = score + "%";
+            document.getElementById('face-feedback').innerText = score>90?"🤩":(score>40?"🤔":"😐");
+            
+            const whyBtn = document.getElementById('why-btn');
+            if(score < 100 && meal.items.length > 0) whyBtn.classList.remove('hidden');
+            else whyBtn.classList.add('hidden');
+        }
+
+        function showWhy() {
+            const meal = dailyMeals[currentTab];
+            let reasons = [];
+            const veg = meal.items.filter(i => i.cat === 'veg').length;
+            const grain = meal.items.filter(i => i.cat === 'grain').length;
+            const prot = meal.items.filter(i => i.cat === 'prot').length;
+            const unhealthy = meal.items.filter(i => i.scoreMod < 0).length;
+
+            if(veg < 2) reasons.push("Il manque des légumes (50% de l'assiette).");
+            if(grain === 0) reasons.push("Il manque des céréales/féculents.");
+            if(prot === 0) reasons.push("Il manque des protéines.");
+            if(!meal.water) reasons.push("Il manque de l'eau.");
+            if(unhealthy > 0) reasons.push("Trop d'aliments non sains.");
+            
+            alert("Pour atteindre 100% :\n- " + reasons.join("\n- "));
+        }
+
+        function openDecisionsModal() {
+            document.getElementById('decisions-modal').classList.remove('hidden');
+            let html = '';
+            const labels = { breakfast: 'Petit Déj', lunch: 'Déjeuner', dinner: 'Dîner' };
+            let copyText = "";
+
+            for (const [key, meal] of Object.entries(dailyMeals)) {
+                if(meal.items.length > 0) {
+                    html += `<h4 class="text-xs font-bold uppercase text-gray-400 mt-4 mb-2">${labels[key]}</h4>`;
+                    copyText += `${labels[key].toUpperCase()}:\n`;
+                    
+                    meal.items.forEach(item => {
+                        html += `
+                        <div class="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-2">
+                            <div class="bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 flex justify-between">
+                                <span>${item.icon} ${item.name}</span>
+                            </div>
+                            <div class="grid grid-cols-2 divide-x divide-gray-200">
+                                <div class="p-2 text-xs text-gray-600"><strong>Élève :</strong> ${item.justification}</div>
+                                <div class="p-2 text-xs text-orange-600 bg-orange-50/30 flex items-start gap-1">
+                                    <i data-lucide="graduation-cap" class="w-3 h-3 mt-0.5"></i>
+                                    <strong>Prof :</strong> ${item.teacherMsg}
+                                </div>
+                            </div>
+                        </div>`;
+                        
+                        copyText += `- ${item.name} : ${item.justification} [Feedback : ${item.teacherMsg}]\n`;
+                    });
+                    copyText += "\n";
+                }
+            }
+            document.getElementById('decisions-list').innerHTML = html || '<p class="text-center text-gray-400">Aucune donnée.</p>';
+            window.decisionsText = copyText;
+            lucide.createIcons();
+        }
+
+        function copyDecisionsTable() {
+            if(!window.decisionsText) { alert("Rien à copier"); return; }
+            navigator.clipboard.writeText(window.decisionsText).then(() => alert("✅ Copié"));
+        }
+
+        function showInfo(t) { 
+            const modal = document.getElementById('info-modal');
+            const content = document.getElementById('modal-content');
+            let html = "";
+            if (t === 'veg') {
+                html = `<h3 class="text-xl font-bold text-emerald-600 mb-2">Légumes et Fruits (50%)</h3>
+                        <p class="mb-2 text-gray-600">Apportent vitamines, minéraux et fibres.</p>
+                        <div class="bg-orange-50 p-3 rounded border-l-4 border-orange-400 text-sm">
+                            <strong>⚠️ Attention :</strong> La pomme de terre NE compte PAS comme légume à Harvard.
+                        </div>`;
+            } else if (t === 'grain') {
+                html = `<h3 class="text-xl font-bold text-yellow-500 mb-2">Céréales Complètes (25%)</h3>
+                        <p class="mb-2 text-gray-600">Énergie durable. Choisis complet pour éviter les pics de sucre.</p>
+                        <div class="bg-red-50 p-3 rounded border-l-4 border-red-400 text-sm">
+                            <strong>⚠️ Excès :</strong> Si tu en manges trop, c'est stocké en graisse.
+                        </div>`;
+            } else if (t === 'prot') {
+                html = `<h3 class="text-xl font-bold text-red-500 mb-2">Protéines (25%)</h3>
+                        <p class="mb-2 text-gray-600">Briques pour tes muscles.</p>
+                        <div class="bg-red-50 p-3 rounded border-l-4 border-red-400 text-sm">
+                            <strong>⚠️ Attention :</strong> L'excès surcharge les reins.
+                        </div>`;
+            }
+            content.innerHTML = html;
+            modal.classList.remove('hidden');
+        }
+
+        function loadPreset(t) {
+            if(dailyMeals[currentTab].items.length>0 && !confirm("Effacer le repas actuel ?")) return;
+            dailyMeals[currentTab].items=[];
+            let items = [];
+            // Traduction des noms de recherche pour les presets
+            if(t==='school') items=['Laitue','Pâtes','Poulet','Pomme']; // Lechuga, Pasta, Pollo, Manzana
+            if(t==='fastfood') items=['Hamburger','Pomme de terre']; // Hamburguesa, Patata
+            
+            items.forEach(n => {
+                // Recherche flexible
+                const dbI = foodDB.find(f => f.name === n || f.name.includes(n));
+                if(dbI) {
+                    dailyMeals[currentTab].items.push({ ...dbI, id: Date.now()+Math.random(), justification: "Défi Automatique" });
+                }
+            });
+            updateScore();
+            switchTab(currentTab);
+        }
+
+        function confirmReset() { if(confirm("Réinitialiser TOUT ?")) location.reload(); }
+        function cancelDrop() { document.getElementById('justification-modal').classList.add('hidden'); resetDrag(); }
+        function randomInt(min,max){return Math.floor(Math.random()*(max-min+1)+min);}
+    </script>
+</body>
+</html>
