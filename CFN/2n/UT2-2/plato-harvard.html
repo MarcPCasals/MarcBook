@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MI PLATO DE HARVARD - Planificador Dietético</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Animate.css -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Urbanist:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        headings: ['Fredoka', 'sans-serif'],
+                        body: ['Urbanist', 'sans-serif'],
+                    },
+                    colors: {
+                        harvard: {
+                            veg: '#4ade80',   
+                            grain: '#facc15', 
+                            prot: '#f87171',  
+                            bg: '#f0fdf4'     
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Urbanist', sans-serif;
+            overflow-x: hidden; 
+            touch-action: manipulation;
+            transition: background-color 0.5s ease;
+        }
+        
+        h1, h2, h3, h4 { font-family: 'Fredoka', sans-serif; }
+
+        /* EL PLATO */
+        .harvard-plate {
+            background: conic-gradient(
+                #4ade80 0% 50%, 
+                #facc15 50% 75%, 
+                #f87171 75% 100%
+            );
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        /* Etiquetas del Plato */
+        .plate-label {
+            font-family: 'Fredoka', sans-serif;
+            font-weight: bold;
+            font-size: 0.75rem; 
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: #374151;
+            pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            white-space: nowrap;
+        }
+
+        /* Zonas Extras */
+        .extra-zone {
+            width: 70px; height: 70px;
+            border: 3px dashed #cbd5e1;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.5);
+            transition: all 0.3s;
+        }
+        .extra-zone.active {
+            border-style: solid;
+            background: white;
+            transform: scale(1.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .extra-zone.drop-target {
+            border-color: #34d399;
+            background: #d1fae5;
+            transform: scale(1.05);
+        }
+
+        /* Botones Info */
+        .info-btn {
+            width: 24px; height: 24px;
+            background: white; border: 2px solid #e5e7eb;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-weight: bold; color: #4b5563;
+            transition: transform 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 0.7rem;
+        }
+        .info-btn:hover { transform: scale(1.1); background-color: #f3f4f6; }
+
+        /* Elemento Arrastrable */
+        .draggable-item {
+            width: 60px; height: 60px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.2rem;
+            cursor: grab;
+            user-select: none;
+            position: absolute; 
+            z-index: 100;
+            touch-action: none;
+        }
+        .draggable-item:active { cursor: grabbing; transform: scale(1.1); }
+        
+        /* Elementos colocados */
+        .placed-item {
+            position: absolute;
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; z-index: 20; 
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translate(-50%, -50%);
+        }
+        .placed-item:hover { transform: translate(-50%, -50%) scale(1.15); z-index: 30; }
+        .placed-item .icon { font-size: 2.2rem; filter: drop-shadow(0 4px 3px rgba(0,0,0,0.2)); }
+        .placed-item .label {
+            font-size: 9px; font-weight: 700;
+            background: rgba(255,255,255,0.95); padding: 1px 5px;
+            border-radius: 6px; box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+            margin-top: -8px; white-space: nowrap; color: #374151; pointer-events: none;
+        }
+
+        /* Sidebar Tabs */
+        .nav-btn {
+            width: 100%; text-align: left; padding: 1rem; border-radius: 1rem;
+            transition: all 0.2s ease-out; display: flex; align-items: center; gap: 12px;
+            background-color: white; border: 2px solid #e5e7eb; margin-bottom: 0.5rem;
+            color: #374151; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .nav-btn:hover { transform: translateX(4px); border-color: #d1d5db; }
+        .nav-btn.active {
+            background-color: white !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), inset 0 0 0 2px currentColor;
+            transform: scale(1.02); opacity: 1; border-color: transparent; 
+        }
+        
+        /* Estados Bloqueado */
+        .nav-btn.locked {
+            opacity: 0.5;
+            background-color: #e5e7eb;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+        .nav-btn.locked:hover { transform: none; border-color: transparent; }
+
+        .btn-breakfast.active { color: #ea580c; } 
+        .btn-lunch.active { color: #0284c7; } 
+        .btn-dinner.active { color: #4f46e5; } 
+        .btn-summary.active { color: #1f2937; background: #f8fafc; }
+
+        .modal-overlay { background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        
+        /* Rúbrica Seleccionada */
+        .rubric-card { transition: all 0.2s; border: 2px solid #e5e7eb; }
+        .rubric-card:hover { transform: translateY(-2px); border-color: #d1d5db; }
+        .rubric-card.selected { transform: scale(1.02); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .rubric-novato.selected { background-color: #fee2e2; border-color: #ef4444; color: #991b1b; }
+        .rubric-sous.selected { background-color: #fef9c3; border-color: #eab308; color: #854d0e; }
+        .rubric-chef.selected { background-color: #dcfce7; border-color: #22c55e; color: #14532d; }
+        
+        @media (max-width: 768px) {
+            .nav-scroll { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 10px; width: 100%; }
+            .nav-btn { min-width: 140px; padding: 0.8rem; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+        }
+
+        /* OMS Notification */
+        #oms-toast {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border-left: 5px solid #10b981;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-orange-50 min-h-screen p-2 md:p-6 pb-20">
+
+    <!-- Header -->
+    <header class="w-full max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center mb-4 animate__animated animate__fadeInDown gap-4">
+        
+        <!-- Izquierda: Título -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+            <div class="bg-white p-2 rounded-xl shadow-sm border-2 border-white/50">
+                <i data-lucide="chef-hat" class="text-emerald-600 w-8 h-8"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-3xl font-bold text-gray-800 leading-none tracking-tight">MI PLATO DE HARVARD</h1>
+                <p class="text-gray-600 text-xs font-medium">Planificador dietético • <span class="font-bold text-emerald-600">Creado por Marc Pérez Casals</span></p>
+            </div>
+        </div>
+        
+        <!-- Derecha: Marcador Global y Botones -->
+        <div class="flex items-center gap-4 w-full md:w-auto justify-end">
+            
+            <!-- Marcador Global -->
+            <div class="flex flex-col items-center">
+                <div class="bg-white px-4 py-2 rounded-xl shadow-md border border-emerald-100 flex items-center gap-3 min-w-[180px] justify-between">
+                    <div class="text-right">
+                        <span id="score-text" class="block font-black text-sm uppercase text-gray-400">VACÍO</span>
+                        <span id="score-val" class="text-xs font-bold text-gray-400">0%</span>
+                    </div>
+                    <div class="h-8 w-px bg-gray-200"></div>
+                    <span id="face-feedback" class="text-3xl">😐</span>
+                </div>
+                <button onclick="showWhy()" id="why-btn" class="text-xs font-bold text-blue-500 bg-blue-50 px-3 py-1 rounded-full mt-1 hover:bg-blue-100 transition-colors hidden">
+                    ¿Por qué?
+                </button>
+            </div>
+
+            <!-- Botones Acción -->
+            <div class="flex gap-2">
+                <button onclick="openDecisionsModal()" class="bg-white hover:bg-gray-50 text-indigo-600 p-3 rounded-full shadow-md border border-indigo-100 transition-all" title="Decisiones">
+                    <i data-lucide="book-open" class="w-5 h-5"></i>
+                </button>
+                <button onclick="confirmReset()" class="bg-white hover:bg-red-50 text-red-500 p-3 rounded-full shadow-md border border-gray-200" title="Reiniciar Día">
+                    <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Layout Principal -->
+    <div class="w-full max-w-7xl mx-auto flex flex-col md:flex-row gap-6">
+
+        <!-- 1. BARRA DE NAVEGACIÓN -->
+        <aside class="w-full md:w-64 shrink-0 flex flex-col gap-2">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1 ml-1 md:block hidden">Menú del Día</p>
+            
+            <div class="nav-scroll">
+                <button onclick="switchTab('breakfast')" id="btn-breakfast" class="nav-btn btn-breakfast active">
+                    <span class="text-2xl">🌅</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">Desayuno</span>
+                        <span class="text-xs font-medium opacity-70 hidden md:block">Empezar el día</span>
+                    </div>
+                </button>
+
+                <button onclick="switchTab('lunch')" id="btn-lunch" class="nav-btn btn-lunch locked">
+                    <span class="text-2xl">☀️</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">Comida</span>
+                        <div class="flex items-center gap-1">
+                            <i data-lucide="lock" class="w-3 h-3"></i>
+                            <span class="text-xs font-medium opacity-70 hidden md:block">Bloqueado</span>
+                        </div>
+                    </div>
+                </button>
+
+                <button onclick="switchTab('dinner')" id="btn-dinner" class="nav-btn btn-dinner locked">
+                    <span class="text-2xl">🌙</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">Cena</span>
+                        <div class="flex items-center gap-1">
+                            <i data-lucide="lock" class="w-3 h-3"></i>
+                            <span class="text-xs font-medium opacity-70 hidden md:block">Bloqueado</span>
+                        </div>
+                    </div>
+                </button>
+
+                <button onclick="switchTab('summary')" id="btn-summary" class="nav-btn btn-summary locked bg-slate-100">
+                    <span class="text-2xl">📊</span>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-sm md:text-lg">RESUMEN</span>
+                        <div class="flex items-center gap-1">
+                            <i data-lucide="lock" class="w-3 h-3"></i>
+                            <span class="text-xs font-medium opacity-70 hidden md:block">Valoración Final</span>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </aside>
+
+        <!-- 2. ÁREA PRINCIPAL -->
+        <div class="flex-1 relative min-h-[600px]">
+            
+            <!-- Notificación OMS (Manual Close) -->
+            <div id="oms-toast" class="absolute top-0 right-0 z-50 m-4 p-4 rounded-xl hidden animate__animated animate__fadeInRight max-w-xs bg-white/95 backdrop-blur shadow-xl border-l-4 border-emerald-500">
+                <div class="flex items-start gap-3">
+                    <div class="bg-emerald-100 p-2 rounded-full text-emerald-600 shrink-0">
+                        <i data-lucide="scale" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-sm">Ración OMS</h4>
+                        <p id="oms-text" class="text-xs text-gray-600 mt-1 leading-relaxed">...</p>
+                    </div>
+                    <button onclick="document.getElementById('oms-toast').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 ml-auto"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+
+            <!-- VISTA PLANIFICADOR -->
+            <div id="planner-view" class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate__animated animate__fadeIn">
+                
+                <!-- Controles -->
+                <div class="lg:col-span-5 flex flex-col gap-4">
+                    <!-- Buscador -->
+                    <div class="bg-white/90 backdrop-blur p-5 rounded-3xl shadow-lg border border-white/50">
+                        <h2 class="text-lg font-headings font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <span class="bg-gray-100 text-gray-600 p-1.5 rounded-lg"><i data-lucide="search" class="w-4 h-4"></i></span>
+                            Añadir a <span id="current-meal-name" class="text-emerald-600">Desayuno</span>
+                        </h2>
+                        <div class="flex gap-2 mb-2 relative z-10">
+                            <input list="food-list" id="food-input" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none text-sm focus:ring-2 focus:ring-emerald-400" placeholder="Buscar alimento..." autocomplete="off">
+                            <datalist id="food-list"></datalist>
+                            <button onclick="stageFood()" class="bg-emerald-500 text-white rounded-xl px-4 shadow-md hover:bg-emerald-600"><i data-lucide="arrow-down" class="w-5 h-5"></i></button>
+                        </div>
+                        
+                        <!-- Bandeja -->
+                        <div class="mt-4">
+                            <div id="staging-area" class="w-full flex items-center justify-center p-4 min-h-[80px] bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl">
+                                <span class="text-gray-400 text-xs italic pointer-events-none">Arrastra al plato...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Extras -->
+                    <div class="bg-white/90 backdrop-blur p-5 rounded-3xl shadow-lg border border-white/50">
+                        <h2 class="text-sm font-bold text-gray-500 uppercase mb-3">No olvides...</h2>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="stageExtra('water')" class="flex items-center gap-2 p-3 rounded-xl border border-blue-100 bg-blue-50/50 hover:bg-blue-100 transition-colors">
+                                <span class="text-2xl">💧</span>
+                                <span class="text-xs font-bold text-gray-700">Agua</span>
+                            </button>
+                            <button onclick="stageExtra('oil')" class="flex items-center gap-2 p-3 rounded-xl border border-yellow-100 bg-yellow-50/50 hover:bg-yellow-100 transition-colors">
+                                <span class="text-2xl">🫒</span>
+                                <span class="text-xs font-bold text-gray-700">Aceite</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Botón Rúbrica (GATEKEEPER) -->
+                    <button onclick="openRubricModal()" class="w-full py-4 bg-gray-800 text-white rounded-2xl font-bold text-sm hover:bg-black shadow-lg flex items-center justify-center gap-2 transform hover:-translate-y-1 transition-all">
+                        <i data-lucide="unlock" class="w-5 h-5 text-emerald-400"></i> Autoevaluar y Desbloquear Siguiente
+                    </button>
+                </div>
+
+                <!-- Plato -->
+                <div class="lg:col-span-7 flex flex-col items-center bg-white/60 backdrop-blur-md rounded-[3rem] p-4 border-2 border-white/50 shadow-xl relative">
+                    
+                    <!-- PLATO -->
+                    <div class="relative w-full max-w-[500px] mt-8 mb-8 flex items-center justify-center">
+                        <div id="oil-zone" class="extra-zone absolute left-2 md:-left-4 top-1/2 transform -translate-y-1/2 z-10" title="Aceite"><span class="opacity-30 text-3xl grayscale">🫒</span></div>
+                        
+                        <div class="relative w-[280px] h-[280px] md:w-[360px] md:h-[360px] select-none mx-auto">
+                            <!-- VEGETALES (Derecha) -->
+                            <div class="absolute top-[40%] -right-12 z-20 flex flex-col items-center gap-1">
+                                <button class="info-btn text-emerald-600" onclick="showInfo('veg')">i</button>
+                                <span class="plate-label">Vegetales</span>
+                            </div>
+
+                            <!-- PROTEINAS (Arriba Izquierda) -->
+                            <div class="absolute -top-10 -left-6 z-20 flex flex-col items-center gap-1">
+                                <button class="info-btn text-red-600" onclick="showInfo('prot')">i</button>
+                                <span class="plate-label">Proteínas</span>
+                            </div>
+
+                            <!-- GRANOS (Abajo Izquierda) -->
+                            <div class="absolute -bottom-10 -left-6 z-20 flex flex-col items-center gap-1">
+                                <button class="info-btn text-yellow-600" onclick="showInfo('grain')">i</button>
+                                <span class="plate-label">Granos</span>
+                            </div>
+
+                            <div id="plate-zone" class="harvard-plate w-full h-full rounded-full border-8 border-white overflow-hidden relative shadow-2xl">
+                                <div class="plate-sector sector-prot" data-cat="prot"></div>
+                                <div class="plate-sector sector-veg" data-cat="veg"></div>
+                                <div class="plate-sector sector-grain" data-cat="grain"></div>
+                                <div id="placed-items-container" class="w-full h-full absolute inset-0 pointer-events-none"></div>
+                            </div>
+                        </div>
+
+                        <div id="water-zone" class="extra-zone absolute right-2 md:-right-4 top-1/2 transform -translate-y-1/2 z-10" title="Agua"><span class="opacity-30 text-3xl grayscale">💧</span></div>
+                    </div>
+
+                    <!-- Retos -->
+                    <div class="flex gap-2 justify-center mt-auto w-full px-4 mb-4">
+                        <button onclick="loadPreset('school')" class="text-[10px] bg-white/50 hover:bg-white px-3 py-1 rounded-lg border border-gray-200 transition-colors">🏫 Reto Cole</button>
+                        <button onclick="loadPreset('fastfood')" class="text-[10px] bg-white/50 hover:bg-white px-3 py-1 rounded-lg border border-gray-200 transition-colors">🍔 Reto Fast</button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- VISTA RESUMEN FINAL -->
+            <div id="summary-view" class="hidden bg-white rounded-[3rem] p-8 shadow-2xl border border-gray-100 animate__animated animate__fadeIn">
+                <div class="text-center mb-8">
+                    <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-sm">
+                        <span id="final-medal" class="text-4xl">🏅</span>
+                    </div>
+                    <h2 class="text-3xl font-headings font-bold text-gray-800">Resumen del Día</h2>
+                    <p class="text-gray-500">Aquí tienes el balance de todas tus comidas</p>
+                    
+                    <!-- RESUMEN DE NIVEL MEDIO -->
+                    <div class="mt-4 inline-block bg-indigo-50 border border-indigo-100 px-6 py-2 rounded-full">
+                        <span class="text-xs font-bold text-indigo-400 uppercase tracking-widest">Tu Nivel Hoy</span>
+                        <div id="global-level-display" class="text-xl font-black text-indigo-700">Calculando...</div>
+                    </div>
+                </div>
+
+                <!-- Cards de Comidas -->
+                <div id="final-summary-content" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    <!-- JS rellena esto -->
+                </div>
+
+                <!-- Reflexión Final -->
+                <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                    <label class="block text-lg font-bold text-slate-800 mb-3">🤔 Reflexión Final: ¿Cómo has diseñado los menús de tu día?</label>
+                    <textarea id="final-reflection-text" rows="4" class="w-full p-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-400 outline-none text-gray-700 bg-white" placeholder="He diseñado mi día intentando..."></textarea>
+                    
+                    <div class="mt-4 bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex items-center gap-3 text-yellow-800">
+                        <i data-lucide="camera" class="w-6 h-6"></i>
+                        <span class="font-bold text-sm">Haz una foto de pantalla y cuélgala en la tarea del Classroom.</span>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modales -->
+    
+    <!-- Alerta Repetición -->
+    <div id="repetition-toast" class="fixed top-24 left-1/2 transform -translate-x-1/2 bg-amber-100 text-amber-800 border-l-4 border-amber-500 p-4 rounded shadow-xl z-[90] hidden animate__animated animate__shakeX max-w-sm">
+        <div class="flex items-center gap-3">
+            <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            <div><p class="font-bold text-sm">¡Repetición!</p><p class="text-xs" id="repetition-msg">...</p></div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="info-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-md w-full p-8 relative animate__animated animate__zoomIn">
+            <button onclick="document.getElementById('info-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-black"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <div id="modal-content" class="mt-2"></div>
+        </div>
+    </div>
+
+    <!-- Justificación Modal -->
+    <div id="justification-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 animate__animated animate__fadeInUp">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">Decisión Nutritiva</h3>
+            <p class="text-sm text-gray-500 mb-4">¿Por qué pones <strong id="just-food-name" class="text-emerald-600">...</strong> aquí?</p>
+            <textarea id="just-input" rows="3" class="w-full bg-gray-50 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Porque..."></textarea>
+            <div class="flex gap-2 mt-4 justify-end">
+                <button onclick="cancelDrop()" class="text-gray-500 text-sm font-bold px-3">Cancelar</button>
+                <button onclick="confirmDrop()" class="bg-emerald-600 text-white text-sm font-bold px-5 py-2 rounded-xl">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Docente -->
+    <div id="teacher-feedback-modal" class="fixed inset-0 modal-overlay hidden z-[60] flex items-center justify-center p-4">
+        <div class="bg-orange-50 rounded-3xl shadow-2xl max-w-sm w-full p-6 border-4 border-orange-200 text-center animate__animated animate__bounceIn">
+            <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto -mt-12 mb-4 border border-orange-200 shadow"><i data-lucide="graduation-cap" class="w-6 h-6 text-orange-500"></i></div>
+            <h3 class="text-lg font-bold text-orange-900 mb-2">Dato del Profe</h3>
+            <p id="teacher-feedback-text" class="text-gray-700 italic mb-4 text-sm">...</p>
+            <button onclick="document.getElementById('teacher-feedback-modal').classList.add('hidden')" class="w-full bg-orange-500 text-white font-bold py-2 rounded-xl hover:bg-orange-600">¡Entendido!</button>
+        </div>
+    </div>
+    
+    <!-- Diario de Decisiones -->
+    <div id="decisions-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-start justify-center p-4 pt-10">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full p-6 relative h-[70vh] flex flex-col animate__animated animate__slideInDown">
+            <button onclick="document.getElementById('decisions-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>
+            
+            <div class="flex justify-between items-end border-b pb-2 mb-4">
+                <h2 class="text-xl font-headings font-bold text-gray-800">📖 Diario de Decisiones</h2>
+                <button onclick="copyDecisionsTable()" class="bg-indigo-50 text-indigo-600 text-xs font-bold px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1">
+                    <i data-lucide="copy" class="w-3 h-3"></i> Copiar Tabla
+                </button>
+            </div>
+            
+            <div id="decisions-list" class="flex-1 overflow-y-auto space-y-3"></div>
+        </div>
+    </div>
+
+    <!-- Rúbrica Modal (ESPECÍFICA POR COMIDA + DESBLOQUEO) -->
+    <div id="rubric-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-3xl w-full p-8 h-[90vh] overflow-y-auto relative">
+             <button onclick="document.getElementById('rubric-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>
+             <h2 class="text-2xl font-bold text-gray-800 mb-2">Autoevaluación del <span id="rubric-meal-name" class="text-emerald-600">...</span></h2>
+             <p class="text-sm text-gray-500 mb-6">Valora sinceramente tu plato para desbloquear la siguiente comida.</p>
+             
+             <div class="space-y-6 mb-8">
+                <!-- Criterio 1 -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-5 h-5"></i> 1. Proporciones Harvard
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="rubric-card rubric-novato rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(1, 0, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-red-400">Novato</span>
+                            <p class="text-sm text-gray-600">No respeto los porcentajes.</p>
+                        </div>
+                        <div class="rubric-card rubric-sous rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(1, 1, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-yellow-500">Sous-Chef</span>
+                            <p class="text-sm text-gray-600">Casi perfecto, pero hay algún fallo.</p>
+                        </div>
+                        <div class="rubric-card rubric-chef rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(1, 2, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-emerald-600">Chef</span>
+                            <p class="text-sm text-gray-600">¡Clavado! 50/25/25.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Criterio 2 -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                        <i data-lucide="star" class="w-5 h-5"></i> 2. Calidad de Ingredientes
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="rubric-card rubric-novato rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(2, 0, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-red-400">Novato</span>
+                            <p class="text-sm text-gray-600">Mucho procesado y azúcar.</p>
+                        </div>
+                        <div class="rubric-card rubric-sous rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(2, 1, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-yellow-500">Sous-Chef</span>
+                            <p class="text-sm text-gray-600">Bastante bien, mejorable.</p>
+                        </div>
+                        <div class="rubric-card rubric-chef rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(2, 2, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-emerald-600">Chef</span>
+                            <p class="text-sm text-gray-600">Todo integral y fresco.</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Criterio 3 (TEXTOS PEDIDOS) -->
+                <div class="rubric-row">
+                    <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                        <i data-lucide="message-square" class="w-5 h-5"></i> 3. Mis Justificaciones
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="rubric-card rubric-novato rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(3, 0, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-red-400">Novato</span>
+                            <p class="text-sm text-gray-600">Muy cortas.</p>
+                        </div>
+                        <div class="rubric-card rubric-sous rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(3, 1, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-yellow-500">Sous-Chef</span>
+                            <p class="text-sm text-gray-600">Sé qué tipo de alimento es pero poco más.</p>
+                        </div>
+                        <div class="rubric-card rubric-chef rounded-xl p-4 cursor-pointer text-center bg-gray-50" onclick="selectRubric(3, 2, this)">
+                            <span class="text-xs font-black uppercase block mb-2 tracking-widest text-emerald-600">Chef</span>
+                            <p class="text-sm text-gray-600">Justifico mis decisiones.</p>
+                        </div>
+                    </div>
+                </div>
+             </div>
+
+             <div class="text-center">
+                 <button onclick="saveRubricAndUnlock()" class="bg-gray-800 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:bg-black transition-transform hover:-translate-y-1 flex items-center gap-2 mx-auto">
+                     <i data-lucide="unlock" class="w-5 h-5"></i> Guardar y Desbloquear Siguiente
+                 </button>
+             </div>
+        </div>
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        // --- CONFIG & STATE ---
+        const colors = {
+            breakfast: 'bg-orange-50',
+            lunch: 'bg-sky-50',
+            dinner: 'bg-indigo-50',
+            summary: 'bg-slate-100'
+        };
+
+        const dailyMeals = {
+            breakfast: { items: [], water: false, oil: false, rubric: null },
+            lunch: { items: [], water: false, oil: false, rubric: null },
+            dinner: { items: [], water: false, oil: false, rubric: null }
+        };
+        
+        // Estado de bloqueo
+        const unlockState = {
+            breakfast: true, // Siempre abierto
+            lunch: false,
+            dinner: false,
+            summary: false
+        };
+
+        let currentTab = 'breakfast';
+        let currentRubricSelection = {1:null, 2:null, 3:null}; // Temp score for modal
+
+        // --- FOOD DB (60+ items with realistic scoring) ---
+        const foodDB = [
+            // VEGETALES Y HORTALIZAS (+20 pts)
+            { name: "Lechuga", cat: "veg", icon: "🥬", scoreMod: 20, grams: "Libre", teacherMsg: "Base perfecta: volumen y agua sin calorías." },
+            { name: "Tomate", cat: "veg", icon: "🍅", scoreMod: 20, grams: "150-200 g", teacherMsg: "Antioxidantes (licopeno). Mejor con un poco de aceite." },
+            { name: "Brócoli", cat: "veg", icon: "🥦", scoreMod: 20, grams: "150 g", teacherMsg: "Superalimento: calcio, fibra y antioxidantes." },
+            { name: "Zanahoria", cat: "veg", icon: "🥕", scoreMod: 20, grams: "100 g", teacherMsg: "Betacarotenos para la piel y la vista." },
+            { name: "Espinacas", cat: "veg", icon: "🍃", scoreMod: 20, grams: "150 g", teacherMsg: "Hierro vegetal (cómelas con Vitamina C para absorberlo)." },
+            { name: "Calabacín", cat: "veg", icon: "🥒", scoreMod: 20, grams: "200 g", teacherMsg: "Muy versátil y digestivo." },
+            { name: "Pimiento", cat: "veg", icon: "🫑", scoreMod: 20, grams: "100 g", teacherMsg: "¡Más Vitamina C que la naranja!" },
+            { name: "Cebolla", cat: "veg", icon: "🧅", scoreMod: 20, grams: "50 g", teacherMsg: "Sabor y propiedades antibióticas naturales." },
+            { name: "Judías Verdes", cat: "veg", icon: "🟢", scoreMod: 20, grams: "150 g", teacherMsg: "Fibra y saciedad." },
+            { name: "Pepino", cat: "veg", icon: "🥒", scoreMod: 20, grams: "150 g", teacherMsg: "Pura agua. Ideal para hidratarse." },
+
+            // FRUTAS (+20 pts)
+            { name: "Manzana", cat: "veg", subcat: "fruit", icon: "🍎", scoreMod: 20, grams: "1 unidad", teacherMsg: "La pectina de la piel ayuda a tu intestino." },
+            { name: "Plátano", cat: "veg", subcat: "fruit", icon: "🍌", scoreMod: 20, grams: "1 unidad", teacherMsg: "Potasio y energía rápida natural." },
+            { name: "Naranja", cat: "veg", subcat: "fruit", icon: "🍊", scoreMod: 20, grams: "1 unidad", teacherMsg: "Mejor entera que en zumo para aprovechar la fibra." },
+            { name: "Fresas", cat: "veg", subcat: "fruit", icon: "🍓", scoreMod: 20, grams: "150 g", teacherMsg: "Poco azúcar y muchos antioxidantes." },
+            { name: "Uvas", cat: "veg", subcat: "fruit", icon: "🍇", scoreMod: 20, grams: "100 g", teacherMsg: "Ricas pero con bastante azúcar natural. Modera." },
+            { name: "Pera", cat: "veg", subcat: "fruit", icon: "🍐", scoreMod: 20, grams: "1 unidad", teacherMsg: "Mucha agua y fibra." },
+            { name: "Melón", cat: "veg", subcat: "fruit", icon: "🍈", scoreMod: 20, grams: "200 g", teacherMsg: "Muy diurético." },
+            { name: "Mandarina", cat: "veg", subcat: "fruit", icon: "🍊", scoreMod: 20, grams: "2 unidades", teacherMsg: "El snack natural perfecto." },
+
+            // GRANOS Y CEREALES
+            // Integrales (+20 pts)
+            { name: "Arroz Integral", cat: "grain", subcat: "whole", icon: "🍚", scoreMod: 20, grams: "60-80 g (seco)", teacherMsg: "La fibra evita picos de glucosa y da energía estable." },
+            { name: "Pasta Integral", cat: "grain", subcat: "whole", icon: "🍝", scoreMod: 20, grams: "60-80 g (seco)", teacherMsg: "Más saciante que la blanca." },
+            { name: "Pan Integral", cat: "grain", subcat: "whole", icon: "🍞", scoreMod: 20, grams: "40-60 g", teacherMsg: "La base de un buen bocadillo saludable." },
+            { name: "Avena", cat: "grain", subcat: "whole", icon: "🌾", scoreMod: 20, grams: "40 g", teacherMsg: "El rey de los desayunos. Beta-glucanos para el colesterol." },
+            { name: "Quinoa", cat: "grain", subcat: "whole", icon: "🥣", scoreMod: 20, grams: "60 g", teacherMsg: "Pseudocereal con proteína completa." },
+            
+            // Refinados / Almidonados (+10 pts)
+            { name: "Arroz Blanco", cat: "grain", subcat: "refined", icon: "🍚", scoreMod: 10, grams: "60-80 g", teacherMsg: "Energía rápida. Acompáñalo siempre de verdura." },
+            { name: "Pasta Blanca", cat: "grain", subcat: "refined", icon: "🍝", scoreMod: 10, grams: "60-80 g", teacherMsg: "Se digiere rápido. Cuidado con no pasarse de cantidad." },
+            { name: "Pan Blanco", cat: "grain", subcat: "refined", icon: "🥖", scoreMod: 10, grams: "40-60 g", teacherMsg: "Menos fibra. Te entrará hambre antes." },
+            { name: "Patata", cat: "grain", subcat: "tuber", icon: "🥔", scoreMod: 10, grams: "200 g", teacherMsg: "En Harvard es 'carbohidrato', no verdura. Mejor hervida que frita." },
+            
+            // Desayuno "Conflictivo"
+            { name: "Cereales Azucarados", cat: "grain", subcat: "sugar", icon: "🥣", scoreMod: -15, grams: "30 g (Ocasional)", teacherMsg: "Suelen ser 30-40% azúcar. Mejor avena o pan." },
+            { name: "Corn Flakes (s/a)", cat: "grain", subcat: "refined", icon: "🥣", scoreMod: 10, grams: "30 g", teacherMsg: "Aceptable si no tienen azúcar, pero mejor integrales." },
+
+            // PROTEÍNAS
+            // Saludables (+20 pts)
+            { name: "Pollo", cat: "prot", subcat: "lean", icon: "🍗", scoreMod: 20, grams: "120-150 g", teacherMsg: "Proteína limpia. Mejor plancha u horno." },
+            { name: "Pescado Blanco", cat: "prot", subcat: "fish", icon: "🐟", scoreMod: 20, grams: "150 g", teacherMsg: "Ligero y digestivo." },
+            { name: "Salmón/Azul", cat: "prot", subcat: "fish", icon: "🐟", scoreMod: 20, grams: "150 g", teacherMsg: "Grasas Omega-3 esenciales para tu cerebro." },
+            { name: "Huevo", cat: "prot", icon: "🥚", scoreMod: 20, grams: "2 unidades", teacherMsg: "La proteína de mayor valor biológico. La yema tiene grasas buenas." },
+            { name: "Lentejas", cat: "prot", subcat: "legume", icon: "🥘", scoreMod: 20, grams: "60-80 g (seco)", teacherMsg: "Proteína + Fibra + Hierro. ¡Consúmelas a menudo!" },
+            { name: "Garbanzos", cat: "prot", subcat: "legume", icon: "🥘", scoreMod: 20, grams: "60-80 g (seco)", teacherMsg: "Muy saciantes y versátiles (hummus, estofado)." },
+            
+            // Procesados / Grasos (+10 a 0 pts)
+            { name: "Ternera", cat: "prot", subcat: "red", icon: "🥩", scoreMod: 10, grams: "120 g (1/sem)", teacherMsg: "Rica en hierro, pero la OMS recomienda limitar carnes rojas." },
+            { name: "Cerdo (Lomo)", cat: "prot", subcat: "red", icon: "🥓", scoreMod: 10, grams: "120 g", teacherMsg: "Si es parte magra (lomo), bien. Si es grasa, modera." },
+            { name: "Queso Curado", cat: "prot", subcat: "dairy", icon: "🧀", scoreMod: 5, grams: "40 g", teacherMsg: "Rico en calcio pero muy alto en grasa saturada y sal." },
+            { name: "Queso Fresco", cat: "prot", subcat: "dairy", icon: "🧀", scoreMod: 20, grams: "80 g", teacherMsg: "Buena opción proteica con menos grasa." },
+            { name: "Embutido (Pavo)", cat: "prot", subcat: "processed", icon: "🥪", scoreMod: 0, grams: "40 g", teacherMsg: "Mejor que el chorizo, pero sigue siendo carne procesada (sal)." },
+            { name: "Embutido (Chorizo/Salchichón)", cat: "prot", subcat: "processed", icon: "🥓", scoreMod: -5, grams: "Ocasional", teacherMsg: "Mucha grasa saturada y sal. Para un día especial." },
+            { name: "Hamburguesa Ind.", cat: "prot", subcat: "processed", icon: "🍔", scoreMod: -10, grams: "Ocasional", teacherMsg: "Suelen llevar carne de baja calidad y muchos aditivos." },
+
+            // LÁCTEOS Y BEBIDAS
+            { name: "Leche", cat: "prot", subcat: "dairy", icon: "🥛", scoreMod: 20, grams: "200 ml", teacherMsg: "Fuente principal de calcio." },
+            { name: "Yogur Natural", cat: "prot", subcat: "dairy", icon: "🥣", scoreMod: 20, grams: "125 g", teacherMsg: "Sin azúcar añadido es perfecto." },
+            { name: "Yogur Sabores", cat: "prot", subcat: "dairy", icon: "🥣", scoreMod: 0, grams: "125 g", teacherMsg: "Ojo: suelen tener 2-3 sobres de azúcar añadido." },
+            { name: "Natillas/Flan", cat: "grain", subcat: "sugar", icon: "🍮", scoreMod: -5, grams: "Ocasional", teacherMsg: "Es un postre dulce, no un lácteo diario." },
+            { name: "Zumo Natural", cat: "veg", subcat: "fruit", icon: "🍹", scoreMod: 10, grams: "150 ml", teacherMsg: "Pierdes la fibra. Cuenta como ración, pero mejor fruta entera." },
+            { name: "Zumo Envasado", cat: "grain", subcat: "sugar", icon: "🧃", scoreMod: -10, grams: "Evitar", teacherMsg: "Básicamente agua con azúcar y sabor a fruta." },
+            { name: "Cola-Cao / Cacao", cat: "grain", subcat: "sugar", icon: "☕", scoreMod: -10, grams: "Moderar", teacherMsg: "El primero ingrediente suele ser azúcar (70%)." },
+
+            // EXTRAS Y SALSAS
+            { name: "Aceite Oliva (AOVE)", cat: "oil", icon: "🫒", scoreMod: 5, grams: "10 ml (1 cda)", teacherMsg: "Grasa 'buena' protectora. Úsalo en crudo." },
+            { name: "Frutos Secos", cat: "oil", icon: "🥜", scoreMod: 5, grams: "30 g (puñado)", teacherMsg: "Energía concentrada y saludable. Sin sal mejor." },
+            { name: "Aguacate", cat: "oil", icon: "🥑", scoreMod: 5, grams: "1/2 unidad", teacherMsg: "Grasa saludable y fibra." },
+            { name: "Salsa Tomate (Frito)", cat: "oil", icon: "🥫", scoreMod: 0, grams: "Moderar", teacherMsg: "Si es casera genial. Si es de bote, mira el azúcar." },
+            { name: "Ketchup", cat: "grain", subcat: "sugar", icon: "🍅", scoreMod: -5, grams: "Poco", teacherMsg: "Es una salsa muy azucarada." },
+            { name: "Mayonesa", cat: "oil", subcat: "fat", icon: "🥣", scoreMod: -5, grams: "Poco", teacherMsg: "Pura grasa calórica. Controla la cantidad." },
+
+            // ULTRAPROCESADOS (-15 pts)
+            { name: "Bollería/Croissant", cat: "grain", subcat: "complex", icon: "🥐", scoreMod: -15, grams: "Ocasional", teacherMsg: "Grasas trans/saturadas y azúcar. Pobre nutricionalmente." },
+            { name: "Galletas", cat: "grain", subcat: "sugar", icon: "🍪", scoreMod: -15, grams: "Ocasional", teacherMsg: "Aunque parezcan desayuno, son repostería." },
+            { name: "Nutella/Creme", cat: "grain", subcat: "sugar", icon: "🍫", scoreMod: -15, grams: "Ocasional", teacherMsg: "Azúcar y grasa de palma. No es un alimento diario." },
+            { name: "Pizza Industrial", cat: "grain", subcat: "complex", isComplex: true, icon: "🍕", scoreMod: -15, grams: "Ocasional", teacherMsg: "Masa refinada, queso graso y carnes procesadas." },
+            { name: "Refrescos", cat: "grain", subcat: "sugar", icon: "🥤", scoreMod: -15, grams: "Evitar", teacherMsg: "Azúcar líquido o edulcorantes. No hidratan." },
+            { name: "Patatas Fritas (Bolsa)", cat: "grain", subcat: "processed", icon: "🍟", scoreMod: -15, grams: "Ocasional", teacherMsg: "Sal, grasas malas y calorías vacías." },
+            
+            // EXTRAS SISTEMA
+            { name: "Agua", cat: "water", icon: "💧", scoreMod: 5, grams: "1.5-2 L/día", teacherMsg: "La mejor bebida siempre." }
+        ];
+
+        let pendingFood = null;
+        let draggedElement = null;
+        let isDragging = false;
+        let startX, startY;
+
+        // --- INIT ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initDatalist();
+            updateTabVisuals();
+            switchTab('breakfast');
+            
+            document.addEventListener('mouseup', handleDragEnd);
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('touchend', handleDragEnd, {passive: false});
+            document.addEventListener('touchmove', handleDragMove, {passive: false});
+            
+            document.getElementById('food-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') stageFood();
+            });
+        });
+
+        function initDatalist() {
+            const list = document.getElementById('food-list');
+            foodDB.filter(f => f.cat !== 'water' && f.cat !== 'oil').forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.name;
+                list.appendChild(opt);
+            });
+        }
+
+        // --- NAVIGATION LOGIC ---
+        function switchTab(tabId) {
+            if(!unlockState[tabId]) {
+                alert("🔒 ¡Completa la autoevaluación anterior para desbloquear!");
+                return;
+            }
+
+            currentTab = tabId;
+            document.body.className = `min-h-screen p-2 md:p-6 pb-20 ${colors[tabId]} transition-colors duration-500`;
+            
+            // Visuals
+            updateTabVisuals();
+
+            if (tabId === 'summary') {
+                document.getElementById('planner-view').classList.add('hidden');
+                document.getElementById('summary-view').classList.remove('hidden');
+                renderFinalSummary();
+            } else {
+                document.getElementById('planner-view').classList.remove('hidden');
+                document.getElementById('summary-view').classList.add('hidden');
+                
+                const names = { breakfast: 'Desayuno', lunch: 'Comida', dinner: 'Cena' };
+                document.getElementById('current-meal-name').innerText = names[tabId];
+                
+                const container = document.getElementById('placed-items-container');
+                container.innerHTML = '';
+                dailyMeals[tabId].items.forEach(renderPlateItem);
+                updateExtrasVisuals();
+                updateScore();
+            }
+        }
+
+        function updateTabVisuals() {
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const id = btn.id.replace('btn-', '');
+                btn.classList.remove('active', 'locked');
+                
+                if (id === currentTab) btn.classList.add('active');
+                if (!unlockState[id]) btn.classList.add('locked');
+            });
+        }
+
+        function updateExtrasVisuals() {
+            const w = document.getElementById('water-zone');
+            const o = document.getElementById('oil-zone');
+            const meal = dailyMeals[currentTab];
+            w.className = `extra-zone absolute right-2 md:-right-4 top-1/2 transform -translate-y-1/2 z-10 ${meal.water ? 'active' : ''}`;
+            w.innerHTML = meal.water ? '<span class="text-3xl">💧</span>' : '<span class="opacity-30 text-3xl grayscale">💧</span>';
+            o.className = `extra-zone absolute left-2 md:-left-4 top-1/2 transform -translate-y-1/2 z-10 ${meal.oil ? 'active' : ''}`;
+            o.innerHTML = meal.oil ? '<span class="text-3xl">🫒</span>' : '<span class="opacity-30 text-3xl grayscale">🫒</span>';
+        }
+
+        // --- RUBRIC & UNLOCK LOGIC ---
+        function openRubricModal() {
+            if(dailyMeals[currentTab].items.length === 0) {
+                alert("¡El plato está vacío! Añade alimentos antes de evaluar.");
+                return;
+            }
+            
+            const names = { breakfast: 'Desayuno', lunch: 'Comida', dinner: 'Cena' };
+            document.getElementById('rubric-meal-name').innerText = names[currentTab];
+            document.getElementById('rubric-modal').classList.remove('hidden');
+            
+            // Reset selection or load existing? Let's reset for simplicity
+            currentRubricSelection = {1:null, 2:null, 3:null};
+            document.querySelectorAll('.rubric-card').forEach(c => c.classList.remove('selected'));
+        }
+
+        function selectRubric(criterion, value, el) {
+            currentRubricSelection[criterion] = value;
+            const parent = el.parentElement;
+            parent.querySelectorAll('.rubric-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            
+            // Colorear según tipo
+            if(value === 0) el.classList.add('rubric-novato');
+            if(value === 1) el.classList.add('rubric-sous');
+            if(value === 2) el.classList.add('rubric-chef');
+        }
+
+        function saveRubricAndUnlock() {
+            if(currentRubricSelection[1] === null || currentRubricSelection[2] === null || currentRubricSelection[3] === null) {
+                alert("Por favor, selecciona un nivel para cada criterio.");
+                return;
+            }
+
+            // Save
+            dailyMeals[currentTab].rubric = { ...currentRubricSelection };
+            
+            // Unlock next
+            let nextTab = '';
+            if(currentTab === 'breakfast') nextTab = 'lunch';
+            else if(currentTab === 'lunch') nextTab = 'dinner';
+            else if(currentTab === 'dinner') nextTab = 'summary';
+
+            if(nextTab) {
+                unlockState[nextTab] = true;
+                updateTabVisuals();
+                document.getElementById('rubric-modal').classList.add('hidden');
+                
+                if(nextTab === 'summary') {
+                    alert("¡Genial! Has completado el día. Vamos al resumen.");
+                    switchTab('summary');
+                } else {
+                    const names = { lunch: 'Comida', dinner: 'Cena' };
+                    if(confirm(`¡Autoevaluación guardada! ¿Quieres pasar a la ${names[nextTab]}?`)) {
+                        switchTab(nextTab);
+                    }
+                }
+            }
+        }
+
+        // --- SUMMARY & STATS ---
+        function renderFinalSummary() {
+            const container = document.getElementById('final-summary-content');
+            let html = '';
+            const labels = { breakfast: 'Desayuno', lunch: 'Comida', dinner: 'Cena' };
+            const colors = { breakfast: 'orange', lunch: 'sky', dinner: 'indigo' };
+            
+            // Calculate Global Level (Average of rubric scores)
+            let totalPoints = 0;
+            let count = 0;
+            
+            for (const [key, meal] of Object.entries(dailyMeals)) {
+                if(meal.rubric) {
+                    totalPoints += (meal.rubric[1] + meal.rubric[2] + meal.rubric[3]); // 0-2 per criterion * 3 criteria = max 6
+                    count++;
+                }
+                
+                const c = colors[key];
+                let localScore = 0;
+                meal.items.forEach(i => localScore += i.scoreMod);
+                if (meal.items.filter(i => i.cat === 'veg').length >= 2) localScore += 10;
+                if (meal.water) localScore += 5;
+                if (meal.oil) localScore += 5;
+                localScore = Math.max(0, Math.min(100, localScore));
+
+                html += `
+                <div class="bg-${c}-50 p-4 rounded-2xl border border-${c}-100">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-${c}-700 flex items-center gap-2 uppercase text-sm">
+                            ${labels[key]} 
+                            ${meal.water ? '💧' : ''} ${meal.oil ? '🫒' : ''}
+                        </h3>
+                        <span class="text-xs font-bold bg-white px-2 py-1 rounded text-${c}-600">${localScore}%</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">`;
+                
+                meal.items.forEach(i => {
+                    html += `<span class="bg-white text-xs px-2 py-1 rounded shadow-sm border text-gray-700">${i.icon} ${i.name}</span>`;
+                });
+                html += `</div></div>`;
+            }
+            container.innerHTML = html;
+
+            // Display Global Level
+            const display = document.getElementById('global-level-display');
+            if (count > 0) {
+                // Average score per meal (0-6 points max per meal)
+                // Let's normalize. Max total = 18 (3 meals * 6 points).
+                // Actually, let's just take average of all criteria points (0-2)
+                // Total criteria evaluated = count * 3
+                const avg = totalPoints / (count * 3); 
+                let level = "Novato";
+                if(avg > 1.5) level = "CHEF 🏆";
+                else if(avg > 0.8) level = "SOUS-CHEF 👨‍🍳";
+                else level = "NOVATO 👶";
+                
+                display.innerText = level;
+            } else {
+                display.innerText = "Pendiente";
+            }
+        }
+
+        // --- DRAG & DROP CORE (Rest of logic) ---
+        function stageFood() {
+            const input = document.getElementById('food-input');
+            const name = input.value.trim();
+            // Búsqueda flexible (case insensitive)
+            const food = foodDB.find(f => f.name.toLowerCase() === name.toLowerCase());
+            
+            if (!food) { alert("Alimento no encontrado. Prueba otro de la lista."); return; }
+            if (food.cat === 'water' || food.cat === 'oil') { alert("Usa los iconos de extras (Agua/Aceite)."); return; }
+            
+            checkRepetition(food.name);
+            createDraggableIcon(food);
+            input.value = '';
+            pendingFood = food;
+        }
+
+        function stageExtra(type) {
+            const food = foodDB.find(f => f.cat === type);
+            createDraggableIcon(food);
+            pendingFood = food;
+        }
+
+        function checkRepetition(name) {
+            let found = false;
+            let where = [];
+            const labels = { breakfast: 'Desayuno', lunch: 'Comida', dinner: 'Cena' };
+            for (const [meal, data] of Object.entries(dailyMeals)) {
+                if (data.items.some(i => i.name === name)) { found = true; where.push(labels[meal]); }
+            }
+            if (found) {
+                const toast = document.getElementById('repetition-toast');
+                document.getElementById('repetition-msg').innerText = `Ya usado en: ${where.join(', ')}.`;
+                toast.classList.remove('hidden');
+                setTimeout(() => toast.classList.add('hidden'), 4000);
+            }
+        }
+
+        function createDraggableIcon(food) {
+            const staging = document.getElementById('staging-area');
+            staging.innerHTML = '';
+            const el = document.createElement('div');
+            el.className = 'draggable-item animate__animated animate__zoomIn';
+            el.innerText = food.icon;
+            el.addEventListener('mousedown', handleDragStart);
+            el.addEventListener('touchstart', handleDragStart, {passive: false});
+            staging.appendChild(el);
+        }
+
+        function handleDragStart(e) {
+            e.preventDefault(); if (!pendingFood) return;
+            draggedElement = e.target; isDragging = true;
+            const t = e.touches ? e.touches[0] : e;
+            const rect = draggedElement.getBoundingClientRect();
+            draggedElement.style.position = 'fixed';
+            draggedElement.style.left = rect.left + 'px';
+            draggedElement.style.top = rect.top + 'px';
+            document.body.appendChild(draggedElement);
+            startX = t.clientX - rect.left; startY = t.clientY - rect.top;
+        }
+
+        function handleDragMove(e) {
+            if (!isDragging || !draggedElement) return;
+            e.preventDefault();
+            const t = e.touches ? e.touches[0] : e;
+            draggedElement.style.left = (t.clientX - startX) + 'px';
+            draggedElement.style.top = (t.clientY - startY) + 'px';
+            if (pendingFood.cat === 'water') highlightZone('water-zone');
+            if (pendingFood.cat === 'oil') highlightZone('oil-zone');
+        }
+
+        function highlightZone(id) {
+            const el = document.getElementById(id);
+            const r = el.getBoundingClientRect();
+            const d = draggedElement.getBoundingClientRect();
+            const dist = Math.hypot(r.x - d.x, r.y - d.y);
+            if (dist < 100) el.classList.add('drop-target'); else el.classList.remove('drop-target');
+        }
+
+        function handleDragEnd(e) {
+            if (!isDragging || !draggedElement) return;
+            isDragging = false;
+            document.getElementById('water-zone').classList.remove('drop-target');
+            document.getElementById('oil-zone').classList.remove('drop-target');
+
+            const elmRect = draggedElement.getBoundingClientRect();
+            const itemX = elmRect.left + elmRect.width/2;
+            const itemY = elmRect.top + elmRect.height/2;
+
+            if (pendingFood.cat === 'water') {
+                if (checkZoneDrop('water-zone', itemX, itemY)) { dailyMeals[currentTab].water = true; finishDrop(false); return; }
+            }
+            if (pendingFood.cat === 'oil') {
+                if (checkZoneDrop('oil-zone', itemX, itemY)) { dailyMeals[currentTab].oil = true; finishDrop(false); return; }
+            }
+
+            const plateZone = document.getElementById('plate-zone').getBoundingClientRect();
+            const radius = plateZone.width / 2;
+            const dist = Math.hypot(itemX - (plateZone.left + radius), itemY - (plateZone.top + radius));
+
+            if (dist < radius) {
+                const dx = itemX - (plateZone.left + radius);
+                const dy = itemY - (plateZone.top + radius);
+                let detected = (dx>0)?'veg':(dy<0?'prot':'grain');
+                let valid = (detected === pendingFood.cat);
+                if (pendingFood.isComplex && detected === 'grain') valid = true;
+
+                if (valid) openJustificationModal();
+                else { alert(`❌ Ups, ${pendingFood.name} no va aquí.`); resetDrag(); }
+            } else resetDrag();
+        }
+
+        function checkZoneDrop(id, x, y) {
+            const r = document.getElementById(id).getBoundingClientRect();
+            return (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+        }
+
+        function resetDrag() {
+            if (draggedElement) draggedElement.remove();
+            if (pendingFood && pendingFood.cat !== 'water' && pendingFood.cat !== 'oil') {
+                const st = document.getElementById('staging-area');
+                if (st.innerHTML === '') createDraggableIcon(pendingFood);
+            }
+            draggedElement = null;
+        }
+
+        function cancelDrop() {
+            document.getElementById('justification-modal').classList.add('hidden');
+            resetDrag();
+        }
+
+        function openJustificationModal() {
+            document.getElementById('justification-modal').classList.remove('hidden');
+            document.getElementById('just-food-name').innerText = pendingFood.name;
+            document.getElementById('just-input').value = '';
+        }
+
+        function confirmDrop() {
+            const just = document.getElementById('just-input').value;
+            document.getElementById('justification-modal').classList.add('hidden');
+            const item = { ...pendingFood, id: Date.now(), justification: just };
+            dailyMeals[currentTab].items.push(item);
+            
+            renderPlateItem(item);
+            
+            const fbModal = document.getElementById('teacher-feedback-modal');
+            document.getElementById('teacher-feedback-text').innerText = pendingFood.teacherMsg;
+            fbModal.classList.remove('hidden');
+            finishDrop(true);
+        }
+
+        function finishDrop(wasPlate) {
+            if (draggedElement) draggedElement.remove();
+            if (wasPlate) document.getElementById('staging-area').innerHTML = '<span class="text-gray-400 text-xs italic pointer-events-none">Arrastra al plato...</span>';
+            
+            // OMS Notification (PERSISTENTE)
+            const omsToast = document.getElementById('oms-toast');
+            document.getElementById('oms-text').innerText = `${pendingFood.grams}`;
+            omsToast.classList.remove('hidden');
+            // NO setTimeout here as requested
+
+            pendingFood = null;
+            updateExtrasVisuals();
+            updateScore();
+        }
+
+        function renderPlateItem(item) {
+            const container = document.getElementById('placed-items-container');
+            const el = document.createElement('div');
+            el.className = 'placed-item animate__animated animate__rubberBand';
+            el.innerHTML = `<div class="icon">${item.icon}</div><div class="label">${item.name}</div>`;
+            el.id = `item-${item.id}`;
+            el.title = "Clic para borrar";
+            el.style.pointerEvents = 'auto'; 
+            el.onclick = (e) => { 
+                e.stopPropagation(); 
+                removeItem(item.id); 
+            };
+            
+            const existingInCat = dailyMeals[currentTab].items.filter(i => i.cat === item.cat && i.id !== item.id).length;
+            let pos = getSlotPosition(item.cat, existingInCat);
+            if(item.isComplex) pos = { left: 50, top: 50 }; 
+
+            el.style.left = pos.left + '%'; 
+            el.style.top = pos.top + '%';
+            container.appendChild(el);
+        }
+
+        function getSlotPosition(cat, index) {
+            // Anti-overlap slots
+            const slotsVeg = [{l: 65, t: 30}, {l: 75, t: 50}, {l: 65, t: 70}, {l: 55, t: 50}, {l: 85, t: 30}];
+            const slotsProt = [{l: 25, t: 25}, {l: 35, t: 15}, {l: 15, t: 35}, {l: 40, t: 30}];
+            const slotsGrain = [{l: 25, t: 75}, {l: 35, t: 85}, {l: 15, t: 65}, {l: 40, t: 70}];
+
+            let pos = {l: 50, t: 50};
+            if(cat === 'veg') pos = slotsVeg[index % slotsVeg.length];
+            if(cat === 'prot') pos = slotsProt[index % slotsProt.length];
+            if(cat === 'grain') pos = slotsGrain[index % slotsGrain.length];
+            return { left: pos.l, top: pos.t };
+        }
+
+        function removeItem(id) {
+            if(confirm("¿Quitar alimento?")) {
+                dailyMeals[currentTab].items = dailyMeals[currentTab].items.filter(i => i.id !== id);
+                document.getElementById(`item-${id}`).remove();
+                updateScore();
+            }
+        }
+
+        function updateScore() {
+            const meal = dailyMeals[currentTab];
+            let score = 0;
+            meal.items.forEach(i => { score += i.scoreMod; });
+            if (meal.items.filter(i => i.cat === 'veg').length >= 2) score += 10;
+            if (meal.water) score += 5;
+            if (meal.oil) score += 5;
+            score = Math.max(0, Math.min(100, score));
+            
+            // Texto Descriptivo Grande
+            let textLabel = "VACÍO";
+            let colorClass = "text-gray-400";
+            if (meal.items.length > 0) {
+                if (score < 40) { textLabel = "DESEQUILIBRADO"; colorClass = "text-red-500"; }
+                else if (score < 90) { textLabel = "EQUILIBRADO"; colorClass = "text-yellow-500"; }
+                else { textLabel = "PERFECTO"; colorClass = "text-emerald-600"; }
+            }
+
+            document.getElementById('score-text').innerText = textLabel;
+            document.getElementById('score-text').className = `block font-black text-sm uppercase ${colorClass}`;
+            document.getElementById('score-val').innerText = score + "%";
+            document.getElementById('face-feedback').innerText = score>90?"🤩":(score>40?"🤔":"😐");
+            
+            const whyBtn = document.getElementById('why-btn');
+            if(score < 100 && meal.items.length > 0) whyBtn.classList.remove('hidden');
+            else whyBtn.classList.add('hidden');
+        }
+
+        function showWhy() {
+            const meal = dailyMeals[currentTab];
+            let reasons = [];
+            const veg = meal.items.filter(i => i.cat === 'veg').length;
+            const grain = meal.items.filter(i => i.cat === 'grain').length;
+            const prot = meal.items.filter(i => i.cat === 'prot').length;
+            const unhealthy = meal.items.filter(i => i.scoreMod < 0).length;
+
+            if(veg < 2) reasons.push("Faltan vegetales (el 50% del plato).");
+            if(grain === 0) reasons.push("Faltan granos/carbohidratos.");
+            if(prot === 0) reasons.push("Falta proteína.");
+            if(!meal.water) reasons.push("Falta agua.");
+            if(unhealthy > 0) reasons.push("Sobran alimentos no saludables.");
+            
+            alert("Para llegar al 100%:\n- " + reasons.join("\n- "));
+        }
+
+        function openDecisionsModal() {
+            document.getElementById('decisions-modal').classList.remove('hidden');
+            let html = '';
+            const labels = { breakfast: 'Desayuno', lunch: 'Comida', dinner: 'Cena' };
+            let copyText = "";
+
+            for (const [key, meal] of Object.entries(dailyMeals)) {
+                if(meal.items.length > 0) {
+                    html += `<h4 class="text-xs font-bold uppercase text-gray-400 mt-4 mb-2">${labels[key]}</h4>`;
+                    copyText += `${labels[key].toUpperCase()}:\n`;
+                    
+                    meal.items.forEach(item => {
+                        html += `
+                        <div class="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden mb-2">
+                            <div class="bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 flex justify-between">
+                                <span>${item.icon} ${item.name}</span>
+                            </div>
+                            <div class="grid grid-cols-2 divide-x divide-gray-200">
+                                <div class="p-2 text-xs text-gray-600"><strong>Alumno:</strong> ${item.justification}</div>
+                                <div class="p-2 text-xs text-orange-600 bg-orange-50/30 flex items-start gap-1">
+                                    <i data-lucide="graduation-cap" class="w-3 h-3 mt-0.5"></i>
+                                    <strong>Profe:</strong> ${item.teacherMsg}
+                                </div>
+                            </div>
+                        </div>`;
+                        
+                        copyText += `- ${item.name}: ${item.justification} [Feedback: ${item.teacherMsg}]\n`;
+                    });
+                    copyText += "\n";
+                }
+            }
+            document.getElementById('decisions-list').innerHTML = html || '<p class="text-center text-gray-400">Sin datos.</p>';
+            window.decisionsText = copyText;
+            lucide.createIcons();
+        }
+
+        function copyDecisionsTable() {
+            if(!window.decisionsText) { alert("Nada que copiar"); return; }
+            navigator.clipboard.writeText(window.decisionsText).then(() => alert("✅ Copiado"));
+        }
+
+        function showInfo(t) { 
+            const modal = document.getElementById('info-modal');
+            const content = document.getElementById('modal-content');
+            let html = "";
+            if (t === 'veg') {
+                html = `<h3 class="text-xl font-bold text-emerald-600 mb-2">Vegetales y Frutas (50%)</h3>
+                        <p class="mb-2 text-gray-600">Aportan vitaminas, minerales y fibra.</p>
+                        <div class="bg-orange-50 p-3 rounded border-l-4 border-orange-400 text-sm">
+                            <strong>⚠️ Ojo:</strong> La patata NO cuenta como vegetal en Harvard.
+                        </div>`;
+            } else if (t === 'grain') {
+                html = `<h3 class="text-xl font-bold text-yellow-500 mb-2">Granos Integrales (25%)</h3>
+                        <p class="mb-2 text-gray-600">Energía duradera. Elige integral para evitar picos de azúcar.</p>
+                        <div class="bg-red-50 p-3 rounded border-l-4 border-red-400 text-sm">
+                            <strong>⚠️ Exceso:</strong> Si te pasas, se almacena como grasa.
+                        </div>`;
+            } else if (t === 'prot') {
+                html = `<h3 class="text-xl font-bold text-red-500 mb-2">Proteínas (25%)</h3>
+                        <p class="mb-2 text-gray-600">Ladrillos para tus músculos.</p>
+                        <div class="bg-red-50 p-3 rounded border-l-4 border-red-400 text-sm">
+                            <strong>⚠️ Cuidado:</strong> El exceso sobrecarga los riñones.
+                        </div>`;
+            }
+            content.innerHTML = html;
+            modal.classList.remove('hidden');
+        }
+
+        function loadPreset(t) {
+            if(dailyMeals[currentTab].items.length>0 && !confirm("¿Borrar comida actual?")) return;
+            dailyMeals[currentTab].items=[];
+            let items = [];
+            if(t==='school') items=['Lechuga','Pasta','Pollo','Manzana'];
+            if(t==='fastfood') items=['Hamburguesa','Patata'];
+            items.forEach(n => {
+                const dbI = foodDB.find(f => f.name === n || f.name.includes(n));
+                if(dbI) {
+                    dailyMeals[currentTab].items.push({ ...dbI, id: Date.now()+Math.random(), justification: "Reto Automático" });
+                }
+            });
+            updateScore();
+            switchTab(currentTab); // Re-render visual
+        }
+
+        function confirmReset() { if(confirm("¿Reiniciar TODO?")) location.reload(); }
+        function cancelDrop() { document.getElementById('justification-modal').classList.add('hidden'); resetDrag(); }
+        function randomInt(min,max){return Math.floor(Math.random()*(max-min+1)+min);}
+    </script>
+</body>
+</html>
