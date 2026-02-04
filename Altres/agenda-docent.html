@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planificador Docent CFN - Andorra</title>
+    
+    <!-- Estils CSS (Tailwind) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tipografies -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        /* Fons taronja suau */
+        body { font-family: 'Inter', sans-serif; background-color: #fff7ed; color: #374151; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 8px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f9fafb; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #fdba74; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #f97316; }
+        
+        /* Animacions */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        
+        @keyframes expandOpen { from { height: 0; opacity: 0; transform: scaleY(0.9); } to { height: auto; opacity: 1; transform: scaleY(1); } }
+        .expand-open { animation: expandOpen 0.15s ease-out forwards; transform-origin: top; }
+
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .slide-in-right { animation: slideInRight 0.3s ease-out forwards; }
+
+        /* Estils especials de Text */
+        .time-red { color: #dc2626; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+        
+        /* Estils IMPORTANTS per inputs */
+        input.task-skipped { 
+            text-decoration: line-through !important; 
+            color: #dc2626 !important; 
+            opacity: 0.8 !important;
+            font-style: italic;
+        }
+        
+        input.task-unfinished { 
+            text-decoration: underline !important; 
+            text-decoration-color: #dc2626 !important; 
+            text-decoration-thickness: 2px !important;
+            color: #b91c1c !important; 
+            font-weight: 600 !important;
+        }
+        
+        /* Estil sessió cancel·lada */
+        .session-cancelled {
+            background-color: #d1d5db !important; /* gray-300 */
+            color: #6b7280 !important; /* gray-500 */
+            pointer-events: none; /* Opcional: per evitar editar si està cancel·lada */
+        }
+        /* Per permetre clicar els botons de reactivar encara que la sessió estigui cancel·lada */
+        .session-cancelled .reactivate-btn {
+            pointer-events: auto !important;
+        }
+
+        /* Loading Overlay */
+        #app-loader {
+            position: fixed; inset: 0; z-index: 9999;
+            background: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            transition: opacity 0.5s ease;
+        }
+        .loader-spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #f97316;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite; mb-4;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .error-box {
+            background: #fee2e2; border: 1px solid #ef4444; color: #b91c1c;
+            padding: 20px; rounded: 8px; max-width: 500px; text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PANTALLA DE CÀRREGA -->
+    <div id="app-loader">
+        <div id="loader-content">
+            <div class="loader-spinner" style="margin-bottom: 20px;"></div>
+            <h2 class="text-xl font-bold text-gray-700">Carregant Planificador...</h2>
+        </div>
+        <div id="error-content" class="error-box">
+            <h3 class="font-bold text-lg mb-2">Error de càrrega</h3>
+            <p id="error-message">No s'ha pogut iniciar l'aplicació.</p>
+        </div>
+    </div>
+
+    <div id="root"></div>
+
+    <!-- LLIBRERIES -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        setTimeout(function() {
+            var loader = document.getElementById('app-loader');
+            if (loader && loader.style.display !== 'none' && !document.getElementById('root').hasChildNodes()) {
+                document.getElementById('loader-content').innerHTML = '<h3 class="text-red-600 font-bold">Error de càrrega. Revisa la connexió.</h3>';
+            }
+        }, 8000);
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- ICONES ---
+        const Icon = ({ children, size = 18, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const Icons = {
+            Settings: () => <Icon><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>,
+            Check: () => <Icon><polyline points="20 6 9 17 4 12"/></Icon>,
+            CheckCircle: () => <Icon><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Icon>,
+            Calendar: () => <Icon><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></Icon>,
+            Save: () => <Icon><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Icon>,
+            Clock: () => <Icon size={12}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Icon>,
+            Moon: () => <Icon><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></Icon>,
+            AlertCircle: () => <Icon><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>,
+            ChevronLeft: () => <Icon><polyline points="15 18 9 12 15 6"/></Icon>,
+            ChevronRight: () => <Icon><polyline points="9 18 15 12 9 6"/></Icon>,
+            FileJson: () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Icon>,
+            Table: () => <Icon><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></Icon>,
+            AlertTriangle: () => <Icon><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>,
+            ArrowRight: () => <Icon><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></Icon>,
+            Trash: () => <Icon><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></Icon>,
+            Plus: () => <Icon><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Icon>,
+            Copy: () => <Icon><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Icon>,
+            XCircle: () => <Icon><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Icon>,
+            MoreHorizontal: () => <Icon><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></Icon>,
+            AlertOctagon: () => <Icon><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>,
+            FileText: () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Icon>,
+            Link: () => <Icon><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></Icon>,
+            Edit: () => <Icon><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Icon>
+        };
+
+        // --- CONSTANTS ---
+        const TIME_SLOTS = [
+            { id: 0, label: "8:30h - 9:30h", type: "class" },
+            { id: 1, label: "9:30h - 10:30h", type: "class" },
+            { id: 2, label: "10:30h - 11:00h", type: "break", name: "PATI" },
+            { id: 3, label: "11:00h - 12:00h", type: "class" },
+            { id: 4, label: "12:00h - 13:00h", type: "class" },
+            { id: 5, label: "13:00h - 14:00h", type: "class" },
+            { id: 6, label: "14:00h - 15:00h", type: "class" }, 
+            { id: 7, label: "15:00h - 16:00h", type: "class" },
+            { id: 8, label: "16:00h - 17:00h", type: "class" },
+            { id: 9, label: "17:00h - 18:00h", type: "class" }
+        ];
+
+        const DAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres"];
+        const MONTHS = ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"];
+        const DEFAULT_COLORS = [
+            { name: "Blau", value: "bg-blue-100 border-blue-300 text-blue-900" },
+            { name: "Vermell", value: "bg-red-100 border-red-300 text-red-900" },
+            { name: "Verd", value: "bg-green-100 border-green-300 text-green-900" },
+            { name: "Groc", value: "bg-yellow-100 border-yellow-300 text-yellow-900" },
+            { name: "Lila", value: "bg-purple-100 border-purple-300 text-purple-900" },
+            { name: "Taronja", value: "bg-orange-100 border-orange-300 text-orange-900" },
+            { name: "Gris", value: "bg-gray-100 border-gray-300 text-gray-900" },
+        ];
+
+        const generateAllWeeks = (yearStr) => {
+            const weeks = [];
+            const year = parseInt(yearStr) || new Date().getFullYear();
+            let current = new Date(year, 8, 1); 
+            const day = current.getDay();
+            const diff = current.getDate() - day + (day == 0 ? -6 : 1);
+            current = new Date(current.setDate(diff));
+            const end = new Date(year + 1, 6, 15);
+            while (current < end) {
+                const weekStart = new Date(current);
+                const weekEnd = new Date(current);
+                weekEnd.setDate(weekEnd.getDate() + 4);
+                weeks.push({
+                    id: weekStart.toISOString().split('T')[0],
+                    label: `Setmana ${weekStart.getDate()} ${MONTHS[weekStart.getMonth()]}`,
+                    startDate: new Date(weekStart),
+                    endDate: new Date(weekEnd),
+                    month: weekStart.getMonth(),
+                    year: weekStart.getFullYear()
+                });
+                current.setDate(current.getDate() + 7);
+            }
+            return weeks;
+        };
+
+        // --- COMPONENTS ---
+
+        const ConfigScreen = ({ config, onSave }) => {
+            const [localConfig, setLocalConfig] = useState(config);
+            const [newClass, setNewClass] = useState({ name: "", color: DEFAULT_COLORS[0].value });
+
+            const addClass = () => {
+                if (!newClass.name) return;
+                setLocalConfig(prev => ({
+                    ...prev,
+                    classes: [...prev.classes, { ...newClass, id: Date.now().toString() }]
+                }));
+                setNewClass(prev => ({ ...prev, name: "" }));
+            };
+
+            const removeClass = (id) => {
+                setLocalConfig(prev => ({ ...prev, classes: prev.classes.filter(c => c.id !== id) }));
+            };
+
+            const updateSchedule = (dayIndex, slotId, classId) => {
+                setLocalConfig(prev => {
+                    const newSchedule = { ...prev.schedule };
+                    if (!newSchedule[dayIndex]) newSchedule[dayIndex] = {};
+                    newSchedule[dayIndex][slotId] = classId;
+                    return { ...prev, schedule: newSchedule };
+                });
+            };
+
+            return (
+                <div className="max-w-6xl mx-auto p-6 bg-white rounded-xl shadow-lg mt-10 fade-in border border-gray-200 mb-20">
+                    <h1 className="text-3xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-4">
+                        <Icons.Settings /> Configuració Inicial
+                    </h1>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nom del Professor/a</label>
+                            <input type="text" className="w-full rounded-md border p-2 bg-gray-50 focus:ring-orange-500 focus:outline-none" value={localConfig.teacherName} onChange={(e) => setLocalConfig({...localConfig, teacherName: e.target.value})} placeholder="Ex: Marc Pérez" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Any d'inici (Ex: 2025)</label>
+                            <input type="number" className="w-full rounded-md border p-2 bg-gray-50 focus:ring-orange-500 focus:outline-none" value={localConfig.schoolYear} onChange={(e) => setLocalConfig({...localConfig, schoolYear: e.target.value})} placeholder="2025" />
+                        </div>
+                    </div>
+                    <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
+                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800"><Icons.Table /> Les meves classes</h2>
+                        <div className="flex flex-wrap gap-2 mb-6">
+                            {localConfig.classes.length === 0 && <span className="text-gray-400 italic">No has creat cap grup encara.</span>}
+                            {localConfig.classes.map(c => (
+                                <span key={c.id} className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 shadow-sm ${c.color}`}>
+                                    {c.name} <button onClick={() => removeClass(c.id)} className="hover:bg-black/10 rounded-full w-5 h-5 flex justify-center items-center">×</button>
+                                </span>
+                            ))}
+                        </div>
+                        <div className="flex flex-col md:flex-row gap-4 items-end bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                            <div className="flex-1 w-full">
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Nom del Grup</label>
+                                <input type="text" className="border p-2 rounded-md w-full" value={newClass.name} onChange={(e) => setNewClass({...newClass, name: e.target.value})} placeholder="Ex: 2n B" onKeyDown={(e) => e.key === 'Enter' && addClass()} />
+                            </div>
+                            <div className="w-full md:w-48">
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Color</label>
+                                <select className="border p-2 rounded-md w-full" value={newClass.color} onChange={(e) => setNewClass({...newClass, color: e.target.value})}>
+                                    {DEFAULT_COLORS.map(c => <option key={c.name} value={c.value}>{c.name}</option>)}
+                                </select>
+                            </div>
+                            <button onClick={addClass} className="bg-orange-600 text-white px-6 py-2 rounded-md hover:bg-orange-700 font-medium transition-colors">Afegir</button>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm mb-6">
+                        <table className="min-w-full bg-white">
+                            <thead>
+                                <tr className="bg-gray-100 text-gray-700 text-xs uppercase"><th className="py-3 px-4 text-left w-32 border-b">Hora</th>{DAYS.map((day, i) => <th key={i} className="py-3 px-4 text-center border-b">{day}</th>)}</tr>
+                            </thead>
+                            <tbody className="text-gray-600 text-sm">
+                                {TIME_SLOTS.map((slot) => (
+                                    <tr key={slot.id} className="border-b hover:bg-gray-50">
+                                        <td className="py-2 px-4 border-r font-mono text-xs font-bold text-gray-500">{slot.label}</td>
+                                        {slot.type === 'break' ? (
+                                            <td colSpan={5} className="py-3 bg-gray-100 text-center text-gray-400 font-bold tracking-widest text-xs">☕ {slot.name}</td>
+                                        ) : (
+                                            DAYS.map((_, dayIndex) => {
+                                                const currentClassId = localConfig.schedule[dayIndex]?.[slot.id];
+                                                const currentClass = localConfig.classes.find(c => c.id === currentClassId);
+                                                return (
+                                                    <td key={dayIndex} className={`p-1 border-r border-gray-100 relative ${currentClass ? currentClass.color.split(' ')[0] : ''}`}>
+                                                        <select className="w-full p-2 bg-transparent border-none text-center cursor-pointer appearance-none font-medium" value={currentClassId || ""} onChange={(e) => updateSchedule(dayIndex, slot.id, e.target.value)}>
+                                                            <option value="">-</option>
+                                                            {localConfig.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                        </select>
+                                                    </td>
+                                                );
+                                            })
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="flex justify-end"><button onClick={() => onSave(localConfig)} className="bg-green-600 text-white px-8 py-3 rounded-lg text-lg font-bold hover:bg-green-700 flex items-center gap-2 transition-all"><Icons.Check /> Guardar Configuració</button></div>
+                </div>
+            );
+        };
+
+        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onExport, onImport, goToConfig, onReset, onSaveConfig }) => {
+            const [currentViewDate, setCurrentViewDate] = useState(new Date());
+            const [showResetModal, setShowResetModal] = useState(false);
+            const [showInfoModal, setShowInfoModal] = useState(false);
+            const [showImportModal, setShowImportModal] = useState(false);
+            const [editingLink, setEditingLink] = useState(false);
+            const [tempLink, setTempLink] = useState(config.googleSheetUrl || "");
+            const fileInputRef = useRef(null);
+
+            const allWeeks = useMemo(() => generateAllWeeks(config.schoolYear), [config.schoolYear]);
+            const currentMonthWeeks = allWeeks.filter(w => w.month === currentViewDate.getMonth() && w.year === currentViewDate.getFullYear());
+
+            const calculateProgress = () => {
+                if (allWeeks.length === 0) return 0;
+                return ((completedWeeks.length / allWeeks.length) * 100).toFixed(1);
+            };
+
+            const changeMonth = (delta) => {
+                const newDate = new Date(currentViewDate);
+                newDate.setMonth(newDate.getMonth() + delta);
+                setCurrentViewDate(newDate);
+            };
+
+            const isCurrentWeek = (w) => {
+                const now = new Date();
+                return now >= w.startDate && now <= w.endDate;
+            };
+
+            const handleImportClick = () => setShowImportModal(true);
+            const confirmImport = () => { setShowImportModal(false); if(fileInputRef.current) fileInputRef.current.click(); };
+
+            const handleSaveLink = () => {
+                onSaveConfig({ ...config, googleSheetUrl: tempLink });
+                setEditingLink(false);
+            };
+
+            return (
+                <div className="max-w-7xl mx-auto p-6 fade-in pb-20">
+                    <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                        <div>
+                            <h1 className="text-3xl font-extrabold text-gray-800">Hola, {config.teacherName || 'Professor'} 👋</h1>
+                            <p className="text-orange-500 font-medium">Curs {config.schoolYear} - {parseInt(config.schoolYear)+1}</p>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                             <button onClick={() => setShowResetModal(true)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 transition-colors mr-4" title="Reiniciar"><Icons.Trash size={18}/></button>
+                             <button onClick={() => setShowInfoModal(true)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium"><Icons.FileJson /> Guardar</button>
+                             <button onClick={handleImportClick} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium cursor-pointer"><Icons.ArrowRight /> Carregar</button>
+                             <input type="file" className="hidden" ref={fileInputRef} onChange={onImport} accept=".json"/>
+                            <button onClick={goToConfig} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><Icons.Settings /></button>
+                        </div>
+                    </header>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+                        <div className="flex justify-between text-sm font-bold text-gray-600 mb-2"><span>Progrés Real del Curs</span><span>{calculateProgress()}%</span></div>
+                        <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden"><div className="bg-orange-500 h-4 rounded-full transition-all duration-500" style={{ width: `${calculateProgress()}%` }}></div></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2">
+                            <div className="flex justify-between items-center mb-4">
+                                <button onClick={() => changeMonth(-1)} className="p-2 bg-white rounded-full shadow hover:bg-gray-50 text-gray-600"><Icons.ChevronLeft /></button>
+                                <h2 className="text-xl font-bold flex items-center gap-2 capitalize text-gray-800">{MONTHS[currentViewDate.getMonth()]} {currentViewDate.getFullYear()}</h2>
+                                <button onClick={() => changeMonth(1)} className="p-2 bg-white rounded-full shadow hover:bg-gray-50 text-gray-600"><Icons.ChevronRight /></button>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {currentMonthWeeks.map(week => {
+                                    const isCompleted = completedWeeks.includes(week.id);
+                                    const isCurrent = isCurrentWeek(week);
+                                    return (
+                                        <div key={week.id} className={`relative p-5 rounded-xl border transition-all ${isCurrent ? 'ring-2 ring-orange-300 bg-orange-200 shadow-md' : 'bg-white border-gray-200 hover:border-orange-200'}`}>
+                                            <div onClick={() => onSelectWeek(week.id)} className="cursor-pointer">
+                                                <h3 className={`font-bold text-lg ${isCurrent ? 'text-orange-900' : 'text-gray-800'}`}>{week.label}</h3>
+                                                <p className={`text-sm mb-2 ${isCurrent ? 'text-orange-800' : 'text-gray-500'}`}>{week.startDate.toLocaleDateString()} - {week.endDate.toLocaleDateString()}</p>
+                                                {isCurrent && <span className="bg-orange-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm">Actual</span>}
+                                            </div>
+                                            <button onClick={(e) => { e.stopPropagation(); onToggleWeekComplete(week.id); }} className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isCompleted ? 'bg-green-100 text-green-600 shadow-inner' : (isCurrent ? 'bg-white/50 text-orange-700 hover:bg-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200')}`}>{isCompleted ? <Icons.CheckCircle /> : <Icons.Check />}</button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="lg:col-span-1 h-full flex flex-col gap-6">
+                            {/* RADAR */}
+                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden h-[300px]">
+                                <div className="bg-gray-800 text-white p-4 flex justify-between items-center"><h2 className="font-bold flex items-center gap-2"><Icons.AlertCircle /> RADAR</h2></div>
+                                <textarea className="flex-1 w-full p-4 resize-none focus:outline-none bg-yellow-50/30 font-mono text-sm leading-relaxed text-gray-700" value={radar} onChange={(e) => setRadar(e.target.value)} placeholder="Notes importants, idees, recordatoris..."></textarea>
+                            </div>
+
+                            {/* PROGRAMACIÓ LINK */}
+                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                                <div className="bg-green-600 text-white p-4 flex justify-between items-center">
+                                    <h2 className="font-bold flex items-center gap-2"><Icons.Link /> La meva Programació</h2>
+                                    <button onClick={() => setEditingLink(!editingLink)} className="text-white hover:text-green-100"><Icons.Edit /></button>
+                                </div>
+                                <div className="p-4 bg-green-50">
+                                    {editingLink ? (
+                                        <div className="flex flex-col gap-2">
+                                            <input 
+                                                type="text" 
+                                                className="w-full p-2 border rounded text-sm focus:outline-none focus:border-green-500" 
+                                                placeholder="Enganxa l'enllaç aquí..." 
+                                                value={tempLink} 
+                                                onChange={(e) => setTempLink(e.target.value)}
+                                            />
+                                            <button onClick={handleSaveLink} className="bg-green-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-green-700">Guardar Enllaç</button>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center">
+                                            {config.googleSheetUrl ? (
+                                                <a href={config.googleSheetUrl} target="_blank" rel="noreferrer" className="block w-full py-3 bg-white border-2 border-green-500 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors flex justify-center items-center gap-2">
+                                                    <Icons.Link size={16}/> Obrir Programació
+                                                </a>
+                                            ) : (
+                                                <div className="text-sm text-gray-500 py-2 italic cursor-pointer" onClick={() => setEditingLink(true)}>
+                                                    Encara no has afegit cap enllaç. Clica l'apis per configurar-ho.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {showResetModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl border-t-4 border-red-500">
+                                <h3 className="text-lg font-bold text-red-600 mb-2">Atenció! Zona de perill</h3>
+                                <p className="text-gray-600 mb-6 text-sm">Segur que vols eliminar tota la informació? Aquest botó està pensat per reiniciar l'agenda per al proper curs.</p>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowResetModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={() => { onReset(); setShowResetModal(false); }} className="px-4 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700">Sí, eliminar tot</button>
+                                </div>
+                            </div>
+                        </div>, document.body
+                    )}
+
+                    {showInfoModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
+                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.FileJson /> Còpia de Seguretat</h3>
+                                <p className="text-gray-600 mb-4 text-sm">Aquest botó descarregarà un arxiu <b>.json</b> al teu ordinador.</p>
+                                <ul className="list-disc list-inside text-xs text-gray-500 mb-6 space-y-1"><li>L'aplicació ja guarda automàticament les dades al navegador.</li><li>Fes servir aquesta opció per moure les dades a un altre dispositiu.</li><li>O per guardar una còpia de seguretat externa.</li></ul>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowInfoModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={() => { setShowInfoModal(false); onExport(); }} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Entesos, descarregar</button>
+                                </div>
+                            </div>
+                        </div>, document.body
+                    )}
+
+                    {showImportModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-green-500">
+                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.ArrowRight /> Carregar Còpia</h3>
+                                <p className="text-gray-600 mb-4 text-sm">Aquesta opció serveix per <b>restaurar</b> una còpia de seguretat que tinguis guardada al teu ordinador (arxiu .json).</p>
+                                <p className="text-gray-600 text-sm mb-6">Això substituirà les dades actuals per les de l'arxiu.</p>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={confirmImport} className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700">Seleccionar Arxiu</button>
+                                </div>
+                            </div>
+                        </div>, document.body
+                    )}
+                </div>
+            );
+        };
+
+        const TaskListInput = ({ tasks, onChange, disabled, onAction }) => {
+            const [focusedIndex, setFocusedIndex] = useState(null);
+
+            const updateTask = (idx, field, value) => {
+                const newTasks = [...tasks];
+                newTasks[idx] = { ...newTasks[idx], [field]: value };
+                if (idx === tasks.length - 1 && field === 'text' && value.trim() !== '') {
+                    newTasks.push({ text: '', time: '', status: null });
+                }
+                onChange(newTasks);
+            };
+
+            const deleteTask = (idx) => {
+                const newTasks = tasks.filter((_, i) => i !== idx);
+                // Ensure at least one empty
+                if(newTasks.length === 0) newTasks.push({ text: '', time: '', status: null });
+                // Ensure last is empty
+                if(newTasks[newTasks.length-1].text.trim() !== '') newTasks.push({ text: '', time: '', status: null });
+                onChange(newTasks);
+            };
+
+            const add5Min = (idx) => {
+                const currentVal = parseInt(tasks[idx].time) || 0;
+                updateTask(idx, 'time', currentVal + 5);
+            };
+
+            const getInputClass = (status) => {
+                if (status === 'skipped') return "task-skipped";
+                if (status === 'unfinished') return "task-unfinished";
+                return "";
+            };
+
+            return (
+                <div className="flex flex-col gap-2 w-full">
+                    {tasks.map((task, idx) => (
+                        <div key={idx} className="flex flex-col group relative border-b border-dashed border-gray-100 pb-1 last:border-0 pl-3">
+                            <div className="flex items-center gap-2 relative">
+                                {/* Brossa a l'esquerra del punt */}
+                                <button 
+                                    className="absolute -left-4 top-1 text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-0.5"
+                                    onClick={() => deleteTask(idx)}
+                                    title="Eliminar activitat"
+                                    disabled={disabled}
+                                >
+                                    <Icons.Trash size={12}/>
+                                </button>
+
+                                <span className="text-orange-400 font-bold mt-1">•</span>
+                                {/* Icona d'estat si ve importada */}
+                                {task.tag === 'skipped' && <span className="text-red-500 text-[10px] mr-1" title="No feta">🔴</span>}
+                                {task.tag === 'unfinished' && <span className="text-red-600 text-[10px] mr-1" title="Inacabada">⚠️</span>}
+
+                                <div className="flex-shrink-0 min-w-[20px] text-right">
+                                    {task.time ? <span className="text-xs font-bold time-red">{task.time}'</span> : <span className="text-xs text-gray-200">-</span>}
+                                </div>
+                                <input 
+                                    type="text" 
+                                    className={`flex-1 bg-transparent hover:bg-gray-50 focus:bg-white rounded px-1 focus:ring-1 focus:ring-orange-200 focus:outline-none text-sm py-0.5 transition-colors ${getInputClass(task.status)}`}
+                                    placeholder={disabled ? "" : "Activitat..."}
+                                    value={task.text}
+                                    onChange={(e) => updateTask(idx, 'text', e.target.value)}
+                                    onFocus={() => setFocusedIndex(idx)}
+                                    disabled={disabled}
+                                />
+                            </div>
+                            
+                            {focusedIndex === idx && task.text.trim() !== '' && !disabled && (
+                                <div className="w-full flex justify-center mt-1 expand-open">
+                                    <div className="flex gap-2 bg-white border border-gray-200 shadow-sm rounded-full px-2 py-0.5">
+                                        <button 
+                                            onMouseDown={(e) => { e.preventDefault(); onAction(task, 'save'); }}
+                                            className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded hover:bg-yellow-100 transition-colors"
+                                            title="Guardar al Radar"
+                                        >
+                                            <Icons.Save size={12}/> Guardar
+                                        </button>
+                                        
+                                        <button 
+                                            onMouseDown={(e) => { e.preventDefault(); onAction(task, 'alert_menu'); }}
+                                            className="flex items-center gap-1 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded hover:bg-orange-100 transition-colors"
+                                            title="Aplaçar / No feta"
+                                        >
+                                            <Icons.AlertTriangle size={12}/> Aplaçar
+                                        </button>
+                                        
+                                         <button 
+                                            onMouseDown={(e) => { e.preventDefault(); add5Min(idx); }}
+                                            className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded hover:bg-red-100 transition-colors font-bold"
+                                            title="Afegir 5 minuts"
+                                        >
+                                            <Icons.Plus size={12}/> 5'
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const DailyNotepadModal = ({ dayIndex, dayName, config, planData, onClose, onSave }) => {
+            const daySlots = TIME_SLOTS.filter(slot => slot.type !== 'break' && config.schedule[dayIndex]?.[slot.id]);
+
+            const [formData, setFormData] = useState(() => {
+                const init = {};
+                daySlots.forEach(slot => {
+                    const key = `${dayIndex}-${slot.id}`;
+                    init[slot.id] = {
+                        notes: planData[key]?.notes || "",
+                        materials: planData[key]?.materials || "",
+                        links: planData[key]?.links || []
+                    };
+                });
+                return init;
+            });
+
+            // Local state for temporary link input in each slot
+            const [linkInputs, setLinkInputs] = useState({});
+
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    onSave(dayIndex, formData);
+                }, 500);
+                return () => clearTimeout(timer);
+            }, [formData, dayIndex]);
+
+            const handleChange = (slotId, field, value) => {
+                setFormData(prev => ({
+                    ...prev,
+                    [slotId]: { ...prev[slotId], [field]: value }
+                }));
+            };
+
+            const addLink = (slotId) => {
+                const url = linkInputs[slotId];
+                if (url && url.trim()) {
+                    const currentLinks = formData[slotId]?.links || [];
+                    setFormData(prev => ({
+                        ...prev,
+                        [slotId]: { ...prev[slotId], links: [...currentLinks, url.trim()] }
+                    }));
+                    setLinkInputs(prev => ({ ...prev, [slotId]: "" }));
+                }
+            };
+
+            const removeLink = (slotId, index) => {
+                 const currentLinks = formData[slotId]?.links || [];
+                 setFormData(prev => ({
+                    ...prev,
+                    [slotId]: { ...prev[slotId], links: currentLinks.filter((_, i) => i !== index) }
+                }));
+            };
+
+            return (
+                <div 
+                    className="fixed top-20 right-4 w-[600px] bg-white border-2 border-yellow-300 shadow-2xl rounded-xl z-[9999] flex flex-col slide-in-right h-[calc(100vh-100px)]"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="bg-yellow-100 p-4 rounded-t-xl border-b border-yellow-200 flex justify-between items-center">
+                        <h3 className="font-bold text-yellow-800 flex items-center gap-2"><Icons.FileText /> Bloc de Notes - {dayName}</h3>
+                        <button onClick={onClose} className="text-yellow-600 hover:text-yellow-800 font-bold px-2">✕</button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-yellow-50/20">
+                        {daySlots.length === 0 ? (
+                            <p className="text-center text-gray-500 italic p-4">No hi ha classes programades per avui.</p>
+                        ) : (
+                            daySlots.map(slot => {
+                                const classId = config.schedule[dayIndex][slot.id];
+                                const className = config.classes.find(c => c.id === classId)?.name || "Classe";
+                                const data = formData[slot.id] || { notes: "", materials: "", links: [] };
+
+                                return (
+                                    <div key={slot.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                                        <div className="flex items-center justify-between mb-2 border-b pb-2">
+                                            <span className="font-bold text-gray-700 text-sm">{slot.label} - {className}</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="flex flex-col">
+                                                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Notes</label>
+                                                <textarea 
+                                                    className="w-full p-2 border rounded resize-none focus:ring-1 focus:ring-yellow-400 text-xs bg-gray-50 min-h-[80px]"
+                                                    placeholder="Notes..."
+                                                    value={data.notes}
+                                                    onChange={(e) => handleChange(slot.id, 'notes', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Materials</label>
+                                                <textarea 
+                                                    className="w-full p-2 border rounded resize-none focus:ring-1 focus:ring-yellow-400 text-xs bg-gray-50 min-h-[60px] mb-2"
+                                                    placeholder="Materials..."
+                                                    value={data.materials}
+                                                    onChange={(e) => handleChange(slot.id, 'materials', e.target.value)}
+                                                />
+                                                {/* Links Section */}
+                                                <div className="border-t pt-2">
+                                                    <div className="flex gap-1 mb-2">
+                                                        <input 
+                                                            type="text" 
+                                                            className="flex-1 border p-1 text-[10px] rounded" 
+                                                            placeholder="https://..." 
+                                                            value={linkInputs[slot.id] || ""} 
+                                                            onChange={(e) => setLinkInputs({...linkInputs, [slot.id]: e.target.value})} 
+                                                        />
+                                                        <button onClick={() => addLink(slot.id)} className="bg-yellow-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">+</button>
+                                                    </div>
+                                                    <div className="space-y-1 max-h-[60px] overflow-y-auto">
+                                                        {(data.links || []).map((l, i) => (
+                                                            <div key={i} className="flex items-center justify-between bg-gray-50 p-1 rounded border text-[10px]">
+                                                                <a href={l} target="_blank" className="text-blue-600 underline truncate max-w-[150px] block">{l}</a>
+                                                                <button onClick={()=>removeLink(slot.id, i)} className="text-red-500 font-bold ml-1">×</button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onSaveWeek, onBack, onAddToRadar }) => {
+            const [planData, setPlanData] = useState(weeksData[weekId] || {});
+            const [reviewMode, setReviewMode] = useState(false);
+            const [showExportModal, setShowExportModal] = useState(false);
+            const [exportClassId, setExportClassId] = useState("");
+            const [showAddClassModal, setShowAddClassModal] = useState(false);
+            const [newExtra, setNewExtra] = useState({ day: 0, slot: 0, classId: "" });
+            
+            const [showCopyModal, setShowCopyModal] = useState(false);
+            const [copySource, setCopySource] = useState(null);
+            const [targetClassId, setTargetClassId] = useState("");
+            const [targetDay, setTargetDay] = useState(0);
+            const [targetSlot, setTargetSlot] = useState(0);
+
+            const [pendingActionTask, setPendingActionTask] = useState(null);
+            const [activeDayNotepad, setActiveDayNotepad] = useState(null); // { dayIndex: number }
+
+            useEffect(() => {
+                setPlanData(weeksData[weekId] || {});
+            }, [weekId, weeksData]);
+
+            const updatePlanData = (newData) => {
+                setPlanData(newData);
+                onUpdateWeekData(weekId, newData);
+            }
+
+            const getTasks = (d, s, dataObj = planData) => {
+                const k = `${d}-${s}`;
+                const existing = dataObj[k]?.tasks;
+                if (existing && Array.isArray(existing) && existing.length > 0) return existing;
+                return [{ text: '', time: '', status: null }, { text: '', time: '', status: null }, { text: '', time: '', status: null }];
+            };
+
+            const getTotalTime = (d, s) => {
+                const tasks = getTasks(d, s);
+                return tasks.reduce((acc, t) => acc + (parseInt(t.time) || 0), 0);
+            };
+
+            const handleTasksChange = (d, s, newTasks) => {
+                const newData = { ...planData, [`${d}-${s}`]: { ...planData[`${d}-${s}`], tasks: newTasks } };
+                updatePlanData(newData);
+            };
+
+            const handleReviewChange = (d, s, val) => {
+                const newData = { ...planData, [`${d}-${s}`]: { ...planData[`${d}-${s}`], review: val } };
+                updatePlanData(newData);
+            };
+
+            const handleStatusChange = (d, s, val) => {
+                const newData = { ...planData, [`${d}-${s}`]: { ...planData[`${d}-${s}`], status: val } };
+                updatePlanData(newData);
+            };
+
+            const handleDailyNotepadSave = (dayIndex, dayData) => {
+                let newData = { ...planData };
+                Object.keys(dayData).forEach(slotId => {
+                    const k = `${dayIndex}-${slotId}`;
+                    const currentCell = newData[k] || {};
+                    newData[k] = { 
+                        ...currentCell, 
+                        notes: dayData[slotId].notes, 
+                        materials: dayData[slotId].materials,
+                        links: dayData[slotId].links
+                    };
+                });
+                updatePlanData(newData);
+            };
+
+            const findNextSession = (d, s, cid) => {
+                let found = null;
+                for(let i=d; i<5; i++) { 
+                    for(let j=0; j<TIME_SLOTS.length; j++) { 
+                        if(i===d && j<=s) continue; 
+                        if(config.schedule[i]?.[j] === cid) { found={d:i, s:j, w:0}; break; } 
+                    } 
+                    if(found) break; 
+                }
+                if(!found) { 
+                    for(let i=0; i<5; i++) { 
+                        for(let j=0; j<TIME_SLOTS.length; j++) { 
+                            if(config.schedule[i]?.[j] === cid) { found={d:i, s:j, w:1}; break; } 
+                        } 
+                        if(found) break; 
+                    } 
+                }
+                return found;
+            };
+
+            const handleTaskAction = (d, s, cid, task, action) => {
+                if (action === 'save') {
+                    onAddToRadar(task.text);
+                    alert("Afegit al Radar!");
+                } else if (action === 'alert_menu') {
+                    const tasks = getTasks(d, s);
+                    const idx = tasks.findIndex(t => t === task);
+                    setPendingActionTask({ d, s, cid, idx, task });
+                }
+            };
+
+            const executePendingAction = (type) => {
+                if (!pendingActionTask) return;
+                const { d, s, cid, idx, task } = pendingActionTask;
+                const tasks = getTasks(d, s);
+                const newTasks = [...tasks];
+
+                newTasks[idx] = { ...newTasks[idx], status: type }; 
+                handleTasksChange(d, s, newTasks);
+
+                const found = findNextSession(d, s, cid);
+                if(found) {
+                    const newTaskObj = { 
+                        text: task.text, 
+                        time: task.time, 
+                        status: null, 
+                        tag: type === 'skipped' ? 'skipped' : 'unfinished' 
+                    };
+                    
+                    if(found.w === 0) {
+                        const targetTasks = getTasks(found.d, found.s);
+                        const newTargetTasks = [newTaskObj, ...targetTasks];
+                        handleTasksChange(found.d, found.s, newTargetTasks);
+                        alert(`Activitat moguda a ${DAYS[found.d]}`);
+                    } else {
+                        const nextWeekDate = new Date(weekId);
+                        nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+                        const nextWeekId = nextWeekDate.toISOString().split('T')[0];
+                        
+                        const nextWeekData = weeksData[nextWeekId] || {};
+                        const targetKey = `${found.d}-${found.s}`;
+                        const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                        const newTargetTasks = [newTaskObj, ...targetTasks];
+                        
+                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
+                        onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                        alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
+                    }
+                } else {
+                    alert("No s'ha trobat cap altra sessió per moure l'activitat.");
+                }
+                setPendingActionTask(null);
+            };
+
+            const handleZzzAction = (d, s, cid) => {
+                const currentTasks = getTasks(d, s).filter(t => t.text.trim());
+                if (currentTasks.length === 0) {
+                    handleStatusChange(d, s, 'zzz');
+                    return;
+                }
+                const found = findNextSession(d, s, cid);
+                if (found) {
+                    const movedTasks = currentTasks.map(t => ({...t, text: `(Del ${DAYS[d]}) ${t.text}`, status: null}));
+                    
+                    if (found.w === 0) {
+                        const targetTasks = getTasks(found.d, found.s);
+                        handleTasksChange(found.d, found.s, [...movedTasks, ...targetTasks]);
+                        handleStatusChange(d, s, 'zzz');
+                        handleTasksChange(d, s, [{text: "", time: "", status: null}]); 
+                        alert(`Classe cancel·lada. Mogut a ${DAYS[found.d]}.`);
+                    } else {
+                        const nextWeekDate = new Date(weekId);
+                        nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+                        const nextWeekId = nextWeekDate.toISOString().split('T')[0];
+                        
+                        const nextWeekData = weeksData[nextWeekId] || {};
+                        const targetKey = `${found.d}-${found.s}`;
+                        const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                        
+                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
+                        onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                        
+                        handleStatusChange(d, s, 'zzz');
+                        handleTasksChange(d, s, [{text: "", time: "", status: null}]);
+                        alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
+                    }
+                } else {
+                    handleStatusChange(d, s, 'zzz');
+                    alert("Zzz marcat (sense moure, no hi ha propera sessió).");
+                }
+            };
+
+            const handleAddExtraClass = () => {
+                if (!newExtra.classId) return;
+                const newSchedule = { ...config.schedule };
+                if (!newSchedule[newExtra.day]) newSchedule[newExtra.day] = {};
+                newSchedule[newExtra.day][newExtra.slot] = newExtra.classId;
+                onConfigChange({ ...config, schedule: newSchedule });
+                setShowAddClassModal(false);
+            };
+
+            const openCopyModal = (d, s, cid) => {
+                setCopySource({ day: d, slot: s, classId: cid });
+                setShowCopyModal(true);
+            };
+
+            const executeCopy = (targetType) => {
+                const sourceTasks = getTasks(copySource.day, copySource.slot).filter(t => t.text.trim());
+                if(sourceTasks.length === 0) { alert("No hi ha activitats."); setShowCopyModal(false); return; }
+                let found = null;
+                if (targetType === 'next_same') found = findNextSession(copySource.day, copySource.slot, copySource.classId);
+                else if (targetType === 'next_other') { if(!targetClassId) return alert("Selecciona un grup."); found = findNextSession(copySource.day, copySource.slot, targetClassId); }
+                else if (targetType === 'manual') found = { d: targetDay, s: targetSlot, w: 0 };
+
+                if (found && found.w === 0) {
+                    const existingTasks = getTasks(found.d, found.s);
+                    const combined = [...existingTasks.filter(t => t.text.trim()), ...sourceTasks.map(t => ({...t, status: null}))];
+                    while(combined.length < 3) combined.push({text:"", time:"", status: null});
+                    handleTasksChange(found.d, found.s, combined);
+                    alert("Copiades!");
+                    setShowCopyModal(false);
+                } else { alert("Només es pot copiar dins la mateixa setmana actualment."); }
+            };
+
+            const generateHTML = () => {
+                let html = `<table border="1" style="width:100%;border-collapse:collapse;font-family:Arial;">
+                    <tr style="background:#f3f4f6;"><th>Sessió</th><th>Activitats / Contingut</th><th>Notes</th><th>Materials</th></tr>`;
+                
+                let sessionCount = 1;
+
+                DAYS.forEach((day, d) => {
+                    TIME_SLOTS.forEach((slot, s) => {
+                        const cid = config.schedule[d]?.[slot.id];
+                        if (cid && slot.type !== 'break' && (!exportClassId || cid === exportClassId)) {
+                            const data = planData[`${d}-${slot.id}`] || {};
+                            const tasks = data.tasks || [];
+                            const validTasks = tasks.filter(t => t.text.trim());
+                            
+                            let contentHtml = "";
+                            if (data.status === 'zzz') {
+                                contentHtml = "💤 NO ES FA CLASSE";
+                            } else {
+                                contentHtml = validTasks.map(t => {
+                                    let style = "";
+                                    let prefix = "";
+                                    if(t.status === 'skipped') style = "text-decoration:line-through;color:red;font-style:italic;";
+                                    if(t.status === 'unfinished') style = "text-decoration:underline;text-decoration-color:red;font-weight:600;color:#b91c1c;";
+                                    
+                                    if(t.tag === 'skipped') prefix = "🔴 ";
+                                    if(t.tag === 'unfinished') prefix = "⚠️ ";
+
+                                    const timeStr = t.time ? `<span style="color:red;font-weight:bold">${t.time}'</span> ` : "";
+                                    return `<div style="${style}">• ${prefix}${timeStr}${t.text}</div>`;
+                                }).join('');
+                                if (data.review) contentHtml += `<br><span style="color:red">[REV: ${data.review}]</span>`;
+                            }
+
+                            if (contentHtml || validTasks.length > 0 || data.notes || data.materials) {
+                                const linksHtml = data.links && data.links.length > 0 ? `<br><b>Enllaços:</b><br>` + data.links.map(l => `<a href="${l}" target="_blank" style="color:blue;text-decoration:underline;">${l}</a>`).join('<br>') : '';
+                                
+                                html += `<tr style="border-bottom: 2px solid #000;">
+                                    <td style="text-align:center;font-weight:bold;padding:10px;">Sessió ${sessionCount}</td>
+                                    <td style="padding:10px;">${contentHtml}</td>
+                                    <td style="padding:10px;font-style:italic;">${data.notes ? data.notes.replace(/\n/g, '<br>') : ''}</td>
+                                    <td style="padding:10px;">${data.materials ? data.materials.replace(/\n/g, '<br>') : ''}${linksHtml}</td>
+                                </tr>`;
+                                sessionCount++;
+                            }
+                        }
+                    });
+                });
+                return html + `</table>`;
+            };
+
+            const visibleSlots = TIME_SLOTS.filter(slot => {
+                if (slot.type === 'break') return false; 
+                const hasAnySchedule = DAYS.some((_, d) => TIME_SLOTS.some(s => config.schedule[d]?.[s.id]));
+                if (!hasAnySchedule) return true;
+                for (let d = 0; d < 5; d++) { if (config.schedule[d]?.[slot.id]) return true; }
+                return false;
+            });
+
+            return (
+                <div className="max-w-full mx-auto p-4 fade-in pb-20">
+                    <div className="sticky top-0 z-20 bg-white/95 backdrop-blur shadow-md p-3 rounded-xl border border-gray-200 mb-4 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => { onBack(); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-600"><Icons.ChevronLeft /></button>
+                            <h2 className="font-bold text-gray-800">Planificador {weekId}</h2>
+                        </div>
+                        <button onClick={() => setShowAddClassModal(true)} className="bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium">+ Afegir classe</button>
+                        <div className="flex gap-2">
+                            <button onClick={() => setReviewMode(!reviewMode)} className={`px-3 py-1 rounded-lg font-bold border flex gap-1 items-center transition-colors ${reviewMode ? 'bg-red-50 text-red-600 border-red-200 shadow-inner' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                                {reviewMode ? <Icons.AlertTriangle /> : <Icons.Settings />} {reviewMode ? 'MODE REVISIÓ' : 'Revisar'}
+                            </button>
+                            <button onClick={() => setShowExportModal(true)} className="bg-orange-600 text-white px-4 py-1 rounded-lg font-bold flex items-center gap-2 hover:bg-orange-700 shadow-md"><Icons.Table /> Crear Taula</button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
+                        <div className="min-w-[1400px] grid" style={{ gridTemplateColumns: '6rem repeat(5, 1fr)' }}>
+                            {/* Header Taula */}
+                            <div className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex items-center justify-center">Hores</div>
+                            {DAYS.map((d, i) => (
+                                <div key={i} className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2">
+                                    {d}
+                                    <button 
+                                        onClick={() => setActiveDayNotepad({ dayIndex: i })}
+                                        className="text-gray-400 hover:text-orange-600 transition-colors"
+                                        title="Bloc de Notes del Dia"
+                                    >
+                                        <Icons.FileText size={16}/>
+                                    </button>
+                                </div>
+                            ))}
+                            
+                            {visibleSlots.map(slot => (
+                                <React.Fragment key={slot.id}>
+                                    <div className="p-2 border-r border-b border-gray-100 bg-gray-50/50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[160px]">{slot.label}</div>
+                                    {DAYS.map((_, d) => {
+                                        const cid = config.schedule[d]?.[slot.id];
+                                        if (!cid) return <div key={d} className="bg-gray-50/30 border-r border-b border-gray-100"></div>;
+                                        const cinfo = config.classes.find(c => c.id === cid);
+                                        const key = `${d}-${slot.id}`;
+                                        const data = planData[key] || {};
+                                        const isZzz = data.status === 'zzz';
+                                        const tasks = getTasks(d, slot.id);
+                                        const totalTime = getTotalTime(d, slot.id);
+
+                                        // Apply gray background class strictly if isZzz
+                                        const cellBgClass = isZzz ? 'session-cancelled' : 'bg-white hover:bg-orange-50/10';
+
+                                        return (
+                                            <div key={d} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-colors ${cellBgClass}`}>
+                                                <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-1 shadow-sm ${cinfo.color} ${isZzz ? 'opacity-50 grayscale' : ''}`}>
+                                                    <div className="flex items-center gap-1 overflow-hidden">
+                                                        <span className="truncate">{cinfo.name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => openCopyModal(d, slot.id, cid)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14}/></button>
+                                                        <button onClick={() => { if(isZzz) { handleStatusChange(d, slot.id, null); } else { if(confirm("Moure tot a la propera sessió?")) { handleZzzAction(d, slot.id, cid); } else { handleStatusChange(d, slot.id, 'zzz'); } } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
+                                                        <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
+                                                    </div>
+                                                </div>
+                                                <div className={`flex-1 overflow-y-auto custom-scroll ${reviewMode ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                    <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, slot.id, t)} onAction={(task, action) => handleTaskAction(d, slot.id, cid, task, action)} disabled={isZzz} />
+                                                </div>
+                                                {(reviewMode || data.review) && (
+                                                    <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={data.review||""} onChange={(e)=>handleReviewChange(d,slot.id,e.target.value)}></textarea>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* BLOC DE NOTES LATERAL (PORTAL) */}
+                    {activeDayNotepad && ReactDOM.createPortal(
+                        <div className="fixed inset-0 z-[9999]" onClick={() => setActiveDayNotepad(null)}>
+                            <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px]"></div>
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <DailyNotepadModal 
+                                    dayIndex={activeDayNotepad.dayIndex}
+                                    dayName={DAYS[activeDayNotepad.dayIndex]}
+                                    config={config}
+                                    planData={planData}
+                                    onClose={() => setActiveDayNotepad(null)}
+                                    onSave={handleDailyNotepadSave}
+                                />
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {showExportModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-2xl w-full m-4 shadow-2xl border-t-4 border-orange-500">
+                                <h3 className="text-xl font-bold mb-4 flex gap-2 text-gray-800"><Icons.Table /> Crear Taula per Excel</h3>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Classe:</label>
+                                    <select className="w-full p-2 border rounded" value={exportClassId} onChange={(e) => setExportClassId(e.target.value)}>
+                                        <option value="">-- Totes les classes --</option>
+                                        {config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="border p-2 max-h-[300px] overflow-auto bg-gray-50 mb-4" dangerouslySetInnerHTML={{ __html: generateHTML() }} />
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Tancar</button>
+                                    <button onClick={() => { const el = document.createElement('div'); el.innerHTML = generateHTML(); document.body.appendChild(el); window.getSelection().selectAllChildren(el); document.execCommand('copy'); document.body.removeChild(el); alert("Copiada!"); }} className="px-4 py-2 bg-orange-600 text-white rounded font-bold hover:bg-orange-700">Copiar Taula</button>
+                                </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+                    
+                    {/* Modal Opcions Aplaçar (PORTAL) */}
+                    {pendingActionTask && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 fade-in">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                                <h3 className="text-lg font-bold mb-4">Què ha passat amb l'activitat?</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={() => executePendingAction('skipped')} className="p-4 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 font-bold flex flex-col items-center">
+                                        <span className="text-2xl mb-2">❌</span>
+                                        No feta
+                                        <span className="text-xs font-normal mt-1 text-center">(Es tatxa i es mou a la propera amb icona 🔴)</span>
+                                    </button>
+                                    <button onClick={() => executePendingAction('unfinished')} className="p-4 bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 font-bold flex flex-col items-center">
+                                        <span className="text-2xl mb-2">🚧</span>
+                                        Inacabada
+                                        <span className="text-xs font-normal mt-1 text-center">(Es subratlla i es mou a la propera amb icona ⚠️)</span>
+                                    </button>
+                                </div>
+                                <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {showCopyModal && copySource && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
+                                <h3 className="text-xl font-bold mb-4 flex gap-2 text-blue-800"><Icons.Copy /> Copiar Sessió</h3>
+                                <div className="space-y-3">
+                                    <button onClick={() => executeCopy('next_same')} className="w-full text-left px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 font-semibold text-blue-800 transition-colors">1. Enganxar a la propera sessió d'aquest grup</button>
+                                    <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase">2. Enganxar a propera sessió de:</p>
+                                        <div className="flex gap-2">
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetClassId} onChange={(e) => setTargetClassId(e.target.value)}><option value="">Selecciona grup...</option>{config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                                            <button onClick={() => executeCopy('next_other')} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Enganxar</button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
+                                        <div className="flex gap-2 mb-2">
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                                        </div>
+                                        <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">Enganxar Aquí</button>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2 mt-4"><button onClick={() => setShowCopyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button></div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {showAddClassModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4">Afegir Classe Extra</h3>
+                                <div className="space-y-3">
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Dia</label><select className="w-full border p-2 rounded" value={newExtra.day} onChange={(e) => setNewExtra({...newExtra, day: parseInt(e.target.value)})}>{DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Hora</label><select className="w-full border p-2 rounded" value={newExtra.slot} onChange={(e) => setNewExtra({...newExtra, slot: parseInt(e.target.value)})}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Classe</label><select className="w-full border p-2 rounded" value={newExtra.classId} onChange={(e) => setNewExtra({...newExtra, classId: e.target.value})}><option value="">Selecciona grup...</option>{config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                                </div>
+                                <div className="flex justify-end gap-2 mt-6"><button onClick={() => setShowAddClassModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button><button onClick={handleAddExtraClass} disabled={!newExtra.classId} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 disabled:opacity-50">Afegir</button></div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('config');
+            const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "" });
+            const [radar, setRadar] = useState("");
+            const [weeksData, setWeeksData] = useState({});
+            const [currentWeekId, setCurrentWeekId] = useState(null);
+            const [completedWeeks, setCompletedWeeks] = useState([]);
+
+            useEffect(() => {
+                const loader = document.getElementById('app-loader');
+                if (loader) loader.style.display = 'none';
+                const saved = localStorage.getItem('cfnPlannerData_v23'); 
+                if (saved) {
+                    try {
+                        const data = JSON.parse(saved);
+                        if(data.config) setConfig(data.config);
+                        if(data.radar) setRadar(data.radar);
+                        if(data.weeksData) setWeeksData(data.weeksData);
+                        if(data.completedWeeks) setCompletedWeeks(data.completedWeeks);
+                        if(data.config?.teacherName) setView('dashboard');
+                    } catch(e) {}
+                }
+            }, []);
+
+            useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks })); }, [config, radar, weeksData, completedWeeks]);
+
+            // Funció per actualitzar qualsevol setmana des del planner
+            const handleUpdateWeekData = (weekId, data) => {
+                setWeeksData(prev => ({ ...prev, [weekId]: data }));
+            };
+
+            const handleToggleComplete = (wid) => { setCompletedWeeks(prev => prev.includes(wid) ? prev.filter(id => id !== wid) : [...prev, wid]); };
+            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "" }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setView('config'); };
+            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
+            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
+
+            return (
+                <div className="min-h-screen">
+                    {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={t => setRadar(`[${new Date().toLocaleDateString()}] ${t}\n` + radar)} />}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
