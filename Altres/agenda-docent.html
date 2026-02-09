@@ -148,7 +148,9 @@
             AlertOctagon: () => <Icon><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>,
             FileText: () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Icon>,
             Link: () => <Icon><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></Icon>,
-            Edit: () => <Icon><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Icon>
+            Edit: () => <Icon><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Icon>,
+            Undo: () => <Icon><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 7"/></Icon>,
+            Redo: () => <Icon><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 7"/></Icon>
         };
 
         // --- CONSTANTS & THEMES ---
@@ -425,7 +427,7 @@
                 <div className="max-w-7xl mx-auto p-6 fade-in pb-20">
                     <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <div>
-                            <h1 className="text-3xl font-extrabold text-gray-800">Hola, {config.teacherName || 'Professor'}! 📙</h1>
+                            <h1 className="text-3xl font-extrabold text-gray-800">Hola, {config.teacherName || 'Professor'} 👋</h1>
                             <p className={`text-${theme}-500 font-medium`}>Curs {config.schoolYear} - {parseInt(config.schoolYear)+1}</p>
                         </div>
                         <div className="flex gap-2 items-center">
@@ -819,6 +821,8 @@
 
         const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onSaveWeek, onBack, onAddToRadar }) => {
             const [planData, setPlanData] = useState(weeksData[weekId] || {});
+            const [history, setHistory] = useState([]);
+            const [future, setFuture] = useState([]);
             const [reviewMode, setReviewMode] = useState(false);
             const [showExportModal, setShowExportModal] = useState(false);
             const [exportClassId, setExportClassId] = useState("");
@@ -840,10 +844,38 @@
                 setPlanData(weeksData[weekId] || {});
             }, [weekId, weeksData]);
 
-            const updatePlanData = (newData) => {
+            const updatePlanData = (newData, saveToHistory = true) => {
+                if (saveToHistory) {
+                    setHistory(prev => [...prev, planData]);
+                    setFuture([]); // Clear future history on new change
+                }
                 setPlanData(newData);
                 onUpdateWeekData(weekId, newData);
             }
+
+            const handleUndo = () => {
+                if (history.length === 0) return;
+                const previous = history[history.length - 1];
+                const newHistory = history.slice(0, -1);
+                
+                setFuture(prev => [planData, ...prev]); // Save current state to future for redo
+                setHistory(newHistory);
+                
+                setPlanData(previous);
+                onUpdateWeekData(weekId, previous);
+            };
+
+            const handleRedo = () => {
+                if (future.length === 0) return;
+                const next = future[0];
+                const newFuture = future.slice(1);
+                
+                setHistory(prev => [...prev, planData]); // Save current state to history for undo
+                setFuture(newFuture);
+                
+                setPlanData(next);
+                onUpdateWeekData(weekId, next);
+            };
 
             const getTasks = (d, s, dataObj = planData) => {
                 const k = `${d}-${s}`;
@@ -890,8 +922,6 @@
             const findNextSession = (d, s, cid) => {
                 let found = null;
                 const currentDuration = config.durations?.[`${d}-${s}`] === 2 ? 2 : 1;
-                
-                // Buscar a partir de s + duration per saltar la pròpia sessió si és de 2h
                 let startSlot = s + currentDuration;
 
                 for(let i=d; i<5; i++) { 
@@ -926,15 +956,11 @@
             const executePendingAction = (type) => {
                 if (!pendingActionTask) return;
                 const { d, s, cid, idx, task } = pendingActionTask;
-                
-                // 1. Create a copy of the current planData to avoid race conditions
                 const newPlanData = { ...planData };
-                
-                // 2. Update Source (Current Cell)
                 const sourceKey = `${d}-${s}`;
-                const sourceTasks = getTasks(d, s, newPlanData); // Helper gets current tasks
+                const sourceTasks = getTasks(d, s, newPlanData); 
                 const newSourceTasks = [...sourceTasks];
-                newSourceTasks[idx] = { ...newSourceTasks[idx], status: type }; // Apply color/status
+                newSourceTasks[idx] = { ...newSourceTasks[idx], status: type }; 
                 newPlanData[sourceKey] = { ...(newPlanData[sourceKey] || {}), tasks: newSourceTasks };
 
                 const found = findNextSession(d, s, cid);
@@ -947,27 +973,21 @@
                     };
                     
                     if(found.w === 0) {
-                        // Same week: Update target in newPlanData
                         const targetKey = `${found.d}-${found.s}`;
                         const targetTasks = getTasks(found.d, found.s, newPlanData);
                         const newTargetTasks = [newTaskObj, ...targetTasks];
                         newPlanData[targetKey] = { ...(newPlanData[targetKey] || {}), tasks: newTargetTasks };
-                        
-                        updatePlanData(newPlanData); // Atomic update
+                        updatePlanData(newPlanData); 
                         alert(`Activitat moguda a ${DAYS[found.d]}`);
                     } else {
-                        // Next week: Update current week first
                         updatePlanData(newPlanData);
-
                         const nextWeekDate = new Date(weekId);
                         nextWeekDate.setDate(nextWeekDate.getDate() + 7);
                         const nextWeekId = nextWeekDate.toISOString().split('T')[0];
-                        
                         const nextWeekData = weeksData[nextWeekId] || {};
                         const targetKey = `${found.d}-${found.s}`;
                         const targetTasks = getTasks(found.d, found.s, nextWeekData);
                         const newTargetTasks = [newTaskObj, ...targetTasks];
-                        
                         const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
                         onUpdateWeekData(nextWeekId, updatedNextWeekData);
                         alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
@@ -981,40 +1001,45 @@
 
             const handleZzzAction = (d, s, cid) => {
                 const currentTasks = getTasks(d, s).filter(t => t.text.trim());
-                if (currentTasks.length === 0) {
-                    handleStatusChange(d, s, 'zzz');
-                    return;
-                }
-                const found = findNextSession(d, s, cid);
-                if (found) {
-                    const movedTasks = currentTasks.map(t => ({...t, text: `(Del ${DAYS[d]}) ${t.text}`, status: null}));
-                    
-                    if (found.w === 0) {
-                        const targetTasks = getTasks(found.d, found.s);
-                        handleTasksChange(found.d, found.s, [...movedTasks, ...targetTasks]);
-                        handleStatusChange(d, s, 'zzz');
-                        handleTasksChange(d, s, [{text: "", time: "", status: null}]); 
-                        alert(`Classe cancel·lada. Mogut a ${DAYS[found.d]}.`);
+                let newData = { ...planData };
+                
+                const currentKey = `${d}-${s}`;
+                newData[currentKey] = { 
+                    ...newData[currentKey], 
+                    status: 'zzz', 
+                    tasks: [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}] 
+                };
+
+                if (currentTasks.length > 0) {
+                    const found = findNextSession(d, s, cid);
+                    if (found) {
+                        const movedTasks = currentTasks.map(t => ({...t, text: `(Del ${DAYS[d]}) ${t.text}`, status: null}));
+                        
+                        if (found.w === 0) {
+                            const targetKey = `${found.d}-${found.s}`;
+                            const targetTasks = getTasks(found.d, found.s, planData); 
+                            newData[targetKey] = {
+                                ...newData[targetKey],
+                                tasks: [...movedTasks, ...targetTasks]
+                            };
+                            alert(`Classe cancel·lada. Mogut a ${DAYS[found.d]}.`);
+                        } else {
+                            const nextWeekDate = new Date(weekId);
+                            nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+                            const nextWeekId = nextWeekDate.toISOString().split('T')[0];
+                            const nextWeekData = weeksData[nextWeekId] || {};
+                            const targetKey = `${found.d}-${found.s}`;
+                            const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
+                            onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                            alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
+                        }
                     } else {
-                        const nextWeekDate = new Date(weekId);
-                        nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-                        const nextWeekId = nextWeekDate.toISOString().split('T')[0];
-                        
-                        const nextWeekData = weeksData[nextWeekId] || {};
-                        const targetKey = `${found.d}-${found.s}`;
-                        const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                        
-                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
-                        onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                        
-                        handleStatusChange(d, s, 'zzz');
-                        handleTasksChange(d, s, [{text: "", time: "", status: null}]);
-                        alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
+                        alert("Zzz marcat (sense moure, no hi ha propera sessió).");
                     }
-                } else {
-                    handleStatusChange(d, s, 'zzz');
-                    alert("Zzz marcat (sense moure, no hi ha propera sessió).");
                 }
+                
+                updatePlanData(newData);
             };
 
             const handleAddExtraClass = () => {
@@ -1105,11 +1130,9 @@
                 const hasAnySchedule = DAYS.some((_, d) => TIME_SLOTS.some(s => config.schedule[d]?.[s.id]));
                 if (!hasAnySchedule) return true;
                 
-                // Show if it has a class
                 const hasClass = DAYS.some((_, d) => config.schedule[d]?.[slot.id]);
                 if (hasClass) return true;
 
-                // Show if it's covered by the previous slot being 2h
                 const prevSlotIndex = slot.id - 1;
                 if (prevSlotIndex >= 0) {
                     const prevSlot = TIME_SLOTS[prevSlotIndex];
@@ -1129,6 +1152,8 @@
                             <button onClick={() => { onBack(); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-600"><Icons.ChevronLeft /></button>
                             <h2 className="font-bold text-gray-800">Planificador {weekId}</h2>
                         </div>
+                        <button onClick={handleUndo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${history.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={history.length === 0} title="Desfer última acció"><Icons.Undo /></button>
+                        <button onClick={handleRedo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${future.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={future.length === 0} title="Refer última acció desfeta"><Icons.Redo /></button>
                         <button onClick={() => setShowAddClassModal(true)} className="bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium">+ Afegir classe</button>
                         <div className="flex gap-2">
                             <button onClick={() => setReviewMode(!reviewMode)} className={`px-3 py-1 rounded-lg font-bold border flex gap-1 items-center transition-colors ${reviewMode ? 'bg-red-50 text-red-600 border-red-200 shadow-inner' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
@@ -1140,7 +1165,6 @@
 
                     <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
                         <div className="min-w-[1400px] grid" style={{ gridTemplateColumns: '6rem repeat(5, 1fr)' }}>
-                            {/* Header Taula */}
                             <div className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex items-center justify-center">Hores</div>
                             {DAYS.map((d, i) => (
                                 <div key={i} className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2">
@@ -1159,14 +1183,12 @@
                                 <React.Fragment key={slot.id}>
                                     <div className="p-2 border-r border-b border-gray-100 bg-gray-50/50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[160px]">{slot.label}</div>
                                     {DAYS.map((_, d) => {
-                                        // Continuity check: Ensure we only merge if the previous visible slot is actually the one immediately above
                                         const prevSlot = visibleSlots[visibleIndex - 1];
                                         const isSequential = prevSlot && (slot.id === prevSlot.id + 1);
                                         const prevKey = prevSlot ? `${d}-${prevSlot.id}` : null;
-                                        // It is covered if sequential AND previous has duration 2
                                         const isCovered = isSequential && config.durations?.[prevKey] === 2;
 
-                                        if (isCovered) return null; // No renderitzem res perquè Grid CSS faci que la de sobre s'expandeixi
+                                        if (isCovered) return null;
 
                                         const cid = config.schedule[d]?.[slot.id];
                                         if (!cid) return <div key={d} className="bg-gray-50/30 border-r border-b border-gray-100"></div>;
@@ -1179,7 +1201,6 @@
                                         const totalTime = getTotalTime(d, slot.id);
                                         const is2h = config.durations?.[key] === 2;
 
-                                        // Apply gray background class strictly if isZzz
                                         const cellBgClass = isZzz ? 'session-cancelled' : `bg-white hover:bg-${theme}-50/10`;
 
                                         return (
@@ -1190,7 +1211,7 @@
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <button onClick={() => openCopyModal(d, slot.id, cid)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14}/></button>
-                                                        <button onClick={() => { if(isZzz) { handleStatusChange(d, slot.id, null); } else { if(confirm("Moure tot a la propera sessió?")) { handleZzzAction(d, slot.id, cid); } else { handleStatusChange(d, slot.id, 'zzz'); } } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
+                                                        <button onClick={() => { if(isZzz) { handleStatusChange(d, slot.id, null); } else { handleZzzAction(d, slot.id, cid); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
                                                         <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
                                                     </div>
                                                 </div>
