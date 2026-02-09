@@ -694,6 +694,122 @@
             );
         };
 
+        const SessionNotepadModal = ({ dayIndex, slotId, className, slotLabel, planData, onClose, onSave }) => {
+            const key = `${dayIndex}-${slotId}`;
+            const [data, setData] = useState({
+                notes: planData[key]?.notes || "",
+                materials: planData[key]?.materials || "",
+                links: planData[key]?.links || []
+            });
+            const [linkInput, setLinkInput] = useState("");
+
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    onSave(dayIndex, slotId, data);
+                }, 500);
+                return () => clearTimeout(timer);
+            }, [data, dayIndex, slotId]);
+
+            const handleChange = (field, value) => {
+                setData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const addLink = () => {
+                if (linkInput && linkInput.trim()) {
+                    setData(prev => ({ ...prev, links: [...prev.links, linkInput.trim()] }));
+                    setLinkInput("");
+                }
+            };
+
+            const removeLink = (index) => {
+                setData(prev => ({ ...prev, links: prev.links.filter((_, i) => i !== index) }));
+            };
+
+            return (
+                <div 
+                    className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+                    onClick={onClose}
+                >
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+                    <div 
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200 relative overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="bg-gradient-to-r from-orange-100 to-white p-5 border-b border-orange-100 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-800">{className}</h3>
+                                <p className="text-orange-600 font-medium text-sm">{slotLabel}</p>
+                            </div>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors">✕</button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto custom-scroll space-y-6">
+                            {/* Notes Section */}
+                            <div className="space-y-2">
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                    <Icons.FileText size={16} className="text-orange-500"/> Notes de la Sessió
+                                </label>
+                                <textarea 
+                                    className="w-full p-4 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 outline-none text-gray-700 bg-gray-50/50 min-h-[120px] transition-all"
+                                    placeholder="Escriu aquí les observacions, idees o punts clau..."
+                                    value={data.notes}
+                                    onChange={(e) => handleChange('notes', e.target.value)}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Materials Section */}
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                        <Icons.Table size={16} className="text-blue-500"/> Materials Necessaris
+                                    </label>
+                                    <textarea 
+                                        className="w-full p-4 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 outline-none text-gray-700 bg-gray-50/50 min-h-[150px] transition-all"
+                                        placeholder="Llista de materials..."
+                                        value={data.materials}
+                                        onChange={(e) => handleChange('materials', e.target.value)}
+                                    />
+                                </div>
+
+                                {/* Links Section */}
+                                <div className="space-y-2 flex flex-col">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                        <Icons.Link size={16} className="text-green-500"/> Enllaços i Recursos
+                                    </label>
+                                    <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-4 flex flex-col">
+                                        <div className="flex gap-2 mb-3">
+                                            <input 
+                                                type="text" 
+                                                className="flex-1 border border-gray-300 p-2 rounded-lg text-sm focus:outline-none focus:border-green-500" 
+                                                placeholder="Enganxa URL..." 
+                                                value={linkInput} 
+                                                onChange={(e) => setLinkInput(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && addLink()}
+                                            />
+                                            <button onClick={addLink} className="bg-green-500 text-white px-3 py-1 rounded-lg font-bold hover:bg-green-600 transition-colors">+</button>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto max-h-[100px] space-y-2 custom-scroll pr-1">
+                                            {data.links.length === 0 && <p className="text-gray-400 text-xs italic text-center mt-4">No hi ha enllaços</p>}
+                                            {data.links.map((l, i) => (
+                                                <div key={i} className="flex items-center justify-between bg-white p-2 rounded border border-gray-200 shadow-sm text-xs group hover:border-green-300 transition-colors">
+                                                    <a href={l} target="_blank" className="text-blue-600 hover:underline truncate max-w-[200px] block font-mono">{l}</a>
+                                                    <button onClick={()=>removeLink(i)} className="text-gray-300 hover:text-red-500 font-bold px-1 transition-colors">×</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 p-4 border-t border-gray-100 text-right">
+                            <span className="text-xs text-gray-400 italic mr-2">Es guarda automàticament...</span>
+                            <button onClick={onClose} className="bg-gray-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-900 transition-colors">Tancar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const DailyNotepadModal = ({ dayIndex, dayName, config, planData, onClose, onSave }) => {
             const daySlots = TIME_SLOTS.filter(slot => slot.type !== 'break' && config.schedule[dayIndex]?.[slot.id]);
 
@@ -839,6 +955,7 @@
 
             const [pendingActionTask, setPendingActionTask] = useState(null);
             const [activeDayNotepad, setActiveDayNotepad] = useState(null); // { dayIndex: number }
+            const [activeSessionNotepad, setActiveSessionNotepad] = useState(null); // { dayIndex, slotId, className, slotLabel }
 
             const theme = config.theme || 'orange';
 
@@ -921,6 +1038,19 @@
                 updatePlanData(newData);
             };
 
+            const handleSessionNotepadSave = (dayIndex, slotId, data) => {
+                let newData = { ...planData };
+                const k = `${dayIndex}-${slotId}`;
+                const currentCell = newData[k] || {};
+                newData[k] = {
+                    ...currentCell,
+                    notes: data.notes,
+                    materials: data.materials,
+                    links: data.links
+                };
+                updatePlanData(newData);
+            }
+
             const findNextSession = (d, s, cid) => {
                 let found = null;
                 const currentDuration = config.durations?.[`${d}-${s}`] === 2 ? 2 : 1;
@@ -983,16 +1113,31 @@
                         alert(`Activitat moguda a ${DAYS[found.d]}`);
                     } else {
                         updatePlanData(newPlanData);
-                        const nextWeekDate = new Date(weekId);
-                        nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-                        const nextWeekId = nextWeekDate.toISOString().split('T')[0];
-                        const nextWeekData = weeksData[nextWeekId] || {};
-                        const targetKey = `${found.d}-${found.s}`;
-                        const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                        const newTargetTasks = [newTaskObj, ...targetTasks];
-                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
-                        onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                        alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
+                        
+                        const getNextActiveWeekId = (currentWid) => {
+                            const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
+                            if (currentIndex === -1) return null;
+                            let nextIndex = currentIndex + 1;
+                            while (nextIndex < allWeeks.length) {
+                                const w = allWeeks[nextIndex];
+                                if (!holidayWeeks.includes(w.id)) return w.id;
+                                nextIndex++;
+                            }
+                            return null;
+                        };
+
+                        const nextWeekId = getNextActiveWeekId(weekId);
+                        if (nextWeekId) {
+                            const nextWeekData = weeksData[nextWeekId] || {};
+                            const targetKey = `${found.d}-${found.s}`;
+                            const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                            const newTargetTasks = [newTaskObj, ...targetTasks];
+                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
+                            onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                            alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
+                        } else {
+                            alert("No s'ha trobat cap setmana lectiva disponible.");
+                        }
                     }
                 } else {
                     updatePlanData(newPlanData);
@@ -1026,15 +1171,29 @@
                             };
                             alert(`Classe cancel·lada. Mogut a ${DAYS[found.d]}.`);
                         } else {
-                            const nextWeekDate = new Date(weekId);
-                            nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-                            const nextWeekId = nextWeekDate.toISOString().split('T')[0];
-                            const nextWeekData = weeksData[nextWeekId] || {};
-                            const targetKey = `${found.d}-${found.s}`;
-                            const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
-                            onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                            alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
+                            const getNextActiveWeekId = (currentWid) => {
+                                const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
+                                if (currentIndex === -1) return null;
+                                let nextIndex = currentIndex + 1;
+                                while (nextIndex < allWeeks.length) {
+                                    const w = allWeeks[nextIndex];
+                                    if (!holidayWeeks.includes(w.id)) return w.id;
+                                    nextIndex++;
+                                }
+                                return null;
+                            };
+
+                            const nextWeekId = getNextActiveWeekId(weekId);
+                            if (nextWeekId) {
+                                const nextWeekData = weeksData[nextWeekId] || {};
+                                const targetKey = `${found.d}-${found.s}`;
+                                const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                                const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
+                                onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                                alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
+                            } else {
+                                alert("No s'ha trobat cap setmana lectiva disponible per moure les tasques.");
+                            }
                         }
                     } else {
                         alert("Zzz marcat (sense moure, no hi ha propera sessió).");
@@ -1210,6 +1369,13 @@
                                                 <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-1 shadow-sm ${cinfo.color} ${isZzz ? 'opacity-50 grayscale' : ''}`}>
                                                     <div className="flex items-center gap-1 overflow-hidden">
                                                         <span className="truncate">{cinfo.name} {is2h && "(2h)"}</span>
+                                                        <button 
+                                                            onClick={() => setActiveSessionNotepad({dayIndex: d, slotId: slot.id, className: cinfo.name, slotLabel: slot.label})} 
+                                                            className="hover:bg-black/10 p-0.5 rounded ml-1" 
+                                                            title="Notes de sessió"
+                                                        >
+                                                            <Icons.FileText size={12}/>
+                                                        </button>
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <button onClick={() => openCopyModal(d, slot.id, cid)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14}/></button>
@@ -1246,6 +1412,20 @@
                                 />
                             </div>
                         </div>,
+                        document.body
+                    )}
+
+                    {/* SESSION NOTEPAD MODAL (PORTAL) */}
+                    {activeSessionNotepad && ReactDOM.createPortal(
+                        <SessionNotepadModal 
+                            dayIndex={activeSessionNotepad.dayIndex}
+                            slotId={activeSessionNotepad.slotId}
+                            className={activeSessionNotepad.className}
+                            slotLabel={activeSessionNotepad.slotLabel}
+                            planData={planData}
+                            onClose={() => setActiveSessionNotepad(null)}
+                            onSave={handleSessionNotepadSave}
+                        />,
                         document.body
                     )}
 
