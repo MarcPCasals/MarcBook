@@ -375,7 +375,7 @@
             );
         };
 
-        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onExport, onImport, goToConfig, onReset, onSaveConfig }) => {
+        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
             const [showInfoModal, setShowInfoModal] = useState(false);
@@ -455,6 +455,7 @@
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {currentMonthWeeks.map(week => {
                                     const isCompleted = completedWeeks.includes(week.id);
+                                    const isHoliday = holidayWeeks?.includes(week.id);
                                     const isCurrent = isCurrentWeek(week);
                                     return (
                                         <div key={week.id} className={`relative p-5 rounded-xl border transition-all ${isCurrent ? `ring-2 ring-${theme}-500 bg-${theme}-300 shadow-lg scale-[1.02]` : `bg-white border-gray-200 hover:border-${theme}-200`}`}>
@@ -464,6 +465,7 @@
                                                 {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm`}>Actual</span>}
                                             </div>
                                             <button onClick={(e) => { e.stopPropagation(); onToggleWeekComplete(week.id); }} className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isCompleted ? 'bg-green-100 text-green-600 shadow-inner' : (isCurrent ? 'bg-white/50 text-orange-700 hover:bg-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200')}`}>{isCompleted ? <Icons.CheckCircle /> : <Icons.Check />}</button>
+                                            <button onClick={(e) => { e.stopPropagation(); onToggleHoliday(week.id); }} className={`absolute top-4 right-12 p-2 rounded-full transition-all ${isHoliday ? 'bg-purple-100 text-purple-600 shadow-inner' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`} title="Marcar com Vacances">🎉</button>
                                         </div>
                                     );
                                 })}
@@ -819,7 +821,7 @@
             );
         };
 
-        const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onSaveWeek, onBack, onAddToRadar }) => {
+        const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onSaveWeek, onBack, onAddToRadar, allWeeks, holidayWeeks }) => {
             const [planData, setPlanData] = useState(weeksData[weekId] || {});
             const [history, setHistory] = useState([]);
             const [future, setFuture] = useState([]);
@@ -919,6 +921,21 @@
                 updatePlanData(newData);
             };
 
+            const getNextActiveWeekId = (currentWid) => {
+                const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
+                if (currentIndex === -1) return null;
+                
+                let nextIndex = currentIndex + 1;
+                while (nextIndex < allWeeks.length) {
+                    const w = allWeeks[nextIndex];
+                    if (!holidayWeeks.includes(w.id)) {
+                        return w.id;
+                    }
+                    nextIndex++;
+                }
+                return null;
+            };
+
             const findNextSession = (d, s, cid) => {
                 let found = null;
                 const currentDuration = config.durations?.[`${d}-${s}`] === 2 ? 2 : 1;
@@ -981,16 +998,19 @@
                         alert(`Activitat moguda a ${DAYS[found.d]}`);
                     } else {
                         updatePlanData(newPlanData);
-                        const nextWeekDate = new Date(weekId);
-                        nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-                        const nextWeekId = nextWeekDate.toISOString().split('T')[0];
-                        const nextWeekData = weeksData[nextWeekId] || {};
-                        const targetKey = `${found.d}-${found.s}`;
-                        const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                        const newTargetTasks = [newTaskObj, ...targetTasks];
-                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
-                        onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                        alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
+                        
+                        const nextWeekId = getNextActiveWeekId(weekId);
+                        if (nextWeekId) {
+                            const nextWeekData = weeksData[nextWeekId] || {};
+                            const targetKey = `${found.d}-${found.s}`;
+                            const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                            const newTargetTasks = [newTaskObj, ...targetTasks];
+                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
+                            onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                            alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
+                        } else {
+                            alert("No s'ha trobat cap setmana lectiva disponible.");
+                        }
                     }
                 } else {
                     updatePlanData(newPlanData);
@@ -1024,15 +1044,17 @@
                             };
                             alert(`Classe cancel·lada. Mogut a ${DAYS[found.d]}.`);
                         } else {
-                            const nextWeekDate = new Date(weekId);
-                            nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-                            const nextWeekId = nextWeekDate.toISOString().split('T')[0];
-                            const nextWeekData = weeksData[nextWeekId] || {};
-                            const targetKey = `${found.d}-${found.s}`;
-                            const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
-                            onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                            alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
+                            const nextWeekId = getNextActiveWeekId(weekId);
+                            if (nextWeekId) {
+                                const nextWeekData = weeksData[nextWeekId] || {};
+                                const targetKey = `${found.d}-${found.s}`;
+                                const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                                const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
+                                onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                                alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
+                            } else {
+                                alert("No s'ha trobat cap setmana lectiva disponible per moure les tasques.");
+                            }
                         }
                     } else {
                         alert("Zzz marcat (sense moure, no hi ha propera sessió).");
@@ -1211,7 +1233,7 @@
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <button onClick={() => openCopyModal(d, slot.id, cid)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14}/></button>
-                                                        <button onClick={() => { if(isZzz) { handleStatusChange(d, slot.id, null); } else { handleZzzAction(d, slot.id, cid); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
+                                                        <button onClick={() => { if(isZzz) { handleStatusChange(d, slot.id, null); } else { if(confirm("Marcar com no feta i cancel·lar?")) handleZzzAction(d, slot.id, cid); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
                                                         <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
                                                     </div>
                                                 </div>
@@ -1344,6 +1366,7 @@
             const [weeksData, setWeeksData] = useState({});
             const [currentWeekId, setCurrentWeekId] = useState(null);
             const [completedWeeks, setCompletedWeeks] = useState([]);
+            const [holidayWeeks, setHolidayWeeks] = useState([]);
 
             // Efecte per actualitzar el fons i scrollbar segons el tema
             useEffect(() => {
@@ -1377,12 +1400,13 @@
                         if(data.radar) setRadar(data.radar);
                         if(data.weeksData) setWeeksData(data.weeksData);
                         if(data.completedWeeks) setCompletedWeeks(data.completedWeeks);
+                        if(data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
                         if(data.config?.teacherName) setView('dashboard');
                     } catch(e) {}
                 }
             }, []);
 
-            useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks })); }, [config, radar, weeksData, completedWeeks]);
+            useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks })); }, [config, radar, weeksData, completedWeeks, holidayWeeks]);
 
             // Funció per actualitzar qualsevol setmana des del planner
             const handleUpdateWeekData = (weekId, data) => {
@@ -1390,15 +1414,46 @@
             };
 
             const handleToggleComplete = (wid) => { setCompletedWeeks(prev => prev.includes(wid) ? prev.filter(id => id !== wid) : [...prev, wid]); };
-            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", theme: "orange" }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setView('config'); };
-            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
-            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
+            
+            const handleToggleHoliday = (wid) => {
+                const isBecomingHoliday = !holidayWeeks.includes(wid);
+                setHolidayWeeks(prev => isBecomingHoliday ? [...prev, wid] : prev.filter(id => id !== wid));
+
+                if (isBecomingHoliday) {
+                    setWeeksData(prev => {
+                        const currentWeekData = prev[wid] || {};
+                        const updatedWeekData = { ...currentWeekData };
+                        
+                        // Loop through all days and slots
+                        for (let d = 0; d < 5; d++) {
+                            for (let s = 0; s < TIME_SLOTS.length; s++) {
+                                const slot = TIME_SLOTS[s];
+                                if (slot.type === 'class') { 
+                                     if (config.schedule[d]?.[slot.id]) {
+                                         const key = `${d}-${slot.id}`;
+                                         updatedWeekData[key] = { 
+                                             ...(updatedWeekData[key] || {}), 
+                                             status: 'zzz',
+                                             tasks: updatedWeekData[key]?.tasks || [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}]
+                                         };
+                                     }
+                                }
+                            }
+                        }
+                        return { ...prev, [wid]: updatedWeekData };
+                    });
+                }
+            };
+
+            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", theme: "orange" }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setView('config'); };
+            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
+            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
 
             return (
                 <div className="min-h-screen">
                     {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} />}
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={t => setRadar(`[${new Date().toLocaleDateString()}] ${t}\n` + radar)} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={t => setRadar(`[${new Date().toLocaleDateString()}] ${t}\n` + radar)} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} />}
                 </div>
             );
         };
