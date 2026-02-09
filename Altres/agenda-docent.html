@@ -465,7 +465,7 @@
                                                 {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm`}>Actual</span>}
                                             </div>
                                             <button onClick={(e) => { e.stopPropagation(); onToggleWeekComplete(week.id); }} className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isCompleted ? 'bg-green-100 text-green-600 shadow-inner' : (isCurrent ? 'bg-white/50 text-orange-700 hover:bg-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200')}`}>{isCompleted ? <Icons.CheckCircle /> : <Icons.Check />}</button>
-                                            <button onClick={(e) => { e.stopPropagation(); onToggleHoliday(week.id); }} className={`absolute top-4 right-12 p-2 rounded-full transition-all ${isHoliday ? 'bg-purple-100 text-purple-600 shadow-inner' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`} title="Marcar com Vacances">🎉</button>
+                                            <button onClick={(e) => { e.stopPropagation(); onToggleHoliday(week.id); }} className={`absolute top-4 right-16 w-9 h-9 flex items-center justify-center rounded-full transition-all ${isHoliday ? 'bg-purple-100 text-purple-600 shadow-inner' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`} title="Marcar com Vacances">🎉</button>
                                         </div>
                                     );
                                 })}
@@ -921,21 +921,6 @@
                 updatePlanData(newData);
             };
 
-            const getNextActiveWeekId = (currentWid) => {
-                const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
-                if (currentIndex === -1) return null;
-                
-                let nextIndex = currentIndex + 1;
-                while (nextIndex < allWeeks.length) {
-                    const w = allWeeks[nextIndex];
-                    if (!holidayWeeks.includes(w.id)) {
-                        return w.id;
-                    }
-                    nextIndex++;
-                }
-                return null;
-            };
-
             const findNextSession = (d, s, cid) => {
                 let found = null;
                 const currentDuration = config.durations?.[`${d}-${s}`] === 2 ? 2 : 1;
@@ -998,19 +983,16 @@
                         alert(`Activitat moguda a ${DAYS[found.d]}`);
                     } else {
                         updatePlanData(newPlanData);
-                        
-                        const nextWeekId = getNextActiveWeekId(weekId);
-                        if (nextWeekId) {
-                            const nextWeekData = weeksData[nextWeekId] || {};
-                            const targetKey = `${found.d}-${found.s}`;
-                            const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                            const newTargetTasks = [newTaskObj, ...targetTasks];
-                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
-                            onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                            alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
-                        } else {
-                            alert("No s'ha trobat cap setmana lectiva disponible.");
-                        }
+                        const nextWeekDate = new Date(weekId);
+                        nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+                        const nextWeekId = nextWeekDate.toISOString().split('T')[0];
+                        const nextWeekData = weeksData[nextWeekId] || {};
+                        const targetKey = `${found.d}-${found.s}`;
+                        const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                        const newTargetTasks = [newTaskObj, ...targetTasks];
+                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
+                        onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                        alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
                     }
                 } else {
                     updatePlanData(newPlanData);
@@ -1044,17 +1026,15 @@
                             };
                             alert(`Classe cancel·lada. Mogut a ${DAYS[found.d]}.`);
                         } else {
-                            const nextWeekId = getNextActiveWeekId(weekId);
-                            if (nextWeekId) {
-                                const nextWeekData = weeksData[nextWeekId] || {};
-                                const targetKey = `${found.d}-${found.s}`;
-                                const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                                const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
-                                onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                                alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
-                            } else {
-                                alert("No s'ha trobat cap setmana lectiva disponible per moure les tasques.");
-                            }
+                            const nextWeekDate = new Date(weekId);
+                            nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+                            const nextWeekId = nextWeekDate.toISOString().split('T')[0];
+                            const nextWeekData = weeksData[nextWeekId] || {};
+                            const targetKey = `${found.d}-${found.s}`;
+                            const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
+                            onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                            alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
                         }
                     } else {
                         alert("Zzz marcat (sense moure, no hi ha propera sessió).");
@@ -1233,7 +1213,7 @@
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <button onClick={() => openCopyModal(d, slot.id, cid)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14}/></button>
-                                                        <button onClick={() => { if(isZzz) { handleStatusChange(d, slot.id, null); } else { if(confirm("Marcar com no feta i cancel·lar?")) handleZzzAction(d, slot.id, cid); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
+                                                        <button onClick={() => { if(isZzz) { handleStatusChange(d, slot.id, null); } else { handleZzzAction(d, slot.id, cid); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors reactivate-btn ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
                                                         <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
                                                     </div>
                                                 </div>
