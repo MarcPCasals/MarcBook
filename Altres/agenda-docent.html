@@ -150,7 +150,8 @@
             Link: () => <Icon><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></Icon>,
             Edit: () => <Icon><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Icon>,
             Undo: () => <Icon><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 7"/></Icon>,
-            Redo: () => <Icon><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 7"/></Icon>
+            Redo: () => <Icon><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 7"/></Icon>,
+            Lightbulb: () => <Icon><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v1"/><path d="M12 14v-2"/><path d="M2 12h1"/><path d="M21 12h1"/><path d="M4.22 19.78l.71-.71"/><path d="M19.07 4.93l.71.71"/><path d="M4.22 4.22l.71.71"/><path d="M19.07 19.07l.71.71"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 10.38 5 9a7 7 0 0 1 7-7z"/></Icon>
         };
 
         // --- CONSTANTS & THEMES ---
@@ -210,6 +211,12 @@
                 current.setDate(current.getDate() + 7);
             }
             return weeks;
+        };
+
+        const addDays = (dateStr, days) => {
+            const result = new Date(dateStr);
+            result.setDate(result.getDate() + days);
+            return result.toISOString().split('T')[0];
         };
 
         // --- COMPONENTS ---
@@ -375,7 +382,7 @@
             );
         };
 
-        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday }) => {
+        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
             const [showInfoModal, setShowInfoModal] = useState(false);
@@ -402,16 +409,11 @@
 
             const isCurrentWeek = (w) => {
                 const now = new Date();
-                // Normalitzem la data d'inici de la setmana a les 00:00:00
                 const start = new Date(w.startDate);
                 start.setHours(0, 0, 0, 0);
-                
-                // Calculem el final real de la setmana (Diumenge a les 23:59:59)
-                // w.startDate és Dilluns. Sumem 6 dies per arribar a Diumenge.
                 const end = new Date(w.startDate);
                 end.setDate(end.getDate() + 6); 
                 end.setHours(23, 59, 59, 999);
-
                 return now >= start && now <= end;
             };
 
@@ -423,6 +425,30 @@
                 setEditingLink(false);
             };
 
+            // Lògica per trobar la setmana actual i calcular les claus de data correctes
+            const currentWeekObj = allWeeks.find(isCurrentWeek);
+            let activeReminders = [];
+            
+            if (currentWeekObj && reminders) {
+                const todayIndex = new Date().getDay() - 1; // Dilluns=0, Divendres=4, Diumenge=6
+                // Només si estem entre dilluns i divendres té sentit mirar la clau del planner
+                if (todayIndex >= 0 && todayIndex <= 4) {
+                    const todayKey = addDays(currentWeekObj.id, todayIndex);
+                    if (reminders[todayKey]) {
+                        activeReminders.push(...reminders[todayKey].map(r => ({...r, day: 'AVUI'})));
+                    }
+                }
+                
+                // Per demà (si demà és laborable)
+                const tomorrowIndex = todayIndex + 1;
+                if (tomorrowIndex >= 0 && tomorrowIndex <= 4) {
+                    const tomorrowKey = addDays(currentWeekObj.id, tomorrowIndex);
+                    if (reminders[tomorrowKey]) {
+                        activeReminders.push(...reminders[tomorrowKey].map(r => ({...r, day: 'DEMÀ'})));
+                    }
+                }
+            }
+
             return (
                 <div className="max-w-7xl mx-auto p-6 fade-in pb-20">
                     <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -430,6 +456,30 @@
                             <h1 className="text-3xl font-extrabold text-gray-800">Hola, {config.teacherName || 'Professor'} 👋</h1>
                             <p className={`text-${theme}-500 font-medium`}>Curs {config.schoolYear} - {parseInt(config.schoolYear)+1}</p>
                         </div>
+
+                        {/* TARGETA DE RECORDATORIS AL HEADER */}
+                        {activeReminders.length > 0 && (
+                            <div className="flex-1 mx-4 max-w-xl w-full">
+                                <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-3 shadow-sm animate-in fade-in zoom-in duration-300">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Icons.Lightbulb className="text-yellow-600" size={18}/>
+                                        <h3 className="font-bold text-yellow-800 text-sm uppercase">Recordatoris Actius</h3>
+                                    </div>
+                                    <div className="space-y-2 max-h-[80px] overflow-y-auto custom-scroll pr-1">
+                                        {activeReminders.map((r, i) => (
+                                            <div key={i} className="flex justify-between items-center bg-white/80 p-1.5 rounded border border-yellow-200 text-sm">
+                                                <span className="font-medium text-gray-700 truncate mr-2">{r.text}</span>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${r.day === 'AVUI' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{r.day}</span>
+                                                    <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-1 rounded">{r.time || 'Tot el dia'}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex gap-2 items-center">
                              <button onClick={() => setShowResetModal(true)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 transition-colors mr-4" title="Reiniciar"><Icons.Trash size={18}/></button>
                              <button onClick={() => setShowInfoModal(true)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium"><Icons.FileJson /> Guardar</button>
@@ -701,7 +751,7 @@
                 materials: planData[key]?.materials || "",
                 links: planData[key]?.links || []
             });
-            const [linkInput, setLinkInput] = useState("");
+            const [linkInput, setLinkInput] = useState({url: "", title: ""});
 
             useEffect(() => {
                 const timer = setTimeout(() => {
@@ -715,9 +765,9 @@
             };
 
             const addLink = () => {
-                if (linkInput && linkInput.trim()) {
-                    setData(prev => ({ ...prev, links: [...prev.links, linkInput.trim()] }));
-                    setLinkInput("");
+                if (linkInput.url && linkInput.url.trim()) {
+                    setData(prev => ({ ...prev, links: [...prev.links, { url: linkInput.url.trim(), title: linkInput.title.trim() }] }));
+                    setLinkInput({url: "", title: ""});
                 }
             };
 
@@ -777,25 +827,38 @@
                                         <Icons.Link size={16} className="text-green-500"/> Enllaços i Recursos
                                     </label>
                                     <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-4 flex flex-col">
-                                        <div className="flex gap-2 mb-3">
+                                        <div className="flex flex-col gap-2 mb-3">
                                             <input 
                                                 type="text" 
-                                                className="flex-1 border border-gray-300 p-2 rounded-lg text-sm focus:outline-none focus:border-green-500" 
-                                                placeholder="Enganxa URL..." 
-                                                value={linkInput} 
-                                                onChange={(e) => setLinkInput(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && addLink()}
+                                                className="w-full border border-gray-300 p-2 rounded-lg text-sm focus:outline-none focus:border-green-500" 
+                                                placeholder="Títol del link (opcional)..." 
+                                                value={linkInput.title} 
+                                                onChange={(e) => setLinkInput({...linkInput, title: e.target.value})}
                                             />
-                                            <button onClick={addLink} className="bg-green-500 text-white px-3 py-1 rounded-lg font-bold hover:bg-green-600 transition-colors">+</button>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    className="flex-1 border border-gray-300 p-2 rounded-lg text-sm focus:outline-none focus:border-green-500" 
+                                                    placeholder="URL (https://...)" 
+                                                    value={linkInput.url} 
+                                                    onChange={(e) => setLinkInput({...linkInput, url: e.target.value})}
+                                                    onKeyDown={(e) => e.key === 'Enter' && addLink()}
+                                                />
+                                                <button onClick={addLink} className="bg-green-500 text-white px-3 py-1 rounded-lg font-bold hover:bg-green-600 transition-colors">+</button>
+                                            </div>
                                         </div>
                                         <div className="flex-1 overflow-y-auto max-h-[100px] space-y-2 custom-scroll pr-1">
                                             {data.links.length === 0 && <p className="text-gray-400 text-xs italic text-center mt-4">No hi ha enllaços</p>}
-                                            {data.links.map((l, i) => (
-                                                <div key={i} className="flex items-center justify-between bg-white p-2 rounded border border-gray-200 shadow-sm text-xs group hover:border-green-300 transition-colors">
-                                                    <a href={l} target="_blank" className="text-blue-600 hover:underline truncate max-w-[200px] block font-mono">{l}</a>
-                                                    <button onClick={()=>removeLink(i)} className="text-gray-300 hover:text-red-500 font-bold px-1 transition-colors">×</button>
-                                                </div>
-                                            ))}
+                                            {data.links.map((l, i) => {
+                                                const url = typeof l === 'string' ? l : l.url;
+                                                const title = typeof l === 'string' ? l : (l.title || l.url);
+                                                return (
+                                                    <div key={i} className="flex items-center justify-between bg-white p-2 rounded border border-gray-200 shadow-sm text-xs group hover:border-green-300 transition-colors">
+                                                        <a href={url} target="_blank" className="text-blue-600 hover:underline truncate max-w-[200px] block font-medium" title={url}>{title}</a>
+                                                        <button onClick={()=>removeLink(i)} className="text-gray-300 hover:text-red-500 font-bold px-1 transition-colors">×</button>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>
@@ -844,14 +907,14 @@
             };
 
             const addLink = (slotId) => {
-                const url = linkInputs[slotId];
-                if (url && url.trim()) {
+                const input = linkInputs[slotId] || {url: "", title: ""};
+                if (input.url && input.url.trim()) {
                     const currentLinks = formData[slotId]?.links || [];
                     setFormData(prev => ({
                         ...prev,
-                        [slotId]: { ...prev[slotId], links: [...currentLinks, url.trim()] }
+                        [slotId]: { ...prev[slotId], links: [...currentLinks, { url: input.url.trim(), title: input.title.trim() }] }
                     }));
-                    setLinkInputs(prev => ({ ...prev, [slotId]: "" }));
+                    setLinkInputs(prev => ({ ...prev, [slotId]: {url: "", title: ""} }));
                 }
             };
 
@@ -907,23 +970,36 @@
                                                 />
                                                 {/* Links Section */}
                                                 <div className="border-t pt-2">
-                                                    <div className="flex gap-1 mb-2">
+                                                    <div className="flex flex-col gap-1 mb-2">
                                                         <input 
                                                             type="text" 
                                                             className="flex-1 border p-1 text-[10px] rounded" 
-                                                            placeholder="https://..." 
-                                                            value={linkInputs[slot.id] || ""} 
-                                                            onChange={(e) => setLinkInputs({...linkInputs, [slot.id]: e.target.value})} 
+                                                            placeholder="Títol..." 
+                                                            value={(linkInputs[slot.id] || {}).title || ""} 
+                                                            onChange={(e) => setLinkInputs({...linkInputs, [slot.id]: { ...(linkInputs[slot.id] || {}), title: e.target.value}})} 
                                                         />
-                                                        <button onClick={() => addLink(slot.id)} className="bg-yellow-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">+</button>
+                                                        <div className="flex gap-1">
+                                                            <input 
+                                                                type="text" 
+                                                                className="flex-1 border p-1 text-[10px] rounded" 
+                                                                placeholder="https://..." 
+                                                                value={(linkInputs[slot.id] || {}).url || ""} 
+                                                                onChange={(e) => setLinkInputs({...linkInputs, [slot.id]: { ...(linkInputs[slot.id] || {}), url: e.target.value}})} 
+                                                            />
+                                                            <button onClick={() => addLink(slot.id)} className="bg-yellow-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">+</button>
+                                                        </div>
                                                     </div>
                                                     <div className="space-y-1 max-h-[60px] overflow-y-auto">
-                                                        {(data.links || []).map((l, i) => (
-                                                            <div key={i} className="flex items-center justify-between bg-gray-50 p-1 rounded border text-[10px]">
-                                                                <a href={l} target="_blank" className="text-blue-600 underline truncate max-w-[150px] block">{l}</a>
-                                                                <button onClick={()=>removeLink(slot.id, i)} className="text-red-500 font-bold ml-1">×</button>
-                                                            </div>
-                                                        ))}
+                                                        {(data.links || []).map((l, i) => {
+                                                            const url = typeof l === 'string' ? l : l.url;
+                                                            const title = typeof l === 'string' ? l : (l.title || l.url);
+                                                            return (
+                                                                <div key={i} className="flex items-center justify-between bg-gray-50 p-1 rounded border text-[10px]">
+                                                                    <a href={url} target="_blank" className="text-blue-600 underline truncate max-w-[150px] block" title={url}>{title}</a>
+                                                                    <button onClick={()=>removeLink(slot.id, i)} className="text-red-500 font-bold ml-1">×</button>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             </div>
@@ -937,7 +1013,86 @@
             );
         };
 
-        const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onSaveWeek, onBack, onAddToRadar, allWeeks, holidayWeeks }) => {
+        const ReminderModal = ({ dateStr, dayName, reminders, onSave, onClose }) => {
+            const [localReminders, setLocalReminders] = useState(reminders || []);
+            const [newReminder, setNewReminder] = useState({ text: "", time: "" });
+
+            const addReminder = () => {
+                if (newReminder.text.trim()) {
+                    setLocalReminders([...localReminders, newReminder]);
+                    setNewReminder({ text: "", time: "" });
+                }
+            };
+
+            const removeReminder = (index) => {
+                setLocalReminders(localReminders.filter((_, i) => i !== index));
+            };
+
+            const handleSave = () => {
+                onSave(dateStr, localReminders);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative animate-in zoom-in duration-200">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <Icons.Lightbulb className="text-yellow-500"/> Recordatoris {dayName}
+                            </h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        
+                        <div className="space-y-3 mb-6">
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <label className="text-xs font-bold text-gray-500">Recordatori</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full border p-2 rounded" 
+                                        placeholder="Ex: Avaluació..." 
+                                        value={newReminder.text}
+                                        onChange={(e) => setNewReminder({...newReminder, text: e.target.value})}
+                                        onKeyDown={(e) => e.key === 'Enter' && addReminder()}
+                                    />
+                                </div>
+                                <div className="w-24">
+                                    <label className="text-xs font-bold text-gray-500">Hora</label>
+                                    <input 
+                                        type="time" 
+                                        className="w-full border p-2 rounded" 
+                                        value={newReminder.time}
+                                        onChange={(e) => setNewReminder({...newReminder, time: e.target.value})}
+                                    />
+                                </div>
+                                <button onClick={addReminder} className="bg-yellow-500 text-white px-3 py-2 rounded font-bold hover:bg-yellow-600">+</button>
+                            </div>
+                            
+                            <div className="bg-yellow-50 rounded-lg p-3 min-h-[100px] max-h-[200px] overflow-y-auto">
+                                {localReminders.length === 0 && <p className="text-gray-400 text-sm italic text-center">Cap recordatori.</p>}
+                                {localReminders.map((r, i) => (
+                                    <div key={i} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm">
+                                        <div>
+                                            <p className="font-medium text-gray-800 text-sm">{r.text}</p>
+                                            <p className="text-xs text-gray-500">{r.time || "Tot el dia"}</p>
+                                        </div>
+                                        <button onClick={() => removeReminder(i)} className="text-red-400 hover:text-red-600 font-bold px-2">×</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                            <button onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                            <button onClick={handleSave} className="px-4 py-2 bg-yellow-500 text-white rounded font-bold hover:bg-yellow-600">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onSaveWeek, onBack, onAddToRadar, allWeeks, holidayWeeks, reminders, onSaveReminder }) => {
             const [planData, setPlanData] = useState(weeksData[weekId] || {});
             const [history, setHistory] = useState([]);
             const [future, setFuture] = useState([]);
@@ -954,8 +1109,9 @@
             const [targetSlot, setTargetSlot] = useState(0);
 
             const [pendingActionTask, setPendingActionTask] = useState(null);
-            const [activeDayNotepad, setActiveDayNotepad] = useState(null); // { dayIndex: number }
-            const [activeSessionNotepad, setActiveSessionNotepad] = useState(null); // { dayIndex, slotId, className, slotLabel }
+            const [activeDayNotepad, setActiveDayNotepad] = useState(null); 
+            const [activeSessionNotepad, setActiveSessionNotepad] = useState(null);
+            const [activeReminderModal, setActiveReminderModal] = useState(null); // { dateStr, dayName }
 
             const theme = config.theme || 'orange';
 
@@ -966,7 +1122,7 @@
             const updatePlanData = (newData, saveToHistory = true) => {
                 if (saveToHistory) {
                     setHistory(prev => [...prev, planData]);
-                    setFuture([]); // Clear future history on new change
+                    setFuture([]); 
                 }
                 setPlanData(newData);
                 onUpdateWeekData(weekId, newData);
@@ -976,10 +1132,8 @@
                 if (history.length === 0) return;
                 const previous = history[history.length - 1];
                 const newHistory = history.slice(0, -1);
-                
-                setFuture(prev => [planData, ...prev]); // Save current state to future for redo
+                setFuture(prev => [planData, ...prev]); 
                 setHistory(newHistory);
-                
                 setPlanData(previous);
                 onUpdateWeekData(weekId, previous);
             };
@@ -988,10 +1142,8 @@
                 if (future.length === 0) return;
                 const next = future[0];
                 const newFuture = future.slice(1);
-                
-                setHistory(prev => [...prev, planData]); // Save current state to history for undo
+                setHistory(prev => [...prev, planData]); 
                 setFuture(newFuture);
-                
                 setPlanData(next);
                 onUpdateWeekData(weekId, next);
             };
@@ -1269,7 +1421,11 @@
                             }
 
                             if (contentHtml || validTasks.length > 0 || data.notes || data.materials) {
-                                const linksHtml = data.links && data.links.length > 0 ? `<br><b>Enllaços:</b><br>` + data.links.map(l => `<a href="${l}" target="_blank" style="color:blue;text-decoration:underline;">${l}</a>`).join('<br>') : '';
+                                const linksHtml = data.links && data.links.length > 0 ? `<br><b>Enllaços:</b><br>` + data.links.map(l => {
+                                    const url = typeof l === 'string' ? l : l.url;
+                                    const title = typeof l === 'string' ? l : (l.title || l.url);
+                                    return `<a href="${url}" target="_blank" style="color:blue;text-decoration:underline;">${title}</a>`;
+                                }).join('<br>') : '';
                                 
                                 html += `<tr style="border-bottom: 2px solid #000;">
                                     <td style="text-align:center;font-weight:bold;padding:10px;">Sessió ${sessionCount}</td>
@@ -1327,18 +1483,29 @@
                     <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
                         <div className="min-w-[1400px] grid" style={{ gridTemplateColumns: '6rem repeat(5, 1fr)' }}>
                             <div className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex items-center justify-center">Hores</div>
-                            {DAYS.map((d, i) => (
-                                <div key={i} className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2">
-                                    {d}
-                                    <button 
-                                        onClick={() => setActiveDayNotepad({ dayIndex: i })}
-                                        className={`text-gray-400 hover:text-${theme}-600 transition-colors`}
-                                        title="Bloc de Notes del Dia"
-                                    >
-                                        <Icons.FileText size={16}/>
-                                    </button>
-                                </div>
-                            ))}
+                            {DAYS.map((d, i) => {
+                                const dateStr = addDays(weekId, i);
+                                const hasReminder = reminders && reminders[dateStr] && reminders[dateStr].length > 0;
+                                return (
+                                    <div key={i} className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 relative group">
+                                        {d}
+                                        <button 
+                                            onClick={() => setActiveDayNotepad({ dayIndex: i })}
+                                            className={`text-gray-400 hover:text-${theme}-600 transition-colors`}
+                                            title="Bloc de Notes del Dia"
+                                        >
+                                            <Icons.FileText size={16}/>
+                                        </button>
+                                        <button 
+                                            onClick={() => setActiveReminderModal({ dateStr: dateStr, dayName: d })}
+                                            className={`${hasReminder ? 'text-yellow-500 animate-pulse' : 'text-gray-300 hover:text-yellow-400'} transition-colors`}
+                                            title="Recordatoris"
+                                        >
+                                            <Icons.Lightbulb size={16}/>
+                                        </button>
+                                    </div>
+                                );
+                            })}
                             
                             {visibleSlots.map((slot, visibleIndex) => (
                                 <React.Fragment key={slot.id}>
@@ -1425,6 +1592,18 @@
                             planData={planData}
                             onClose={() => setActiveSessionNotepad(null)}
                             onSave={handleSessionNotepadSave}
+                        />,
+                        document.body
+                    )}
+
+                    {/* REMINDER MODAL (PORTAL) */}
+                    {activeReminderModal && ReactDOM.createPortal(
+                        <ReminderModal 
+                            dateStr={activeReminderModal.dateStr}
+                            dayName={activeReminderModal.dayName}
+                            reminders={reminders[activeReminderModal.dateStr]}
+                            onSave={onSaveReminder}
+                            onClose={() => setActiveReminderModal(null)}
                         />,
                         document.body
                     )}
@@ -1527,6 +1706,7 @@
             const [currentWeekId, setCurrentWeekId] = useState(null);
             const [completedWeeks, setCompletedWeeks] = useState([]);
             const [holidayWeeks, setHolidayWeeks] = useState([]);
+            const [reminders, setReminders] = useState({});
 
             // Efecte per actualitzar el fons i scrollbar segons el tema
             useEffect(() => {
@@ -1561,12 +1741,13 @@
                         if(data.weeksData) setWeeksData(data.weeksData);
                         if(data.completedWeeks) setCompletedWeeks(data.completedWeeks);
                         if(data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
+                        if(data.reminders) setReminders(data.reminders);
                         if(data.config?.teacherName) setView('dashboard');
                     } catch(e) {}
                 }
             }, []);
 
-            useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks })); }, [config, radar, weeksData, completedWeeks, holidayWeeks]);
+            useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
 
             // Funció per actualitzar qualsevol setmana des del planner
             const handleUpdateWeekData = (weekId, data) => {
@@ -1605,15 +1786,22 @@
                 }
             };
 
-            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", theme: "orange" }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setView('config'); };
-            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
-            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
+            const handleSaveReminder = (dateStr, newReminders) => {
+                setReminders(prev => ({
+                    ...prev,
+                    [dateStr]: newReminders
+                }));
+            };
+
+            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", theme: "orange" }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
+            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
+            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
 
             return (
                 <div className="min-h-screen">
                     {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} />}
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={t => setRadar(`[${new Date().toLocaleDateString()}] ${t}\n` + radar)} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={t => setRadar(`[${new Date().toLocaleDateString()}] ${t}\n` + radar)} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                 </div>
             );
         };
