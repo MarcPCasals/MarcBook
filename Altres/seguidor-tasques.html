@@ -73,6 +73,15 @@
 
         const MAX_PENALTIES = 3;
 
+        // Estructura UTs per defecte (IDs fixos per facilitar la còpia)
+        const DEFAULT_UTS = [
+            { id: 'ut1', name: 'UT 1' },
+            { id: 'ut2', name: 'UT 2' },
+            { id: 'ut3', name: 'UT 3' },
+            { id: 'ut4', name: 'UT 4' },
+            { id: 'default', name: 'General' }
+        ];
+
         // --- Components ---
 
         const Modal = ({ title, onClose, children, variant = 'default' }) => {
@@ -95,11 +104,11 @@
             const [classes, setClasses] = useState([{ id: 'default', name: 'Classe Principal' }]);
             const [activeClassId, setActiveClassId] = useState('default');
             const [allData, setAllData] = useState({ 
-                'default': { students: [], tasks: [], records: {}, penalties: {}, uts: [{ id: 'default', name: 'General' }] } 
+                'default': { students: [], tasks: [], records: {}, penalties: {}, uts: DEFAULT_UTS } 
             });
 
             // --- Estat UI Local ---
-            const [activeUtId, setActiveUtId] = useState('default');
+            const [activeUtId, setActiveUtId] = useState('ut1'); // Per defecte comencem a la UT 1
             
             const [isAddingTask, setIsAddingTask] = useState(false);
             const [isManagingStudents, setIsManagingStudents] = useState(false);
@@ -126,7 +135,7 @@
             // --- Derivats ---
             const currentData = allData[activeClassId] || { students: [], tasks: [], records: {}, penalties: {}, uts: [] };
             const students = currentData.students || [];
-            const uts = currentData.uts || [{ id: 'default', name: 'General' }];
+            const uts = currentData.uts || DEFAULT_UTS;
             
             // FILTRE DE TASQUES
             const visibleTasks = useMemo(() => {
@@ -138,6 +147,7 @@
                     return [...rawTasks].sort(sortFn);
                 } else {
                     // Si estem a una UT especifica: Filtrem
+                    // Assignem 'default' a tasques velles sense UT, o busquem la UT correcta
                     const tasksWithUt = rawTasks.map(t => ({...t, utId: t.utId || 'default'}));
                     return tasksWithUt.filter(t => t.utId === activeUtId).sort(sortFn);
                 }
@@ -178,7 +188,10 @@
                 const classUts = allData[activeClassId]?.uts;
                 if (classUts && classUts.length > 0) {
                     if (!classUts.find(u => u.id === activeUtId)) {
-                        setActiveUtId(classUts[0].id);
+                        // Si la UT activa no existeix en la nova classe (poc probable amb IDs fixos, però per si de cas)
+                        // intentem anar a la mateixa ID (per mantenir context), si no a la primera.
+                        const sameIdUt = classUts.find(u => u.id === activeUtId);
+                        setActiveUtId(sameIdUt ? sameIdUt.id : classUts[0].id);
                     }
                 } else {
                     setActiveUtId('default');
@@ -196,7 +209,7 @@
                             const migratedData = { ...parsed.data };
                             Object.keys(migratedData).forEach(clsId => {
                                 if (!migratedData[clsId].uts) {
-                                    migratedData[clsId].uts = [{ id: 'default', name: 'General' }];
+                                    migratedData[clsId].uts = DEFAULT_UTS;
                                 }
                                 migratedData[clsId].tasks = migratedData[clsId].tasks.map(t => ({
                                     ...t,
@@ -212,21 +225,21 @@
                     const initialData = {
                         [initialClassId]: {
                             students: [{ id: 's1', name: 'Alumne Exemple' }],
-                            tasks: [{ id: 't1', title: 'Tasca Inicial', date: new Date().toISOString(), utId: 'default' }],
+                            tasks: [{ id: 't1', title: 'Tasca Inicial', date: new Date().toISOString(), utId: 'ut1' }],
                             records: {},
                             penalties: {},
-                            uts: [{ id: 'default', name: 'General' }]
+                            uts: DEFAULT_UTS
                         }
                     };
                     setClasses([{ id: initialClassId, name: '1r ESO A' }]);
                     setAllData(initialData);
                     setActiveClassId(initialClassId);
-                    setActiveUtId('default');
+                    setActiveUtId('ut1');
                 }
             }, []);
 
             useEffect(() => {
-                const dataToSave = { version: 4, classes, currentId: activeClassId, data: allData };
+                const dataToSave = { version: 5, classes, currentId: activeClassId, data: allData };
                 localStorage.setItem('seguidor_tasques_data', JSON.stringify(dataToSave));
             }, [classes, activeClassId, allData]);
 
@@ -318,7 +331,7 @@
                 setClasses([...classes, { id: newId, name: newClassName }]);
                 setAllData(prev => ({ 
                     ...prev, 
-                    [newId]: { students: [], tasks: [], records: {}, penalties: {}, uts: [{id: 'default', name: 'General'}] } 
+                    [newId]: { students: [], tasks: [], records: {}, penalties: {}, uts: DEFAULT_UTS } 
                 }));
                 setActiveClassId(newId);
                 setNewClassName("");
@@ -346,6 +359,15 @@
                 setIsEditingUt(false);
             };
 
+            const handleDeleteUt = (utIdToDelete) => {
+                if(!confirm("Estàs segur? Les tasques no s'esborraran, però deixaran de ser visibles en aquesta pestanya (les podràs veure a General).")) return;
+                updateClassData(activeClassId, d => ({
+                    ...d,
+                    uts: d.uts.filter(u => u.id !== utIdToDelete)
+                }));
+                if (activeUtId === utIdToDelete) setActiveUtId('default');
+            };
+
             const handleAddTask = () => {
                 if (!newTaskName.trim()) return;
                 const taskIdBase = Date.now().toString();
@@ -355,7 +377,12 @@
                 Object.entries(copyToClasses).forEach(([classId, config]) => {
                     if (config.checked) {
                         const targetClassData = allData[classId];
-                        const targetUtId = targetClassData?.uts?.[0]?.id || 'default';
+                        
+                        // LÒGICA DE CÒPIA INTEL·LIGENT DE PESTANYES
+                        // Intentem trobar una UT amb la mateixa ID que l'activa (ex: 'ut3')
+                        // Si no existeix, anem a General ('default')
+                        const targetUtId = targetClassData?.uts?.find(u => u.id === activeUtId)?.id || 'default';
+                        
                         const classTask = { id: taskIdBase, title: newTaskName, date: config.date, utId: targetUtId };
                         updateClassData(classId, d => ({ ...d, tasks: [...d.tasks, classTask] }));
                     }
@@ -371,7 +398,7 @@
             const deleteStudent = (id) => { if(confirm("Segur que vols eliminar aquest alumne?")) { updateClassData(activeClassId, d => ({ ...d, students: d.students.filter(s => s.id !== id) })); if (selectedStudent?.id === id) setSelectedStudent(null); } };
             const deleteTask = (id) => { if(confirm("Segur que vols eliminar aquesta tasca?")) { updateClassData(activeClassId, d => ({ ...d, tasks: d.tasks.filter(t => t.id !== id) })); } };
             const markTaskForAll = (taskId, status) => { if(!confirm(`Vols marcar "${STATUS_TYPES[status].label}" per a tots els alumnes?`)) return; updateClassData(activeClassId, d => { const newRecords = { ...d.records }; d.students.forEach(s => { newRecords[`${s.id}_${taskId}`] = status; }); return { ...d, records: newRecords }; }); };
-            const handleExport = () => { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ version: 4, classes, currentId: activeClassId, data: allData })); const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", `seguidor_tasques_${new Date().toLocaleDateString()}.json`); document.body.appendChild(a); a.click(); a.remove(); };
+            const handleExport = () => { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ version: 5, classes, currentId: activeClassId, data: allData })); const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", `seguidor_tasques_${new Date().toLocaleDateString()}.json`); document.body.appendChild(a); a.click(); a.remove(); };
             const handleImport = (e) => { const fr = new FileReader(); fr.readAsText(e.target.files[0], "UTF-8"); fr.onload = ev => { const parsed = JSON.parse(ev.target.result); if(confirm("Substituir totes les dades?")) { if (parsed.version >= 2) { setClasses(parsed.classes); setAllData(parsed.data); setActiveClassId(parsed.currentId); } } }; };
 
             const getBarColor = (p) => { if (p >= 80) return 'bg-emerald-500'; if (p >= 50) return 'bg-amber-400'; return 'bg-rose-400'; };
@@ -443,18 +470,26 @@
                                     
                                     {/* Render Specific UTs First */}
                                     {uts.filter(u => u.id !== 'default').map(ut => (
-                                        <div key={ut.id} className="relative group shrink-0">
+                                        <div key={ut.id} className="relative group shrink-0 flex items-center border-b-2 transition-all border-transparent hover:border-slate-300">
                                             <button 
                                                 onClick={() => setActiveUtId(ut.id)}
-                                                className={`px-4 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeUtId === ut.id ? 'border-orange-500 text-orange-700 bg-orange-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                                                className={`px-3 py-2 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeUtId === ut.id ? 'text-orange-700 bg-orange-50/50' : 'text-slate-500 hover:text-slate-700'}`}
+                                                style={{ borderBottom: activeUtId === ut.id ? '2px solid #f97316' : 'none', marginBottom: '-2px' }}
                                             >
                                                 {ut.name}
-                                                {activeUtId === ut.id && (
-                                                    <span onClick={(e) => { e.stopPropagation(); setEditUtName(ut.name); setIsEditingUt(true); }} className="opacity-50 hover:opacity-100 cursor-pointer p-0.5 rounded hover:bg-orange-200 ml-1">
-                                                        <Edit2 size={10} />
-                                                    </span>
-                                                )}
                                             </button>
+                                            
+                                            {/* Edit/Delete Actions inside the tab strip but visible on active */}
+                                            {activeUtId === ut.id && (
+                                                <div className="flex items-center ml-1 pr-2 space-x-1 border-b-2 border-orange-500" style={{ marginBottom: '-2px', height: '100%' }}>
+                                                    <span onClick={(e) => { e.stopPropagation(); setEditUtName(ut.name); setIsEditingUt(true); }} className="opacity-50 hover:opacity-100 cursor-pointer p-0.5 rounded hover:bg-orange-200 text-slate-500">
+                                                        <Edit2 size={12} />
+                                                    </span>
+                                                    <span onClick={(e) => { e.stopPropagation(); handleDeleteUt(ut.id); }} className="opacity-50 hover:opacity-100 cursor-pointer p-0.5 rounded hover:bg-rose-100 text-rose-400">
+                                                        <Trash2 size={12} />
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                     
