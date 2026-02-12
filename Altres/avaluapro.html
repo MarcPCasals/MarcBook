@@ -131,12 +131,12 @@
 
         const calculateGrade = (marks) => {
             if (!marks || marks.length === 0) return '';
-            const validMarks = marks.filter(m => m === 'A' || m === 'B' || m === 'C' || m === 'D');
+            const validMarks = marks.filter(m => ['A', 'B', 'C', 'D', 'NA'].includes(m));
             if (validMarks.length === 0) return '';
             
-            const counts = { A: 0, B: 0, C: 0, D: 0 };
+            const counts = { A: 0, B: 0, C: 0, D: 0, NA: 0 };
             let sum = 0;
-            const values = { A: 4, B: 3, C: 2, D: 1 };
+            const values = { A: 4, B: 3, C: 2, D: 1, NA: 1 }; // NA penalitza com D
             
             validMarks.forEach(m => { 
                 counts[m]++; 
@@ -144,7 +144,8 @@
             });
             
             const total = validMarks.length;
-            if (counts.D / total > 0.5) return 'D';
+            // Si més del 50% són D o NA, suspès
+            if ((counts.D + counts.NA) / total > 0.5) return 'D';
             
             const avg = sum / total;
             if (avg >= 3.5) return 'A';
@@ -155,18 +156,18 @@
 
         const calculateNumericAverage = (marks) => {
             if (!marks) return 0;
-            const validMarks = marks.filter(m => m === 'A' || m === 'B' || m === 'C' || m === 'D');
+            const validMarks = marks.filter(m => ['A', 'B', 'C', 'D', 'NA'].includes(m));
             if (validMarks.length === 0) return 0;
-            const values = { A: 4, B: 3, C: 2, D: 1 };
+            const values = { A: 4, B: 3, C: 2, D: 1, NA: 1 };
             const sum = validMarks.reduce((acc, m) => acc + values[m], 0);
             return (sum / validMarks.length);
         };
 
         const calculateMode = (marks) => {
              if (!marks) return '-';
-             const validMarks = marks.filter(m => m === 'A' || m === 'B' || m === 'C' || m === 'D');
+             const validMarks = marks.filter(m => ['A', 'B', 'C', 'D', 'NA'].includes(m));
              if (validMarks.length === 0) return '-';
-             const counts = { A: 0, B: 0, C: 0, D: 0 };
+             const counts = { A: 0, B: 0, C: 0, D: 0, NA: 0 };
              validMarks.forEach(m => counts[m]++);
              let max = 0; 
              let mode = '-';
@@ -193,7 +194,7 @@
         };
 
         const getNumericFromGrade = (grade) => {
-            const map = {'A':4, 'B':3, 'C':2, 'D':1};
+            const map = {'A':4, 'B':3, 'C':2, 'D':1, 'NA':1};
             return map[grade] ? map[grade] : 0;
         };
 
@@ -203,6 +204,7 @@
                 case 'B': return 'bg-blue-100 text-blue-800 border-blue-300';
                 case 'C': return 'bg-orange-100 text-orange-800 border-orange-300';
                 case 'D': return 'bg-red-100 text-red-800 border-red-300';
+                case 'NA': return 'bg-gray-800 text-white border-gray-600';
                 default: return 'bg-gray-50 text-gray-400';
             }
         };
@@ -213,6 +215,7 @@
                 case 'B': return 'text-blue-600 font-bold';
                 case 'C': return 'text-orange-600 font-bold';
                 case 'D': return 'text-red-600 font-bold';
+                case 'NA': return 'text-gray-800 font-black';
                 default: return 'text-gray-300';
             }
         };
@@ -525,10 +528,23 @@
             const handleSave = () => {
                 const names = textInput.split("\n").map(n => n.trim()).filter(n => n !== "");
                 const sList = students ? students : [];
-                const newStudents = names.map(name => {
-                    const existing = sList.find(s => s.name === name);
-                    return existing ? existing : { id: generateUUID(), name: name, marks: {}, notes: { general: "", competencies: {} } };
-                });
+
+                let newStudents;
+                
+                // Si el nombre d'alumnes coincideix, assumim que és un canvi de nom per ordre (preservant ID i Notes)
+                if (names.length === sList.length) {
+                    newStudents = names.map((name, index) => {
+                        const originalStudent = sList[index];
+                        return { ...originalStudent, name: name };
+                    });
+                } else {
+                    // Si no coincideix, intentem fer match per nom, o creem nous
+                    newStudents = names.map(name => {
+                        const existing = sList.find(s => s.name === name);
+                        return existing ? existing : { id: generateUUID(), name: name, marks: {}, notes: { general: "", competencies: {} } };
+                    });
+                }
+
                 onSave(newStudents);
                 onClose();
             };
@@ -537,7 +553,8 @@
                 <Modal isOpen={isOpen} onClose={onClose} title="Gestió del Llistat d'Alumnes" size="lg">
                     <div className="space-y-4">
                         <div className="bg-blue-50 p-3 rounded text-sm text-blue-800 border border-blue-200">
-                            <Icon name="circle-info" className="mr-2"/>Pots copiar i enganxar la llista sencera de noms des del teu Excel o Word (un nom per línia).
+                            <Icon name="circle-info" className="mr-2"/>
+                            <span className="font-bold">Mode Edició Intel·ligent:</span> Si només canvies un nom (sense afegir o treure línies), es mantindran les notes d'aquell alumne. Si afegeixes o treus alumnes, el sistema intentarà recuperar les dades pels noms coincidents.
                         </div>
                         <textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} className="w-full h-64 p-3 border rounded-xl font-mono text-sm border-gray-300 outline-none focus:border-brand-500 focus:ring-1" placeholder="Cognom Nom 1&#10;Cognom Nom 2&#10;..." />
                         <div className="flex justify-end">
@@ -743,7 +760,7 @@
                             const targetCol = colIdx + cOffset;
                             if (targetCol < newRow.length) {
                                 let cleanVal = val.trim().toUpperCase();
-                                if(cleanVal === 'A' || cleanVal === 'B' || cleanVal === 'C' || cleanVal === 'D' || cleanVal === '') {
+                                if(['A','B','C','D','NA'].includes(cleanVal) || cleanVal === '') {
                                     newRow[targetCol] = cleanVal;
                                 }
                             }
@@ -774,7 +791,7 @@
                             <div>
                                 <p className="font-bold mb-1">Com importar notes ràpidament?</p>
                                 <ul className="list-disc ml-4 space-y-1">
-                                    <li>Selecciona les cel·les amb notes (A, B, C, D) al teu Excel i copia-les (<kbd className="bg-gray-200 px-1 rounded">Ctrl</kbd> + <kbd className="bg-gray-200 px-1 rounded">C</kbd>).</li>
+                                    <li>Selecciona les cel·les amb notes (A, B, C, D, NA) al teu Excel i copia-les (<kbd className="bg-gray-200 px-1 rounded">Ctrl</kbd> + <kbd className="bg-gray-200 px-1 rounded">C</kbd>).</li>
                                     <li>Fes clic a la <strong>primera cel·la blanca</strong> d'aquesta taula (la que correspon al primer alumne i primer indicador).</li>
                                     <li>Prem <kbd className="bg-gray-200 px-1 rounded">Ctrl</kbd> + <kbd className="bg-gray-200 px-1 rounded">V</kbd>. Les dades ompliran la graella automàticament cap a la dreta i avall.</li>
                                 </ul>
@@ -962,14 +979,38 @@
             );
         };
 
-        const StudentEvolutionModal = ({ isOpen, onClose, studentData }) => {
+        const StudentEvolutionModal = ({ isOpen, onClose, studentData, classData }) => {
             if (!isOpen || !studentData) return null;
-            const { name, history, radarFirst, radarLast, labels } = studentData;
+            const { name, history, radarFirst, radarLast, labels, studentId } = studentData;
             
             const improvement = history.length >= 2 ? (history[history.length-1] - history[0]) : 0;
             let status = { text: "Estable", color: "text-gray-500", icon: "minus" };
             if (improvement > 0.5) status = { text: "Progrés Alt", color: "text-green-600", icon: "arrow-trend-up" };
             if (improvement < -0.5) status = { text: "Regressió", color: "text-red-600", icon: "arrow-trend-down" };
+
+            // Calculate per-semester competency summary for this student
+            const student = classData.students.find(s => s.id === studentId);
+            const compSummary = {}; 
+
+            if (student) {
+                classData.semesters.forEach(sem => {
+                    if (sem.competencies) {
+                        sem.competencies.forEach(comp => {
+                            if (!compSummary[comp.name]) compSummary[comp.name] = { S1: '-', S2: '-' };
+                            
+                            let marks = [];
+                            if (comp.criteria) {
+                                comp.criteria.forEach(c => {
+                                    if(c.indicators) c.indicators.forEach(i => { if(student.marks[i.id]) marks.push(student.marks[i.id]); });
+                                });
+                            }
+                            const g = calculateGrade(marks);
+                            if (sem.id === 'S1') compSummary[comp.name].S1 = g || '-';
+                            if (sem.id === 'S2') compSummary[comp.name].S2 = g || '-';
+                        });
+                    }
+                });
+            }
 
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title={`Evolució: ${name}`} size="lg">
@@ -983,9 +1024,43 @@
                             </div>
                             <div className="text-right">
                                 <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-1">Nota Mitjana Actual</p>
-                                <p className="text-3xl font-bold text-gray-800">{history.length>0 ? history[history.length-1].toFixed(2) : '-'}</p>
+                                <p className="text-3xl font-bold text-gray-800">
+                                    {history.length>0 ? (
+                                        <span>
+                                            {getGradeFromNumeric(history[history.length-1])} <span className="text-lg text-gray-500 font-normal">({history[history.length-1].toFixed(2)})</span>
+                                        </span>
+                                    ) : '-'}
+                                </p>
                             </div>
                         </div>
+
+                        {/* Nova Taula Resum Competències */}
+                        <div className="bg-white p-4 border rounded-xl shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-700 mb-3 text-center uppercase tracking-wide border-b pb-2">Resum per Competències</h4>
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-50 text-gray-600">
+                                    <tr>
+                                        <th className="p-2 text-left">Competència</th>
+                                        <th className="p-2 text-center w-24">1r Semestre</th>
+                                        <th className="p-2 text-center w-24">2n Semestre</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {Object.entries(compSummary).map(([cName, grades]) => (
+                                        <tr key={cName}>
+                                            <td className="p-2 font-medium">{cName}</td>
+                                            <td className="p-2 text-center">
+                                                <span className={`px-2 py-1 rounded font-bold text-xs ${getGradeColor(grades.S1)}`}>{grades.S1}</span>
+                                            </td>
+                                            <td className="p-2 text-center">
+                                                <span className={`px-2 py-1 rounded font-bold text-xs ${getGradeColor(grades.S2)}`}>{grades.S2}</span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="bg-white p-4 border rounded-xl shadow-sm">
                                 <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Trajectòria Temporal</h4>
@@ -1044,6 +1119,7 @@
             const [showGlobalNotes, setShowGlobalNotes] = useState(false);
             const [showCopyTable, setShowCopyTable] = useState(false);
             const [showSemesterStats, setShowSemesterStats] = useState(false);
+            const [showStudentModal, setShowStudentModal] = useState(null); 
             const [showBulkImport, setShowBulkImport] = useState(false);
             const [showStudentEvoModal, setShowStudentEvoModal] = useState(null);
 
@@ -1358,7 +1434,7 @@
                                                 });
                                             }
                                             const g = calculateGrade(marks); 
-                                            if(g) {
+                                            if(g && g !== 'NA') { // Criteria stats ignore NA generally for A/D ratio
                                                 cStats.counts[g]++;
                                             }
                                         });
@@ -1394,7 +1470,7 @@
                         });
 
                         studentsArray.forEach(s => {
-                            studentStats[s.id] = { name: s.name, timePoints: [], radarFirst: {}, radarLast: {}, finalAvg: 0 };
+                            studentStats[s.id] = { name: s.name, timePoints: [], radarFirst: {}, radarLast: {}, finalAvg: 0, studentId: s.id };
                             let allG = [];
                             
                             currentClass.semesters.forEach(sem => {
@@ -1403,6 +1479,7 @@
 
                                 if (sem.competencies) {
                                     sem.competencies.forEach(comp => {
+                                        // Calculate Competency Grade from Criteria (Standard method)
                                         let compMarks = []; 
                                         if(comp.criteria) {
                                             comp.criteria.forEach(c => {
@@ -1431,9 +1508,16 @@
                                             // Add to compStats
                                             compStats[comp.name].grades.push(n);
 
-                                            // Count for Compare Table
-                                            semesterCounts[semKey][finalCompGrade]++;
-                                            semesterCompCounts[semKey][comp.name][finalCompGrade]++;
+                                            // Count for Compare Table - ONLY IF NOT NA for A/B/C/D counts usually, but user wants NA to count? 
+                                            // Request: "El recompte... només vull que es faci amb les dades de la competència". Done.
+                                            // NA is treated as D internally in calculateGrade logic (counts.NA added to D).
+                                            // But for the display grid A,B,C,D, NA will fall into D if logic holds.
+                                            // Let's ensure 'NA' doesn't break 'A','B','C','D' keys.
+                                            // calculateGrade returns A,B,C,D. If many NA, returns D. So it fits.
+                                            if (['A','B','C','D'].includes(finalCompGrade)) {
+                                                semesterCounts[semKey][finalCompGrade]++;
+                                                semesterCompCounts[semKey][comp.name][finalCompGrade]++;
+                                            }
                                         }
                                     });
                                 }
@@ -1582,7 +1666,7 @@
                                                                     if (counts[grade] > 0) {
                                                                         return (
                                                                             <div key={cName} className="flex justify-between text-[11px] items-center pb-1 border-b border-gray-100 last:border-0">
-                                                                                <span className="text-gray-600 font-medium truncate pr-2">{cName}</span>
+                                                                                <span className="text-gray-600 font-medium truncate pr-2" title={cName}>{cName}</span>
                                                                                 <span className={`font-bold px-1.5 rounded ${bgLight} ${textDark}`}>{counts[grade]}</span>
                                                                             </div>
                                                                         );
@@ -1623,7 +1707,7 @@
                                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
                                     <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Nivells d'Assoliment</h4>
                                     <div className="flex h-24 items-center justify-center relative"><ChartComponent type="doughnut" className="h-full w-full" data={{labels: ['Assolit', 'Procés', 'No'], datasets: [{ data: [stats.achievement.assolit, stats.achievement.proces, stats.achievement.noAssolit], backgroundColor: ['#22c55e', '#f97316', '#ef4444'], borderWidth: 0 }]}} options={{ cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }}/><div className="absolute text-center z-10 flex flex-col items-center justify-center"><span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none">Total</span><span className="font-black text-2xl text-gray-700 leading-tight">{stats.achievement.total}</span></div></div>
-                                    <div className="flex justify-between text-xs font-bold mt-3 px-2"><span className="text-green-600 bg-green-50 px-2 py-1 rounded">High: {stats.achievement.total > 0 ? Math.round(stats.achievement.assolit/stats.achievement.total*100) : 0}%</span><span className="text-red-600 bg-red-50 px-2 py-1 rounded">Risc: {stats.achievement.total > 0 ? Math.round(stats.achievement.noAssolit/stats.achievement.total*100) : 0}%</span></div>
+                                    <div className="flex justify-between text-xs font-bold mt-3 px-2"><span className="text-green-600 bg-green-50 px-2 py-1 rounded">High: {Math.round(stats.achievement.assolit/(stats.achievement.total||1)*100)}%</span><span className="text-red-600 bg-red-50 px-2 py-1 rounded">Risc: {Math.round(stats.achievement.noAssolit/(stats.achievement.total||1)*100)}%</span></div>
                                 </div>
                                 <div className="bg-red-50 p-4 rounded-xl border border-red-200 flex flex-col justify-center text-center shadow-inner">
                                     <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3"><Icon name="triangle-exclamation" className="text-2xl"/></div>
@@ -1642,7 +1726,7 @@
                                 </div>
                                 <div className="flex-1 overflow-y-auto pr-2 custom-scroll" style={{maxHeight: "350px"}}>
                                     <table className="w-full text-sm">
-                                        <thead className="bg-gray-50 sticky top-0 z-10"><tr className="text-black uppercase text-xs tracking-wider"><th className="p-3 text-left rounded-tl">Alumne</th><th className="p-3 text-center">Nota Actual</th><th className="p-3 text-right rounded-tr">Detall</th></tr></thead>
+                                        <thead className="bg-gray-50 sticky top-0 z-10"><tr className="text-gray-500 uppercase text-xs tracking-wider"><th className="p-3 text-left rounded-tl">Alumne</th><th className="p-3 text-center">Nota Actual</th><th className="p-3 text-right rounded-tr">Detall</th></tr></thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {Object.keys(stats.studentStats).map(k => {
                                                 const s = stats.studentStats[k];
@@ -1651,7 +1735,7 @@
                                                         <td className="p-3 font-medium text-gray-700">{s.name}</td>
                                                         <td className="p-3 text-center font-bold text-gray-600">{s.timePoints.length>0 ? s.timePoints[s.timePoints.length-1].toFixed(2) : '-'}</td>
                                                         <td className="text-right p-3">
-                                                            <button onClick={() => setShowStudentEvoModal({name:s.name, history:s.timePoints, labels:Object.keys(stats.compStats), radarFirst:Object.keys(stats.compStats).map(ck=>s.radarFirst[ck]?s.radarFirst[ck]:0), radarLast:Object.keys(stats.compStats).map(ck=>s.radarLast[ck]?s.radarLast[ck]:0)})} className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition font-medium shadow-sm"><Icon name="chart-line" className="mr-1"/> Veure</button>
+                                                            <button onClick={() => setShowStudentEvoModal({name:s.name, history:s.timePoints, labels:Object.keys(stats.compStats), radarFirst:Object.keys(stats.compStats).map(ck=>s.radarFirst[ck]?s.radarFirst[ck]:0), radarLast:Object.keys(stats.compStats).map(ck=>s.radarLast[ck]?s.radarLast[ck]:0), studentId: s.studentId}, currentClass)} className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition font-medium shadow-sm"><Icon name="chart-line" className="mr-1"/> Veure</button>
                                                         </td>
                                                     </tr>
                                                 );
@@ -1718,8 +1802,8 @@
                                                                             <div style={{width:`${c.counts.D/(stats.achievement.total||1)*100}%`}} className="bg-red-500"/>
                                                                         </div>
                                                                         <div className="flex justify-between text-xs font-bold mt-2">
-                                                                            <span className="text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">Suspesos: {c.counts.D}</span>
                                                                             <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">Excel·lents: {c.counts.A}</span>
+                                                                            <span className="text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">Suspesos: {c.counts.D}</span>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -1832,7 +1916,7 @@
                                                             )}
                                                         </th>
                                                     ))}
-                                                    <th className="p-2 border-b border-r w-14 text-center text-xs min-w-[3.5rem] font-bold shadow-sm" style={{backgroundColor: styles.header, color: 'black', borderColor: styles.border}}>Nota</th>
+                                                    <th className="p-2 border-b border-r w-14 text-center text-xs min-w-[3.5rem] font-bold shadow-sm" style={{backgroundColor: styles.header, color: 'white', borderColor: styles.border}}>Nota</th>
                                                 </React.Fragment>
                                             );
                                         })}
@@ -1853,7 +1937,7 @@
                                                         <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner">CA</th>
                                                     </React.Fragment>
                                                 ))}
-                                                <th className="p-2 border-b border-r bg-gray-200 w-14 text-center font-bold text-xs min-w-[3.5rem] text-black shadow-inner">C</th>
+                                                <th className="p-2 border-b border-r bg-gray-200 w-14 text-center min-w-[3.5rem] shadow-inner"></th>
                                             </React.Fragment>
                                         ))}
                                     </tr>
@@ -1892,6 +1976,7 @@
                                                                                     <option value="B" className="text-blue-600 font-black bg-blue-50">B</option>
                                                                                     <option value="C" className="text-orange-600 font-black bg-orange-50">C</option>
                                                                                     <option value="D" className="text-red-600 font-black bg-red-50">D</option>
+                                                                                    <option value="NA" className="text-gray-800 font-black bg-gray-100">NA</option>
                                                                                 </select>
                                                                             </td>
                                                                         );
@@ -1937,7 +2022,7 @@
                         <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
                         <SemesterStatsModal isOpen={showSemesterStats} onClose={() => setShowSemesterStats(false)} competencies={visibleCompsList} students={currentClass && currentClass.students ? currentClass.students : []} />
                         {showBulkImport && <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass && currentClass.students ? currentClass.students : []} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />}
-                        <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} />
+                        <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
 
                         {/* SIDEBAR */}
                         <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
@@ -2025,22 +2110,21 @@
                         <main className="flex-1 flex flex-col min-w-0 bg-gray-100 h-full overflow-hidden">
                             {currentClass ? (
                                 <>
-                                    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10 shrink-0">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-4 h-8 rounded-full ${CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'] ? CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'].bg : 'bg-blue-600'}`}></div>
-                                            <h2 className={`text-3xl font-black text-gray-800 tracking-tight`}>{currentClass.name}</h2>
+                                    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10 sticky top-0">
+                                        <div>
+                                            <h1 className="text-2xl font-bold text-brand-500 flex items-center gap-2"><Icon name="graduation-cap"/> Avalua Pro</h1>
+                                            <div className="flex flex-col mt-1">
+                                                <p className="text-sm font-semibold text-gray-600">Eina docent d’avaluació i seguiment competencial</p>
+                                                <p className="text-xs text-gray-400">Creat per Marc Pérez Casals</p>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-6">
-                                            <div className="flex bg-gray-100 p-1.5 rounded-xl shadow-inner border border-gray-200">
-                                                {(currentClass.semesters ? currentClass.semesters : []).map(s => (
-                                                    <button key={s.id} onClick={() => setActiveTab(s.id)} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === s.id ? 'bg-white text-brand-600 shadow border border-gray-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'}`}>{s.name}</button>
-                                                ))}
-                                                <button onClick={() => setActiveTab('GLOBAL')} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'GLOBAL' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'}`}><Icon name="chart-pie" className="mr-2"/>Global</button>
-                                            </div>
-                                            <div className="h-8 w-px bg-gray-300"></div>
+                                            <h2 className={`text-3xl font-bold ${CLASS_COLORS[currentClass.color || 'blue'].text}`}>{currentClass.name}</h2>
+                                            <div className="h-8 w-px bg-gray-200"></div>
                                             <div className="flex items-center gap-4">
                                                 <button onClick={resetAllData} className="p-2 text-red-300 hover:text-red-600 transition" title="Reiniciar curs"><Icon name="trash-can" className="text-lg"/></button>
                                                 <div className="flex bg-gray-100 rounded-lg p-1"><button onClick={undo} disabled={historyIndex <= 0} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-left"/></button><button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-right"/></button></div>
+                                                <div className="flex bg-gray-100 p-1 rounded-lg">{currentClass.semesters.map(s => (<button key={s.id} onClick={() => setActiveTab(s.id)} className={`px-4 py-1.5 text-sm font-medium rounded-md transition ${activeTab === s.id ? 'bg-white text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{s.name}</button>))}<button onClick={() => setActiveTab('GLOBAL')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition ${activeTab === 'GLOBAL' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Global</button></div>
                                             </div>
                                         </div>
                                     </header>
