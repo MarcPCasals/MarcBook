@@ -1,1 +1,2075 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avaluació Competencial Pro</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel per compilar JSX al vol -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- SheetJS (Excel Export) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
+    <!-- Configuració Tailwind personalitzada -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            500: '#f97316', // Taronja Principal
+                            600: '#ea580c',
+                            900: '#7c2d12',
+                        },
+                        grade: {
+                            A: '#22c55e',
+                            B: '#3b82f6',
+                            C: '#f97316',
+                            D: '#ef4444',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        
+        /* Columnes i Capçaleres Fixes */
+        .sticky-col { position: sticky; left: 0; background-color: white; z-index: 30; }
+        .sticky-header { position: sticky; top: 0; z-index: 40; }
+        .sticky-intersection { z-index: 50 !important; }
+        
+        table { border-spacing: 0; border-collapse: separate; }
+        th, td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; }
+        th { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, Component } = React;
+
+        // --- ERROR BOUNDARY (ROBUSTESA MÀXIMA) ---
+        class ErrorBoundary extends Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null, errorInfo: null };
+            }
+
+            static getDerivedStateFromError(error) {
+                return { hasError: true };
+            }
+
+            componentDidCatch(error, errorInfo) {
+                this.setState({ error, errorInfo });
+                console.error("Error capturat per ErrorBoundary:", error, errorInfo);
+            }
+
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="flex flex-col items-center justify-center h-screen bg-red-50 text-red-800 p-8 text-center">
+                            <h1 className="text-3xl font-bold mb-4">Ups! Ha ocorregut un error de càrrega.</h1>
+                            <p className="mb-4 text-gray-700">Això passa si el navegador no pot processar bé el codi o les dades emmagatzemades estan corruptes.</p>
+                            <div className="bg-white p-4 rounded border border-red-200 w-full max-w-2xl overflow-auto mb-6 text-left">
+                                <p className="font-bold text-red-600 mb-2">Detall tècnic:</p>
+                                <pre className="text-xs text-gray-600">{this.state.error ? this.state.error.toString() : "Error desconegut"}</pre>
+                            </div>
+                            <button 
+                                onClick={() => { 
+                                    if(confirm("Atenció! Si continues, s'esborraran totes les dades del curs actual (taules, alumnes, notes) i l'eina es reiniciarà. Vols continuar?")) {
+                                        localStorage.removeItem('evalApp_data_v2'); 
+                                        window.location.reload(); 
+                                    }
+                                }} 
+                                className="px-6 py-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 shadow-lg transition-transform hover:scale-105"
+                            >
+                                <i className="fa-solid fa-trash-can mr-2"></i> Esborrar dades corruptes i Reiniciar
+                            </button>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
+        // --- UTILITATS ---
+        const generateUUID = () => {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        };
+
+        const calculateGrade = (marks) => {
+            if (!marks || marks.length === 0) return '';
+            const validMarks = marks.filter(m => m === 'A' || m === 'B' || m === 'C' || m === 'D');
+            if (validMarks.length === 0) return '';
+            
+            const counts = { A: 0, B: 0, C: 0, D: 0 };
+            let sum = 0;
+            const values = { A: 4, B: 3, C: 2, D: 1 };
+            
+            validMarks.forEach(m => { 
+                counts[m]++; 
+                sum += values[m]; 
+            });
+            
+            const total = validMarks.length;
+            if (counts.D / total > 0.5) return 'D';
+            
+            const avg = sum / total;
+            if (avg >= 3.5) return 'A';
+            if (avg >= 2.5) return 'B';
+            if (avg > 1.5) return 'C';
+            return 'D';
+        };
+
+        const calculateNumericAverage = (marks) => {
+            if (!marks) return 0;
+            const validMarks = marks.filter(m => m === 'A' || m === 'B' || m === 'C' || m === 'D');
+            if (validMarks.length === 0) return 0;
+            const values = { A: 4, B: 3, C: 2, D: 1 };
+            const sum = validMarks.reduce((acc, m) => acc + values[m], 0);
+            return (sum / validMarks.length);
+        };
+
+        const calculateMode = (marks) => {
+             if (!marks) return '-';
+             const validMarks = marks.filter(m => m === 'A' || m === 'B' || m === 'C' || m === 'D');
+             if (validMarks.length === 0) return '-';
+             const counts = { A: 0, B: 0, C: 0, D: 0 };
+             validMarks.forEach(m => counts[m]++);
+             let max = 0; 
+             let mode = '-';
+             for (const key in counts) {
+                 if (counts.hasOwnProperty(key)) {
+                     const value = counts[key];
+                     if (value > max) { 
+                         max = value; 
+                         mode = key; 
+                     } else if (value === max && max > 0) { 
+                         mode += `, ${key}`; 
+                     }
+                 }
+             }
+             return mode;
+        };
+
+        const getGradeFromNumeric = (avg) => {
+            if (!avg) return '-';
+            if (avg >= 3.5) return 'A';
+            if (avg >= 2.5) return 'B';
+            if (avg > 1.5) return 'C';
+            return 'D';
+        };
+
+        const getNumericFromGrade = (grade) => {
+            const map = {'A':4, 'B':3, 'C':2, 'D':1};
+            return map[grade] ? map[grade] : 0;
+        };
+
+        const getGradeColor = (grade) => {
+            switch(grade) {
+                case 'A': return 'bg-green-100 text-green-800 border-green-300';
+                case 'B': return 'bg-blue-100 text-blue-800 border-blue-300';
+                case 'C': return 'bg-orange-100 text-orange-800 border-orange-300';
+                case 'D': return 'bg-red-100 text-red-800 border-red-300';
+                default: return 'bg-gray-50 text-gray-400';
+            }
+        };
+
+        const getGradeTextColor = (grade) => {
+            switch(grade) {
+                case 'A': return 'text-green-600 font-bold';
+                case 'B': return 'text-blue-600 font-bold';
+                case 'C': return 'text-orange-600 font-bold';
+                case 'D': return 'text-red-600 font-bold';
+                default: return 'text-gray-300';
+            }
+        };
+
+        const CLASS_COLORS = {
+            blue: { bg: 'bg-blue-600', text: 'text-blue-600', light: 'bg-blue-50', border: 'border-blue-200' },
+            green: { bg: 'bg-green-600', text: 'text-green-600', light: 'bg-green-50', border: 'border-green-200' },
+            yellow: { bg: 'bg-yellow-500', text: 'text-yellow-600', light: 'bg-yellow-50', border: 'border-yellow-200' },
+            red: { bg: 'bg-red-600', text: 'text-red-600', light: 'bg-red-50', border: 'border-red-200' },
+            purple: { bg: 'bg-purple-600', text: 'text-purple-600', light: 'bg-purple-50', border: 'border-purple-200' },
+            orange: { bg: 'bg-orange-500', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200' },
+        };
+
+        const COMP_COLORS_ORDER = ['orange', 'green', 'purple', 'blue'];
+
+        const COMP_COLORS_STYLES = {
+            orange: { header: 'bg-orange-500', sub: 'bg-orange-50 border-orange-200', text: 'text-orange-800', light: '#ffedd5', border: '#fed7aa' },
+            green: { header: 'bg-green-500', sub: 'bg-green-50 border-green-200', text: 'text-green-800', light: '#dcfce7', border: '#bbf7d0' },
+            purple: { header: 'bg-purple-600', sub: 'bg-purple-50 border-purple-200', text: 'text-purple-800', light: '#f3e8ff', border: '#e9d5ff' },
+            blue: { header: 'bg-blue-500', sub: 'bg-blue-50 border-blue-200', text: 'text-blue-800', light: '#dbeafe', border: '#bfdbfe' },
+            yellow: { header: 'bg-yellow-500', sub: 'bg-yellow-50 border-yellow-200', text: 'text-yellow-800', light: '#fefce8', border: '#fef08a' },
+            red: { header: 'bg-red-500', sub: 'bg-red-50 border-red-200', text: 'text-red-800', light: '#fef2f2', border: '#fecaca' },
+            gray: { header: 'bg-gray-500', sub: 'bg-gray-50 border-gray-200', text: 'text-gray-800', light: '#f3f4f6', border: '#e5e7eb' }
+        };
+
+        // --- COMPONENTS UI ---
+
+        const Icon = ({ name, className }) => {
+            return <i className={`fa-solid fa-${name} ${className ? className : ""}`}></i>;
+        };
+
+        const Modal = ({ isOpen, onClose, title, children, size }) => {
+            if (!isOpen) return null;
+            const sizes = { 
+                sm: "max-w-md", 
+                md: "max-w-2xl", 
+                lg: "max-w-6xl", 
+                xl: "max-w-[95vw] h-[90vh]" 
+            }; 
+            const selectedSize = sizes[size] ? sizes[size] : sizes["md"];
+            
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className={`bg-white rounded-xl shadow-2xl w-full ${selectedSize} flex flex-col overflow-hidden max-h-[90vh]`}>
+                        <div className="flex justify-between items-center p-4 border-b shrink-0">
+                            <h3 className="text-xl font-bold text-gray-800">{title}</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+                                <Icon name="xmark" className="text-xl" />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto custom-scroll flex-1">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ChartComponent = ({ type, data, options, className }) => {
+            const canvasRef = useRef(null);
+            const chartRef = useRef(null);
+            useEffect(() => {
+                if (canvasRef.current) {
+                    if (chartRef.current) chartRef.current.destroy();
+                    chartRef.current = new Chart(canvasRef.current, { 
+                        type: type, 
+                        data: data, 
+                        options: { ...options, responsive: true, maintainAspectRatio: false } 
+                    });
+                }
+                return () => { if (chartRef.current) chartRef.current.destroy(); };
+            }, [data, type, options]);
+            return <div className={`relative w-full ${className ? className : 'h-64'}`}><canvas ref={canvasRef} /></div>;
+        };
+
+        // --- MODALS DE CONFIGURACIÓ I GESTIÓ ---
+        const SetupWizard = ({ onComplete }) => {
+            const [className, setClassName] = useState("Grup 1");
+            const [classColor, setClassColor] = useState("blue");
+            const [competencies, setCompetencies] = useState([
+                { id: generateUUID(), name: "Competència 1", criteria: [{id: generateUUID(), name: "Criteri 1.1"}, {id: generateUUID(), name: "Criteri 1.2"}] },
+                { id: generateUUID(), name: "Competència 2", criteria: [{id: generateUUID(), name: "Criteri 2.1"}, {id: generateUUID(), name: "Criteri 2.2"}] },
+                { id: generateUUID(), name: "Competència 3", criteria: [{id: generateUUID(), name: "Criteri 3.1"}, {id: generateUUID(), name: "Criteri 3.2"}] }
+            ]);
+
+            const handleCompChange = (id, val) => {
+                setCompetencies(prev => {
+                    return prev.map(c => {
+                        return c.id === id ? {...c, name: val} : c;
+                    });
+                });
+            };
+
+            const handleCritChange = (compId, critId, val) => {
+                setCompetencies(prev => {
+                    return prev.map(c => {
+                        if (c.id !== compId) return c;
+                        return {
+                            ...c,
+                            criteria: c.criteria.map(crit => crit.id === critId ? {...crit, name: val} : crit)
+                        };
+                    });
+                });
+            };
+
+            const addCompetency = () => {
+                setCompetencies(prev => [...prev, { id: generateUUID(), name: `Competència ${prev.length + 1}`, criteria: [{id: generateUUID(), name: "Criteri 1"}] }]);
+            };
+
+            const removeCompetency = (id) => {
+                setCompetencies(prev => prev.filter(c => c.id !== id));
+            };
+
+            const addCriteria = (compId) => {
+                setCompetencies(prev => {
+                    return prev.map(c => {
+                        if (c.id !== compId) return c;
+                        return {
+                            ...c,
+                            criteria: [...c.criteria, {id: generateUUID(), name: `Criteri ${c.criteria.length + 1}`}]
+                        };
+                    });
+                });
+            };
+
+            const removeCriteria = (compId, critId) => {
+                setCompetencies(prev => {
+                    return prev.map(c => {
+                        if (c.id !== compId) return c;
+                        return {
+                            ...c,
+                            criteria: c.criteria.filter(crit => crit.id !== critId)
+                        };
+                    });
+                });
+            };
+
+            const handleSubmit = () => {
+                const createSemesterStructure = () => {
+                    return competencies.map((c, idx) => {
+                        return {
+                            ...c,
+                            color: COMP_COLORS_ORDER[idx % COMP_COLORS_ORDER.length],
+                            criteria: c.criteria.map(crit => {
+                                return { ...crit, indicators: [{id: generateUUID(), name: "IA 1"}] };
+                            })
+                        };
+                    });
+                };
+                
+                const newClass = { 
+                    id: generateUUID(), 
+                    name: className, 
+                    color: classColor, 
+                    semesters: [
+                        { id: "S1", name: "1r Semestre", isActive: true, competencies: createSemesterStructure() },
+                        { id: "S2", name: "2n Semestre", isActive: false, competencies: createSemesterStructure() }
+                    ], 
+                    students: [] 
+                };
+                onComplete(newClass);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-8">
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-gray-800">Benvingut a Avalua Pro</h2>
+                            <p className="text-gray-500">Configurem el teu primer grup.</p>
+                        </div>
+                        <input value={className} onChange={(e)=>setClassName(e.target.value)} className="w-full p-3 border rounded-xl mb-4 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200" placeholder="Nom del Grup" />
+                        <div className="flex gap-2 mb-6">
+                            {Object.keys(CLASS_COLORS).map(c => (
+                                <button key={c} onClick={()=>setClassColor(c)} className={`w-8 h-8 rounded-full ${CLASS_COLORS[c].bg} ${classColor===c?'ring-2 ring-offset-2 ring-gray-400':''}`}/>
+                            ))}
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto mb-6 custom-scroll">
+                            <h3 className="font-bold text-gray-700 mb-2">Estructura Inicial</h3>
+                            {competencies.map((c, i) => (
+                                <div key={c.id} className="mb-4 bg-gray-50 p-3 rounded border">
+                                    <div className="flex justify-between mb-2">
+                                        <input value={c.name} onChange={(e)=>handleCompChange(c.id, e.target.value)} className="font-bold bg-transparent border-b border-gray-300 w-full mr-2 outline-none focus:border-brand-500 text-gray-700"/>
+                                        <button onClick={()=>removeCompetency(c.id)} className="text-red-400 hover:text-red-600"><Icon name="trash"/></button>
+                                    </div>
+                                    <div className="pl-4 space-y-1">
+                                        {c.criteria.map(crit => (
+                                            <div key={crit.id} className="flex gap-2">
+                                                <input value={crit.name} onChange={(e)=>handleCritChange(c.id, crit.id, e.target.value)} className="text-sm bg-white border rounded p-1 w-full outline-none focus:border-brand-500"/>
+                                                <button onClick={()=>removeCriteria(c.id, crit.id)} className="text-red-300 hover:text-red-500"><Icon name="xmark"/></button>
+                                            </div>
+                                        ))}
+                                        <button onClick={()=>addCriteria(c.id)} className="text-xs text-brand-500 mt-1 font-bold">+ Afegir Criteri</button>
+                                    </div>
+                                </div>
+                            ))}
+                            <button onClick={addCompetency} className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded hover:border-brand-500 hover:text-brand-500 transition font-bold">+ Afegir Competència</button>
+                        </div>
+
+                        <button onClick={handleSubmit} className="w-full bg-brand-500 text-white py-3 rounded-xl font-bold hover:bg-brand-600 shadow-md">Començar a Avaluar</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const NewClassModal = ({ isOpen, onClose, existingClasses, onCreate, onOpenWizard }) => {
+            if (!isOpen) return null;
+            const [name, setName] = useState("");
+            const [baseClassId, setBaseClassId] = useState("new");
+            const [classColor, setClassColor] = useState("blue");
+
+            const handleSubmit = () => {
+                if (baseClassId === "new") {
+                    onClose();
+                    onOpenWizard(name);
+                } else {
+                    const base = existingClasses.find(c => c.id === baseClassId);
+                    if(base) {
+                        const newClass = JSON.parse(JSON.stringify(base));
+                        newClass.id = generateUUID();
+                        newClass.name = name ? name : `${base.name} (Còpia)`;
+                        newClass.color = classColor;
+                        newClass.students = [];
+                        onCreate(newClass);
+                    }
+                    onClose();
+                }
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Crear Nova Classe">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Nom de la Classe</label>
+                            <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500 focus:ring-1" placeholder="Ex: Matemàtiques 2n ESO" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Estructura d'Avaluació</label>
+                            <select value={baseClassId} onChange={(e)=>setBaseClassId(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500">
+                                <option value="new">✨ Crear nova estructura (Wizard)</option>
+                                {existingClasses.map(c => (
+                                    <option key={c.id} value={c.id}>Copiar estructura de: {c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Color del Grup</label>
+                            <div className="flex gap-2">
+                                {Object.keys(CLASS_COLORS).map(c => (
+                                    <button key={c} onClick={()=>setClassColor(c)} className={`w-8 h-8 rounded-full ${CLASS_COLORS[c].bg} ${classColor===c?'ring-2 ring-offset-2 ring-gray-400':''}`}/>
+                                ))}
+                            </div>
+                        </div>
+                        <button onClick={handleSubmit} className="w-full bg-brand-500 text-white py-2 rounded font-bold hover:bg-brand-600 mt-2">Crear Classe</button>
+                    </div>
+                </Modal>
+            );
+        }; 
+        
+        const EditClassModal = ({ isOpen, onClose, cls, onUpdate, onDelete }) => {
+            if (!isOpen || !cls) return null;
+            const [name, setName] = useState(cls.name);
+            const [color, setColor] = useState(cls.color ? cls.color : 'blue');
+
+            const handleSave = () => {
+                onUpdate(cls.id, {name: name, color: color});
+                onClose();
+            };
+
+            const handleDelete = () => {
+                if(confirm("Estàs completament segur que vols eliminar aquesta classe per sempre? Aquesta acció no es pot desfer.")) {
+                    onDelete(cls.id);
+                    onClose();
+                }
+            };
+
+            return (
+                 <Modal isOpen={isOpen} onClose={onClose} title="Editar Configuració de la Classe">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Nom de la Classe</label>
+                            <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500"/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Color del Grup</label>
+                            <div className="flex gap-2">
+                                {Object.keys(CLASS_COLORS).map(c => (
+                                    <button key={c} onClick={()=>setColor(c)} className={`w-8 h-8 rounded-full ${CLASS_COLORS[c].bg} ${color===c?'ring-2 ring-offset-2 ring-gray-400':''}`}/>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex justify-between pt-4 mt-2 border-t">
+                            <button onClick={handleDelete} className="text-red-600 font-bold px-4 py-2 hover:bg-red-50 rounded"><Icon name="trash"/> Eliminar Classe</button>
+                            <button onClick={handleSave} className="bg-brand-500 text-white px-6 py-2 rounded font-bold hover:bg-brand-600">Guardar Canvis</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        const ManageStudentsModal = ({ isOpen, onClose, students, onSave }) => {
+            if (!isOpen) return null;
+            const [textInput, setTextInput] = useState("");
+            
+            useEffect(() => {
+                const sList = students ? students : [];
+                setTextInput(sList.map(s => s.name).join("\n"));
+            }, [students]);
+
+            const handleSave = () => {
+                const names = textInput.split("\n").map(n => n.trim()).filter(n => n !== "");
+                const sList = students ? students : [];
+                const newStudents = names.map(name => {
+                    const existing = sList.find(s => s.name === name);
+                    return existing ? existing : { id: generateUUID(), name: name, marks: {}, notes: { general: "", competencies: {} } };
+                });
+                onSave(newStudents);
+                onClose();
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Gestió del Llistat d'Alumnes" size="lg">
+                    <div className="space-y-4">
+                        <div className="bg-blue-50 p-3 rounded text-sm text-blue-800 border border-blue-200">
+                            <Icon name="circle-info" className="mr-2"/>Pots copiar i enganxar la llista sencera de noms des del teu Excel o Word (un nom per línia).
+                        </div>
+                        <textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} className="w-full h-64 p-3 border rounded-xl font-mono text-sm border-gray-300 outline-none focus:border-brand-500 focus:ring-1" placeholder="Cognom Nom 1&#10;Cognom Nom 2&#10;..." />
+                        <div className="flex justify-end">
+                            <button onClick={handleSave} className="px-6 py-2 bg-brand-500 text-white rounded-lg font-bold hover:bg-brand-600 shadow">Desar Llistat</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        const StudentNotesModal = ({ isOpen, onClose, student, competencies, onSave }) => {
+            if (!isOpen || !student) return null;
+            const initialNotes = student.notes ? student.notes : { general: "", competencies: {} };
+            const [notes, setNotes] = useState(initialNotes);
+
+            const handleNotesChange = (key, val, isComp) => {
+                if(isComp) {
+                    const compNotes = notes.competencies ? notes.competencies : {};
+                    setNotes(prev => {
+                        return {...prev, competencies: {...compNotes, [key]: val}};
+                    });
+                } else {
+                    setNotes(prev => {
+                        return {...prev, [key]: val};
+                    });
+                }
+            };
+
+            const copyNotes = () => {
+                let text = `Alumne\tTipus\tComentari\n`;
+                if(notes.general) text += `${student.name}\tGeneral\t${notes.general}\n`;
+                if(competencies && notes.competencies) {
+                    competencies.forEach(c => { 
+                        if(notes.competencies[c.id]) {
+                            text += `${student.name}\t${c.name}\t${notes.competencies[c.id]}\n`; 
+                        }
+                    });
+                }
+                navigator.clipboard.writeText(text); 
+                alert("Notes copiades al porta-retalls per enganxar a Excel.");
+            };
+
+            const handleSaveAndClose = () => {
+                onSave(student.id, notes);
+                onClose();
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={handleSaveAndClose} title={`Anotacions Personals: ${student.name}`} size="lg">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center bg-gray-50 p-2 rounded border">
+                            <p className="text-xs text-gray-500">Aquests comentaris es desaran i es podran exportar a Excel.</p>
+                            <button onClick={copyNotes} className="text-xs bg-white border border-gray-300 shadow-sm px-3 py-1.5 rounded hover:bg-gray-100 font-bold text-gray-700">
+                                <Icon name="copy" className="mr-1"/> Copiar
+                            </button>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Comentari General del Semestre</label>
+                            <textarea value={notes.general ? notes.general : ""} onChange={(e) => handleNotesChange("general", e.target.value, false)} className="w-full p-3 border border-yellow-300 rounded-lg h-24 bg-yellow-50 outline-none focus:ring-2 focus:ring-yellow-400" placeholder="Anotacions generals sobre el progrés, actitud, etc."/>
+                        </div>
+                        {competencies && competencies.length > 0 && (
+                            <div className="space-y-3 pt-4 border-t">
+                                <h4 className="font-bold text-gray-700 uppercase tracking-wide text-sm mb-2">Notes Específiques per Competència</h4>
+                                {competencies.map(c => (
+                                    <div key={c.id}>
+                                        <label className="block text-xs font-bold text-brand-600 mb-1">{c.name}</label>
+                                        <textarea value={(notes.competencies && notes.competencies[c.id]) ? notes.competencies[c.id] : ""} onChange={(e) => handleNotesChange(c.id, e.target.value, true)} className="w-full p-2 border rounded h-16 text-sm outline-none focus:border-brand-500" placeholder={`Comentari associat només a aquesta competència...`}/>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="pt-4 flex justify-end">
+                            <button onClick={handleSaveAndClose} className="px-6 py-2 bg-brand-500 text-white rounded font-bold hover:bg-brand-600 shadow">Desar i Tancar</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+        
+        const GlobalNotesModal = ({ isOpen, onClose, students, competencies }) => {
+            if (!isOpen) return null;
+            
+            const sList = students ? students : [];
+            const cList = competencies ? competencies : [];
+
+            const copyAllNotes = () => {
+                let text = `Alumne\tTipus\tCompetència\tComentari\n`;
+                sList.forEach(s => {
+                    if (s.notes && s.notes.general) {
+                        text += `${s.name}\tGeneral\t-\t${s.notes.general.replace(/\n/g, ' ')}\n`;
+                    }
+                    if (s.notes && s.notes.competencies) {
+                        cList.forEach(c => { 
+                            if (s.notes.competencies[c.id]) {
+                                text += `${s.name}\tCompetencial\t${c.name}\t${s.notes.competencies[c.id].replace(/\n/g, ' ')}\n`; 
+                            }
+                        });
+                    }
+                });
+                navigator.clipboard.writeText(text); 
+                alert("Tots els comentaris s'han copiat al porta-retalls.");
+            };
+
+            const studentsWithNotes = sList.filter(s => {
+                let hasGen = false;
+                if (s.notes && s.notes.general && s.notes.general.trim() !== "") hasGen = true;
+                
+                let hasComp = false;
+                if (s.notes && s.notes.competencies) {
+                    for (const key in s.notes.competencies) {
+                        if (s.notes.competencies[key] && s.notes.competencies[key].trim() !== "") {
+                            hasComp = true;
+                            break;
+                        }
+                    }
+                }
+                return hasGen || hasComp;
+            });
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Resum de tots els Comentaris" size="lg">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
+                            <p className="text-sm text-blue-800"><Icon name="circle-info" className="mr-2"/>Només es mostren els alumnes que tenen algun comentari escrit.</p>
+                            <button onClick={copyAllNotes} className="px-4 py-2 bg-white border border-blue-200 rounded shadow-sm text-sm font-bold text-blue-700 hover:bg-blue-100 transition">
+                                <Icon name="copy" className="mr-1"/> Copiar Tot com a Taula
+                            </button>
+                        </div>
+                        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scroll">
+                            {studentsWithNotes.length === 0 && <p className="text-center text-gray-400 py-10 font-bold text-lg">No hi ha cap comentari registrat per a cap alumne.</p>}
+                            {studentsWithNotes.map(s => (
+                                <div key={s.id} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+                                    <h4 className="font-bold text-lg mb-3 text-gray-800 border-b pb-1">{s.name}</h4>
+                                    {s.notes && s.notes.general && (
+                                        <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-gray-800">
+                                            <span className="font-black text-[10px] text-yellow-600 uppercase block mb-1">Anotació General</span>
+                                            {s.notes.general}
+                                        </div>
+                                    )}
+                                    {s.notes && s.notes.competencies && Object.keys(s.notes.competencies).map(cid => {
+                                        const txt = s.notes.competencies[cid];
+                                        if(!txt || txt.trim() === "") return null;
+                                        const comp = cList.find(c=>c.id===cid);
+                                        const cName = comp ? comp.name : 'Competència';
+                                        return (
+                                            <div key={cid} className="mt-2 ml-2 pl-3 border-l-4 border-brand-300 text-sm py-1 bg-gray-50 rounded-r">
+                                                <span className="font-bold text-gray-700 block text-xs">{cName}:</span>
+                                                <span className="text-gray-600">{txt}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </Modal>
+            );
+        }
+
+        const getFlatIndicators = (comps) => {
+            let inds = [];
+            if (comps) {
+                comps.forEach(c => {
+                    if (c.criteria) {
+                        c.criteria.forEach(crit => {
+                            if (crit.indicators) {
+                                crit.indicators.forEach(ind => {
+                                    inds.push(ind);
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            return inds;
+        };
+
+        const BulkImportModal = ({ isOpen, onClose, students, indicators, onImport }) => {
+            if (!isOpen) return null;
+            
+            const sList = students ? students : [];
+            const iList = indicators ? indicators : [];
+            
+            const [gridData, setGridData] = useState(() => {
+                return sList.map(s => {
+                    return iList.map(ind => {
+                        return s.marks && s.marks[ind.id] ? s.marks[ind.id] : "";
+                    });
+                });
+            });
+
+            const handlePaste = (e, rowIdx, colIdx) => {
+                e.preventDefault();
+                const pasteData = e.clipboardData.getData('text');
+                const rows = pasteData.trim().split(/\r\n|\n|\r/).map(row => row.split('\t'));
+                
+                const newGrid = [...gridData];
+                rows.forEach((rowVals, rOffset) => {
+                    const targetRow = rowIdx + rOffset;
+                    if (targetRow < newGrid.length) {
+                        const newRow = [...newGrid[targetRow]];
+                        rowVals.forEach((val, cOffset) => {
+                            const targetCol = colIdx + cOffset;
+                            if (targetCol < newRow.length) {
+                                let cleanVal = val.trim().toUpperCase();
+                                if(cleanVal === 'A' || cleanVal === 'B' || cleanVal === 'C' || cleanVal === 'D' || cleanVal === '') {
+                                    newRow[targetCol] = cleanVal;
+                                }
+                            }
+                        });
+                        newGrid[targetRow] = newRow;
+                    }
+                });
+                setGridData(newGrid);
+            };
+
+            const handleChange = (r, c, val) => {
+                const newGrid = [...gridData];
+                newGrid[r] = [...newGrid[r]];
+                newGrid[r][c] = val.toUpperCase();
+                setGridData(newGrid);
+            };
+
+            const handleSave = () => {
+                onImport(gridData);
+                onClose();
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Importació Massiva des d'Excel" size="xl">
+                    <div className="flex flex-col h-[70vh]">
+                        <div className="bg-blue-50 p-4 rounded mb-4 text-sm text-blue-800 flex items-start gap-3 border border-blue-200 shrink-0">
+                            <Icon name="circle-info" className="mt-1 text-lg"/>
+                            <div>
+                                <p className="font-bold mb-1">Com importar notes ràpidament?</p>
+                                <ul className="list-disc ml-4 space-y-1">
+                                    <li>Selecciona les cel·les amb notes (A, B, C, D) al teu Excel i copia-les (<kbd className="bg-gray-200 px-1 rounded">Ctrl</kbd> + <kbd className="bg-gray-200 px-1 rounded">C</kbd>).</li>
+                                    <li>Fes clic a la <strong>primera cel·la blanca</strong> d'aquesta taula (la que correspon al primer alumne i primer indicador).</li>
+                                    <li>Prem <kbd className="bg-gray-200 px-1 rounded">Ctrl</kbd> + <kbd className="bg-gray-200 px-1 rounded">V</kbd>. Les dades ompliran la graella automàticament cap a la dreta i avall.</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-auto border rounded relative bg-gray-50 shadow-inner custom-scroll">
+                            <table className="w-full text-xs border-collapse">
+                                <thead className="sticky top-0 bg-gray-200 z-10 shadow-sm">
+                                    <tr>
+                                        <th className="p-2 border sticky left-0 bg-gray-200 z-20 min-w-[180px] text-left">Alumne</th>
+                                        {iList.map(ind => (
+                                            <th key={ind.id} className="p-2 border min-w-[60px] text-center font-bold text-gray-700">{ind.name}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white">
+                                    {sList.map((student, r) => (
+                                        <tr key={student.id} className="hover:bg-blue-50 transition-colors">
+                                            <td className="p-2 border sticky left-0 bg-white font-medium truncate max-w-[180px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">{student.name}</td>
+                                            {iList.map((ind, c) => (
+                                                <td key={ind.id} className="p-0 border">
+                                                    <input 
+                                                        value={gridData[r][c] ? gridData[r][c] : ""}
+                                                        onChange={(e) => handleChange(r, c, e.target.value)}
+                                                        onPaste={(e) => handlePaste(e, r, c)}
+                                                        className={`w-full h-full p-2 text-center focus:bg-blue-100 focus:ring-2 focus:ring-blue-400 outline-none transition-colors font-bold ${getGradeTextColor(gridData[r][c])}`}
+                                                    />
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="flex justify-end pt-4 shrink-0 mt-2">
+                            <button onClick={handleSave} className="bg-brand-500 text-white px-8 py-3 rounded-lg font-bold hover:bg-brand-600 shadow-md">Desar Importació a la Taula Principal</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        const CopyTableModal = ({ isOpen, onClose, classes, currentClassId, currentSemester, onCopy }) => {
+            if (!isOpen) return null;
+            const [targetClassId, setTargetClassId] = useState("");
+            const [selectedCompetencies, setSelectedCompetencies] = useState([]);
+            
+            const comps = currentSemester && currentSemester.competencies ? currentSemester.competencies : [];
+            const clsList = classes ? classes : [];
+
+            const handleCheckbox = (compId) => {
+                setSelectedCompetencies(prev => {
+                    if (prev.includes(compId)) {
+                        return prev.filter(x => x !== compId);
+                    } else {
+                        return [...prev, compId];
+                    }
+                });
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Copiar Configuració de la Taula">
+                    <div className="space-y-6">
+                        <div className="text-sm text-gray-700 bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3 items-start">
+                            <Icon name="copy" className="text-blue-500 text-xl mt-1"/>
+                            <div>
+                                <p className="mb-2">Aquesta eina copiarà l'estructura (Criteris i Indicadors) de les competències que triïs a una altra classe.</p>
+                                <p className="text-red-600 font-bold text-xs"><Icon name="triangle-exclamation" className="mr-1"/> Si la competència ja existeix al destí, <strong>sobreescriurà l'antiga</strong> i se'n perdran les notes prèvies. Les altres competències no es tocaran.</p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Classe Destí</label>
+                            <select value={targetClassId} onChange={(e) => setTargetClassId(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <option value="">-- Selecciona la classe on vols copiar --</option>
+                                {clsList.filter(c => c.id !== currentClassId).map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Competències a copiar:</label>
+                            <div className="max-h-48 overflow-y-auto border border-gray-200 p-2 rounded-lg bg-gray-50 space-y-1 custom-scroll">
+                                {comps.map(comp => (
+                                    <label key={comp.id} className="flex gap-3 p-3 bg-white border border-gray-100 rounded cursor-pointer hover:bg-blue-50 transition items-center shadow-sm">
+                                        <input type="checkbox" className="w-4 h-4 text-brand-500" checked={selectedCompetencies.includes(comp.id)} onChange={() => handleCheckbox(comp.id)}/>
+                                        <span className="font-bold text-gray-700">{comp.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end pt-4 border-t">
+                            <button onClick={() => { onCopy(targetClassId, selectedCompetencies); onClose(); }} disabled={!targetClassId || selectedCompetencies.length===0} className="px-6 py-3 bg-brand-500 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-brand-600 transition shadow">Executar Còpia</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        const SemesterStatsModal = ({ isOpen, onClose, competencies, students }) => {
+            if (!isOpen) return null;
+            
+            const cList = competencies ? competencies : [];
+            const sList = students ? students : [];
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Estadístiques Detallades del Semestre" size="lg">
+                    <div className="space-y-6">
+                        {cList.length === 0 && <p className="text-gray-500 text-center py-8 font-bold text-lg">No hi ha competències per analitzar.</p>}
+                        
+                        {cList.map(comp => {
+                            const styles = COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] ? COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] : COMP_COLORS_STYLES['blue'];
+                            let sum = 0; let count = 0;
+                            
+                            sList.forEach(s => {
+                                let marks = [];
+                                if(comp.criteria) {
+                                    comp.criteria.forEach(crit => {
+                                        if(crit.indicators) {
+                                            crit.indicators.forEach(i => { 
+                                                if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); 
+                                            });
+                                        }
+                                    });
+                                }
+                                const g = calculateGrade(marks);
+                                if(g) { sum += getNumericFromGrade(g); count++; }
+                            });
+                            
+                            const avgNum = count > 0 ? sum/count : 0;
+                            const avgLetter = count > 0 ? getGradeFromNumeric(avgNum) : '-';
+                            
+                            return (
+                                <div key={comp.id} className={`border rounded-xl overflow-hidden shadow-sm ${styles.sub.replace('bg-', 'border-')}`}>
+                                    <div className={`p-4 flex justify-between items-center ${styles.header} text-white`}>
+                                        <h4 className="font-bold text-xl">{comp.name}</h4>
+                                        <div className="bg-white/20 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 shadow-inner">
+                                            <span className="uppercase tracking-wide text-xs">Mitjana Global:</span>
+                                            <span className="font-black text-2xl">{avgNum.toFixed(2)}</span>
+                                            <span className="bg-white text-gray-800 px-2 py-0.5 rounded text-sm font-bold">{avgLetter}</span>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-white space-y-6">
+                                        {comp.criteria && comp.criteria.map(crit => (
+                                            <div key={crit.id} className="ml-2">
+                                                <h5 className={`text-sm font-black uppercase mb-3 border-b pb-1 ${styles.text.replace('text-', 'border-')} ${styles.text}`}>{crit.name}</h5>
+                                                <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                                    <table className="w-full text-sm">
+                                                        <thead>
+                                                            <tr className="bg-gray-50 border-b border-gray-200">
+                                                                <th className="p-3 text-left font-bold text-gray-600 uppercase text-xs tracking-wider">Indicador d'Avaluació</th>
+                                                                <th className="p-3 text-center font-bold text-gray-600 uppercase text-xs tracking-wider border-l w-28 bg-gray-100/50">Moda</th>
+                                                                <th className="p-3 text-center font-bold text-gray-600 uppercase text-xs tracking-wider border-l w-32 bg-gray-100/50">Mitjana</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100">
+                                                            {crit.indicators && crit.indicators.map(ind => {
+                                                                const m = sList.map(s => s.marks && s.marks[ind.id] ? s.marks[ind.id] : null).filter(val => val !== null);
+                                                                const avg = calculateNumericAverage(m);
+                                                                const lAvg = getGradeFromNumeric(avg);
+                                                                return (
+                                                                    <tr key={ind.id} className="hover:bg-gray-50 transition-colors">
+                                                                        <td className="p-3 text-gray-800 font-medium">{ind.name}</td>
+                                                                        <td className="p-3 text-center border-l font-mono font-bold text-gray-500 bg-gray-50/20 text-lg">{calculateMode(m)}</td>
+                                                                        <td className="p-3 text-center border-l bg-gray-50/20">
+                                                                            <span className="font-bold text-lg mr-2 text-gray-700">{avg.toFixed(2)}</span>
+                                                                            {m.length > 0 && <span className={`text-xs px-2 py-1 rounded font-bold shadow-sm ${getGradeColor(lAvg)}`}>{lAvg}</span>}
+                                                                        </td>
+                                                                    </tr>
+                                                                )
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </Modal>
+            );
+        };
+
+        const StudentEvolutionModal = ({ isOpen, onClose, studentData }) => {
+            if (!isOpen || !studentData) return null;
+            const { name, history, radarFirst, radarLast, labels } = studentData;
+            
+            const improvement = history.length >= 2 ? (history[history.length-1] - history[0]) : 0;
+            let status = { text: "Estable", color: "text-gray-500", icon: "minus" };
+            if (improvement > 0.5) status = { text: "Progrés Alt", color: "text-green-600", icon: "arrow-trend-up" };
+            if (improvement < -0.5) status = { text: "Regressió", color: "text-red-600", icon: "arrow-trend-down" };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title={`Evolució: ${name}`} size="lg">
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border">
+                            <div>
+                                <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-1">Ritme de Millora</p>
+                                <p className={`text-2xl font-bold ${status.color} flex items-center gap-2`}>
+                                    <Icon name={status.icon}/> {status.text}
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-1">Nota Mitjana Actual</p>
+                                <p className="text-3xl font-bold text-gray-800">{history.length>0 ? history[history.length-1].toFixed(2) : '-'}</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white p-4 border rounded-xl shadow-sm">
+                                <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Trajectòria Temporal</h4>
+                                <ChartComponent 
+                                    className="h-64"
+                                    type="line" 
+                                    data={{
+                                        labels: history.map((_,i)=>`Evidència ${i+1}`), 
+                                        datasets:[{label:'Mitjana Acumulada', data:history, borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.1)', fill:true, tension:0.3, pointRadius: 5}]
+                                    }} 
+                                    options={{scales:{y:{min:1, max:4}}, plugins: { legend: { display: false } }}}
+                                />
+                            </div>
+                            <div className="bg-white p-4 border rounded-xl shadow-sm">
+                                <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Inici vs Final</h4>
+                                <ChartComponent 
+                                    className="h-64"
+                                    type="radar" 
+                                    data={{
+                                        labels: labels, 
+                                        datasets:[
+                                            {label:'Primera Evidència', data:radarFirst, borderColor:'#9ca3af', backgroundColor: 'rgba(156, 163, 175, 0.2)'}, 
+                                            {label:'Darrera Evidència', data:radarLast, borderColor:'#f97316', backgroundColor: 'rgba(249, 115, 22, 0.2)'}
+                                        ]
+                                    }} 
+                                    options={{scales:{r:{min:0, max:4, ticks: { display: false }}}}}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        // --- APP PRINCIPAL ---
+
+        const App = () => {
+            const [history, setHistory] = useState([]);
+            const [historyIndex, setHistoryIndex] = useState(-1);
+            
+            let classes = [];
+            if (historyIndex >= 0 && historyIndex < history.length) {
+                classes = history[historyIndex];
+            }
+            
+            const [activeClassId, setActiveClassId] = useState(null);
+            const [activeTab, setActiveTab] = useState('S1'); 
+            
+            // Modal States
+            const [isEditingStructure, setIsEditingStructure] = useState(false);
+            const [showWizard, setShowWizard] = useState(false);
+            const [showNewClassModal, setShowNewClassModal] = useState(false);
+            const [showEditClassModal, setShowEditClassModal] = useState(null);
+            const [showManageStudents, setShowManageStudents] = useState(false);
+            const [showStudentNotes, setShowStudentNotes] = useState(null); 
+            const [showGlobalNotes, setShowGlobalNotes] = useState(false);
+            const [showCopyTable, setShowCopyTable] = useState(false);
+            const [showSemesterStats, setShowSemesterStats] = useState(false);
+            const [showBulkImport, setShowBulkImport] = useState(false);
+            const [showStudentEvoModal, setShowStudentEvoModal] = useState(null);
+
+            const [visibleCompetencies, setVisibleCompetencies] = useState({});
+            const [expandedComps, setExpandedComps] = useState({});
+
+            // 1. CARREGA I MIGRACIÓ DE DADES 
+            useEffect(() => {
+                let initialData = [];
+                try { 
+                    const saved = localStorage.getItem('evalApp_data_v2'); 
+                    let parsed = [];
+                    if (saved) {
+                        parsed = JSON.parse(saved);
+                    }
+                    
+                    if (!Array.isArray(parsed)) {
+                        parsed = [];
+                    }
+
+                    initialData = parsed.map(cls => {
+                        let newCls = {...cls};
+                        if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
+                            newCls.semesters = [
+                                { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
+                                { id: 'S2', name: '2n Semestre', isActive: false, competencies: [] }
+                            ];
+                        }
+                        if (!newCls.students) {
+                            newCls.students = [];
+                        }
+                        return newCls;
+                    });
+
+                } catch(e) { 
+                    console.error("Error loading data from localStorage", e);
+                    initialData = []; 
+                }
+                
+                if (initialData.length === 0) {
+                    setShowWizard(true);
+                }
+                setHistory([initialData]); 
+                setHistoryIndex(0);
+                if (initialData.length > 0) {
+                    setActiveClassId(initialData[0].id);
+                }
+            }, []);
+
+            useEffect(() => { 
+                if (classes && classes.length > 0) {
+                    try { 
+                        localStorage.setItem('evalApp_data_v2', JSON.stringify(classes)); 
+                    } catch(e) {
+                        console.error("Failed to save to localStorage", e);
+                    }
+                }
+            }, [classes]);
+
+            const updateClasses = (newClasses) => {
+                let newHistory = [];
+                if (historyIndex >= 0) {
+                    newHistory = history.slice(0, historyIndex + 1); 
+                }
+                newHistory.push(newClasses);
+                if (newHistory.length > 50) {
+                    newHistory.shift(); 
+                }
+                setHistory(newHistory); 
+                setHistoryIndex(newHistory.length - 1);
+            };
+
+            const undo = () => { if (historyIndex > 0) setHistoryIndex(historyIndex - 1); };
+            const redo = () => { if (historyIndex < history.length - 1) setHistoryIndex(historyIndex + 1); };
+            
+            const resetAllData = () => { 
+                if(confirm("ATENCIÓ: Esborraràs TOTES les dades i reiniciaràs l'aplicació.\nEstàs segur?")) { 
+                    try { localStorage.removeItem('evalApp_data_v2'); } catch(e) {}
+                    window.location.reload(); 
+                } 
+            };
+
+            let currentClass = null;
+            if (classes && classes.length > 0 && activeClassId) {
+                const found = classes.find(c => c.id === activeClassId);
+                if (found) currentClass = found;
+            }
+
+            const isGlobalView = activeTab === 'GLOBAL';
+            
+            let currentSemester = null;
+            if (currentClass && currentClass.semesters) {
+                const foundSem = currentClass.semesters.find(s => s.id === activeTab);
+                if (foundSem) currentSemester = foundSem;
+            }
+
+            const activeCompetencies = currentSemester && currentSemester.competencies ? currentSemester.competencies : [];
+            
+            const visibleCompsList = activeCompetencies.filter(c => { 
+                const visibleSet = visibleCompetencies[activeClassId]; 
+                return !visibleSet || visibleSet.length === 0 || visibleSet.includes(c.id); 
+            });
+
+            // Handlers
+            const saveStudentsList = (ns) => { 
+                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: ns } : c)); 
+            };
+            const updateStudentNotes = (sid, notes) => { 
+                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, notes: notes } : s) } : c)); 
+            };
+            const handleUpdateClass = (id, data) => {
+                updateClasses(classes.map(c => c.id === id ? { ...c, ...data } : c));
+            };
+            const handleDeleteClass = (id) => { 
+                const nc = classes.filter(c => c.id !== id); 
+                updateClasses(nc); 
+                if(nc.length > 0) {
+                    setActiveClassId(nc[0].id);
+                } else {
+                    setActiveClassId(null); 
+                    setShowWizard(true);
+                } 
+            };
+            const handleCreateClass = (nc) => { 
+                updateClasses([...classes, nc]); 
+                setActiveClassId(nc.id); 
+                setShowWizard(false); 
+            };
+            const updateMark = (sid, iid, val) => {
+                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, marks: { ...(s.marks ? s.marks : {}), [iid]: val } } : s) } : c));
+            };
+            
+            const renameItem = (type, itemId, parentId, grandParentId) => {
+                const newName = prompt("Nou nom:"); 
+                if (!newName || newName.trim() === "") return;
+                const newClasses = classes.map(c => { 
+                    if (c.id !== activeClassId) return c; 
+                    return { ...c, semesters: c.semesters.map(s => { 
+                        if (s.id !== activeTab) return s; 
+                        if(type === 'comp') {
+                            return {...s, competencies: s.competencies.map(x => x.id===itemId ? {...x, name:newName} : x)}; 
+                        }
+                        return {...s, competencies: s.competencies.map(comp => { 
+                            if(type === 'crit') {
+                                return {...comp, criteria: comp.criteria.map(x => x.id===itemId ? {...x, name:newName} : x)}; 
+                            }
+                            if(type === 'ind') {
+                                return {...comp, criteria: comp.criteria.map(crit => {
+                                    return {...crit, indicators: crit.indicators.map(x => x.id===itemId ? {...x, name:newName} : x)}
+                                })}; 
+                            }
+                            return comp; 
+                        })}; 
+                    })}; 
+                });
+                updateClasses(newClasses);
+            };
+
+            const deleteItem = (type, itemId, parentId, grandParentId) => {
+                if(!confirm("Segur que vols esborrar-ho? Es perdran les notes associades.")) return;
+                const newClasses = classes.map(c => { 
+                    if (c.id !== activeClassId) return c; 
+                    return { ...c, semesters: c.semesters.map(s => { 
+                        if (s.id !== activeTab) return s; 
+                        if(type === 'comp') {
+                            return {...s, competencies: s.competencies.filter(x => x.id !== itemId)}; 
+                        }
+                        return {...s, competencies: s.competencies.map(comp => { 
+                            if(type === 'crit' && comp.id === parentId) {
+                                return {...comp, criteria: comp.criteria.filter(x => x.id !== itemId)}; 
+                            }
+                            if(type === 'ind' && comp.id === grandParentId) {
+                                return {...comp, criteria: comp.criteria.map(crit => {
+                                    if (crit.id === parentId) {
+                                        return {...crit, indicators: crit.indicators.filter(x => x.id !== itemId)};
+                                    }
+                                    return crit;
+                                })}; 
+                            }
+                            return comp; 
+                        })}; 
+                    })}; 
+                });
+                updateClasses(newClasses);
+            };
+
+            const addStructureItem = (type, parentId, grandParentId) => {
+                let name = prompt("Nom del nou element:"); 
+                if(!name || name.trim() === "") {
+                    if (type === 'comp') name = "Nova Competència";
+                    if (type === 'crit') name = "Nou Criteri";
+                    if (type === 'ind') name = "Nou IA";
+                }
+                const newClasses = classes.map(c => { 
+                    if (c.id !== activeClassId) return c; 
+                    return { ...c, semesters: c.semesters.map(s => { 
+                        if (s.id !== activeTab) return s; 
+                        if(type === 'comp') { 
+                            const color = COMP_COLORS_ORDER[s.competencies.length % COMP_COLORS_ORDER.length]; 
+                            return {...s, competencies: [...s.competencies, {id:generateUUID(), name: name, color: color, criteria:[]}]}; 
+                        } 
+                        return {...s, competencies: s.competencies.map(comp => { 
+                            if(type === 'crit' && comp.id === parentId) {
+                                return {...comp, criteria: [...comp.criteria, {id:generateUUID(), name: name, indicators:[{id:generateUUID(), name: "IA 1"}]}]}; 
+                            }
+                            if(type === 'ind' && comp.id === grandParentId) {
+                                return {...comp, criteria: comp.criteria.map(crit => {
+                                    if (crit.id === parentId) {
+                                        return {...crit, indicators: [...crit.indicators, {id:generateUUID(), name: name}]};
+                                    }
+                                    return crit;
+                                })}; 
+                            }
+                            return comp; 
+                        })}; 
+                    })}; 
+                });
+                updateClasses(newClasses);
+            };
+            
+            const handleCopyTable = (targetId, compIds) => {
+                const sourceComps = currentSemester.competencies.filter(c => compIds.includes(c.id));
+                
+                // Deep clone 
+                const clonedComps = sourceComps.map(c => {
+                    return { 
+                        ...c, 
+                        id: generateUUID(), 
+                        criteria: c.criteria.map(k => {
+                            return {
+                                ...k, 
+                                id: generateUUID(), 
+                                indicators: k.indicators.map(i => {
+                                    return { ...i, id: generateUUID() };
+                                })
+                            };
+                        }) 
+                    };
+                });
+
+                const newClasses = classes.map(c => { 
+                    if (c.id !== targetId) return c; 
+                    return { ...c, semesters: c.semesters.map(s => { 
+                        if (s.id !== activeTab) return s; 
+                        
+                        let newComps = [...s.competencies]; 
+                        clonedComps.forEach(clone => { 
+                            const idx = newComps.findIndex(nc => nc.name === clone.name); 
+                            if (idx !== -1) { 
+                                newComps[idx] = clone; // Sobreescriu
+                            } else { 
+                                newComps.push(clone); // Afegeix
+                            } 
+                        }); 
+                        return { ...s, competencies: newComps }; 
+                    }) }; 
+                });
+                updateClasses(newClasses);
+                alert("Estructura copiada amb èxit!");
+            };
+
+            const handleBulkImportSave = (gridData) => {
+                const flatInds = getFlatIndicators(visibleCompsList);
+
+                const updated = currentClass.students.map((s, r) => { 
+                    const marks = s.marks ? {...s.marks} : {}; 
+                    if(gridData[r]) {
+                        gridData[r].forEach((val, c) => { 
+                            if(c < flatInds.length && val) {
+                                marks[flatInds[c].id] = val; 
+                            }
+                        }); 
+                    }
+                    return {...s, marks}; 
+                });
+                updateClasses(classes.map(c => c.id === activeClassId ? {...c, students: updated} : c));
+            };
+
+            // --- GLOBAL DASHBOARD LOGIC ---
+            const GlobalDashboard = () => { 
+                const stats = useMemo(() => {
+                    if (!currentClass || !currentClass.semesters) return null;
+                    
+                    const studentStats = {}; 
+                    const criteriaStats = { S1: {}, S2: {} }; 
+                    const compStats = {};
+                    const semesterCounts = { S1: {A:0,B:0,C:0,D:0}, S2: {A:0,B:0,C:0,D:0} };
+                    const semesterCompCounts = { S1: {}, S2: {} };
+                    const progressMap = []; 
+
+                    try {
+                        // 1. Traverse Semesters for Criteria Stats ONLY
+                        currentClass.semesters.forEach((sem, idx) => {
+                            if (!sem.competencies) return;
+                            const semKey = sem.id;
+
+                            sem.competencies.forEach(comp => {
+                                if(!criteriaStats[semKey][comp.name]) {
+                                    criteriaStats[semKey][comp.name] = [];
+                                }
+
+                                if(comp.criteria) {
+                                    comp.criteria.forEach(crit => {
+                                        let cStats = { name: crit.name, compName: comp.name, counts: {A:0,B:0,C:0,D:0} };
+                                        let studentsArray = currentClass.students ? currentClass.students : [];
+                                        
+                                        studentsArray.forEach(s => {
+                                            let marks = []; 
+                                            if(crit.indicators) {
+                                                crit.indicators.forEach(i => { 
+                                                    if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); 
+                                                });
+                                            }
+                                            const g = calculateGrade(marks); 
+                                            if(g) {
+                                                cStats.counts[g]++;
+                                            }
+                                        });
+                                        criteriaStats[semKey][comp.name].push(cStats);
+                                    });
+                                }
+                            });
+                        });
+
+                        // 2. Student Final Averages, Comp Stats, and Progress Map
+                        let assolit = 0; let proces = 0; let noAssolit = 0;
+                        let studentsArray = currentClass.students ? currentClass.students : [];
+                        
+                        // Setup compStats initial structure from S1 or S2
+                        currentClass.semesters.forEach(sem => {
+                            if (sem.competencies) {
+                                sem.competencies.forEach(comp => {
+                                    if(!compStats[comp.name]) { 
+                                        compStats[comp.name] = { name: comp.name, grades: [], color: comp.color }; 
+                                    }
+                                });
+                            }
+                        });
+
+                        // Ensure sem keys in semesterCompCounts
+                        currentClass.semesters.forEach(sem => {
+                            const semKey = sem.id;
+                            if(!semesterCompCounts[semKey]) semesterCompCounts[semKey] = {};
+                            Object.keys(compStats).forEach(cName => {
+                                if(!semesterCompCounts[semKey][cName]) semesterCompCounts[semKey][cName] = { A:0, B:0, C:0, D:0 };
+                            });
+                            if(!semesterCounts[semKey]) semesterCounts[semKey] = {A:0,B:0,C:0,D:0};
+                        });
+
+                        studentsArray.forEach(s => {
+                            studentStats[s.id] = { name: s.name, timePoints: [], radarFirst: {}, radarLast: {}, finalAvg: 0 };
+                            let allG = [];
+                            
+                            currentClass.semesters.forEach(sem => {
+                                let semG = [];
+                                const semKey = sem.id;
+
+                                if (sem.competencies) {
+                                    sem.competencies.forEach(comp => {
+                                        let compMarks = []; 
+                                        if(comp.criteria) {
+                                            comp.criteria.forEach(c => {
+                                                let critMarks = [];
+                                                if(c.indicators) {
+                                                    c.indicators.forEach(i => { 
+                                                        if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); 
+                                                    }); 
+                                                }
+                                                const cg = calculateGrade(critMarks);
+                                                if (cg) compMarks.push(cg);
+                                            });
+                                        }
+                                        
+                                        const finalCompGrade = calculateGrade(compMarks);
+                                        if(finalCompGrade) { 
+                                            const n = getNumericFromGrade(finalCompGrade); 
+                                            allG.push(n); 
+                                            semG.push(n); 
+                                            
+                                            if(!studentStats[s.id].radarFirst[comp.name]) {
+                                                studentStats[s.id].radarFirst[comp.name] = n; 
+                                            }
+                                            studentStats[s.id].radarLast[comp.name] = n; 
+                                            
+                                            // Add to compStats
+                                            compStats[comp.name].grades.push(n);
+
+                                            // Count for Compare Table
+                                            semesterCounts[semKey][finalCompGrade]++;
+                                            semesterCompCounts[semKey][comp.name][finalCompGrade]++;
+                                        }
+                                    });
+                                }
+                                if(semG.length > 0) {
+                                    studentStats[s.id].timePoints.push(semG.reduce((a,b)=>a+b,0)/semG.length);
+                                }
+                            });
+                            const finalAvg = allG.length ? allG.reduce((a,b)=>a+b,0)/allG.length : 0;
+                            studentStats[s.id].finalAvg = finalAvg;
+
+                            if (finalAvg >= 2.5) assolit++;
+                            else if (finalAvg >= 1.5) proces++;
+                            else if (finalAvg > 0) noAssolit++;
+                        });
+
+                        // Calculate Global Progress Map
+                        currentClass.semesters.forEach(sem => {
+                            let semSum = 0;
+                            let semCount = 0;
+                            if (sem.competencies) {
+                                sem.competencies.forEach(comp => {
+                                    studentsArray.forEach(s => {
+                                        let compMarks = []; 
+                                        if(comp.criteria) {
+                                            comp.criteria.forEach(c => {
+                                                let critMarks = [];
+                                                if(c.indicators) {
+                                                    c.indicators.forEach(i => { 
+                                                        if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); 
+                                                    }); 
+                                                }
+                                                const cg = calculateGrade(critMarks);
+                                                if (cg) compMarks.push(cg);
+                                            });
+                                        }
+                                        const fg = calculateGrade(compMarks);
+                                        if (fg) {
+                                            semSum += getNumericFromGrade(fg);
+                                            semCount++;
+                                        }
+                                    });
+                                });
+                            }
+                            if (semCount > 0) progressMap.push(semSum / semCount);
+                        });
+
+                        // 3. IECG & Critical Comp Logic
+                        Object.keys(compStats).forEach(k => {
+                            const c = compStats[k];
+                            c.avg = c.grades.length ? c.grades.reduce((a,b)=>a+b,0)/c.grades.length : 0;
+                            const mean = c.avg;
+                            c.stdDev = c.grades.length > 1 ? Math.sqrt(c.grades.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / c.grades.length) : 0;
+                        });
+
+                        const compAvgs = Object.keys(compStats).map(k => compStats[k].avg); 
+                        const range = compAvgs.length > 1 ? Math.max(...compAvgs) - Math.min(...compAvgs) : 0;
+                        
+                        let iecgLevel = '🟢 Grup equilibrat'; 
+                        if (range > 1.5) iecgLevel = '🔴 Desequilibri important'; 
+                        else if (range > 0.8) iecgLevel = '🟠 Desenvolupament desigual';
+
+                        let sortedByAvg = [];
+                        Object.keys(compStats).forEach(k => {
+                            if(compStats[k].grades.length > 0) {
+                                sortedByAvg.push(compStats[k]);
+                            }
+                        });
+                        sortedByAvg.sort((a,b)=>a.avg-b.avg);
+                        
+                        const worstComp = sortedByAvg.length > 0 ? sortedByAvg[0] : null;
+                        const bestComp = sortedByAvg.length > 0 ? sortedByAvg[sortedByAvg.length-1] : null;
+
+                        let iecgExplanation = "Nivells similars en totes les competències.";
+                        if (worstComp && bestComp && range > 0.5) {
+                            iecgExplanation = `Desequilibri de ${range.toFixed(2)} punts entre la més alta (${bestComp.name}: ${bestComp.avg.toFixed(2)}) i la més baixa (${worstComp.name}: ${worstComp.avg.toFixed(2)}).`;
+                        }
+
+                        // Collect all unique competency names across semesters
+                        let compNamesSet = [];
+                        currentClass.semesters.forEach(sem => {
+                            if(sem.competencies) {
+                                sem.competencies.forEach(c => {
+                                    if (compNamesSet.indexOf(c.name) === -1) {
+                                        compNamesSet.push(c.name);
+                                    }
+                                });
+                            }
+                        });
+                        const allCompNames = compNamesSet;
+
+                        return { 
+                            studentStats: studentStats, 
+                            criteriaStats: criteriaStats, 
+                            compStats: compStats, 
+                            bestComp: bestComp, 
+                            worstComp: worstComp, 
+                            semesterCounts: semesterCounts, 
+                            semesterCompCounts: semesterCompCounts,
+                            iecg: { range: range, level: iecgLevel }, 
+                            iecgExplanation: iecgExplanation,
+                            progressMap: progressMap, 
+                            achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit },
+                            allCompNames: allCompNames
+                        };
+
+                    } catch(e) { 
+                        console.error("Error stats", e); 
+                        return null; 
+                    }
+                }, [currentClass]);
+
+                if (!stats) return <div className="p-10 text-center text-gray-500 font-bold text-xl">Sense dades suficients per calcular estadístiques. Assegura't d'haver entrat alguna nota.</div>;
+                
+                const handleToggleComp = (name) => { 
+                    setExpandedComps(prev => {
+                        return {...prev, [name]: !prev[name]};
+                    }); 
+                };
+
+                return (
+                    <div className="p-6 space-y-6 pb-20">
+                        {/* SEMESTER COMPARISON TABLE WITH DETAILS */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icon name="scale-balanced" className="text-blue-500"/> Comparativa de Notes de Competències (1r vs 2n Semestre)</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {['A', 'B', 'C', 'D'].map(grade => {
+                                    const styleClass = getGradeColor(grade);
+                                    const bgLight = styleClass.split(' ')[0]; 
+                                    const textDark = styleClass.split(' ')[1]; 
+                                    const borderClass = styleClass.split(' ')[2]; 
+                                    
+                                    return (
+                                        <div key={grade} className={`rounded-xl border-2 ${borderClass} bg-white shadow-sm overflow-hidden flex flex-col`}>
+                                            <div className={`${bgLight} ${textDark} text-center py-3 border-b ${borderClass}`}>
+                                                <div className="text-3xl font-black">{grade}</div>
+                                            </div>
+                                            <div className="flex-1 grid grid-cols-2 divide-x divide-gray-100">
+                                                {['S1', 'S2'].map((semId, i) => {
+                                                    const totalForGrade = stats.semesterCounts[semId] ? stats.semesterCounts[semId][grade] : 0;
+                                                    return (
+                                                        <div key={semId} className="p-3 bg-gray-50/50 hover:bg-gray-50 transition">
+                                                            <div className="text-center font-bold text-gray-700 border-b border-gray-200 pb-1 mb-2">{i===0 ? '1r Sem' : '2n Sem'} ({totalForGrade})</div>
+                                                            <div className="space-y-1.5 mt-2">
+                                                                {stats.semesterCompCounts[semId] && Object.keys(stats.semesterCompCounts[semId]).map(cName => {
+                                                                    const counts = stats.semesterCompCounts[semId][cName];
+                                                                    if (counts[grade] > 0) {
+                                                                        return (
+                                                                            <div key={cName} className="flex justify-between text-[11px] items-center pb-1 border-b border-gray-100 last:border-0">
+                                                                                <span className="text-gray-600 font-medium truncate pr-2">{cName}</span>
+                                                                                <span className={`font-bold px-1.5 rounded ${bgLight} ${textDark}`}>{counts[grade]}</span>
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })}
+                                                                {totalForGrade === 0 && <div className="text-center text-xs text-gray-400 py-2">-</div>}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* DIAGNOSTIC GLOBAL CARD */}
+                        <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 overflow-hidden">
+                            <div className="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center">
+                                <div><h3 className="font-bold text-xl">Diagnòstic Global de Classe</h3><p className="text-sm opacity-90">En què he d’intervenir? El grup avança equilibradament?</p></div>
+                                <Icon name="stethoscope" className="text-3xl opacity-50"/>
+                            </div>
+                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                    <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Equilibri Competencial</h4>
+                                    <div className="text-2xl font-black text-gray-800">{stats.iecg.level.split(' ')[0]}</div>
+                                    <div className="text-sm font-bold text-gray-600 mb-3">{stats.iecg.level.substring(2)}</div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2"><div className={`h-2 rounded-full ${stats.iecg.range > 1.5 ? 'bg-red-500' : stats.iecg.range > 0.8 ? 'bg-orange-500' : 'bg-green-500'}`} style={{width: `${Math.min(100, stats.iecg.range*25)}%`}}></div></div>
+                                    <p className="text-xs text-gray-500 font-medium leading-tight">{stats.iecgExplanation}</p>
+                                </div>
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                    <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Tendència Global</h4>
+                                    <div className="h-24"><ChartComponent className="h-full" type="line" data={{labels: stats.progressMap.map((_, i) => `T${i+1}`), datasets: [{ data: stats.progressMap, borderColor: '#4f46e5', tension: 0.4, pointRadius: 4 }]}} options={{plugins: { legend: { display: false } }, scales: { y: { min: 1, max: 4, display: false }, x: { display: false } }, maintainAspectRatio: false}}/></div>
+                                    <p className="text-xs text-center font-bold text-indigo-600 mt-2">{stats.progressMap.length > 1 ? (stats.progressMap[stats.progressMap.length-1] > stats.progressMap[0] ? "↗ Progrés Sostingut" : "↘ Estancament/Regressió") : "Dades insuficients"}</p>
+                                </div>
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
+                                    <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Nivells d'Assoliment</h4>
+                                    <div className="flex h-24 items-center justify-center relative"><ChartComponent type="doughnut" className="h-full w-full" data={{labels: ['Assolit', 'Procés', 'No'], datasets: [{ data: [stats.achievement.assolit, stats.achievement.proces, stats.achievement.noAssolit], backgroundColor: ['#22c55e', '#f97316', '#ef4444'], borderWidth: 0 }]}} options={{ cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }}/><div className="absolute text-center z-10 flex flex-col items-center justify-center"><span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none">Total</span><span className="font-black text-2xl text-gray-700 leading-tight">{stats.achievement.total}</span></div></div>
+                                    <div className="flex justify-between text-xs font-bold mt-3 px-2"><span className="text-green-600 bg-green-50 px-2 py-1 rounded">High: {stats.achievement.total > 0 ? Math.round(stats.achievement.assolit/stats.achievement.total*100) : 0}%</span><span className="text-red-600 bg-red-50 px-2 py-1 rounded">Risc: {stats.achievement.total > 0 ? Math.round(stats.achievement.noAssolit/stats.achievement.total*100) : 0}%</span></div>
+                                </div>
+                                <div className="bg-red-50 p-4 rounded-xl border border-red-200 flex flex-col justify-center text-center shadow-inner">
+                                    <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3"><Icon name="triangle-exclamation" className="text-2xl"/></div>
+                                    <h4 className="font-bold text-red-800 text-xs uppercase tracking-wider mb-2">Intervenció Prioritària</h4>
+                                    <p className="font-black text-xl text-gray-900 leading-tight">{stats.worstComp ? stats.worstComp.name : "-"}</p>
+                                    <div className="mt-2 inline-block bg-red-200 text-red-800 px-3 py-1 rounded-full text-xs font-bold">Mitjana: {stats.worstComp ? stats.worstComp.avg.toFixed(2) : '0.00'}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* OTHER CARDS */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div><h3 className="font-bold text-xl text-gray-800"><Icon name="user-graduate" className="text-blue-500 mr-2"/> Evolució Individual</h3><p className="text-sm text-gray-500">Com avança cada alumne?</p></div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto pr-2 custom-scroll" style={{maxHeight: "350px"}}>
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 sticky top-0 z-10"><tr className="text-black uppercase text-xs tracking-wider"><th className="p-3 text-left rounded-tl">Alumne</th><th className="p-3 text-center">Nota Actual</th><th className="p-3 text-right rounded-tr">Detall</th></tr></thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {Object.keys(stats.studentStats).map(k => {
+                                                const s = stats.studentStats[k];
+                                                return (
+                                                    <tr key={s.name} className="hover:bg-blue-50/50 transition">
+                                                        <td className="p-3 font-medium text-gray-700">{s.name}</td>
+                                                        <td className="p-3 text-center font-bold text-gray-600">{s.timePoints.length>0 ? s.timePoints[s.timePoints.length-1].toFixed(2) : '-'}</td>
+                                                        <td className="text-right p-3">
+                                                            <button onClick={() => setShowStudentEvoModal({name:s.name, history:s.timePoints, labels:Object.keys(stats.compStats), radarFirst:Object.keys(stats.compStats).map(ck=>s.radarFirst[ck]?s.radarFirst[ck]:0), radarLast:Object.keys(stats.compStats).map(ck=>s.radarLast[ck]?s.radarLast[ck]:0)})} className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition font-medium shadow-sm"><Icon name="chart-line" className="mr-1"/> Veure</button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <div className="mb-6"><h3 className="font-bold text-xl text-gray-800"><Icon name="brain" className="text-purple-500 mr-2"/> Anàlisi Pedagògica</h3><p className="text-sm text-gray-500">Conclusions i recomanacions automàtiques</p></div>
+                                <div className="space-y-4 flex-1 flex flex-col">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                                            <div className="flex items-center gap-2 mb-2"><Icon name="award" className="text-green-600 text-lg"/><span className="text-xs font-bold text-green-700 uppercase tracking-wider">Millor Competència</span></div>
+                                            <span className="font-bold text-gray-800 text-lg leading-tight block">{stats.bestComp ? stats.bestComp.name : "-"}</span>
+                                        </div>
+                                        <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                                            <div className="flex items-center gap-2 mb-2"><Icon name="fire" className="text-red-600 text-lg"/><span className="text-xs font-bold text-red-700 uppercase tracking-wider">Més Dificultat</span></div>
+                                            <span className="font-bold text-gray-800 text-lg leading-tight block">{stats.worstComp ? stats.worstComp.name : "-"}</span>
+                                        </div>
+                                    </div>
+                                    <div className="mt-auto p-5 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100 text-gray-700 italic rounded-xl shadow-inner relative">
+                                        <Icon name="quote-left" className="text-purple-200 text-4xl absolute top-2 left-2 opacity-50"/>
+                                        <p className="relative z-10 font-medium">Es recomana centrar els esforços de reforç en <span className="font-bold text-purple-700">{stats.worstComp ? stats.worstComp.name : '...'}</span>, especialment treballant els criteris amb més suspensos. {stats.achievement.noAssolit > 0 ? `Hi ha ${stats.achievement.noAssolit} alumnes que requereixen atenció directa i un possible pla individualitzat.` : 'El grup avança favorablement sense riscos greus d\'estancament generalitzat.'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Collapsible Criteria Analysis - 2 COLUMNS FOR S1 AND S2 */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-xl text-gray-800 mb-6"><Icon name="layer-group" className="text-orange-500 mr-2"/> Distribució per Criteris d'Avaluació</h3>
+                            <div className="space-y-4">
+                                {stats.allCompNames.map(compName => {
+                                    const compInfo = stats.compStats[compName];
+                                    const styles = compInfo ? COMP_COLORS_STYLES[compInfo.color ? compInfo.color : 'blue'] : COMP_COLORS_STYLES['gray'];
+                                    
+                                    return (
+                                        <div key={compName} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                                            <button onClick={() => handleToggleComp(compName)} className={`w-full flex justify-between items-center p-4 transition ${expandedComps[compName] ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-3 h-3 rounded-full ${styles ? styles.header : 'bg-gray-500'}`}></div>
+                                                    <span className="font-bold text-gray-800 text-lg">{compName}</span>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <Icon name={expandedComps[compName] ? "chevron-up" : "chevron-down"} className="text-gray-400"/>
+                                                </div>
+                                            </button>
+                                            
+                                            {expandedComps[compName] && (
+                                                <div className="flex flex-col lg:flex-row gap-6 p-6 border-t border-gray-200 animate-fade-in bg-gray-50/50">
+                                                    {currentClass.semesters.map((sem, sIdx) => (
+                                                        <div key={sem.id} className="flex-1 w-full lg:w-1/2">
+                                                            <h5 className="font-bold text-gray-600 border-b border-gray-300 pb-2 mb-4 uppercase tracking-wider text-sm">{sem.name}</h5>
+                                                            <div className="space-y-3">
+                                                                {stats.criteriaStats[sem.id] && stats.criteriaStats[sem.id][compName] && stats.criteriaStats[sem.id][compName].map((c,i)=>(
+                                                                    <div key={i} className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow transition">
+                                                                        <div className="font-bold text-gray-800 mb-3 line-clamp-2 h-10 leading-tight text-sm" title={c.name}>{c.name}</div>
+                                                                        <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 mb-2">
+                                                                            <div style={{width:`${c.counts.A/(stats.achievement.total||1)*100}%`}} className="bg-green-500"/>
+                                                                            <div style={{width:`${c.counts.B/(stats.achievement.total||1)*100}%`}} className="bg-blue-500"/>
+                                                                            <div style={{width:`${c.counts.C/(stats.achievement.total||1)*100}%`}} className="bg-orange-500"/>
+                                                                            <div style={{width:`${c.counts.D/(stats.achievement.total||1)*100}%`}} className="bg-red-500"/>
+                                                                        </div>
+                                                                        <div className="flex justify-between text-xs font-bold mt-2">
+                                                                            <span className="text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">Suspesos: {c.counts.D}</span>
+                                                                            <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">Excel·lents: {c.counts.A}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                                {(!stats.criteriaStats[sem.id] || !stats.criteriaStats[sem.id][compName] || stats.criteriaStats[sem.id][compName].length === 0) && (
+                                                                    <p className="text-sm text-gray-400 italic text-center py-4">Sense criteris avaluats.</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderSpreadsheet = () => {
+                if (!currentClass) return <div className="p-10 text-center text-gray-500 font-bold text-xl">Selecciona o crea una classe per començar.</div>;
+                return (
+                    <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 flex flex-col h-full">
+                        <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0">
+                            <div className="flex items-center space-x-2">
+                                <button onClick={() => setIsEditingStructure(!isEditingStructure)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 ${isEditingStructure ? 'bg-orange-100 text-orange-700 shadow-inner' : 'bg-white text-gray-600 border hover:bg-gray-50 shadow-sm'}`}><Icon name={isEditingStructure ? "lock" : "pen-to-square"} />{isEditingStructure ? "Bloquejar Taula" : "Editar Taula"}</button>
+                                <button onClick={() => setShowSemesterStats(true)} className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="chart-simple" className="text-blue-500 mr-1"/> Estadístiques</button>
+                                <button onClick={() => setShowBulkImport(true)} className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="table" className="text-green-600 mr-1"/> Importar Excel</button>
+                                <div className="relative group">
+                                    <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar</button>
+                                    <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-50 hidden group-hover:block w-56 text-sm">
+                                        {activeCompetencies.map(c => (
+                                            <div key={c.id} className="p-1.5 hover:bg-gray-50 rounded transition">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-4 h-4 text-brand-500 rounded focus:ring-brand-500" 
+                                                        checked={!visibleCompetencies[activeClassId] || visibleCompetencies[activeClassId].includes(c.id)} 
+                                                        onChange={() => { 
+                                                            const curr = visibleCompetencies[activeClassId] ? visibleCompetencies[activeClassId] : activeCompetencies.map(x=>x.id); 
+                                                            setVisibleCompetencies(prev => {
+                                                                if(curr.includes(c.id)) {
+                                                                    return {...prev, [activeClassId]: curr.filter(x=>x!==c.id)};
+                                                                } else {
+                                                                    return {...prev, [activeClassId]: [...curr, c.id]};
+                                                                }
+                                                            }); 
+                                                        }}
+                                                    /> 
+                                                    <span className="font-medium text-gray-700 truncate">{c.name}</span>
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {isEditingStructure && (
+                                    <>
+                                        <button onClick={() => addStructureItem('comp')} className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm font-bold shadow-sm hover:bg-purple-200 transition"><Icon name="plus" className="mr-1"/> Comp</button>
+                                        <button onClick={() => setShowCopyTable(true)} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold shadow-sm hover:bg-blue-200 transition"><Icon name="copy" className="mr-1"/> Copiar Estructura</button>
+                                    </>
+                                )}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowManageStudents(true)} className="px-4 py-2 bg-slate-800 text-white rounded-lg shadow-sm hover:bg-slate-700 transition text-sm font-bold"><Icon name="users" className="mr-2" /> Gestió d'Alumnes</button>
+                            </div>
+                        </div>
+
+                        <div className="overflow-auto custom-scroll flex-1 relative bg-gray-100/50">
+                            <table className="text-sm border-separate border-spacing-0 table-auto w-full">
+                                <thead className="bg-gray-50 text-gray-700 sticky-header z-40">
+                                    <tr>
+                                        <th className="p-3 text-left w-64 sticky-col sticky-intersection border-b border-r bg-white h-full shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]" rowSpan="3">
+                                            <div className="flex justify-between items-center h-full text-base font-bold text-gray-800">
+                                                <span><Icon name="users" className="mr-2 text-gray-400"/> Alumnes</span>
+                                                <button onClick={() => setShowGlobalNotes(true)} className="text-brand-500 hover:text-brand-700 bg-brand-50 px-2 py-1 rounded transition" title="Veure tots els comentaris globals"><Icon name="comments"/></button>
+                                            </div>
+                                        </th>
+                                        {visibleCompsList.map(comp => {
+                                            const totalCols = (comp.criteria ? comp.criteria : []).reduce((acc, crit) => {
+                                                return acc + (crit.indicators ? crit.indicators.length : 0) + 1;
+                                            }, 0) + 1;
+                                            const styles = COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] ? COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] : COMP_COLORS_STYLES['blue'];
+                                            return (
+                                                <th key={comp.id} colSpan={totalCols} className={`p-3 text-center border-b border-r font-black min-w-[220px] text-lg ${styles.text} relative group border-t-4 shadow-sm`} style={{backgroundColor: styles.light, borderColor: styles.border, borderTopColor: styles.header.replace('bg-','') }}>
+                                                    <span onClick={() => isEditingStructure && renameItem('comp', comp.id)} className={isEditingStructure ? "cursor-pointer hover:underline border-b border-dashed" : ""}>{comp.name}</span>
+                                                    {isEditingStructure && (
+                                                        <div className="absolute top-2 right-2 flex gap-1">
+                                                            <button onClick={() => deleteItem('comp', comp.id)} className="text-red-500 bg-white/60 hover:bg-white rounded w-7 h-7 flex items-center justify-center shadow-sm transition"><Icon name="trash"/></button>
+                                                            <button onClick={() => addStructureItem('crit', comp.id)} className="text-blue-600 bg-white/60 hover:bg-white rounded w-7 h-7 flex items-center justify-center shadow-sm transition"><Icon name="plus"/></button>
+                                                        </div>
+                                                    )}
+                                                </th>
+                                            );
+                                        })}
+                                    </tr>
+                                    <tr>
+                                        {visibleCompsList.map(comp => {
+                                            const styles = COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] ? COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] : COMP_COLORS_STYLES['blue'];
+                                            return (
+                                                <React.Fragment key={comp.id}>
+                                                    {(comp.criteria ? comp.criteria : []).map(crit => (
+                                                        <th key={crit.id} colSpan={(crit.indicators ? crit.indicators.length : 0) + 1} className="p-2 text-center border-b border-r font-bold text-xs uppercase relative group shadow-sm" style={{backgroundColor: styles.light, borderColor: styles.border}}>
+                                                            <span onClick={() => isEditingStructure && renameItem('crit', crit.id)} className={`block py-1 ${isEditingStructure ? "cursor-pointer hover:underline border-b border-dashed" : ""}`}>{crit.name}</span>
+                                                            {isEditingStructure && (
+                                                                <div className="absolute top-1 right-1 flex gap-1">
+                                                                    <button onClick={() => deleteItem('crit', crit.id, comp.id)} className="text-red-500 bg-white rounded-full w-5 h-5 opacity-0 group-hover:opacity-100 shadow-sm transition"><Icon name="xmark"/></button>
+                                                                    <button onClick={() => addStructureItem('ind', crit.id, comp.id)} className="text-blue-600 bg-white rounded-full w-5 h-5 shadow-sm transition"><Icon name="plus"/></button>
+                                                                </div>
+                                                            )}
+                                                        </th>
+                                                    ))}
+                                                    <th className="p-2 border-b border-r w-14 text-center text-xs min-w-[3.5rem] font-bold shadow-sm" style={{backgroundColor: styles.header, color: 'white', borderColor: styles.border}}>Nota</th>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tr>
+                                    <tr>
+                                        {visibleCompsList.map(comp => (
+                                            <React.Fragment key={comp.id}>
+                                                {(comp.criteria ? comp.criteria : []).map(crit => (
+                                                    <React.Fragment key={crit.id}>
+                                                        {(crit.indicators ? crit.indicators : []).map(ind => (
+                                                            <th key={ind.id} className="p-0 border-b border-r bg-white font-medium text-gray-600 min-w-[5rem] w-24 text-center text-xs group relative hover:bg-gray-50 transition">
+                                                                <div className="w-full h-full p-2 flex items-center justify-center relative">
+                                                                    <span onClick={() => isEditingStructure && renameItem('ind', ind.id)} className={`block truncate w-full ${isEditingStructure ? 'cursor-pointer hover:text-brand-600 border-b border-dashed border-brand-300 pb-0.5' : ''}`} title={ind.name}>{ind.name}</span>
+                                                                    {isEditingStructure && (<button onClick={() => deleteItem('ind', ind.id, crit.id, comp.id)} className="absolute -top-2 -right-2 text-white bg-red-500 rounded-full w-4 h-4 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 shadow"><Icon name="xmark"/></button>)}
+                                                                </div>
+                                                            </th>
+                                                        ))}
+                                                        <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner">CA</th>
+                                                    </React.Fragment>
+                                                ))}
+                                                <th className="p-2 border-b border-r bg-gray-200 w-14 text-center min-w-[3.5rem] shadow-inner"></th>
+                                            </React.Fragment>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {(currentClass.students ? currentClass.students : []).map((student, sIdx) => (
+                                        <tr key={student.id} className="hover:bg-blue-50/30 group transition-colors">
+                                            <td className="p-2 sticky-col w-64 border-r border-b font-medium text-gray-800 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] group-hover:bg-blue-50/50">
+                                                <div className="flex items-center gap-3 w-full pl-2">
+                                                    <span className="text-xs font-bold text-gray-400 w-4 text-right">{sIdx + 1}.</span>
+                                                    <button onClick={() => setShowStudentNotes(student)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition shadow-sm ${student.notes && student.notes.general ? 'bg-yellow-100 text-yellow-600 border border-yellow-200' : 'text-gray-400 bg-gray-50 border border-gray-200 hover:bg-yellow-50 hover:text-yellow-500 hover:border-yellow-200'}`} title="Notes personals"><Icon name="note-sticky"/></button>
+                                                    <span className="font-bold text-gray-700 truncate flex-1 tracking-tight" title={student.name}>{student.name}</span>
+                                                </div>
+                                            </td>
+                                            {visibleCompsList.map(comp => {
+                                                let compMarks = [];
+                                                return (
+                                                    <React.Fragment key={comp.id}>
+                                                        {(comp.criteria ? comp.criteria : []).map(crit => {
+                                                            let critMarks = [];
+                                                            return (
+                                                                <React.Fragment key={crit.id}>
+                                                                    {(crit.indicators ? crit.indicators : []).map(ind => {
+                                                                        const val = (student.marks && student.marks[ind.id]) ? student.marks[ind.id] : "";
+                                                                        if(val) critMarks.push(val);
+                                                                        return (
+                                                                            <td key={ind.id} className="p-0 border-r border-b text-center w-24 min-w-[5rem]">
+                                                                                <select 
+                                                                                    value={val} 
+                                                                                    onChange={(e) => updateMark(student.id, ind.id, e.target.value)} 
+                                                                                    className={`w-full h-11 px-1 text-center text-sm font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 bg-transparent transition-colors ${getGradeTextColor(val)} hover:bg-gray-50`} 
+                                                                                    style={{textAlignLast:'center'}}
+                                                                                >
+                                                                                    <option value="" className="text-gray-300 font-normal">-</option>
+                                                                                    <option value="A" className="text-green-600 font-black bg-green-50">A</option>
+                                                                                    <option value="B" className="text-blue-600 font-black bg-blue-50">B</option>
+                                                                                    <option value="C" className="text-orange-600 font-black bg-orange-50">C</option>
+                                                                                    <option value="D" className="text-red-600 font-black bg-red-50">D</option>
+                                                                                </select>
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                    <td className="p-1 border-r border-b text-center bg-gray-50 w-14 min-w-[3.5rem] shadow-inner">
+                                                                        <div className={`w-8 h-8 mx-auto flex items-center justify-center rounded-full text-xs font-bold shadow-sm ${getGradeColor(calculateGrade(critMarks))}`}>{calculateGrade(critMarks)}</div>
+                                                                    </td>
+                                                                    {(() => { 
+                                                                        const cg = calculateGrade(critMarks);
+                                                                        if(cg) compMarks.push(cg); 
+                                                                    })()}
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
+                                                        <td className="p-1 border-r border-b text-center bg-gray-100 font-bold border-l-2 border-l-gray-300 w-14 min-w-[3.5rem] shadow-inner">
+                                                            <div className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg shadow-md text-sm font-black ${getGradeColor(calculateGrade(compMarks)).replace('bg-', 'bg-gradient-to-br from-white to-')}`}>{calculateGrade(compMarks)}</div>
+                                                        </td>
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                    {(!currentClass.students || currentClass.students.length === 0) && (
+                                        <tr><td colSpan="100%" className="p-12 text-center text-gray-500 font-medium text-lg">No hi ha cap alumne en aquesta classe. Fes clic a "Gestió d'Alumnes" per afegir-ne.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <ErrorBoundary>
+                    <div className="flex h-screen overflow-hidden text-gray-800">
+                        {/* MODALS */}
+                        {showWizard && <SetupWizard onComplete={handleCreateClass} />}
+                        <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
+                        <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
+                        <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
+                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} competencies={activeCompetencies} onSave={updateStudentNotes} />
+                        <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} competencies={activeCompetencies} />
+                        <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
+                        <SemesterStatsModal isOpen={showSemesterStats} onClose={() => setShowSemesterStats(false)} competencies={visibleCompsList} students={currentClass && currentClass.students ? currentClass.students : []} />
+                        {showBulkImport && <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass && currentClass.students ? currentClass.students : []} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />}
+                        <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} />
+
+                        {/* SIDEBAR */}
+                        <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
+                            <div className="p-6 border-b border-slate-800">
+                                <h1 className="text-2xl font-black tracking-tight text-brand-500 flex items-center gap-2"><Icon name="graduation-cap"/> Avalua Pro</h1>
+                                <p className="text-xs text-slate-300 mt-2 font-medium leading-relaxed">Eina docent d’avaluació i seguiment competencial</p>
+                                <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-bold">Creat per Marc Pérez Casals</p>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-2">Les teves classes</div>
+                                {classes.map(c => {
+                                    const cKey = c.color && CLASS_COLORS[c.color] ? c.color : 'blue';
+                                    const classColor = CLASS_COLORS[cKey];
+                                    return (
+                                        <div key={c.id} className="flex items-center group relative">
+                                            <button onClick={() => setActiveClassId(c.id)} className={`w-full text-left px-4 py-3 rounded-xl transition flex items-center justify-between border-l-4 ${activeClassId === c.id ? `${classColor.bg} border-${c.color}-400 text-white shadow-lg` : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                                                <span className="font-semibold truncate pr-4">{c.name}</span>
+                                            </button>
+                                            <button onClick={() => setShowEditClassModal(c)} className="absolute right-2 text-slate-400 hover:text-white p-2 opacity-0 group-hover:opacity-100 transition"><Icon name="gear"/></button>
+                                        </div>
+                                    );
+                                })}
+                                <button onClick={() => setShowNewClassModal(true)} className="w-full mt-4 border-2 border-dashed border-slate-700 text-slate-400 p-3 rounded-xl hover:border-brand-500 hover:text-brand-500 transition flex items-center justify-center text-sm font-bold"><Icon name="plus" className="mr-2"/> Nova Classe</button>
+                            </div>
+                             <div className="p-4 border-t border-slate-800 bg-slate-950">
+                                 <button onClick={() => { 
+                                     if(!currentClass) return; 
+                                     const headers = ["Alumne"];
+                                     const subH = [""]; 
+                                     
+                                     visibleCompsList.forEach(c => { 
+                                         if(c.criteria) {
+                                             c.criteria.forEach(k => { 
+                                                 if(k.indicators) {
+                                                     k.indicators.forEach(i => { 
+                                                         headers.push(c.name); 
+                                                         subH.push(`${k.name}-${i.name}`); 
+                                                     }); 
+                                                 }
+                                                 headers.push(c.name); 
+                                                 subH.push('Nota '+k.name); 
+                                             }); 
+                                         }
+                                         headers.push(c.name); 
+                                         subH.push('FINAL'); 
+                                     }); 
+                                     
+                                     const d = [headers, subH]; 
+                                     
+                                     if(currentClass.students) {
+                                         currentClass.students.forEach(s => { 
+                                             const r = [s.name]; 
+                                             visibleCompsList.forEach(c => { 
+                                                 let cm = []; 
+                                                 if(c.criteria) {
+                                                     c.criteria.forEach(k => { 
+                                                         let km = []; 
+                                                         if(k.indicators) {
+                                                             k.indicators.forEach(i => { 
+                                                                 const v = (s.marks && s.marks[i.id]) ? s.marks[i.id] : ""; 
+                                                                 r.push(v); 
+                                                                 if(v) km.push(v); 
+                                                             }); 
+                                                         }
+                                                         const g = calculateGrade(km); 
+                                                         r.push(g); 
+                                                         if(g) cm.push(g); 
+                                                     }); 
+                                                 }
+                                                 r.push(calculateGrade(cm)); 
+                                             }); 
+                                             d.push(r); 
+                                         }); 
+                                     }
+                                     const wb = XLSX.utils.book_new(); 
+                                     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d), currentClass.name.substring(0,31)); 
+                                     XLSX.writeFile(wb, `avaluacio_${currentClass.name}.xlsx`); 
+                                 }} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-3 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
+                                     <Icon name="file-excel" className="mr-2 text-lg"/> Exportar a Excel
+                                 </button>
+                            </div>
+                        </aside>
+
+                        {/* MAIN CONTENT */}
+                        <main className="flex-1 flex flex-col min-w-0 bg-gray-100 h-full overflow-hidden">
+                            {currentClass ? (
+                                <>
+                                    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10 shrink-0">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-4 h-8 rounded-full ${CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'] ? CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'].bg : 'bg-blue-600'}`}></div>
+                                            <h2 className={`text-3xl font-black text-gray-800 tracking-tight`}>{currentClass.name}</h2>
+                                        </div>
+                                        <div className="flex items-center gap-6">
+                                            <div className="flex bg-gray-100 p-1.5 rounded-xl shadow-inner border border-gray-200">
+                                                {(currentClass.semesters ? currentClass.semesters : []).map(s => (
+                                                    <button key={s.id} onClick={() => setActiveTab(s.id)} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === s.id ? 'bg-white text-brand-600 shadow border border-gray-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'}`}>{s.name}</button>
+                                                ))}
+                                                <button onClick={() => setActiveTab('GLOBAL')} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'GLOBAL' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'}`}><Icon name="chart-pie" className="mr-2"/>Global</button>
+                                            </div>
+                                            <div className="h-8 w-px bg-gray-300"></div>
+                                            <div className="flex items-center gap-4">
+                                                <button onClick={resetAllData} className="p-2 text-red-300 hover:text-red-600 transition" title="Reiniciar curs"><Icon name="trash-can" className="text-lg"/></button>
+                                                <div className="flex bg-gray-100 rounded-lg p-1"><button onClick={undo} disabled={historyIndex <= 0} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-left"/></button><button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-right"/></button></div>
+                                            </div>
+                                        </div>
+                                    </header>
+                                    <div className="flex-1 overflow-hidden relative flex flex-col bg-gray-50/50">
+                                        {isGlobalView ? (
+                                            <div className="flex-1 overflow-y-auto custom-scroll">
+                                                <GlobalDashboard />
+                                            </div>
+                                        ) : (
+                                            <div className="flex-1 p-6 h-full overflow-hidden flex flex-col">
+                                                {renderSpreadsheet()}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+                                    <Icon name="folder-open" className="text-6xl mb-4 text-gray-300"/>
+                                    <p className="text-xl font-medium">Selecciona o crea una classe per començar.</p>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                </ErrorBoundary>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
