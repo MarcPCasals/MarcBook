@@ -251,6 +251,62 @@
             justify-items: center; /* Centra les targetes si la columna és més ampla */
         }
 
+        /* --- VISTA PER CURSOS (Horizontal Scroll) --- */
+        #course-view-container {
+            max-width: 100%;
+            padding: 0 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .ut-row {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .ut-title {
+            font-family: 'Nunito', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+            padding-left: 0.5rem;
+            border-left: 5px solid var(--primary);
+        }
+
+        .scrolling-wrapper {
+            display: flex;
+            overflow-x: auto;
+            gap: 1.5rem;
+            padding: 1rem 0.5rem 2rem 0.5rem; /* Padding bottom for shadow/hover space */
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch; /* For smooth scrolling on iOS */
+        }
+
+        /* Hide scrollbar for cleaner look but keep functionality */
+        .scrolling-wrapper::-webkit-scrollbar {
+            height: 8px;
+        }
+        .scrolling-wrapper::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .scrolling-wrapper::-webkit-scrollbar-thumb {
+            background: #c7c7c7;
+            border-radius: 4px;
+        }
+        .scrolling-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #a0a0a0;
+        }
+
+        /* Adjust card in scroll view */
+        .scrolling-wrapper .artifact-card {
+            flex: 0 0 320px; /* Fixed width for horizontal items */
+            width: 320px;
+        }
+
         /* Disseny de la Targeta (Card) */
         .artifact-card {
             background: var(--bg-card);
@@ -511,6 +567,7 @@
                     <button class="btn-filter" onclick="filterApps('2eso')">2n curs</button>
                     <button class="btn-filter" onclick="filterApps('3eso')">3r curs</button>
                     <button class="btn-filter" onclick="filterApps('4eso')">4t curs</button>
+                    <button class="btn-filter" onclick="filterApps('cfn_all')">Tots</button>
                 </div>
             </div>
 
@@ -520,6 +577,7 @@
         </div>
     </div>
 
+    <!-- Container Grid Normal -->
     <div class="grid-container" id="appsGrid">
 
         <!-- =====================================================
@@ -847,6 +905,9 @@
 
     </div>
 
+    <!-- Container nou per a la vista per cursos -->
+    <div id="course-view-container" class="hidden"></div>
+
     <script>
         // Funció Dropdown Naturals
         function toggleDropdown() {
@@ -869,37 +930,125 @@
 
         // Funció de filtratge
         function filterApps(category) {
-            const cards = document.querySelectorAll('.artifact-card');
+            const gridContainer = document.getElementById('appsGrid');
+            const courseViewContainer = document.getElementById('course-view-container');
             const buttons = document.querySelectorAll('.btn-filter');
             
             // Actualitzar estat actiu dels botons
             buttons.forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
 
-            // Filtrar targetes
-            cards.forEach(card => {
-                // Reiniciem l'animació
+            // 1. Restaurar: Moure totes les targetes al Grid original abans de processar
+            // Busquem totes les targetes, siguin on siguin
+            const allCards = document.querySelectorAll('.artifact-card');
+            allCards.forEach(card => {
+                gridContainer.appendChild(card); // Movem al grid
                 card.classList.remove('fade-in');
-                void card.offsetWidth; // Trigger reflow
+                void card.offsetWidth; // Trigger reflow per animacions
                 card.classList.add('fade-in');
-
-                if (category === 'all') {
-                    card.classList.remove('hidden');
-                } else {
-                    if (card.getAttribute('data-category') === category) {
-                        card.classList.remove('hidden');
-                    } else {
-                        card.classList.add('hidden');
-                    }
-                }
             });
+
+            // 2. Comprovar si estem en mode "Vista Curs" (Files) o "Vista Grid"
+            const courseModes = ['1eso', '2eso', '3eso', '4eso'];
+            
+            if (courseModes.includes(category)) {
+                // --- MODE VISTA CURS (Files UT) ---
+                gridContainer.classList.add('hidden');
+                courseViewContainer.classList.remove('hidden');
+                courseViewContainer.innerHTML = ''; // Netejar contenidor de cursos
+
+                // Filtrar targetes d'aquest curs
+                const courseCards = Array.from(allCards).filter(card => card.getAttribute('data-category') === category);
+                
+                // Agrupar per UT (extreure de .course-badge)
+                const groupedByUT = {};
+                
+                courseCards.forEach(card => {
+                    const badgeText = card.querySelector('.course-badge').innerText;
+                    // Busquem patró "UT X.Y"
+                    const match = badgeText.match(/UT\s*(\d+(\.\d+)?)/);
+                    let utKey = "General";
+                    
+                    if (match && match[1]) {
+                        utKey = match[1]; // ex: "2.2" o "2.3"
+                    }
+                    
+                    if (!groupedByUT[utKey]) {
+                        groupedByUT[utKey] = [];
+                    }
+                    groupedByUT[utKey].push(card);
+                });
+
+                // Ordenar claus de UT (General al final, números ordenats)
+                const sortedKeys = Object.keys(groupedByUT).sort((a, b) => {
+                    if (a === "General") return 1;
+                    if (b === "General") return -1;
+                    return parseFloat(a) - parseFloat(b);
+                });
+
+                // Crear estructura DOM per cada UT
+                sortedKeys.forEach(ut => {
+                    // Crear fila
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'ut-row fade-in';
+                    
+                    // Títol UT
+                    const title = document.createElement('h3');
+                    title.className = 'ut-title';
+                    title.innerText = ut === "General" ? "General" : `Unitat Temporal ${ut}`;
+                    rowDiv.appendChild(title);
+
+                    // Contenidor Scroll
+                    const scrollWrapper = document.createElement('div');
+                    scrollWrapper.className = 'scrolling-wrapper';
+                    
+                    // Afegir targetes (Moure-les del grid a aquí)
+                    groupedByUT[ut].forEach(card => {
+                        card.classList.remove('hidden'); // Assegurar que es veu
+                        scrollWrapper.appendChild(card);
+                    });
+
+                    rowDiv.appendChild(scrollWrapper);
+                    courseViewContainer.appendChild(rowDiv);
+                });
+
+            } else {
+                // --- MODE GRID NORMAL (Tots, CFN Tots, Projectes, Altres) ---
+                courseViewContainer.classList.add('hidden');
+                gridContainer.classList.remove('hidden');
+
+                allCards.forEach(card => {
+                    const cardCat = card.getAttribute('data-category');
+                    
+                    if (category === 'all') {
+                        card.classList.remove('hidden');
+                    } else if (category === 'cfn_all') {
+                        // CFN Tots: inclou 1eso, 2eso, 3eso, 4eso
+                        if (['1eso', '2eso', '3eso', '4eso'].includes(cardCat)) {
+                            card.classList.remove('hidden');
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    } else {
+                        // Filtratge estàndard
+                        if (cardCat === category) {
+                            card.classList.remove('hidden');
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    }
+                });
+            }
         }
 
-        // Funció de cerca (Search bar)
+        // Funció de cerca (Search bar) - Actualitzada per buscar a tot arreu
         document.getElementById('searchInput').addEventListener('keyup', function(e) {
             const term = e.target.value.toLowerCase();
             const cards = document.querySelectorAll('.artifact-card');
-
+            
+            // Si algú busca, millor anar a vista "Tots" o grid per veure els resultats clarament
+            // Però mantindrem la vista actual, només ocultant el que no coincideix.
+            
             cards.forEach(card => {
                 const title = card.querySelector('.card-title').innerText.toLowerCase();
                 const desc = card.querySelector('.card-desc').innerText.toLowerCase();
