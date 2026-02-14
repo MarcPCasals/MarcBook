@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investigación: La Química del Amor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Atkinson Hyperlegible', sans-serif; background-color: #f1f5f9; scroll-behavior: smooth; }
+        
+        /* Estilos de resaltado alumno */
+        .highlight-blue { background-color: #bfdbfe; border-bottom: 2px solid #2563eb; color: #1e3a8a; }
+        .highlight-red { background-color: #fecaca; border-bottom: 2px solid #dc2626; color: #7f1d1d; }
+        .highlight-green { background-color: #bbf7d0; border-bottom: 2px solid #16a34a; color: #14532d; }
+        
+        /* Estilos Modo Docente */
+        .teacher-mark { transition: all 0.3s; border-radius: 4px; }
+        body.teacher-mode .teacher-mark { cursor: help; position: relative; }
+        body.teacher-mode .teacher-mark:hover::after {
+            content: "💡 " attr(data-exp);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            width: 250px;
+            z-index: 100;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            pointer-events: none;
+        }
+        body.teacher-mode .t-correct-blue { background-color: rgba(37, 99, 235, 0.2); border: 1px dashed #2563eb; }
+        body.teacher-mode .t-correct-red { background-color: rgba(220, 38, 38, 0.2); border: 1px dashed #dc2626; }
+        body.teacher-mode .t-correct-green { background-color: rgba(22, 163, 74, 0.2); border: 1px dashed #16a34a; }
+
+        /* Numeración de párrafos Estilo # */
+        .paragraph-container { counter-reset: parrafo; }
+        .numbered-p { position: relative; padding-left: 1.5em; margin-bottom: 2em; line-height: 1.9; text-align: justify; font-size: 1.1rem; }
+        .numbered-p::before {
+            counter-increment: parrafo;
+            content: "#" counter(parrafo);
+            position: absolute;
+            left: -1em;
+            top: 0.2em;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        /* Fake Quote */
+        .pull-quote {
+            border-left: 4px solid #f59e0b;
+            background: #fffbeb;
+            padding: 1rem;
+            margin: 2rem 0;
+            font-style: italic;
+            color: #92400e;
+            border-radius: 0 8px 8px 0;
+        }
+
+        /* Panel inferior animación */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        
+        .panel-header { min-height: 80px; } /* Altura fija para evitar cortes */
+    </style>
+</head>
+<body class="text-slate-800 pb-64">
+
+    <!-- HEADER -->
+    <header class="fixed top-0 w-full bg-white shadow-md z-50 border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center gap-4">
+                <div>
+                    <h1 class="font-bold text-2xl font-['Oswald'] text-slate-900 tracking-wide uppercase flex items-center gap-2">
+                        <span>🧪</span> La Química del Amor
+                    </h1>
+                </div>
+                <!-- Botón Modo Docente -->
+                <button onclick="toggleTeacherAuth()" id="teacherBtn" class="bg-slate-800 text-xs text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors border border-slate-600 flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" /></svg>
+                    Modo Docente
+                </button>
+            </div>
+            
+            <!-- TOOLBAR -->
+            <div class="flex bg-slate-100 p-1.5 rounded-lg shadow-inner">
+                <button onclick="setTool('blue')" id="btn-blue" class="flex items-center gap-2 px-4 py-2 rounded transition-all hover:bg-white ring-2 ring-transparent focus:outline-none text-sm group">
+                    <div class="w-3 h-3 rounded-full bg-blue-500 group-hover:scale-125 transition-transform"></div>
+                    <span class="font-bold text-slate-700">S. Nervioso</span>
+                </button>
+                <div class="w-px bg-slate-300 mx-2 my-1"></div>
+                <button onclick="setTool('red')" id="btn-red" class="flex items-center gap-2 px-4 py-2 rounded transition-all hover:bg-white ring-2 ring-transparent focus:outline-none text-sm group">
+                    <div class="w-3 h-3 rounded-full bg-red-500 group-hover:scale-125 transition-transform"></div>
+                    <span class="font-bold text-slate-700">Hormonas</span>
+                </button>
+                <div class="w-px bg-slate-300 mx-2 my-1"></div>
+                <button onclick="setTool('green')" id="btn-green" class="flex items-center gap-2 px-4 py-2 rounded transition-all hover:bg-white ring-2 ring-transparent focus:outline-none text-sm group">
+                    <div class="w-3 h-3 rounded-full bg-green-500 group-hover:scale-125 transition-transform"></div>
+                    <span class="font-bold text-slate-700">Órganos</span>
+                </button>
+                
+                <button onclick="undoLast()" class="ml-3 px-3 py-2 text-slate-400 hover:text-red-500 hover:bg-slate-200 rounded transition-colors" title="Deshacer último resaltado">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto mt-32 px-6 sm:px-8">
+        
+        <!-- INSTRUCCIONES -->
+        <div class="bg-white border border-slate-200 p-6 mb-10 rounded-xl shadow-sm relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-blue-500 via-red-500 to-green-500"></div>
+            <h3 class="font-bold text-lg flex items-center gap-2 text-slate-800 font-['Oswald'] uppercase tracking-wide">
+                🔬 Protocolo de Investigación
+            </h3>
+            <p class="mt-2 text-slate-600">
+                Como científico, tu misión es leer el artículo completo y diseccionar la información. Usa las herramientas de color de arriba para <strong>"capturar"</strong> términos científicos.
+            </p>
+            <div class="mt-4 flex flex-wrap gap-4 text-sm">
+                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200 font-bold">🔵 Azul: El Jefe (Estímulos/Cerebro)</span>
+                <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full border border-red-200 font-bold">🔴 Rojo: Mensajeros (Hormonas)</span>
+                <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full border border-green-200 font-bold">🟢 Verde: Reacción (Órganos)</span>
+            </div>
+        </div>
+
+        <!-- ARTÍCULO -->
+        <article id="text-content" class="bg-white p-10 rounded-xl shadow-lg border border-slate-100 relative">
+            <!-- Header Artículo -->
+            <header class="mb-10 border-b pb-6">
+                <span class="bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded uppercase tracking-widest">Biología • Neurociencia</span>
+                <h2 class="text-4xl sm:text-5xl font-['Oswald'] font-bold text-slate-900 mt-4 mb-4 leading-tight">¿Mariposas o modo supervivencia? La ciencia de tu "crush"</h2>
+                <div class="flex items-center justify-between text-sm text-slate-500">
+                    <p class="font-bold text-slate-700">Por Marc Pérez Casals</p>
+                    <p>14 Febrero, 2026</p>
+                </div>
+            </header>
+            
+            <div class="paragraph-container text-slate-700">
+                <p class="numbered-p">
+                    Seguro que te ha pasado: estás tranquilamente en el patio o en clase, y de repente aparece ESA persona. En cuestión de segundos, tus manos sudan, tu corazón parece que va a salirse del pecho y sientes un nudo raro en la barriga. Intentas decir "hola", pero te sale una voz extraña. ¿Te estás volviendo loco? No, simplemente tu laboratorio químico interno acaba de explotar.
+                </p>
+                <p class="numbered-p">
+                    Aunque a los poetas y a los cantantes les guste decir que el amor está en el corazón, la ciencia tiene una noticia para ti: <strong class="teacher-mark t-correct-blue" data-exp="Centro de control">todo empieza en el cerebro</strong>. El amor no es magia, es una estrategia de supervivencia de la naturaleza.
+                </p>
+                
+                <h3 class="text-2xl font-['Oswald'] font-bold text-slate-800 mt-8 mb-4">1. El objetivo oculto: ¿Por qué nos enamoramos?</h3>
+                <p class="numbered-p">
+                    Biológicamente, el enamoramiento es un truco de la evolución. La naturaleza no "quiere" que seas feliz viendo series con tu pareja; lo que quiere es la <strong class="teacher-mark t-correct-blue" data-exp="Objetivo evolutivo">perpetuación de la especie</strong>. Los seres humanos (y muchos animales) hemos desarrollado mecanismos para buscar pareja y reproducirnos. Ese "flechazo" que sientes es el <strong class="teacher-mark t-correct-blue" data-exp="Detecta estímulos">sistema nervioso</strong> detectando señales (como el olor y las feromonas) y activando una reacción en cadena para empujarte hacia esa persona.
+                </p>
+
+                <h3 class="text-2xl font-['Oswald'] font-bold text-slate-800 mt-8 mb-4">2. El "chute" de energía: La fase de atracción</h3>
+                <p class="numbered-p">
+                    Cuando ves a quien te gusta, tu <strong class="teacher-mark t-correct-blue" data-exp="Órgano principal">cerebro</strong> activa el <strong class="teacher-mark t-correct-blue" data-exp="Circuito del placer">sistema de recompensa</strong> y libera un cóctel de sustancias químicas muy potentes, similares a las que se activan con las drogas o los deportes de riesgo:
+                </p>
+                <ul class="list-disc ml-8 mb-6 space-y-2">
+                    <li><strong class="teacher-mark t-correct-red" data-exp="Hormona del placer">Dopamina</strong>: Es la responsable de que sientas euforia, motivación y esas ganas obsesivas de estar con la otra persona.</li>
+                    <li><strong class="teacher-mark t-correct-red" data-exp="Anfetamina natural">Feniletilamina (FEA)</strong>: Actúa como una anfetamina natural que te mantiene despierto y excitado.</li>
+                </ul>
+                <p class="numbered-p">
+                    Por eso, al principio de una relación, te sientes con muchísima energía y ves a la otra persona perfecta (aunque tus amigos te digan lo contrario). Tu cerebro ha "silenciado" la parte crítica y lógica.
+                </p>
+
+                <h3 class="text-2xl font-['Oswald'] font-bold text-slate-800 mt-8 mb-4">3. ¿Por qué siento mariposas en el estómago?</h3>
+                <p class="numbered-p">
+                    Esta es la pregunta del millón. ¿Tienes insectos dentro? Obviamente no. Lo que sientes es una reacción de estrés y alerta. Al ver a tu crush, tu cerebro (específicamente el <strong class="teacher-mark t-correct-blue" data-exp="Controlador endocrino">hipotálamo</strong>) envía una señal de emergencia a las <strong class="teacher-mark t-correct-green" data-exp="Glándulas sobre riñones">glándulas suprarrenales</strong> (situadas sobre los riñones) para que liberen <strong class="teacher-mark t-correct-red" data-exp="Hormona del estrés/acción">adrenalina</strong> y <strong class="teacher-mark t-correct-red" data-exp="Neurotransmisor alerta">noradrenalina</strong>. El cuerpo se pone en "modo lucha o huida" (como si te persiguiera un león, pero en versión romántica):
+                </p>
+                <ul class="list-disc ml-8 mb-6 space-y-2">
+                    <li>Sube la presión arterial y el <strong class="teacher-mark t-correct-green" data-exp="Bombea sangre rápido">corazón</strong> late rápido para bombear sangre.</li>
+                    <li>Para ser más eficientes, el cuerpo "roba" la sangre del <strong class="teacher-mark t-correct-green" data-exp="Se queda sin sangre">estómago</strong> y la envía a los <strong class="teacher-mark t-correct-green" data-exp="Prioridad para huir">músculos</strong> (por si tienes que salir corriendo).</li>
+                </ul>
+                <p class="numbered-p">
+                    Esa falta de sangre en el <strong class="teacher-mark t-correct-green" data-exp="Conjunto de órganos">sistema digestivo</strong> hace que el estómago se contraiga y la digestión se detenga. Esa sensación de vacío y contracción es lo que llamamos "mariposas".
+                </p>
+
+                <h3 class="text-2xl font-['Oswald'] font-bold text-slate-800 mt-8 mb-4">4. Una orquesta de órganos</h3>
+                <p class="numbered-p">
+                    Aunque el jefe es el cerebro (hipotálamo), para que sientas todo esto, las hormonas viajan por la sangre y "tocan" diferentes órganos:
+                </p>
+                <ul class="list-disc ml-8 mb-6 space-y-2">
+                    <li><strong class="teacher-mark t-correct-green" data-exp="Glándula maestra">Hipófisis</strong> y <strong class="teacher-mark t-correct-green" data-exp="Regula metabolismo">Tiroides</strong>: Regulan el metabolismo y la energía.</li>
+                    <li><strong class="teacher-mark t-correct-green" data-exp="Controla el azúcar">Páncreas</strong>: Secreta <strong class="teacher-mark t-correct-red" data-exp="Regula glucosa">insulina</strong> porque suben los niveles de azúcar (necesitas energía rápida).</li>
+                    <li><strong class="teacher-mark t-correct-green" data-exp="Órganos sexuales">Gónadas (Testículos y Ovarios)</strong>: Se activan para producir <strong class="teacher-mark t-correct-red" data-exp="Hormona masculina">testosterona</strong> y <strong class="teacher-mark t-correct-red" data-exp="Hormona femenina">estrógenos</strong>, aumentando el deseo físico.</li>
+                </ul>
+
+                <h3 class="text-2xl font-['Oswald'] font-bold text-slate-800 mt-8 mb-4">5. De la locura a la calma: El amor verdadero</h3>
+                <p class="numbered-p">
+                    El cuerpo no puede aguantar ese nivel de estrés y taquicardia para siempre. Si la relación avanza, el cerebro cambia de estrategia. Deja de producir tanta dopamina (pasión loca) y empieza a liberar <strong class="teacher-mark t-correct-red" data-exp="Hormona del abrazo">oxitocina</strong>. La oxitocina es la hormona del abrazo, la confianza y la calma. Es la que nos permite crear vínculos duraderos, reduce el estrés y fortalece nuestro <strong class="teacher-mark t-correct-green" data-exp="Defensa del cuerpo">sistema inmunitario</strong>. Biológicamente, pasamos de "querer cazar" a "querer cuidar".
+                </p>
+                <p class="numbered-p">
+                    Así que, la próxima vez que te suden las manos y notes mariposas, recuerda: no es magia, es tu sistema hormonal montando una fiesta para asegurar que la vida continúe.
+                </p>
+            </div>
+        </article>
+
+        <!-- SECCIÓN DE ACTIVIDADES -->
+        <div class="mt-16 grid gap-10 md:grid-cols-2">
+            
+            <!-- ACTIVIDAD 1: PREGUNTAS -->
+            <div class="bg-white p-8 rounded-xl shadow-md border-t-4 border-indigo-500 col-span-2 relative">
+                <div class="absolute -top-5 left-8 bg-indigo-600 text-white px-4 py-1 rounded font-bold shadow-sm uppercase text-sm tracking-wider">Actividad 1</div>
+                
+                <h3 class="text-2xl font-['Oswald'] font-bold text-slate-800 mb-6 mt-2">Análisis Crítico</h3>
+                
+                <div class="space-y-8">
+                    <!-- P1 -->
+                    <div class="group">
+                        <label class="block font-bold text-slate-700 mb-2 border-l-4 border-slate-200 pl-3 group-hover:border-indigo-400 transition-colors">A. ¿Cuál es la razón biológica para enamorarse?</label>
+                        <div class="flex gap-3">
+                            <textarea id="ans-1" rows="3" class="w-full p-3 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all" placeholder="Escribe aquí tu hipótesis..."></textarea>
+                            <input type="text" id="ref-1" class="w-24 p-2 bg-slate-50 border border-slate-300 rounded text-center font-bold text-slate-600" placeholder="#Párrafo">
+                        </div>
+                    </div>
+                    
+                    <!-- P2 -->
+                    <div class="group">
+                        <label class="block font-bold text-slate-700 mb-2 border-l-4 border-slate-200 pl-3 group-hover:border-indigo-400 transition-colors">B. ¿Por qué sentimos "mariposas" en el estómago?</label>
+                        <div class="flex gap-3">
+                            <textarea id="ans-2" rows="3" class="w-full p-3 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all" placeholder="Explica el mecanismo fisiológico..."></textarea>
+                            <input type="text" id="ref-2" class="w-24 p-2 bg-slate-50 border border-slate-300 rounded text-center font-bold text-slate-600" placeholder="#Párrafo">
+                        </div>
+                    </div>
+
+                    <!-- P3 -->
+                    <div class="group">
+                        <label class="block font-bold text-slate-700 mb-2 border-l-4 border-slate-200 pl-3 group-hover:border-indigo-400 transition-colors">C. ¿El amor es solo química? Argumenta.</label>
+                        <div class="flex gap-3">
+                            <textarea id="ans-3" rows="3" class="w-full p-3 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all" placeholder="Tu opinión basada en el texto..."></textarea>
+                            <input type="text" id="ref-3" class="w-24 p-2 bg-slate-50 border border-slate-300 rounded text-center font-bold text-slate-600" placeholder="#Párrafo">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Classroom Card -->
+                <div class="mt-8 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-4 animate-pulse">
+                    <div class="bg-amber-100 p-3 rounded-full text-amber-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-amber-800">📸 ¡Entrega Digital!</p>
+                        <p class="text-sm text-amber-700">Cuando termines de responder, haz una foto a esta sección y cuélgala en el <strong>Classroom</strong>.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACTIVIDAD 2: CONEXIONES -->
+            <div class="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 col-span-2 relative text-white">
+                <div class="absolute -top-5 left-8 bg-emerald-500 text-white px-4 py-1 rounded font-bold shadow-sm uppercase text-sm tracking-wider">Actividad 2</div>
+
+                <h3 class="text-2xl font-['Oswald'] font-bold mb-2 mt-2">Mapas de Conexión</h3>
+                <p class="text-slate-300 mb-6 text-sm">Selecciona el camino correcto. ¡OJO! Ahora es más difícil: hay hormonas trampa.</p>
+                
+                <div class="space-y-6">
+                    
+                    <!-- CAMINO 1: ATRACCIÓN -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg border border-slate-600 connection-row" id="row-1">
+                        <p class="text-xs font-bold text-slate-400 uppercase mb-2">Caso 1: El Flechazo (Inicio)</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="ver">
+                                <option value="">[Estímulo]</option>
+                                <option value="ver">Ver al crush</option>
+                                <option value="comer">Oler comida</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="sn">
+                                <option value="">[Procesamiento]</option>
+                                <option value="medula">Médula Espinal (Reflejo)</option>
+                                <option value="sn">Cerebro (Sist. Recompensa)</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="dopa">
+                                <option value="">[Química]</option>
+                                <option value="insulina">Insulina (Bajar azúcar)</option>
+                                <option value="dopa">Dopamina + FEA (Euforia)</option>
+                                <option value="mela">Melatonina (Sueño)</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="euforia">
+                                <option value="">[Resultado]</option>
+                                <option value="sueño">Relajación total</option>
+                                <option value="euforia">Energía y obsesión</option>
+                            </select>
+                            <span class="feedback ml-2 text-xl hidden"></span>
+                        </div>
+                    </div>
+
+                    <!-- CAMINO 2: ESTRÉS -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg border border-slate-600 connection-row" id="row-2">
+                        <p class="text-xs font-bold text-slate-400 uppercase mb-2">Caso 2: Las Mariposas (Estrés Agudo)</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="hipo">
+                                <option value="">[Orden Central]</option>
+                                <option value="hipo">Hipotálamo (Alerta)</option>
+                                <option value="cerebelo">Cerebelo (Equilibrio)</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="adre">
+                                <option value="">[Mensajero]</option>
+                                <option value="adre">Adrenalina (Suprarrenales)</option>
+                                <option value="tirox">Tiroxina (Tiroides)</option>
+                                <option value="insu">Insulina (Páncreas)</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="roba">
+                                <option value="">[Efecto Fisiológico]</option>
+                                <option value="roba">Sangre va a músculos (Huida)</option>
+                                <option value="diges">Aumenta la digestión</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="contra">
+                                <option value="">[Sensación]</option>
+                                <option value="hambre">Hambre atroz</option>
+                                <option value="contra">Estómago contraído ("Mariposas")</option>
+                            </select>
+                            <span class="feedback ml-2 text-xl hidden"></span>
+                        </div>
+                    </div>
+
+                    <!-- CAMINO 3: AMOR -->
+                    <div class="bg-slate-700/50 p-4 rounded-lg border border-slate-600 connection-row" id="row-3">
+                        <p class="text-xs font-bold text-slate-400 uppercase mb-2">Caso 3: Relación Estable (Apego)</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="tiempo">
+                                <option value="">[Situación]</option>
+                                <option value="tiempo">Confianza tras meses</option>
+                                <option value="susto">Peligro inminente</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="oxi">
+                                <option value="">[Hormona]</option>
+                                <option value="adre">Adrenalina (Estrés)</option>
+                                <option value="oxi">Oxitocina (Apego)</option>
+                                <option value="testo">Testosterona (Dominancia)</option>
+                            </select>
+                            <span class="text-slate-500">➜</span>
+                            <select class="path-select bg-slate-900 border-slate-600 rounded p-2 text-sm w-full md:w-auto" data-correct="calma">
+                                <option value="">[Efecto Global]</option>
+                                <option value="calma">Sistema Inmune fuerte + Calma</option>
+                                <option value="taqui">Taquicardia crónica</option>
+                            </select>
+                            <span class="feedback ml-2 text-xl hidden"></span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button onclick="validateConnections()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded font-bold shadow transition-transform transform hover:scale-105 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                        Confirmar Conexiones
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- FOOTER FLOTANTE (Diccionario + Exportar) -->
+    <div class="fixed bottom-0 w-full bg-slate-900 text-white z-40 transition-transform duration-300 shadow-[0_-8px_20px_rgba(0,0,0,0.3)]" id="resultsPanel" style="transform: translateY(calc(100% - 70px));">
+        
+        <!-- Barra de título -->
+        <div class="flex justify-between items-center px-6 py-4 cursor-pointer hover:bg-slate-800 border-t-4 border-indigo-500 panel-header" onclick="toggleResults()">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <span class="text-2xl">🧪</span>
+                <div>
+                    <h3 class="font-bold text-base sm:text-lg uppercase tracking-wider font-['Oswald']">Mi Informe Científico</h3>
+                    <p class="text-xs text-slate-400">Captura palabras clave y defínelas</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-xs bg-slate-700 px-3 py-1 rounded-full border border-slate-600 hidden sm:inline">Progreso: <span id="total-count" class="text-white font-bold">0</span>/20</span>
+                <svg id="chevron-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                </svg>
+            </div>
+        </div>
+        
+        <!-- Contenido desplegable -->
+        <div class="px-6 py-6" id="statsGrid">
+            
+            <div class="bg-indigo-900/50 p-4 rounded mb-6 border border-indigo-500/30 text-sm text-indigo-200">
+                <p>📝 <strong>Instrucciones:</strong> Encuentra los términos escondidos en el texto. Cuando completes cada cajita, define las palabras y clica "Copiar" para guardarlo en tu libreta.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Columna Azul -->
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 shadow-xl relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-600 pb-2">
+                        <span class="text-blue-400 font-bold uppercase tracking-wider text-sm">S. Nervioso</span>
+                        <span class="text-xs text-slate-400">Meta: 4 palabras</span>
+                    </div>
+                    <div id="msg-blue" class="text-xs text-yellow-400 mb-2 font-bold animate-pulse">🎯 Te faltan: 4 términos</div>
+                    <div id="list-blue" class="space-y-3 h-64 overflow-y-auto pr-2 custom-scrollbar"></div>
+                </div>
+                <!-- Columna Roja -->
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 shadow-xl relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-600 pb-2">
+                        <span class="text-red-400 font-bold uppercase tracking-wider text-sm">Hormonas</span>
+                        <span class="text-xs text-slate-400">Meta: 8 palabras</span>
+                    </div>
+                    <div id="msg-red" class="text-xs text-yellow-400 mb-2 font-bold animate-pulse">🎯 Te faltan: 8 términos</div>
+                    <div id="list-red" class="space-y-3 h-64 overflow-y-auto pr-2 custom-scrollbar"></div>
+                </div>
+                <!-- Columna Verde -->
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 shadow-xl relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-600 pb-2">
+                        <span class="text-green-400 font-bold uppercase tracking-wider text-sm">Órganos / Efectos</span>
+                        <span class="text-xs text-slate-400">Meta: 8 palabras</span>
+                    </div>
+                    <div id="msg-green" class="text-xs text-yellow-400 mb-2 font-bold animate-pulse">🎯 Te faltan: 8 términos</div>
+                    <div id="list-green" class="space-y-3 h-64 overflow-y-auto pr-2 custom-scrollbar"></div>
+                </div>
+            </div>
+
+            <!-- Botón de Exportar -->
+            <div class="flex justify-center pt-4 border-t border-slate-700">
+                <button onclick="copyToClipboard()" class="bg-white text-slate-900 hover:bg-indigo-50 px-8 py-3 rounded-lg shadow-lg flex items-center font-bold text-lg transition-all transform hover:scale-105 border border-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    Copiar Informe
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DOCENTE -->
+    <div id="teacherModal" class="fixed inset-0 bg-black bg-opacity-80 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-2xl border-2 border-slate-300">
+            <h3 class="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2">
+                🔒 Acceso Docente
+            </h3>
+            <p class="text-sm text-slate-500 mb-4">Introduce el código para ver el solucionario completo (preguntas y diccionario).</p>
+            <input type="password" id="teacherPass" class="w-full border border-slate-300 rounded p-2 mb-4 text-center text-lg tracking-widest" placeholder="****">
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">Cancelar</button>
+                <button onclick="checkTeacherPass()" class="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-700">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        let currentTool = 'blue';
+        let highlights = { blue: [], red: [], green: [] }; // Datos del alumno
+        const history = [];
+        let isTeacherMode = false;
+
+        // Metas para el contador
+        const targets = { blue: 4, red: 8, green: 8 };
+
+        // Datos del Docente (Solucionario Diccionario)
+        const teacherData = {
+            blue: [
+                { term: "Cerebro", def: "Centro de control de todo el proceso amoroso." },
+                { term: "Sistema Nervioso", def: "Red que detecta estímulos (olor, visión) y activa la respuesta." },
+                { term: "Sistema de recompensa", def: "Circuito cerebral que genera placer y motivación." },
+                { term: "Hipotálamo", def: "Región del cerebro que conecta el sistema nervioso con el endocrino." }
+            ],
+            red: [
+                { term: "Dopamina", def: "Neurotransmisor de la euforia y la motivación." },
+                { term: "Feniletilamina (FEA)", def: "Sustancia estimulante natural (anfetamina)." },
+                { term: "Adrenalina", def: "Hormona del estrés (lucha/huida) producida por suprarrenales." },
+                { term: "Noradrenalina", def: "Colabora con la adrenalina en la respuesta de alerta." },
+                { term: "Insulina", def: "Hormona del páncreas que regula el azúcar para dar energía." },
+                { term: "Testosterona", def: "Hormona sexual masculina (aumenta deseo)." },
+                { term: "Estrógenos", def: "Hormona sexual femenina." },
+                { term: "Oxitocina", def: "Hormona del apego, la calma y la confianza." }
+            ],
+            green: [
+                { term: "Manos (Sudor)", def: "Respuesta fisiológica al estrés." },
+                { term: "Corazón", def: "Bombea sangre más rápido (taquicardia)." },
+                { term: "Estómago", def: "Se contrae por falta de sangre ('mariposas')." },
+                { term: "Glándulas suprarrenales", def: "Órgano sobre el riñón que libera adrenalina." },
+                { term: "Músculos", def: "Reciben más sangre para prepararse para la acción." },
+                { term: "Hipófisis", def: "Glándula maestra que regula otras glándulas." },
+                { term: "Tiroides", def: "Regula el metabolismo." },
+                { term: "Páncreas", def: "Libera insulina." }
+            ]
+        };
+
+        // --- INICIALIZACIÓN ---
+        function init() {
+            setTool('blue');
+            updateAllCounters();
+        }
+
+        // --- HERRAMIENTAS DE COLOR ---
+        function setTool(color) {
+            currentTool = color;
+            ['blue', 'red', 'green'].forEach(c => {
+                const btn = document.getElementById(`btn-${c}`);
+                if (c === color) {
+                    btn.classList.add('ring-2', `ring-${c}-400`, 'bg-white', 'shadow-md', 'scale-105');
+                    btn.classList.remove('opacity-70');
+                } else {
+                    btn.classList.remove('ring-2', `ring-${c}-400`, 'bg-white', 'shadow-md', 'scale-105');
+                    btn.classList.add('opacity-70');
+                }
+            });
+        }
+
+        // --- LÓGICA DE RESALTADO ---
+        document.getElementById('text-content').addEventListener('mouseup', function() {
+            if (isTeacherMode) return; // No permitir editar en modo docente
+
+            const selection = window.getSelection();
+            if (selection.rangeCount === 0) return;
+            const text = selection.toString().trim();
+            if (text.length === 0) return;
+
+            const range = selection.getRangeAt(0);
+            const container = document.getElementById('text-content');
+            if (!container.contains(range.commonAncestorContainer)) return;
+            if (range.commonAncestorContainer.nodeType !== 3 && range.commonAncestorContainer.tagName !== 'P') return; 
+
+            try {
+                const span = document.createElement('span');
+                span.className = `highlight-${currentTool}`;
+                span.textContent = text;
+                range.deleteContents();
+                range.insertNode(span);
+                selection.removeAllRanges();
+
+                // Añadir a datos alumno
+                if (!highlights[currentTool].some(item => item.term === text)) {
+                    highlights[currentTool].push({ term: text, def: "" });
+                    updateDictionaryDOM();
+                }
+                
+                history.push({ span, color: currentTool, text });
+                updateAllCounters();
+                
+                // Abrir panel auto si está cerrado
+                const panel = document.getElementById('resultsPanel');
+                if (panel.style.transform !== 'translateY(0%)') {
+                   toggleResults();
+                }
+
+            } catch (e) {
+                console.log("Selección compleja ignorada");
+            }
+        });
+
+        // --- GESTIÓN DE DICCIONARIO DOM ---
+        function updateDictionaryDOM() {
+            // Decidir qué datos mostrar: Docente o Alumno
+            const dataToShow = isTeacherMode ? teacherData : highlights;
+
+            ['blue', 'red', 'green'].forEach(color => {
+                const list = document.getElementById(`list-${color}`);
+                
+                // Si NO es modo docente, guardamos lo que el alumno estaba escribiendo antes de repintar
+                if (!isTeacherMode) {
+                    const inputs = list.querySelectorAll('input');
+                    inputs.forEach((inp, idx) => {
+                        if(highlights[color][idx]) highlights[color][idx].def = inp.value;
+                    });
+                }
+
+                list.innerHTML = '';
+                const items = dataToShow[color];
+
+                if (items.length === 0) {
+                    list.innerHTML = '<p class="text-slate-500 text-xs italic">Aún no has encontrado palabras.</p>';
+                } else {
+                    items.forEach((item, index) => {
+                        const div = document.createElement('div');
+                        div.className = "bg-slate-700/50 p-2 rounded mb-2 border border-slate-600";
+                        
+                        // Si es modo docente, el input es readonly o texto fijo
+                        const valueAttr = item.def ? `value="${item.def}"` : '';
+                        const readonlyAttr = isTeacherMode ? 'readonly class="w-full bg-slate-900 border border-indigo-500/50 rounded text-xs p-1 text-indigo-200"' : 'class="w-full bg-slate-800 border border-slate-600 rounded text-xs p-1 text-slate-200 focus:border-white focus:outline-none"';
+                        const placeholder = isTeacherMode ? '' : 'placeholder="Definición..."';
+                        const onInput = isTeacherMode ? '' : `oninput="updateDef('${color}', ${index}, this.value)"`;
+
+                        div.innerHTML = `
+                            <p class="font-bold text-${color}-300 text-xs mb-1">"${item.term}"</p>
+                            <input type="text" ${readonlyAttr} ${valueAttr} ${placeholder} ${onInput}>
+                        `;
+                        list.appendChild(div);
+                    });
+                }
+            });
+        }
+
+        function updateDef(color, index, value) {
+            highlights[color][index].def = value;
+        }
+
+        function updateAllCounters() {
+            let totalFound = 0;
+            ['blue', 'red', 'green'].forEach(color => {
+                const count = highlights[color].length;
+                totalFound += count;
+                const missing = targets[color] - count;
+                const msgDiv = document.getElementById(`msg-${color}`);
+                
+                if (missing > 0) {
+                    msgDiv.textContent = `🎯 Te faltan: ${missing} términos`;
+                    msgDiv.className = "text-xs text-yellow-400 mb-2 font-bold animate-pulse";
+                } else {
+                    msgDiv.textContent = `✅ ¡Colección completa!`;
+                    msgDiv.className = "text-xs text-green-400 mb-2 font-bold";
+                }
+            });
+            document.getElementById('total-count').textContent = totalFound;
+        }
+
+        function undoLast() {
+            if (isTeacherMode) return;
+            if (history.length === 0) return;
+            const last = history.pop();
+            const parent = last.span.parentNode;
+            parent.replaceChild(document.createTextNode(last.text), last.span);
+            parent.normalize();
+            
+            const idx = highlights[last.color].findIndex(i => i.term === last.text);
+            if (idx > -1) {
+                highlights[last.color].splice(idx, 1);
+                updateDictionaryDOM();
+            }
+            updateAllCounters();
+        }
+
+        // --- MODO DOCENTE ---
+        function toggleTeacherAuth() {
+            if (isTeacherMode) {
+                // Desactivar
+                isTeacherMode = false;
+                document.body.classList.remove('teacher-mode');
+                document.getElementById('teacherBtn').classList.remove('bg-indigo-600', 'text-white');
+                document.getElementById('teacherBtn').classList.add('bg-slate-800', 'text-slate-300');
+                
+                // Limpiar respuestas de texto
+                document.getElementById('ans-1').value = "";
+                document.getElementById('ans-2').value = "";
+                document.getElementById('ans-3').value = "";
+                document.getElementById('ref-1').value = "";
+                document.getElementById('ref-2').value = "";
+                document.getElementById('ref-3').value = "";
+
+                // Resetear selects
+                document.querySelectorAll('.path-select').forEach(sel => {
+                    sel.value = "";
+                    sel.classList.remove('bg-green-900', 'text-white', 'border-green-500', 'border-red-500', 'text-red-400', 'text-green-400', 'font-bold');
+                });
+                document.querySelectorAll('.feedback').forEach(f => f.classList.add('hidden'));
+                document.querySelectorAll('.connection-row').forEach(r => r.classList.remove('bg-green-900/20'));
+
+                // Restaurar vista alumno en el diccionario
+                updateDictionaryDOM();
+                alert("Modo docente desactivado. Vista de alumno restaurada.");
+
+            } else {
+                // Pedir pass
+                document.getElementById('teacherModal').classList.remove('hidden');
+                document.getElementById('teacherPass').value = '';
+                document.getElementById('teacherPass').focus();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('teacherModal').classList.add('hidden');
+        }
+
+        function checkTeacherPass() {
+            const pass = document.getElementById('teacherPass').value;
+            if (pass === '1234') {
+                activateTeacherMode();
+                closeModal();
+            } else {
+                alert("Código incorrecto");
+            }
+        }
+
+        function activateTeacherMode() {
+            isTeacherMode = true;
+            document.body.classList.add('teacher-mode');
+            document.getElementById('teacherBtn').classList.remove('bg-slate-800', 'text-slate-300');
+            document.getElementById('teacherBtn').classList.add('bg-indigo-600', 'text-white');
+            
+            // Rellenar respuestas
+            document.getElementById('ans-1').value = "DOCENTE: Estrategia evolutiva para perpetuar la especie mediante la reproducción (Párrafo #1).";
+            document.getElementById('ans-2').value = "DOCENTE: Redistribución sanguínea por adrenalina: sangre sale del estómago hacia los músculos (Párrafo #3).";
+            document.getElementById('ans-3').value = "DOCENTE: Inicia como química (supervivencia) pero evoluciona a vínculo emocional complejo (apego/oxitocina).";
+            document.getElementById('ref-1').value = "#1";
+            document.getElementById('ref-2').value = "#3";
+            document.getElementById('ref-3').value = "Global";
+
+            // Resolver conexiones
+            document.querySelectorAll('.path-select').forEach(sel => {
+                sel.value = sel.dataset.correct;
+                sel.classList.add('bg-green-900', 'text-white', 'border-green-500');
+            });
+
+            // Mostrar diccionario completo
+            updateDictionaryDOM();
+        }
+
+        // --- VALIDACIÓN CONEXIONES ---
+        function validateConnections() {
+            const rows = document.querySelectorAll('.connection-row');
+            
+            rows.forEach(row => {
+                const selects = row.querySelectorAll('select');
+                let allCorrect = true;
+                
+                selects.forEach(sel => {
+                    if (sel.value === sel.dataset.correct) {
+                        sel.classList.remove('border-red-500', 'text-red-400');
+                        sel.classList.add('border-green-500', 'text-green-400', 'font-bold');
+                    } else {
+                        allCorrect = false;
+                        sel.classList.remove('border-green-500', 'text-green-400');
+                        sel.classList.add('border-red-500', 'text-red-400');
+                    }
+                });
+
+                const feedback = row.querySelector('.feedback');
+                feedback.classList.remove('hidden');
+                if (allCorrect) {
+                    feedback.textContent = "✅";
+                    row.classList.add('bg-green-900/20');
+                } else {
+                    feedback.textContent = "❌";
+                    row.classList.remove('bg-green-900/20');
+                }
+            });
+        }
+
+        // --- UI PANEL ---
+        function toggleResults() {
+            const panel = document.getElementById('resultsPanel');
+            const icon = document.getElementById('chevron-icon');
+            
+            if (panel.style.transform === 'translateY(0%)') {
+                panel.style.transform = 'translateY(calc(100% - 70px))';
+                icon.style.transform = 'rotate(0deg)';
+            } else {
+                panel.style.transform = 'translateY(0%)';
+                icon.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        // --- EXPORTAR ---
+        function copyToClipboard() {
+            let text = "🧬 INFORME CIENTÍFICO: LA QUÍMICA DEL AMOR\n";
+            text += "Alumno: ________________________\n\n";
+            
+            ['blue', 'red', 'green'].forEach(color => {
+                const title = color === 'blue' ? 'SISTEMA NERVIOSO' : (color === 'red' ? 'HORMONAS' : 'ÓRGANOS/EFECTOS');
+                text += `[${title}]\n`;
+                highlights[color].forEach(item => {
+                    text += `- ${item.term}: ${item.def || ""}\n`;
+                });
+                text += "\n";
+            });
+
+            navigator.clipboard.writeText(text).then(() => {
+                alert("¡Copiado! Ahora pégalo en tu libreta digital.");
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
