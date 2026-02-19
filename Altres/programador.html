@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programació Docent Interactiva</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel per compilar JSX al navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fff7ed; /* Fons taronja molt suau, estil agenda docent */
+            color: #374151;
+        }
+
+        /* Scrollbars personalitzades i netes */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f9fafb; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #fdba74; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f97316; }
+
+        .textarea-auto {
+            resize: none;
+            overflow: hidden;
+            width: 100%;
+            background: transparent;
+            outline: none;
+            transition: background-color 0.2s;
+        }
+
+        .phase-header-0 { background-color: #d1fae5; color: #065f46; border-left: 4px solid #059669; } /* Verd */
+        .phase-header-1 { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; } /* Blau */
+        .phase-header-2 { background-color: #fef3c7; color: #92400e; border-left: 4px solid #d97706; } /* Groc */
+        .phase-header-3 { background-color: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; } /* Vermell */
+        .phase-header-4 { background-color: #f3e8ff; color: #6b21a8; border-left: 4px solid #9333ea; } /* Lila */
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- ICONES SVG ---
+        const IconSave = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
+        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+        const IconUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>;
+        const IconDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>;
+        const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>;
+        const IconUndo = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.6L3 13"></path></svg>;
+        const IconRedo = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 019-9 9 9 0 016 2.6L21 13"></path></svg>;
+        const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>;
+        const IconEye = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
+        const IconEyeOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
+        const IconChevronLeft = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
+        const IconChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
+
+        // --- DADES INICIALS ---
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        const initialData = [
+            {
+                id: 'course_1',
+                name: 'CFN 25-26',
+                units: [
+                    {
+                        id: 'unit_1',
+                        title: 'UP 4.2 / 4.3',
+                        phases: [
+                            {
+                                id: generateId(),
+                                name: 'FASE DE PREPARACIÓ',
+                                collapsed: false,
+                                sessions: [
+                                    { 
+                                        id: generateId(), number: 1, 
+                                        activities: [{ id: generateId(), text: "• 15' Somos iguales? - ACTIVITAT MOTIVADORA", detail: "", expanded: false }], 
+                                        materials: [{ id: generateId(), name: "Som iguals?", url: "" }, { id: generateId(), name: "Taula Som iguals?", url: "" }], 
+                                        comments: "", completed: true 
+                                    }
+                                ]
+                            },
+                            {
+                                id: generateId(),
+                                name: 'FASE DE RESOLUCIÓ',
+                                collapsed: false,
+                                sessions: [
+                                    { 
+                                        id: generateId(), number: 2, 
+                                        activities: [
+                                            { id: generateId(), text: "• 10' Oferta laboral (rols coop) -->", detail: "", expanded: false },
+                                            { id: generateId(), text: "• 10' S.Compl + AE + Expl Recerca", detail: "", expanded: false },
+                                            { id: generateId(), text: "• 20' Recerca orgànuls", detail: "", expanded: false }
+                                        ], 
+                                        materials: [{ id: generateId(), name: "Rols recerca", url: "" }, { id: generateId(), name: "Taula recerca orgànuls", url: "" }], 
+                                        comments: "[REV: Al final han fet 20 mins de recerca només]", completed: false 
+                                    },
+                                    { 
+                                        id: generateId(), number: 3, 
+                                        activities: [
+                                            { id: generateId(), text: "• 40' Acabar recerca", detail: "", expanded: false },
+                                            { id: generateId(), text: "• 20' Concurs", detail: "", expanded: false }
+                                        ], 
+                                        materials: [{ id: generateId(), name: "Concurs orgànuls", url: "" }], 
+                                        comments: "[REV: S'ha allargat la recerca, han treballat bé. No hem acabat concurs]", completed: false 
+                                    },
+                                    { 
+                                        id: generateId(), number: 4, 
+                                        activities: [
+                                            { id: generateId(), text: "• Classe extra (substi)", detail: "", expanded: false },
+                                            { id: generateId(), text: "• 10' Explicació NotebookLM", detail: "", expanded: false },
+                                            { id: generateId(), text: "• 45' PigeonEtics (teorització)", detail: "", expanded: false }
+                                        ], 
+                                        materials: [{ id: generateId(), name: "PigeonEtics", url: "" }], 
+                                        comments: "", completed: false 
+                                    },
+                                    { 
+                                        id: generateId(), number: 5, 
+                                        activities: [
+                                            { id: generateId(), text: "• ⚠️ 20' Concurs", detail: "", expanded: false },
+                                            { id: generateId(), text: "• 10' Metacognició recerca", detail: "", expanded: false },
+                                            { id: generateId(), text: "• 20' Teoria", detail: "", expanded: false }
+                                        ], 
+                                        materials: [{ id: generateId(), name: "Metacognició recerca", url: "" }], 
+                                        comments: "[REV: He explicat de manera extra què són els cromosomes i com i quan es formen (superficialment). Diapo 30]", completed: false 
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        // --- FUNCIONS DE LOCALSTORAGE ---
+        const guardarDades = (coursesToSave) => {
+            Object.keys(localStorage).forEach(k => {
+                if (k.startsWith('programacio-')) localStorage.removeItem(k);
+            });
+            coursesToSave.forEach(curs => {
+                localStorage.setItem(`programacio-${curs.name}`, JSON.stringify(curs));
+            });
+        };
+
+        const llegirDades = () => {
+            const keys = Object.keys(localStorage).filter(k => k.startsWith('programacio-'));
+            return keys.map(k => {
+                try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
+            }).filter(Boolean);
+        };
+
+        const detectarDades = () => {
+            return Object.keys(localStorage).some(k => k.startsWith('programacio-'));
+        };
+
+        const migrateData = (courses) => {
+            return courses.map(c => ({
+                ...c,
+                units: c.units.map(u => ({
+                    ...u,
+                    phases: u.phases.map(p => ({
+                        ...p,
+                        collapsed: p.collapsed || false,
+                        sessions: p.sessions.map(s => {
+                            let newS = { ...s };
+                            delete newS.space;
+                            if (typeof newS.activity === 'string') {
+                                newS.activities = newS.activity.split('\n').filter(a=>a.trim()).map(a => ({ id: generateId(), text: a, detail: '', expanded: false }));
+                                delete newS.activity;
+                            } else if (!newS.activities) newS.activities = [];
+                            
+                            if (typeof newS.material === 'string') {
+                                newS.materials = newS.material.split('\n').filter(m=>m.trim()).map(m => ({ id: generateId(), name: m, url: '' }));
+                                delete newS.material;
+                            } else if (!newS.materials) newS.materials = [];
+                            return newS;
+                        })
+                    }))
+                }))
+            }));
+        };
+
+        // --- COMPONENTS ---
+
+        const AutoTextarea = ({ value, onChange, placeholder, className }) => {
+            const textareaRef = useRef(null);
+
+            const adjustHeight = () => {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                    textarea.style.height = 'auto';
+                    textarea.style.height = `${textarea.scrollHeight}px`;
+                }
+            };
+
+            useEffect(() => {
+                adjustHeight();
+            }, [value]);
+
+            return (
+                <textarea
+                    ref={textareaRef}
+                    value={value}
+                    onChange={(e) => {
+                        onChange(e.target.value);
+                        adjustHeight();
+                    }}
+                    placeholder={placeholder}
+                    rows={1}
+                    className={`textarea-auto ${className}`}
+                />
+            );
+        };
+
+        const HighlightedActivityTextarea = ({ value, onChange, completed }) => {
+            const textareaRef = useRef(null);
+            
+            const adjustHeight = () => {
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+                }
+            };
+
+            useEffect(() => { adjustHeight(); }, [value]);
+
+            const handleChange = (e) => {
+                let val = e.target.value;
+                if (!val.startsWith('• ')) val = '• ' + val.replace(/^•?\s*/, '');
+                onChange(val);
+                adjustHeight();
+            };
+
+            return (
+                <div className="relative w-full text-sm font-medium">
+                    <div 
+                        className={`absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-1 py-1 ${completed ? 'text-gray-500' : 'text-gray-800'}`} 
+                        aria-hidden="true"
+                    >
+                        {value.split(/(\d+)/).map((part, i) =>
+                            /\d+/.test(part) ? <span key={i} className="text-red-600 font-bold">{part}</span> : <span key={i} className={completed ? "opacity-50" : ""}>{part}</span>
+                        )}
+                    </div>
+                    <textarea
+                        ref={textareaRef}
+                        value={value}
+                        onChange={handleChange}
+                        rows={1}
+                        className={`textarea-auto relative z-10 w-full px-1 py-1 bg-transparent text-transparent caret-black outline-none resize-none overflow-hidden rounded`}
+                        style={{ color: 'transparent', WebkitTextFillColor: 'transparent' }}
+                    />
+                </div>
+            );
+        };
+
+
+        const App = () => {
+            const [data, setData] = useState(() => {
+                let loadedData;
+                if (detectarDades()) {
+                    loadedData = llegirDades();
+                } else {
+                    const antic = localStorage.getItem('programacio_docent_data');
+                    if (antic) { try { loadedData = JSON.parse(antic); } catch (e) {} }
+                }
+                return migrateData(loadedData && loadedData.length > 0 ? loadedData : initialData);
+            });
+
+            const [activeCourseId, setActiveCourseId] = useState(data[0]?.id);
+            const [activeUnitId, setActiveUnitId] = useState(data[0]?.units[0]?.id);
+            const [toastMsg, setToastMsg] = useState('');
+            
+            const [history, setHistory] = useState([]);
+            const [historyIndex, setHistoryIndex] = useState(-1);
+            const [skipHistory, setSkipHistory] = useState(false);
+
+            const [showPasteModal, setShowPasteModal] = useState(false);
+            const [pasteRows, setPasteRows] = useState(() => Array.from({length: 5}, () => ['', '', '', '']));
+            const [pastePhaseId, setPastePhaseId] = useState("");
+            
+            const [showCompleted, setShowCompleted] = useState(false);
+
+            // REQ 5: URL de l'Agenda Docent
+            const [agendaUrl, setAgendaUrl] = useState(() => localStorage.getItem('programacio_agenda_url') || '');
+
+            useEffect(() => {
+                localStorage.setItem('programacio_agenda_url', agendaUrl);
+            }, [agendaUrl]);
+
+            useEffect(() => {
+                guardarDades(data);
+                if (skipHistory) {
+                    setSkipHistory(false);
+                    return;
+                }
+                setHistory(prev => {
+                    const newHistory = prev.slice(0, historyIndex + 1);
+                    newHistory.push(data);
+                    setHistoryIndex(newHistory.length - 1);
+                    return newHistory;
+                });
+            }, [data]);
+
+            const activeCourse = data.find(c => c.id === activeCourseId) || data[0];
+            useEffect(() => {
+                if (activeCourse && (!activeUnitId || !activeCourse.units.find(u => u.id === activeUnitId))) {
+                    setActiveUnitId(activeCourse.units[0]?.id);
+                }
+            }, [activeCourseId, data]);
+
+            const activeUnit = activeCourse?.units.find(u => u.id === activeUnitId);
+
+            const showToast = (msg) => {
+                setToastMsg(msg);
+                setTimeout(() => setToastMsg(''), 3000);
+            };
+
+            const undo = () => {
+                if (historyIndex > 0) {
+                    setSkipHistory(true);
+                    setHistoryIndex(historyIndex - 1);
+                    setData(history[historyIndex - 1]);
+                }
+            };
+            const redo = () => {
+                if (historyIndex < history.length - 1) {
+                    setSkipHistory(true);
+                    setHistoryIndex(historyIndex + 1);
+                    setData(history[historyIndex + 1]);
+                }
+            };
+
+            const moveCourse = (courseId, direction) => {
+                setData(prev => {
+                    const index = prev.findIndex(c => c.id === courseId);
+                    if (index < 0) return prev;
+                    const newIndex = index + direction;
+                    if (newIndex < 0 || newIndex >= prev.length) return prev;
+                    const newData = [...prev];
+                    [newData[index], newData[newIndex]] = [newData[newIndex], newData[index]];
+                    return newData;
+                });
+            };
+
+            // --- LÒGICA DE DADES ---
+            
+            const updateSession = (courseId, unitId, phaseId, sessionId, field, value) => {
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: unit.phases.map(phase => {
+                                    if (phase.id !== phaseId) return phase;
+                                    return {
+                                        ...phase,
+                                        sessions: phase.sessions.map(session => 
+                                            session.id === sessionId ? { ...session, [field]: value } : session
+                                        )
+                                    };
+                                })
+                            };
+                        })
+                    };
+                }));
+            };
+
+            const updateSessionArray = (courseId, unitId, phaseId, sessionId, arrayName, action, itemData) => {
+                setData(prev => prev.map(c => c.id !== courseId ? c : {
+                    ...c, units: c.units.map(u => u.id !== unitId ? u : {
+                        ...u, phases: u.phases.map(p => p.id !== phaseId ? p : {
+                            ...p, sessions: p.sessions.map(s => {
+                                if (s.id !== sessionId) return s;
+                                let newArray = [...s[arrayName]];
+                                if (action === 'add') newArray.push(itemData);
+                                else if (action === 'delete') newArray = newArray.filter(i => i.id !== itemData);
+                                else if (action === 'update') {
+                                    const { itemId, field, value } = itemData;
+                                    newArray = newArray.map(i => i.id !== itemId ? i : { ...i, [field]: value });
+                                }
+                                return { ...s, [arrayName]: newArray };
+                            })
+                        })
+                    })
+                }));
+            };
+
+            const updatePhase = (courseId, unitId, phaseId, field, value) => {
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: unit.phases.map(phase => {
+                                    if (phase.id !== phaseId) return phase;
+                                    return { ...phase, [field]: value };
+                                })
+                            };
+                        })
+                    };
+                }));
+            };
+
+            const areAllExpanded = activeUnit?.phases.every(p => p.sessions.every(s => s.activities.every(a => a.expanded)));
+            
+            const toggleAllDetails = () => {
+                const newState = !areAllExpanded; 
+                setData(prev => prev.map(c => c.id !== activeCourse.id ? c : {
+                    ...c, units: c.units.map(u => u.id !== activeUnit.id ? u : {
+                        ...u, phases: u.phases.map(p => ({
+                            ...p, sessions: p.sessions.map(s => ({
+                                ...s, activities: s.activities.map(a => ({ ...a, expanded: newState }))
+                            }))
+                        }))
+                    })
+                }));
+            };
+
+            const addSession = (courseId, unitId, phaseId) => {
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: unit.phases.map(phase => {
+                                    if (phase.id !== phaseId) return phase;
+                                    return {
+                                        ...phase,
+                                        sessions: [...phase.sessions, {
+                                            id: generateId(),
+                                            activities: [],
+                                            materials: [],
+                                            comments: "",
+                                            completed: false
+                                        }]
+                                    };
+                                })
+                            };
+                        })
+                    };
+                }));
+            };
+
+            const deleteSession = (courseId, unitId, phaseId, sessionId) => {
+                if(!confirm("Segur que vols eliminar aquesta sessió? Aquesta acció no es pot desfer.")) return;
+                
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: unit.phases.map(phase => {
+                                    if (phase.id !== phaseId) return phase;
+                                    return {
+                                        ...phase,
+                                        sessions: phase.sessions.filter(s => s.id !== sessionId)
+                                    };
+                                })
+                            };
+                        })
+                    };
+                }));
+            };
+
+            const moveSession = (courseId, unitId, phaseId, sessionId, direction) => {
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+
+                            let pIndex = unit.phases.findIndex(p => p.id === phaseId);
+                            if (pIndex < 0) return unit;
+                            let sIndex = unit.phases[pIndex].sessions.findIndex(s => s.id === sessionId);
+                            if (sIndex < 0) return unit;
+
+                            const newPhases = JSON.parse(JSON.stringify(unit.phases));
+                            const sessionToMove = newPhases[pIndex].sessions[sIndex];
+
+                            if (direction === 'up') {
+                                if (sIndex > 0) {
+                                    newPhases[pIndex].sessions.splice(sIndex, 1);
+                                    newPhases[pIndex].sessions.splice(sIndex - 1, 0, sessionToMove);
+                                } else if (pIndex > 0) {
+                                    newPhases[pIndex].sessions.splice(sIndex, 1);
+                                    newPhases[pIndex - 1].sessions.push(sessionToMove);
+                                }
+                            } else if (direction === 'down') {
+                                if (sIndex < newPhases[pIndex].sessions.length - 1) {
+                                    newPhases[pIndex].sessions.splice(sIndex, 1);
+                                    newPhases[pIndex].sessions.splice(sIndex + 1, 0, sessionToMove);
+                                } else if (pIndex < newPhases.length - 1) {
+                                    newPhases[pIndex].sessions.splice(sIndex, 1);
+                                    newPhases[pIndex + 1].sessions.unshift(sessionToMove);
+                                }
+                            }
+
+                            return { ...unit, phases: newPhases };
+                        })
+                    };
+                }));
+            };
+
+            const resetUnit = (courseId, unitId) => {
+                if(!confirm("Segur que vols REINICIAR aquesta unitat? S'eliminaran TOTES les sessions de totes les fases. Aquesta acció no es pot desfer.")) return;
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: unit.phases.map(phase => ({ ...phase, sessions: [] }))
+                            };
+                        })
+                    };
+                }));
+                showToast("Programació reiniciada correctament.");
+            };
+
+            const addUnit = (courseId) => {
+                const newUnitId = generateId();
+                setData(prev => prev.map(course => {
+                    if(course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: [...course.units, {
+                            id: newUnitId,
+                            title: 'Nova Unitat Temporal',
+                            phases: [
+                                // REQ 1: Només tres fases predeterminades
+                                { id: generateId(), name: 'FASE DE PREPARACIÓ', collapsed: false, sessions: [] },
+                                { id: generateId(), name: 'FASE DE RESOLUCIÓ', collapsed: false, sessions: [] },
+                                { id: generateId(), name: "FASE D'INTEGRACIÓ", collapsed: false, sessions: [] }
+                            ]
+                        }]
+                    };
+                }));
+                setActiveUnitId(newUnitId);
+            };
+
+            // REQ 4: Funcions per Desar i Carregar JSON
+            const exportJSON = () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+                const link = document.createElement("a");
+                link.setAttribute("href", dataStr);
+                link.setAttribute("download", `programacio_docent_${new Date().toISOString().split('T')[0]}.json`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const handleImportJSON = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        setData(migrateData(importedData));
+                        setActiveCourseId(importedData[0]?.id);
+                        showToast("Dades JSON importades correctament.");
+                    } catch (err) {
+                        alert("El fitxer no té un format JSON vàlid.");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const exportCSV = () => {
+                 let csvContent = "data:text/csv;charset=utf-8,Curs,Unitat,Fase,Sessió,Descriptiu activitat,Material,Comentaris,Estat\n";
+                 // REQ 2: Assignem la numeració on the fly per a l'exportació CSV
+                 data.forEach(c => {
+                     c.units.forEach(u => {
+                         let exportCounter = 1;
+                         u.phases.forEach(p => {
+                             p.sessions.forEach(s => {
+                                 const actText = s.activities.map(a => a.text).join(' | ').replace(/"/g, '""');
+                                 const matText = s.materials.map(m => m.name + (m.url ? ` (${m.url})` : '')).join(' | ').replace(/"/g, '""');
+                                 const comments = (s.comments || "").replace(/"/g, '""');
+                                 csvContent += `"${c.name}","${u.title}","${p.name}","${exportCounter++}","${actText}","${matText}","${comments}","${s.completed ? 'Completada' : 'Pendent'}"\n`;
+                             });
+                         });
+                     });
+                 });
+                 const encodedUri = encodeURI(csvContent);
+                 const link = document.createElement("a");
+                 link.setAttribute("href", encodedUri);
+                 link.setAttribute("download", `programacio_${new Date().toISOString().split('T')[0]}.csv`);
+                 document.body.appendChild(link);
+                 link.click();
+                 document.body.removeChild(link);
+            };
+
+            const openPasteModal = () => {
+                setPasteRows(Array.from({length: 5}, () => ['', '', '', '']));
+                setPastePhaseId("");
+                setShowPasteModal(true);
+            };
+
+            const handlePasteToGrid = (e, startRow, startCol) => {
+                e.preventDefault();
+                const pasteDataStr = e.clipboardData.getData('text/plain');
+                
+                let rows = [];
+                let currentRow = [];
+                let currentCell = "";
+                let inQuotes = false;
+
+                for (let i = 0; i < pasteDataStr.length; i++) {
+                    const char = pasteDataStr[i];
+                    if (inQuotes) {
+                        if (char === '"') {
+                            if (pasteDataStr[i + 1] === '"') {
+                                currentCell += '"';
+                                i++;
+                            } else {
+                                inQuotes = false;
+                            }
+                        } else {
+                            currentCell += char;
+                        }
+                    } else {
+                        if (char === '"') {
+                            inQuotes = true;
+                        } else if (char === '\t') {
+                            currentRow.push(currentCell);
+                            currentCell = "";
+                        } else if (char === '\n') {
+                            currentRow.push(currentCell);
+                            rows.push(currentRow);
+                            currentRow = [];
+                            currentCell = "";
+                        } else if (char !== '\r') {
+                            currentCell += char;
+                        }
+                    }
+                }
+                if (currentCell || currentRow.length > 0) {
+                    currentRow.push(currentCell);
+                    rows.push(currentRow);
+                }
+
+                setPasteRows(prev => {
+                    const newRows = [...prev];
+                    rows.forEach((row, i) => {
+                        const targetRow = startRow + i;
+                        while (targetRow >= newRows.length) {
+                            newRows.push(['', '', '', '']);
+                        }
+                        row.forEach((cell, j) => {
+                            const targetCol = startCol + j;
+                            if (targetCol < 4) {
+                                newRows[targetRow][targetCol] = cell;
+                            }
+                        });
+                    });
+                    return newRows;
+                });
+            };
+
+            const handlePasteSubmit = () => {
+                if (!pastePhaseId) return;
+                
+                const newSessions = pasteRows.filter(r => r.some(c => c.trim() !== '')).map(cols => {
+                    return {
+                        id: generateId(),
+                        activities: cols[1] ? cols[1].split('\n').filter(x=>x.trim()).map(a => ({ id: generateId(), text: (a.trim().startsWith('•') ? '' : '• ') + a.trim(), detail: "", expanded: false })) : [],
+                        materials: cols[2] ? cols[2].split('\n').filter(x=>x.trim()).map(m => ({ id: generateId(), name: m.trim(), url: "" })) : [],
+                        comments: cols[3] || "",
+                        completed: false
+                    };
+                });
+
+                if (newSessions.length === 0) return;
+
+                setData(prev => prev.map(c => c.id !== activeCourse.id ? c : {
+                    ...c, units: c.units.map(u => u.id !== activeUnit?.id ? u : {
+                        ...u, phases: u.phases.map(p => {
+                            if (p.id !== pastePhaseId) return p;
+                            return { ...p, sessions: [...p.sessions, ...newSessions] };
+                        })
+                    })
+                }));
+                
+                setShowPasteModal(false);
+                showToast("Dades importades a la taula correctament.");
+            };
+
+            // REQ 2: Pre-càlcul absolutament robust de tots els números de sessió per la vista actual
+            const sessionNumbers = {};
+            if (activeUnit) {
+                let sessionCounter = 1;
+                activeUnit.phases.forEach(phase => {
+                    phase.sessions.forEach(session => {
+                        sessionNumbers[session.id] = sessionCounter++;
+                    });
+                });
+            }
+
+            return (
+                <div className="min-h-screen pb-20">
+                    {/* Header Principal */}
+                    <header className="bg-white border-b border-orange-200 shadow-sm sticky top-0 z-30">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center h-16">
+                                <div className="flex items-center">
+                                    <div className="bg-orange-500 text-white p-2 rounded-lg mr-3 shadow-sm hidden sm:block">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                                    </div>
+                                    <h1 className="text-xl font-bold text-gray-800 truncate max-w-[150px] sm:max-w-none">Programador Docent</h1>
+                                    
+                                    {/* REQ 5: Caixeta URL Agenda */}
+                                    <div className="hidden md:flex items-center ml-4 pl-4 border-l-2 border-orange-200">
+                                        <span className="text-sm font-semibold text-gray-500 mr-2">La meva agenda:</span>
+                                        {agendaUrl ? (
+                                            <div className="flex items-center bg-orange-50 px-2 py-1 rounded border border-orange-100">
+                                                <a href={agendaUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:text-blue-800 underline max-w-[150px] truncate" title={agendaUrl}>Obrir Agenda</a>
+                                                <button onClick={() => {const url = prompt("Nova URL de l'Agenda Docent:", agendaUrl); if(url !== null) setAgendaUrl(url);}} className="ml-2 text-xs text-gray-400 hover:text-orange-500" title="Editar URL">✏️</button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => {const url = prompt("Introdueix l'URL de la teva Agenda Docent:"); if(url) setAgendaUrl(url);}} className="text-sm text-orange-500 hover:text-orange-700 underline font-medium">Configurar URL</button>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2 sm:space-x-3">
+                                    <div className="flex bg-gray-100 rounded-md p-0.5 shadow-sm">
+                                         <button onClick={undo} disabled={historyIndex <= 0} className="p-1 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 rounded hover:bg-white transition-all" title="Desfer"> <IconUndo /> </button>
+                                         <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-1 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 rounded hover:bg-white transition-all" title="Refer"> <IconRedo /> </button>
+                                    </div>
+
+                                    {/* REQ 4: Botons per exportar/importar JSON restablerts */}
+                                    <label className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors cursor-pointer" title="Carregar JSON">
+                                        <IconUpload /> <span className="ml-2 hidden lg:inline">Obrir JSON</span>
+                                        <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
+                                    </label>
+                                    <button onClick={exportJSON} className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Desar còpia de seguretat en format JSON">
+                                        <IconSave /> <span className="ml-2 hidden lg:inline">Desar JSON</span>
+                                    </button>
+                                    
+                                    <button onClick={exportCSV} className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Exportar a CSV">
+                                        <IconDownload /> <span className="ml-2 hidden lg:inline">Exportar Excel</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tabs de Cursos amb Reordenació */}
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <nav className="flex space-x-2 overflow-x-auto custom-scroll pb-1">
+                                {data.map((course, index) => (
+                                    <button
+                                        key={course.id}
+                                        onClick={() => setActiveCourseId(course.id)}
+                                        className={`whitespace-nowrap py-3 px-2 border-b-2 font-medium text-sm transition-colors flex items-center ${
+                                            activeCourseId === course.id
+                                                ? 'border-orange-500 text-orange-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        {activeCourseId === course.id && index > 0 && (
+                                            <div onClick={(e) => { e.stopPropagation(); moveCourse(course.id, -1); }} className="text-gray-400 hover:text-orange-500 p-1 mr-1 hover:bg-orange-50 rounded" title="Moure a l'esquerra"><IconChevronLeft /></div>
+                                        )}
+                                        
+                                        <input 
+                                            type="text" 
+                                            value={course.name}
+                                            onChange={e => {
+                                                const nom = e.target.value;
+                                                setData(prev => prev.map(c => c.id !== course.id ? c : { ...c, name: nom }));
+                                            }}
+                                            className={`bg-transparent border-none outline-none w-auto max-w-[120px] cursor-pointer text-center ${activeCourseId === course.id ? 'font-bold' : ''}`}
+                                        />
+
+                                        {activeCourseId === course.id && index < data.length - 1 && (
+                                            <div onClick={(e) => { e.stopPropagation(); moveCourse(course.id, 1); }} className="text-gray-400 hover:text-orange-500 p-1 ml-1 hover:bg-orange-50 rounded" title="Moure a la dreta"><IconChevronRight /></div>
+                                        )}
+                                    </button>
+                                ))}
+                                <button 
+                                    onClick={() => {
+                                        const nom = prompt("Nom del nou curs:");
+                                        if (nom) {
+                                            const newCourse = { id: generateId(), name: nom, units: [] };
+                                            setData([...data, newCourse]);
+                                            setActiveCourseId(newCourse.id);
+                                        }
+                                    }}
+                                    className="whitespace-nowrap py-3 px-4 font-medium text-sm text-gray-400 hover:text-orange-500 flex items-center"
+                                >
+                                    <IconPlus /> <span className="ml-1">Nou Curs</span>
+                                </button>
+                            </nav>
+                        </div>
+                    </header>
+
+                    {/* Cos Principal */}
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        
+                        {activeCourse && (
+                            <div className="flex space-x-2 mb-4 overflow-x-auto custom-scroll pb-2 border-b border-orange-200">
+                                {activeCourse.units.map(u => (
+                                    <div key={u.id} className={`flex items-center px-4 py-2 rounded-t-lg border-b-2 transition-colors ${activeUnit?.id === u.id ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-transparent bg-orange-50/50 text-gray-500 hover:bg-orange-50 cursor-pointer'}`} onClick={() => setActiveUnitId(u.id)}>
+                                        <input 
+                                            type="text" 
+                                            value={u.title}
+                                            onChange={(e) => {
+                                                const newTitle = e.target.value;
+                                                setData(prev => prev.map(c => c.id !== activeCourse.id ? c : {
+                                                    ...c, units: c.units.map(unit => unit.id !== u.id ? unit : { ...unit, title: newTitle })
+                                                }));
+                                            }}
+                                            className={`bg-transparent border-none outline-none w-32 ${activeUnit?.id === u.id ? 'font-bold' : ''}`}
+                                        />
+                                    </div>
+                                ))}
+                                <button onClick={() => addUnit(activeCourse.id)} className="px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 rounded-t-lg transition-colors flex items-center">
+                                    <IconPlus /> <span className="ml-1">Nova UT</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {activeUnit && (() => {
+                            const totalSessions = activeUnit.phases.reduce((acc, phase) => acc + phase.sessions.length, 0);
+                            const completedSessions = activeUnit.phases.reduce((acc, phase) => acc + phase.sessions.filter(s => s.completed).length, 0);
+                            const progressPercent = totalSessions === 0 ? 0 : Math.round((completedSessions / totalSessions) * 100);
+
+                            return (
+                                <div key={activeUnit.id} className="bg-white rounded-xl shadow-sm border border-orange-200 mb-8 animate-[fadeIn_0.3s_ease-out] flex flex-col">
+                                    
+                                    {/* Capçalera Unitat */}
+                                    <div className="bg-orange-50/50 p-4 sm:p-6 border-b border-orange-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                                        <div className="flex-1">
+                                            <h2 className="text-xl font-bold text-gray-800 mb-1">{activeUnit.title}</h2>
+                                            <div className="flex items-center text-sm text-gray-500">
+                                                <span className="font-medium mr-3">{totalSessions} sessions previstes</span>
+                                                <div className="w-32 h-2.5 bg-gray-200 rounded-full overflow-hidden hidden sm:block">
+                                                    <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
+                                                </div>
+                                                <span className="ml-2 text-xs font-semibold">{progressPercent}% completat</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex flex-wrap gap-2">
+                                            <button onClick={openPasteModal} className="flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-lg shadow-sm transition-colors" title="Pujar taula d'Excel">
+                                                <IconUpload /> <span className="ml-2 hidden sm:inline">Pujar taula</span>
+                                            </button>
+                                            <button 
+                                                onClick={toggleAllDetails}
+                                                className="flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg shadow-sm transition-colors"
+                                            >
+                                                {areAllExpanded ? <IconEyeOff /> : <IconEye />}
+                                                <span className="ml-2 hidden sm:inline">{areAllExpanded ? 'Ocultar tots els detalls' : 'Mostrar tots els detalls'}</span>
+                                            </button>
+                                            {/* REQ 4: Botó canviat de nom i ús: Reiniciar programació */}
+                                            <button 
+                                                onClick={() => resetUnit(activeCourse.id, activeUnit.id)}
+                                                className="flex items-center px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-medium rounded-lg shadow-sm transition-all transform active:scale-95"
+                                            >
+                                                <IconTrash />
+                                                <span className="ml-2 hidden sm:inline">Reiniciar programació</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Taula Completa */}
+                                    <div className="overflow-y-auto max-h-[75vh] custom-scroll relative">
+                                        <table className="w-full text-left border-collapse min-w-[1000px]">
+                                            <thead className="sticky top-0 z-20 bg-gray-50 shadow-sm">
+                                                <tr className="border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
+                                                    {/* REQ 2: Assignem la nova distribució d'amplades de columna aquí */}
+                                                    <th className="p-3 w-12 text-center font-semibold">Sessió</th>
+                                                    <th className="p-3 w-[40%] font-semibold">Descriptiu activitat</th>
+                                                    <th className="p-3 w-[20%] font-semibold">Material (prof. i alumne)</th>
+                                                    <th className="p-3 w-[20%] font-semibold">Comentaris / Observacions</th>
+                                                    <th className="p-3 w-16 text-center font-semibold">Estat</th>
+                                                    <th className="p-3 w-12 text-center font-semibold">Accions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(() => {
+                                                    const completedCount = activeUnit.phases.reduce((acc, p) => acc + p.sessions.filter(s => s.completed).length, 0);
+                                                    if (completedCount > 0) {
+                                                        return (
+                                                            <tr className="bg-gray-100/80 border-b border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => setShowCompleted(!showCompleted)}>
+                                                                <td colSpan="6" className="p-2 text-center text-sm font-semibold text-gray-600">
+                                                                    {showCompleted ? '▼ Ocultar sessions acabades' : `▶ Mostrar sessions acabades (${completedCount})`}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+
+                                                {activeUnit.phases.map((phase, pIndex) => (
+                                                    <React.Fragment key={phase.id}>
+                                                        <tr className={`border-b border-gray-200 ${`phase-header-${pIndex % 5}`}`}>
+                                                            <td colSpan="6" className="p-2">
+                                                                <div className="flex items-center">
+                                                                    <button
+                                                                        onClick={() => updatePhase(activeCourse.id, activeUnit.id, phase.id, 'collapsed', !phase.collapsed)}
+                                                                        className="mr-2 text-current opacity-70 hover:opacity-100 focus:outline-none font-bold text-xs"
+                                                                        title={phase.collapsed ? "Desplegar fase" : "Col·lapsar fase"}
+                                                                    >
+                                                                        {phase.collapsed ? '▶' : '▼'}
+                                                                    </button>
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={phase.name}
+                                                                        onChange={(e) => updatePhase(activeCourse.id, activeUnit.id, phase.id, 'name', e.target.value)}
+                                                                        className="font-bold text-sm bg-transparent border-none w-full outline-none"
+                                                                    />
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        
+                                                        {!phase.collapsed && phase.sessions.map((session, sIndex) => {
+                                                            const isFirstSession = pIndex === 0 && sIndex === 0;
+                                                            const isLastSession = pIndex === activeUnit.phases.length - 1 && sIndex === phase.sessions.length - 1;
+
+                                                            if (session.completed && !showCompleted) return null;
+
+                                                            // REQ 3: bg-gray-200 per les sessions acabades
+                                                            return (
+                                                                <tr key={session.id} className={`border-b border-gray-100 transition-colors ${session.completed ? 'bg-gray-200 hover:bg-gray-300' : 'hover:bg-orange-50/30'}`}>
+                                                                    
+                                                                    <td className="p-3 text-center align-top border-r border-gray-100">
+                                                                        {/* REQ 2: Numeració absolutament automàtica, sense inputs */}
+                                                                        <span className={`w-10 text-center font-bold text-gray-700 block ${session.completed ? 'opacity-50' : ''}`}>
+                                                                            {sessionNumbers[session.id]}
+                                                                        </span>
+                                                                    </td>
+                                                                    
+                                                                    <td className="p-3 align-top border-r border-gray-100 relative">
+                                                                        {session.activities.map((act) => {
+                                                                            return (
+                                                                                <div key={act.id} className="mb-2 last:mb-0 group">
+                                                                                    <div className="flex items-start">
+                                                                                        <span 
+                                                                                            className="text-orange-500 hover:text-orange-700 mr-1 mt-1.5 cursor-pointer select-none text-xs transition-colors" 
+                                                                                            onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'expanded', value: !act.expanded })}
+                                                                                        >
+                                                                                            {act.expanded ? '▼' : '▶'}
+                                                                                        </span>
+                                                                                        <HighlightedActivityTextarea 
+                                                                                            value={act.text} 
+                                                                                            onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: val })}
+                                                                                            completed={session.completed}
+                                                                                        />
+                                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'delete', act.id)} className="ml-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
+                                                                                    </div>
+                                                                                    
+                                                                                    {act.expanded && (
+                                                                                        <div className="ml-5 mt-2 mb-2 relative animate-[fadeIn_0.2s_ease-out]">
+                                                                                            <div className="border-l-4 border-orange-400 bg-orange-50/80 rounded-r-lg shadow-sm p-3 flex flex-col">
+                                                                                                <AutoTextarea 
+                                                                                                    value={act.detail} 
+                                                                                                    onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'detail', value: val })} 
+                                                                                                    placeholder="Descriu detalls de la dinàmica, pautes, agrupament..." 
+                                                                                                    className="text-sm text-gray-800 w-full leading-relaxed placeholder-gray-400" 
+                                                                                                />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "• Nova activitat", detail: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
+                                                                            <IconPlus /><span className="ml-1">Afegir activitat</span>
+                                                                        </button>
+                                                                    </td>
+                                                                    
+                                                                    <td className="p-3 align-top border-r border-gray-100 relative">
+                                                                        <ul className="space-y-2">
+                                                                            {session.materials.map((mat) => (
+                                                                                <li key={mat.id} className={`text-sm group flex items-start ${session.completed ? 'opacity-70' : ''}`}>
+                                                                                    <span className="text-gray-400 mr-2 mt-1 select-none">•</span>
+                                                                                    <div className="flex-1 flex flex-col min-w-0">
+                                                                                        <div className="flex items-center space-x-1">
+                                                                                            {mat.url ? (
+                                                                                                <a href={mat.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-blue-600 hover:text-blue-800 underline font-medium truncate" title={`Obrir: ${mat.url}`}>
+                                                                                                    {mat.name || 'Enllaç'}
+                                                                                                </a>
+                                                                                            ) : (
+                                                                                                <AutoTextarea 
+                                                                                                    value={mat.name} 
+                                                                                                    onChange={(v) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: v })} 
+                                                                                                    className="flex-1 text-sm text-gray-700 font-medium" 
+                                                                                                    placeholder="Nom del material" 
+                                                                                                />
+                                                                                            )}
+                                                                                            
+                                                                                            {mat.url && (
+                                                                                                <button 
+                                                                                                    onClick={() => { const newName = prompt("Edita el nom del material:", mat.name); if(newName !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: newName }); }} 
+                                                                                                    className="text-xs px-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity" title="Editar Nom"
+                                                                                                >✏️</button>
+                                                                                            )}
+
+                                                                                            <button 
+                                                                                                onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url); if(url !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }} 
+                                                                                                className={`text-xs px-1 hover:scale-110 transition-transform ${mat.url ? 'text-blue-600' : 'text-gray-300 hover:text-blue-400'}`} title="Afegir/Editar Enllaç"
+                                                                                            >🔗</button>
+                                                                                            <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'add', { id: generateId(), name: "", url: "" })} className="text-xs text-orange-500 hover:text-orange-700 mt-3 flex items-center">
+                                                                            <IconPlus /><span className="ml-1">Afegir material</span>
+                                                                        </button>
+                                                                    </td>
+                                                                    
+                                                                    <td className="p-3 align-top border-r border-gray-100">
+                                                                        <AutoTextarea 
+                                                                            value={session.comments}
+                                                                            onChange={(val) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', val)}
+                                                                            placeholder="Notes d'aplicació..."
+                                                                            className={`text-sm italic ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
+                                                                        />
+                                                                    </td>
+
+                                                                    <td className="p-3 align-middle text-center border-r border-gray-100">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={session.completed}
+                                                                            onChange={(e) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'completed', e.target.checked)}
+                                                                            className="w-5 h-5 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer accent-green-600"
+                                                                        />
+                                                                    </td>
+
+                                                                    <td className={`p-2 align-middle text-center ${session.completed ? 'opacity-70' : ''}`}>
+                                                                        <div className="flex flex-col items-center space-y-2">
+                                                                            <button onClick={() => moveSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'up')} disabled={isFirstSession} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed rounded hover:bg-gray-100"><IconUp /></button>
+                                                                            <button onClick={() => moveSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'down')} disabled={isLastSession} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed rounded hover:bg-gray-100"><IconDown /></button>
+                                                                            <button onClick={() => deleteSession(activeCourse.id, activeUnit.id, phase.id, session.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar sessió">
+                                                                                <IconTrash />
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+
+                                                        {!phase.collapsed && (
+                                                            <tr className="bg-gray-50/50">
+                                                                <td colSpan="6" className="p-2 text-center">
+                                                                    <button 
+                                                                        onClick={() => addSession(activeCourse.id, activeUnit.id, phase.id)}
+                                                                        className="inline-flex items-center px-3 py-1 text-sm text-gray-500 hover:text-orange-600 hover:bg-orange-100 rounded-full transition-colors font-medium"
+                                                                    >
+                                                                        <IconPlus /> <span className="ml-1">Afegir sessió a "{phase.name}"</span>
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </React.Fragment>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        
+                        {!activeCourse && (
+                            <div className="text-center py-20 text-gray-500">
+                                No hi ha cap curs actiu. Crea'n un al menú superior.
+                            </div>
+                        )}
+                    </main>
+
+                    {showPasteModal && (
+                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+                            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-5xl">
+                                <h2 className="text-xl font-bold mb-2 text-gray-800">Pujar taula (Des d'Excel)</h2>
+                                <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-2 rounded border border-blue-100">
+                                    Copia les cel·les del teu Excel/Numbers i <b>fés Ctrl+V (Enganxar) directament dins d'aquesta graella</b>. L'eina distribuirà cada text a la seva columna corresponent.
+                                </p>
+                                
+                                <div className="border border-gray-300 rounded-lg overflow-hidden flex flex-col mb-5">
+                                    <div className="overflow-y-auto max-h-72 bg-gray-50">
+                                        {/* REQ 6: Els thead (capçaleres) estan ara DINS la mateixa taula, garantint alineació perfecta al mil·límetre */}
+                                        <table className="w-full border-collapse">
+                                            <thead className="bg-gray-100 border-b border-gray-300 shadow-sm sticky top-0 z-10">
+                                                <tr>
+                                                    <th className="p-2 font-bold text-xs text-gray-600 border-r border-gray-300 text-center w-[10%]">Sessió</th>
+                                                    <th className="p-2 font-bold text-xs text-gray-600 border-r border-gray-300 text-left w-[40%]">Activitat</th>
+                                                    <th className="p-2 font-bold text-xs text-gray-600 border-r border-gray-300 text-left w-[25%]">Material</th>
+                                                    <th className="p-2 font-bold text-xs text-gray-600 text-left w-[25%]">Comentaris</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {pasteRows.map((row, rIndex) => (
+                                                    <tr key={rIndex} className="bg-white border-b border-gray-200 hover:bg-orange-50/30 transition-colors">
+                                                        {row.map((cell, cIndex) => (
+                                                            <td key={cIndex} className={`p-1 align-top border-r border-gray-200 last:border-r-0 ${cIndex === 0 ? 'w-[10%]' : cIndex === 1 ? 'w-[40%]' : 'w-[25%]'}`}>
+                                                                <textarea
+                                                                    className="w-full text-sm p-1.5 outline-none resize-none bg-transparent focus:bg-orange-50 focus:ring-1 focus:ring-orange-300 rounded overflow-hidden"
+                                                                    rows={Math.max(1, cell.split('\n').length)}
+                                                                    value={cell}
+                                                                    onChange={e => {
+                                                                        const newRows = [...pasteRows];
+                                                                        newRows[rIndex][cIndex] = e.target.value;
+                                                                        setPasteRows(newRows);
+                                                                    }}
+                                                                    onPaste={(e) => handlePasteToGrid(e, rIndex, cIndex)}
+                                                                    placeholder={rIndex === 0 && cIndex === 1 ? "Ctrl+V aquí..." : ""}
+                                                                />
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        <div className="p-1">
+                                            <button onClick={() => setPasteRows(prev => [...prev, ['', '', '', '']])} className="w-full py-2 text-xs text-gray-500 hover:bg-gray-200 hover:text-gray-700 font-medium transition-colors rounded">
+                                                + Afegir fila manualment
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                    <label className="text-sm font-semibold text-gray-700">Afegir a la fase:</label>
+                                    <select value={pastePhaseId} onChange={e=>setPastePhaseId(e.target.value)} className="border border-gray-300 rounded p-1.5 text-sm bg-white focus:ring-orange-500 w-full sm:w-auto">
+                                        <option value="">-- Selecciona la fase de destí --</option>
+                                        {activeUnit?.phases.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="mt-6 flex justify-end space-x-3">
+                                    <button onClick={() => setShowPasteModal(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel·lar</button>
+                                    <button 
+                                        onClick={handlePasteSubmit} 
+                                        disabled={!pastePhaseId || pasteRows.every(r => r.every(c => !c.trim()))} 
+                                        className="px-5 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                                    >
+                                        Afegir dades
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {toastMsg && (
+                        <div className="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center animate-[fadeIn_0.3s_ease-out] z-50">
+                            <span className="text-green-400 mr-2">✓</span>
+                            {toastMsg}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
