@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agenda Docent</title>
+    <title>Planificador Docent CFN - Andorra</title>
     
     <!-- Estils CSS (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -808,13 +808,13 @@
 
             const addLink = () => {
                 if (linkInput.url && linkInput.url.trim()) {
-                    setData(prev => ({ ...prev, links: [...prev.links, { url: linkInput.url.trim(), title: linkInput.title.trim() }] }));
+                    setData(prev => ({ ...prev, links: [...(prev.links || []), { url: linkInput.url.trim(), title: linkInput.title.trim() }] }));
                     setLinkInput({url: "", title: ""});
                 }
             };
 
             const removeLink = (index) => {
-                setData(prev => ({ ...prev, links: prev.links.filter((_, i) => i !== index) }));
+                setData(prev => ({ ...prev, links: (prev.links || []).filter((_, i) => i !== index) }));
             };
 
             return (
@@ -1064,19 +1064,14 @@
                 const lines = text.split('\n').filter(l => l.trim());
                 const parsedTasks = lines.map(line => {
                     // Regex per detectar "• 10' text" o "10 min text" o "text"
-                    // Match 1: bullet o similar (opcional)
-                    // Match 2: temps (digits)
-                    // Match 3: unitat (opcional)
-                    // Match 4: resta del text
                     const timeMatch = line.match(/^[\•\-\*]?\s*(\d+)['’m\s]*(.*)/i);
                     if (timeMatch) {
                         return { 
                             time: timeMatch[1], 
-                            text: timeMatch[2].replace(/^in\s+/, '').trim(), // neteja 'min' residual si regex no és perfecte
+                            text: timeMatch[2].replace(/^in\s+/, '').trim(), 
                             status: null 
                         };
                     } else {
-                         // Neteja bullets si no hi ha temps
                         return { 
                             time: "", 
                             text: line.replace(/^[\•\-\*]\s*/, '').trim(), 
@@ -1095,7 +1090,7 @@
                         <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                             <Icons.Paste className="text-blue-500"/> Enganxar Programació
                         </h3>
-                        <p className="text-xs text-gray-500 mb-2">Enganxa les línies del teu document (Ex: "• 10' Introducció"). Es detectaran els temps automàticament.</p>
+                        <p className="text-xs text-gray-500 mb-2">Enganxa les línies del teu document (Ex: "• 10' Introducció"). S'afegiran automàticament sota les tasques existents.</p>
                         <textarea 
                             className="w-full p-3 border rounded-lg h-40 text-sm font-mono mb-4 focus:ring-2 focus:ring-blue-500 outline-none"
                             placeholder="• 10' Activitat 1&#10;• 20' Activitat 2..."
@@ -1197,7 +1192,7 @@
             const [reviewMode, setReviewMode] = useState(false);
             const [showExportModal, setShowExportModal] = useState(false);
             const [exportClassId, setExportClassId] = useState("");
-            const [exportConfig, setExportConfig] = useState({ curs: "", ut: "" });
+            const [exportConfig, setExportConfig] = useState({ curs: "", ut: "", fase: "FASE DE PREPARACIÓ" });
             const [showAddClassModal, setShowAddClassModal] = useState(false);
             const [newExtra, setNewExtra] = useState({ day: 0, slot: 0, classId: "" });
             
@@ -1210,8 +1205,8 @@
             const [pendingActionTask, setPendingActionTask] = useState(null);
             const [activeDayNotepad, setActiveDayNotepad] = useState(null); 
             const [activeSessionNotepad, setActiveSessionNotepad] = useState(null);
-            const [activeReminderModal, setActiveReminderModal] = useState(null); // { dateStr, dayName }
-            const [activeSmartPaste, setActiveSmartPaste] = useState(null); // { day, slot }
+            const [activeReminderModal, setActiveReminderModal] = useState(null); 
+            const [activeSmartPaste, setActiveSmartPaste] = useState(null); 
 
             const theme = config.theme || 'orange';
 
@@ -1306,12 +1301,17 @@
             const handleSmartPaste = (tasks) => {
                 if (!activeSmartPaste) return;
                 const { day, slot } = activeSmartPaste;
-                const newTasks = [...tasks];
-                while(newTasks.length < 3) newTasks.push({text: "", time: "", status: null});
+                
+                const currentTasks = getTasks(day, slot).filter(t => t.text.trim() !== '');
+                const combinedTasks = [...currentTasks, ...tasks];
+                
+                while(combinedTasks.length < 3) {
+                    combinedTasks.push({text: "", time: "", status: null});
+                }
                 
                 const newData = { ...planData };
                 const key = `${day}-${slot}`;
-                newData[key] = { ...(newData[key] || {}), tasks: newTasks };
+                newData[key] = { ...(newData[key] || {}), tasks: combinedTasks };
                 updatePlanData(newData);
             };
 
@@ -1396,7 +1396,7 @@
                             const targetKey = `${found.d}-${found.s}`;
                             const targetTasks = getTasks(found.d, found.s, nextWeekData);
                             const newTargetTasks = [newTaskObj, ...targetTasks];
-                            const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: newTargetTasks } };
+                            const updatedNextWeekData = { ...nextWeekData, [targetKey] = { ...nextWeekData[targetKey], tasks: newTargetTasks } };
                             onUpdateWeekData(nextWeekId, updatedNextWeekData);
                             alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
                         } else {
@@ -1452,7 +1452,7 @@
                                 const nextWeekData = weeksData[nextWeekId] || {};
                                 const targetKey = `${found.d}-${found.s}`;
                                 const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                                const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
+                                const updatedNextWeekData = { ...nextWeekData, [targetKey] = { ...nextWeekData[targetKey], tasks: [...movedTasks, ...targetTasks] } };
                                 onUpdateWeekData(nextWeekId, updatedNextWeekData);
                                 alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
                             } else {
@@ -1554,6 +1554,7 @@
                     action: 'SYNC_TABLE',
                     curs: exportConfig.curs.trim(),
                     ut: exportConfig.ut.trim(),
+                    fase: exportConfig.fase,
                     html: htmlTable,
                     timestamp: Date.now()
                 };
@@ -1769,11 +1770,19 @@
                                             <input type="text" placeholder="Ex: 2n ESO" className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={exportConfig.curs} onChange={e=>setExportConfig({...exportConfig, curs: e.target.value})} />
                                         </div>
                                         <div className="flex-1">
-                                            <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Unitat Temporal (UT)</label>
+                                            <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">UT</label>
                                             <input type="text" placeholder="Ex: UT1" className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={exportConfig.ut} onChange={e=>setExportConfig({...exportConfig, ut: e.target.value})} />
                                         </div>
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Fase</label>
+                                            <select className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={exportConfig.fase} onChange={e=>setExportConfig({...exportConfig, fase: e.target.value})}>
+                                                <option value="FASE DE PREPARACIÓ">FASE DE PREPARACIÓ</option>
+                                                <option value="FASE DE RESOLUCIÓ">FASE DE RESOLUCIÓ</option>
+                                                <option value="FASE D'INTEGRACIÓ">FASE D'INTEGRACIÓ</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <button onClick={handleExportToProgramacio} disabled={!exportConfig.curs || !exportConfig.ut} className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md flex items-center justify-center gap-2">
+                                    <button onClick={handleExportToProgramacio} disabled={!exportConfig.curs || !exportConfig.ut || !exportConfig.fase} className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md flex items-center justify-center gap-2">
                                         Exportar a la meva Programació <Icons.ArrowRight size={20}/>
                                     </button>
                                 </div>
