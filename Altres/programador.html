@@ -66,6 +66,7 @@
         const IconEyeOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
         const IconChevronLeft = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
         const IconChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
+        const IconGripVertical = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>;
 
         // --- DADES INICIALS ---
         const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -477,6 +478,26 @@
                 }));
             };
 
+            const reorderActivities = (courseId, unitId, phaseId, sessionId, draggedId, targetId) => {
+                if (draggedId === targetId) return;
+                setData(prev => prev.map(c => c.id !== courseId ? c : {
+                    ...c, units: c.units.map(u => u.id !== unitId ? u : {
+                        ...u, phases: u.phases.map(p => p.id !== phaseId ? p : {
+                            ...p, sessions: p.sessions.map(s => {
+                                if (s.id !== sessionId) return s;
+                                const newActivities = [...s.activities];
+                                const draggedIndex = newActivities.findIndex(a => a.id === draggedId);
+                                const targetIndex = newActivities.findIndex(a => a.id === targetId);
+                                if (draggedIndex === -1 || targetIndex === -1) return s;
+                                const [draggedItem] = newActivities.splice(draggedIndex, 1);
+                                newActivities.splice(targetIndex, 0, draggedItem);
+                                return { ...s, activities: newActivities };
+                            })
+                        })
+                    })
+                }));
+            };
+
             const updatePhase = (courseId, unitId, phaseId, field, value) => {
                 setData(prev => prev.map(course => {
                     if (course.id !== courseId) return course;
@@ -619,6 +640,27 @@
                     };
                 }));
                 showToast("Programació reiniciada correctament.");
+            };
+
+            const resetUnitState = (courseId, unitId) => {
+                if(!confirm("Segur que vols reiniciar l'estat d'aquesta unitat? Totes les sessions es marcaran com a pendents (no fetes).")) return;
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: unit.phases.map(phase => ({
+                                    ...phase,
+                                    sessions: phase.sessions.map(s => ({ ...s, completed: false }))
+                                }))
+                            };
+                        })
+                    };
+                }));
+                showToast("Estat de les sessions reiniciat.");
             };
 
             const addUnit = (courseId) => {
@@ -956,7 +998,13 @@
                                                 {areAllExpanded ? <IconEyeOff /> : <IconEye />}
                                                 <span className="ml-2 hidden sm:inline">{areAllExpanded ? 'Ocultar tots els detalls' : 'Mostrar tots els detalls'}</span>
                                             </button>
-                                            {/* REQ 4: Botó canviat de nom i ús: Reiniciar programació */}
+                                            <button 
+                                                onClick={() => resetUnitState(activeCourse.id, activeUnit.id)}
+                                                className="flex items-center px-4 py-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 font-medium rounded-lg shadow-sm transition-all transform active:scale-95"
+                                            >
+                                                <IconEye />
+                                                <span className="ml-2 hidden sm:inline">Reiniciar Estat</span>
+                                            </button>
                                             <button 
                                                 onClick={() => resetUnit(activeCourse.id, activeUnit.id)}
                                                 className="flex items-center px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-medium rounded-lg shadow-sm transition-all transform active:scale-95"
@@ -1037,11 +1085,37 @@
                                                                     
                                                                     <td className="p-3 align-top border-r border-gray-100 relative">
                                                                         {session.activities.map((act) => {
+                                                                            const hasDetail = act.detail && act.detail.trim() !== '';
                                                                             return (
-                                                                                <div key={act.id} className="mb-2 last:mb-0 group">
+                                                                                <div 
+                                                                                    key={act.id} 
+                                                                                    className="mb-2 last:mb-0 group relative transition-all"
+                                                                                    draggable
+                                                                                    onDragStart={(e) => {
+                                                                                        e.dataTransfer.setData('text/plain', act.id);
+                                                                                        e.currentTarget.style.opacity = '0.5';
+                                                                                    }}
+                                                                                    onDragEnd={(e) => {
+                                                                                        e.currentTarget.style.opacity = '1';
+                                                                                    }}
+                                                                                    onDragOver={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        e.currentTarget.classList.add('border-t-2', 'border-orange-400');
+                                                                                    }}
+                                                                                    onDragLeave={(e) => {
+                                                                                        e.currentTarget.classList.remove('border-t-2', 'border-orange-400');
+                                                                                    }}
+                                                                                    onDrop={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        e.currentTarget.classList.remove('border-t-2', 'border-orange-400');
+                                                                                        const draggedId = e.dataTransfer.getData('text/plain');
+                                                                                        reorderActivities(activeCourse.id, activeUnit.id, phase.id, session.id, draggedId, act.id);
+                                                                                    }}
+                                                                                >
                                                                                     <div className="flex items-start">
+                                                                                        <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing mr-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><IconGripVertical /></span>
                                                                                         <span 
-                                                                                            className="text-orange-500 hover:text-orange-700 mr-1 mt-1.5 cursor-pointer select-none text-xs transition-colors" 
+                                                                                            className={`${hasDetail ? 'text-orange-500 hover:text-orange-700' : 'text-gray-300 hover:text-gray-400'} mr-1 mt-1.5 cursor-pointer select-none text-xs transition-colors shrink-0`} 
                                                                                             onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'expanded', value: !act.expanded })}
                                                                                         >
                                                                                             {act.expanded ? '▼' : '▶'}
