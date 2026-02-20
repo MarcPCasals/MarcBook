@@ -1128,81 +1128,107 @@
         root.render(<App />);
     </script>
     <script>
-document.addEventListener("DOMContentLoaded", function() {
-    
-    // Funció central robusta per processar les files de la taula
-    function processarDadesAgenda(payload) {
-        console.log("Dades rebudes per sincronitzar:", payload);
+    document.addEventListener("DOMContentLoaded", function() {
         
-        if (payload && payload.action === 'SYNC_TABLE') {
-            try {
-                // 1. Busquem el contenidor amb els data-attributes exactes
-                const query = `[data-curs="${payload.curs}"][data-ut="${payload.ut}"][data-fase="${payload.fase}"]`;
-                const contenidorTarget = document.querySelector(query);
-                
-                if (contenidorTarget) {
-                    let targetElement = contenidorTarget;
+        // Funció central robusta per processar les files de la taula
+        function processarDadesAgenda(payload) {
+            console.log("Dades rebudes per sincronitzar:", payload);
+            
+            if (payload && payload.action === 'SYNC_TABLE') {
+                // Com que estem fent servir React, el DOM real (com la taula o les files) 
+                // triga uns mil·lisegons a dibuixar-se. Fem un polling robust per esperar-ho.
+                let intents = 0;
+                const interval = setInterval(() => {
+                    intents++;
+                    const tbody = document.querySelector('table tbody');
                     
-                    // 2. PROTECCIÓ HTML: Assegurem que inserim dins d'un <tbody>
-                    // Si el contenidor no és una taula, mirem si en té una dins o en creem una.
-                    if (targetElement.tagName !== 'TBODY' && targetElement.tagName !== 'TABLE') {
-                        let table = targetElement.querySelector('table');
-                        if (!table) {
-                            // Creem la taula inicial si no existia
-                            targetElement.innerHTML = `<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody></tbody></table>`;
-                            table = targetElement.querySelector('table');
+                    if (tbody) {
+                        clearInterval(interval);
+                        try {
+                            let inserit = false;
+                            
+                            // 1. Intentem buscar la fase correcta pel nom.
+                            // React renderitza el nom de la fase dins d'un <input> (per permetre l'edició).
+                            const inputs = Array.from(tbody.querySelectorAll('input'));
+                            const inputFase = inputs.find(inp => inp.value.trim() === (payload.fase || "").trim());
+                            
+                            if (inputFase) {
+                                const filaFase = inputFase.closest('tr');
+                                if (filaFase) {
+                                    // Busquem on acaba aquesta fase per afegir les noves files al final d'aquesta.
+                                    let nextFila = filaFase.nextElementSibling;
+                                    while (nextFila && !nextFila.className.includes('phase-header')) {
+                                        nextFila = nextFila.nextElementSibling;
+                                    }
+                                    
+                                    if (nextFila) {
+                                        // Inserim just abans de la següent capçalera de fase (és a dir, a l'últim lloc d'aquesta fase)
+                                        nextFila.insertAdjacentHTML('beforebegin', payload.html);
+                                    } else {
+                                        // Si no hi ha cap fase més a sota, estem a l'última fase. Afegeix al final.
+                                        tbody.insertAdjacentHTML('beforeend', payload.html);
+                                    }
+                                    inserit = true;
+                                    console.log(`Èxit: Files afegides dins la fase "${payload.fase}".`);
+                                }
+                            }
+                            
+                            // 2. Fallback: Si no es troba l'input amb el nom de la fase, inserim al final del tbody genèric.
+                            // insertAdjacentHTML no sobreescriu res, només afegeix nodes al final preservant els existents.
+                            if (!inserit) {
+                                tbody.insertAdjacentHTML('beforeend', payload.html);
+                                console.log("Èxit: Files afegides al final de la taula (fallback).");
+                            }
+                            
+                        } catch(error) {
+                            console.error("Error a l'inserir la taula a la programació:", error);
                         }
-                        targetElement = table.querySelector('tbody') || table;
-                    } else if (targetElement.tagName === 'TABLE') {
-                        targetElement = targetElement.querySelector('tbody') || targetElement;
+                    } else if (intents >= 20) {
+                        // Desistim després de 10 segons (20 intents de 500ms)
+                        clearInterval(interval);
+                        console.error("DOM Error: La taula de React no s'ha carregat a temps.");
                     }
-
-                    // 3. INSERCIÓ: Afegim a sota de les files existents sense esborrar-les
-                    targetElement.insertAdjacentHTML('beforeend', payload.html);
-                    
-                    console.log(`Èxit: Files afegides a ${payload.curs} - ${payload.ut} - ${payload.fase}`);
-                } else {
-                    console.error(`DOM Error: No s'ha trobat cap element coincident amb: ${query}`);
-                }
-            } catch(error) {
-                console.error("Error a l'inserir la taula a la programació:", error);
+                }, 500);
             }
         }
-    }
 
-    // --- MÈTODE 1: Escolta via postMessage ---
-    window.addEventListener("message", function(event) {
-        // Assegurem que només acceptem dades del teu GitHub Pages
-        const allowedOrigin = "https://marcpcasals.github.io";
-        if (event.origin !== allowedOrigin && event.origin !== window.location.origin) {
-            console.warn("Bloquejat intent de postMessage des de:", event.origin);
-            return;
+        // --- MÈTODE 1: Escolta via postMessage ---
+        window.addEventListener("message", function(event) {
+            // Assegurem que només acceptem dades del teu GitHub Pages de forma segura
+            // (Mantingut obert a localhost/127.0.0.1 perquè puguis fer proves locals si vols)
+            const originValid = event.origin.includes("marcpcasals.github.io") || 
+                                event.origin.includes("localhost") || 
+                                event.origin.includes("127.0.0.1");
+                                
+            if (!originValid && event.origin !== window.location.origin) {
+                console.warn("Bloquejat intent de postMessage des de:", event.origin);
+                return;
+            }
+            
+            if (event.data && event.data.action === 'SYNC_TABLE') {
+                processarDadesAgenda(event.data);
+            }
+        });
+
+        // --- MÈTODE 2: Recuperació via localStorage (Evita pèrdua de dades al window.open) ---
+        const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
+        if (savedPayloadStr) {
+            try {
+                const savedPayload = JSON.parse(savedPayloadStr);
+                processarDadesAgenda(savedPayload);
+                // L'esborrem un cop consumit perquè no es repeteixi si es refresca la pàgina
+                localStorage.removeItem('cfn_sync_payload'); 
+            } catch(e) {
+                console.error("Error interpretant el payload del localStorage:", e);
+            }
         }
         
-        if (event.data && event.data.action === 'SYNC_TABLE') {
-            processarDadesAgenda(event.data);
+        // Si s'ha obert des de l'Agenda mitjançant un script de finestres vinculades, enviem avís de retorn
+        if (window.opener) {
+            window.opener.postMessage({ action: 'PROGRAMACIO_READY' }, "*");
         }
+        
     });
-
-    // --- MÈTODE 2: Recuperació via localStorage (Evita pèrdua de dades al window.open) ---
-    const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
-    if (savedPayloadStr) {
-        try {
-            const savedPayload = JSON.parse(savedPayloadStr);
-            processarDadesAgenda(savedPayload);
-            // L'esborrem un cop consumit perquè no es repeteixi si es refresca la pàgina
-            localStorage.removeItem('cfn_sync_payload'); 
-        } catch(e) {
-            console.error("Error interpretant el payload del localStorage:", e);
-        }
-    }
-    
-    // Si s'ha obert des de l'Agenda mitjançant un script de finestres vinculades, enviem avís de retorn
-    if (window.opener) {
-        window.opener.postMessage({ action: 'PROGRAMACIO_READY' }, "https://marcpcasals.github.io");
-    }
-    
-});
-</script>
+    </script>
 </body>
 </html>
