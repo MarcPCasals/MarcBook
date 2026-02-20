@@ -243,6 +243,139 @@
                 localStorage.setItem('programacio_agenda_url', agendaUrl);
             }, [agendaUrl]);
 
+            // --- SINCRONITZACIÓ AMB AGENDA (POSTMESSAGE I LOCALSTORAGE) ---
+            useEffect(() => {
+                const processarDadesAgenda = (payload) => {
+                    if (!payload || payload.action !== 'SYNC_TABLE') return;
+                    console.log("Dades rebudes de l'Agenda per integrar a l'estat:", payload);
+
+                    // Analitzar l'HTML i convertir-lo en l'estructura de dades de React
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString('<table>' + payload.html + '</table>', 'text/html');
+                    const rows = doc.querySelectorAll('tr');
+                    const newSessions = [];
+
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('td');
+                        if (cells.length >= 3) {
+                            // Parsejar Activitats
+                            const actDivs = cells[0].querySelectorAll('div');
+                            const activities = [];
+                            if (actDivs.length > 0) {
+                                actDivs.forEach(div => {
+                                    let text = div.textContent.trim();
+                                    if (text && !text.startsWith('•')) text = '• ' + text;
+                                    if (text) activities.push({ id: generateId(), text: text, detail: '', expanded: false });
+                                });
+                            } else {
+                                let text = cells[0].textContent.trim();
+                                if (text && !text.startsWith('•')) text = '• ' + text;
+                                if (text) activities.push({ id: generateId(), text: text, detail: '', expanded: false });
+                            }
+
+                            // Parsejar Materials i Enllaços
+                            const materials = [];
+                            const contentCol1 = cells[1].innerHTML;
+                            const splitParts = contentCol1.split(/<b>Enllaços:<\/b>/i);
+                            const textMaterials = splitParts[0].replace(/<br\s*[\/]?>/gi, '\n');
+                            const matDoc = parser.parseFromString(textMaterials, 'text/html');
+                            matDoc.body.textContent.split('\n').forEach(line => {
+                                if (line.trim()) materials.push({ id: generateId(), name: line.trim(), url: "" });
+                            });
+
+                            const links = cells[1].querySelectorAll('a');
+                            links.forEach(a => {
+                                materials.push({ id: generateId(), name: a.textContent.trim(), url: a.href });
+                            });
+
+                            // Parsejar Comentaris
+                            const commentsHtml = cells[2].innerHTML.replace(/<br\s*[\/]?>/gi, '\n');
+                            const comments = parser.parseFromString(commentsHtml, 'text/html').body.textContent.trim();
+
+                            newSessions.push({
+                                id: generateId(),
+                                activities: activities,
+                                materials: materials,
+                                comments: comments,
+                                completed: false
+                            });
+                        }
+                    });
+
+                    if (newSessions.length === 0) return;
+
+                    setData(prevData => {
+                        let newData = JSON.parse(JSON.stringify(prevData)); 
+                        
+                        // 1. Cercar o crear el Curs sol·licitat
+                        let course = newData.find(c => c.name.trim().toLowerCase() === (payload.curs || "").trim().toLowerCase());
+                        if (!course) {
+                            course = { id: generateId(), name: payload.curs || "Nou Curs Importat", units: [] };
+                            newData.push(course);
+                        }
+                        
+                        // 2. Cercar o crear la UT sol·licitada
+                        let unit = course.units.find(u => u.title.trim().toLowerCase() === (payload.ut || "").trim().toLowerCase());
+                        if (!unit) {
+                            unit = { 
+                                id: generateId(), 
+                                title: payload.ut || "Nova UT", 
+                                phases: [
+                                    { id: generateId(), name: 'FASE DE PREPARACIÓ', collapsed: false, sessions: [] },
+                                    { id: generateId(), name: 'FASE DE RESOLUCIÓ', collapsed: false, sessions: [] },
+                                    { id: generateId(), name: "FASE D'INTEGRACIÓ", collapsed: false, sessions: [] }
+                                ] 
+                            };
+                            course.units.push(unit);
+                        }
+
+                        // 3. Cercar la Fase
+                        let phase = unit.phases.find(p => p.name.trim().toLowerCase() === (payload.fase || "").trim().toLowerCase());
+                        if (!phase) phase = unit.phases[0]; // Si no troba la fase exacta, es col·locarà a la primera
+
+                        // 4. Afegir les noves sessions a la fase (s'apilaran correctament abans del botó d'afegir)
+                        phase.sessions.push(...newSessions);
+
+                        // Actualitzar les pestanyes actives automàticament per portar-te al lloc on s'han importat
+                        setTimeout(() => {
+                            setActiveCourseId(course.id);
+                            setActiveUnitId(unit.id);
+                            showToast(`Dades afegides a: ${course.name} > ${unit.title} > ${phase.name}`);
+                        }, 100);
+
+                        return newData;
+                    });
+                };
+
+                // Escoltar missatges de tipus postMessage
+                const handleMessage = (event) => {
+                    const originValid = event.origin.includes("marcpcasals.github.io") || 
+                                        event.origin.includes("localhost") || 
+                                        event.origin.includes("127.0.0.1");
+                    if (!originValid && event.origin !== window.location.origin) return;
+                    
+                    if (event.data && event.data.action === 'SYNC_TABLE') {
+                        processarDadesAgenda(event.data);
+                    }
+                };
+                window.addEventListener("message", handleMessage);
+
+                // Intents d'obrir per localStorage
+                const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
+                if (savedPayloadStr) {
+                    try {
+                        const savedPayload = JSON.parse(savedPayloadStr);
+                        processarDadesAgenda(savedPayload);
+                        localStorage.removeItem('cfn_sync_payload'); 
+                    } catch(e) {
+                        console.error("Error processant dades del localStorage:", e);
+                    }
+                }
+
+                // Neteja
+                return () => window.removeEventListener("message", handleMessage);
+            }, []);
+
             useEffect(() => {
                 guardarDades(data);
                 if (skipHistory) {
@@ -1129,105 +1262,11 @@
     </script>
     <script>
     document.addEventListener("DOMContentLoaded", function() {
-        
-        // Funció central robusta per processar les files de la taula
-        function processarDadesAgenda(payload) {
-            console.log("Dades rebudes per sincronitzar:", payload);
-            
-            if (payload && payload.action === 'SYNC_TABLE') {
-                // Com que estem fent servir React, el DOM real (com la taula o les files) 
-                // triga uns mil·lisegons a dibuixar-se. Fem un polling robust per esperar-ho.
-                let intents = 0;
-                const interval = setInterval(() => {
-                    intents++;
-                    const tbody = document.querySelector('table tbody');
-                    
-                    if (tbody) {
-                        clearInterval(interval);
-                        try {
-                            let inserit = false;
-                            
-                            // 1. Intentem buscar la fase correcta pel nom.
-                            // React renderitza el nom de la fase dins d'un <input> (per permetre l'edició).
-                            const inputs = Array.from(tbody.querySelectorAll('input'));
-                            const inputFase = inputs.find(inp => inp.value.trim() === (payload.fase || "").trim());
-                            
-                            if (inputFase) {
-                                const filaFase = inputFase.closest('tr');
-                                if (filaFase) {
-                                    // Busquem on acaba aquesta fase per afegir les noves files al final d'aquesta.
-                                    let nextFila = filaFase.nextElementSibling;
-                                    while (nextFila && !nextFila.className.includes('phase-header')) {
-                                        nextFila = nextFila.nextElementSibling;
-                                    }
-                                    
-                                    if (nextFila) {
-                                        // Inserim just abans de la següent capçalera de fase (és a dir, a l'últim lloc d'aquesta fase)
-                                        nextFila.insertAdjacentHTML('beforebegin', payload.html);
-                                    } else {
-                                        // Si no hi ha cap fase més a sota, estem a l'última fase. Afegeix al final.
-                                        tbody.insertAdjacentHTML('beforeend', payload.html);
-                                    }
-                                    inserit = true;
-                                    console.log(`Èxit: Files afegides dins la fase "${payload.fase}".`);
-                                }
-                            }
-                            
-                            // 2. Fallback: Si no es troba l'input amb el nom de la fase, inserim al final del tbody genèric.
-                            // insertAdjacentHTML no sobreescriu res, només afegeix nodes al final preservant els existents.
-                            if (!inserit) {
-                                tbody.insertAdjacentHTML('beforeend', payload.html);
-                                console.log("Èxit: Files afegides al final de la taula (fallback).");
-                            }
-                            
-                        } catch(error) {
-                            console.error("Error a l'inserir la taula a la programació:", error);
-                        }
-                    } else if (intents >= 20) {
-                        // Desistim després de 10 segons (20 intents de 500ms)
-                        clearInterval(interval);
-                        console.error("DOM Error: La taula de React no s'ha carregat a temps.");
-                    }
-                }, 500);
-            }
-        }
-
-        // --- MÈTODE 1: Escolta via postMessage ---
-        window.addEventListener("message", function(event) {
-            // Assegurem que només acceptem dades del teu GitHub Pages de forma segura
-            // (Mantingut obert a localhost/127.0.0.1 perquè puguis fer proves locals si vols)
-            const originValid = event.origin.includes("marcpcasals.github.io") || 
-                                event.origin.includes("localhost") || 
-                                event.origin.includes("127.0.0.1");
-                                
-            if (!originValid && event.origin !== window.location.origin) {
-                console.warn("Bloquejat intent de postMessage des de:", event.origin);
-                return;
-            }
-            
-            if (event.data && event.data.action === 'SYNC_TABLE') {
-                processarDadesAgenda(event.data);
-            }
-        });
-
-        // --- MÈTODE 2: Recuperació via localStorage (Evita pèrdua de dades al window.open) ---
-        const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
-        if (savedPayloadStr) {
-            try {
-                const savedPayload = JSON.parse(savedPayloadStr);
-                processarDadesAgenda(savedPayload);
-                // L'esborrem un cop consumit perquè no es repeteixi si es refresca la pàgina
-                localStorage.removeItem('cfn_sync_payload'); 
-            } catch(e) {
-                console.error("Error interpretant el payload del localStorage:", e);
-            }
-        }
-        
         // Si s'ha obert des de l'Agenda mitjançant un script de finestres vinculades, enviem avís de retorn
+        // Com que la gestió de dades ja l'hem integrat a l'estat de React, aquí només deixem aquest passadís actiu.
         if (window.opener) {
             window.opener.postMessage({ action: 'PROGRAMACIO_READY' }, "*");
         }
-        
     });
     </script>
 </body>
