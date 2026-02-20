@@ -1127,5 +1127,82 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
+    <script>
+document.addEventListener("DOMContentLoaded", function() {
+    
+    // Funció central robusta per processar les files de la taula
+    function processarDadesAgenda(payload) {
+        console.log("Dades rebudes per sincronitzar:", payload);
+        
+        if (payload && payload.action === 'SYNC_TABLE') {
+            try {
+                // 1. Busquem el contenidor amb els data-attributes exactes
+                const query = `[data-curs="${payload.curs}"][data-ut="${payload.ut}"][data-fase="${payload.fase}"]`;
+                const contenidorTarget = document.querySelector(query);
+                
+                if (contenidorTarget) {
+                    let targetElement = contenidorTarget;
+                    
+                    // 2. PROTECCIÓ HTML: Assegurem que inserim dins d'un <tbody>
+                    // Si el contenidor no és una taula, mirem si en té una dins o en creem una.
+                    if (targetElement.tagName !== 'TBODY' && targetElement.tagName !== 'TABLE') {
+                        let table = targetElement.querySelector('table');
+                        if (!table) {
+                            // Creem la taula inicial si no existia
+                            targetElement.innerHTML = `<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody></tbody></table>`;
+                            table = targetElement.querySelector('table');
+                        }
+                        targetElement = table.querySelector('tbody') || table;
+                    } else if (targetElement.tagName === 'TABLE') {
+                        targetElement = targetElement.querySelector('tbody') || targetElement;
+                    }
+
+                    // 3. INSERCIÓ: Afegim a sota de les files existents sense esborrar-les
+                    targetElement.insertAdjacentHTML('beforeend', payload.html);
+                    
+                    console.log(`Èxit: Files afegides a ${payload.curs} - ${payload.ut} - ${payload.fase}`);
+                } else {
+                    console.error(`DOM Error: No s'ha trobat cap element coincident amb: ${query}`);
+                }
+            } catch(error) {
+                console.error("Error a l'inserir la taula a la programació:", error);
+            }
+        }
+    }
+
+    // --- MÈTODE 1: Escolta via postMessage ---
+    window.addEventListener("message", function(event) {
+        // Assegurem que només acceptem dades del teu GitHub Pages
+        const allowedOrigin = "https://marcpcasals.github.io";
+        if (event.origin !== allowedOrigin && event.origin !== window.location.origin) {
+            console.warn("Bloquejat intent de postMessage des de:", event.origin);
+            return;
+        }
+        
+        if (event.data && event.data.action === 'SYNC_TABLE') {
+            processarDadesAgenda(event.data);
+        }
+    });
+
+    // --- MÈTODE 2: Recuperació via localStorage (Evita pèrdua de dades al window.open) ---
+    const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
+    if (savedPayloadStr) {
+        try {
+            const savedPayload = JSON.parse(savedPayloadStr);
+            processarDadesAgenda(savedPayload);
+            // L'esborrem un cop consumit perquè no es repeteixi si es refresca la pàgina
+            localStorage.removeItem('cfn_sync_payload'); 
+        } catch(e) {
+            console.error("Error interpretant el payload del localStorage:", e);
+        }
+    }
+    
+    // Si s'ha obert des de l'Agenda mitjançant un script de finestres vinculades, enviem avís de retorn
+    if (window.opener) {
+        window.opener.postMessage({ action: 'PROGRAMACIO_READY' }, "https://marcpcasals.github.io");
+    }
+    
+});
+</script>
 </body>
 </html>
