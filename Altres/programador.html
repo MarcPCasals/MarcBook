@@ -14,6 +14,9 @@
     
     <!-- Babel per compilar JSX al navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- SheetJS per generar XLSX real -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -169,7 +172,7 @@
             );
         };
 
-        const HighlightedActivityTextarea = ({ value, onChange, completed }) => {
+        const HighlightedActivityTextarea = ({ value, onChange, completed, onFocus }) => {
             const textareaRef = useRef(null);
             
             const adjustHeight = () => {
@@ -202,6 +205,7 @@
                         ref={textareaRef}
                         value={value}
                         onChange={handleChange}
+                        onFocus={onFocus}
                         rows={1}
                         className={`textarea-auto relative z-10 w-full px-1 py-1 bg-transparent text-transparent caret-black outline-none resize-none overflow-hidden rounded`}
                         style={{ color: 'transparent', WebkitTextFillColor: 'transparent' }}
@@ -234,6 +238,11 @@
             const [showPasteModal, setShowPasteModal] = useState(false);
             const [pasteRows, setPasteRows] = useState(() => Array.from({length: 5}, () => ['', '', '', '']));
             const [pastePhaseId, setPastePhaseId] = useState("");
+
+            // Estats per Modal d'Exportar
+            const [showExportModal, setShowExportModal] = useState(false);
+            const [exportCourseId, setExportCourseId] = useState("");
+            const [exportUnitId, setExportUnitId] = useState("");
             
             const [showCompleted, setShowCompleted] = useState(false);
 
@@ -430,6 +439,33 @@
                     [newData[index], newData[newIndex]] = [newData[newIndex], newData[index]];
                     return newData;
                 });
+            };
+
+            const deleteCourse = (courseId) => {
+                if(confirm("Segur que vols eliminar tot aquest curs? Aquesta acció no es pot desfer.")) {
+                    setData(prev => {
+                        const newData = prev.filter(c => c.id !== courseId);
+                        if (newData.length > 0 && activeCourseId === courseId) {
+                            setActiveCourseId(newData[0].id);
+                        }
+                        return newData;
+                    });
+                }
+            };
+
+            const deleteUnit = (courseId, unitId) => {
+                if(confirm("Segur que vols eliminar aquesta unitat temporal? Aquesta acció no es pot desfer.")) {
+                    setData(prev => prev.map(c => {
+                        if (c.id !== courseId) return c;
+                        const newUnits = c.units.filter(u => u.id !== unitId);
+                        if (activeUnitId === unitId && newUnits.length > 0) {
+                            setActiveUnitId(newUnits[0].id);
+                        } else if (activeUnitId === unitId) {
+                            setActiveUnitId(null);
+                        }
+                        return { ...c, units: newUnits };
+                    }));
+                }
             };
 
             // --- LÒGICA DE DADES ---
@@ -684,7 +720,7 @@
                 setActiveUnitId(newUnitId);
             };
 
-            // REQ 4: Funcions per Desar i Carregar JSON
+            // Funcions per Desar i Carregar JSON
             const exportJSON = () => {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
                 const link = document.createElement("a");
@@ -712,29 +748,43 @@
                 reader.readAsText(file);
             };
 
-            const exportCSV = () => {
-                 let csvContent = "data:text/csv;charset=utf-8,Curs,Unitat,Fase,Sessió,Descriptiu activitat,Material,Comentaris,Estat\n";
-                 // REQ 2: Assignem la numeració on the fly per a l'exportació CSV
-                 data.forEach(c => {
-                     c.units.forEach(u => {
-                         let exportCounter = 1;
-                         u.phases.forEach(p => {
-                             p.sessions.forEach(s => {
-                                 const actText = s.activities.map(a => a.text).join(' | ').replace(/"/g, '""');
-                                 const matText = s.materials.map(m => m.name + (m.url ? ` (${m.url})` : '')).join(' | ').replace(/"/g, '""');
-                                 const comments = (s.comments || "").replace(/"/g, '""');
-                                 csvContent += `"${c.name}","${u.title}","${p.name}","${exportCounter++}","${actText}","${matText}","${comments}","${s.completed ? 'Completada' : 'Pendent'}"\n`;
-                             });
-                         });
-                     });
-                 });
-                 const encodedUri = encodeURI(csvContent);
-                 const link = document.createElement("a");
-                 link.setAttribute("href", encodedUri);
-                 link.setAttribute("download", `programacio_${new Date().toISOString().split('T')[0]}.csv`);
-                 document.body.appendChild(link);
-                 link.click();
-                 document.body.removeChild(link);
+            // Nou mètode d'exportació XLSX utilitzant SheetJS
+            const executeExportXLSX = () => {
+                const targetCourse = data.find(c => c.id === exportCourseId);
+                const targetUnit = targetCourse?.units.find(u => u.id === exportUnitId);
+                
+                if (!targetCourse || !targetUnit) return;
+
+                const exportData = [];
+                let exportCounter = 1;
+
+                targetUnit.phases.forEach(p => {
+                    p.sessions.forEach(s => {
+                        const actText = s.activities.map(a => a.text).join('\n');
+                        const matText = s.materials.map(m => m.name + (m.url ? ` (${m.url})` : '')).join('\n');
+                        const comments = s.comments || "";
+                        exportData.push({
+                            "Sessió": exportCounter++,
+                            "Fase": p.name,
+                            "Activitats": actText,
+                            "Materials": matText,
+                            "Comentaris": comments,
+                            "Estat": s.completed ? 'Completada' : 'Pendent'
+                        });
+                    });
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Programació");
+                
+                // Generar nom del fitxer netejat
+                const safeCourseName = targetCourse.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const safeUnitName = targetUnit.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                
+                XLSX.writeFile(wb, `programacio_${safeCourseName}_${safeUnitName}.xlsx`);
+                setShowExportModal(false);
+                showToast("Excel descarregat correctament.");
             };
 
             const openPasteModal = () => {
@@ -832,7 +882,7 @@
                 showToast("Dades importades a la taula correctament.");
             };
 
-            // REQ 2: Pre-càlcul absolutament robust de tots els números de sessió per la vista actual
+            // Pre-càlcul absolutament robust de tots els números de sessió per la vista actual
             const sessionNumbers = {};
             if (activeUnit) {
                 let sessionCounter = 1;
@@ -855,7 +905,7 @@
                                     </div>
                                     <h1 className="text-xl font-bold text-gray-800 truncate max-w-[150px] sm:max-w-none">Programador Docent</h1>
                                     
-                                    {/* REQ 5: Caixeta URL Agenda */}
+                                    {/* Caixeta URL Agenda */}
                                     <div className="hidden md:flex items-center ml-4 pl-4 border-l-2 border-orange-200">
                                         <span className="text-sm font-semibold text-gray-500 mr-2">La meva agenda:</span>
                                         {agendaUrl ? (
@@ -875,7 +925,7 @@
                                          <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-1 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 rounded hover:bg-white transition-all" title="Refer"> <IconRedo /> </button>
                                     </div>
 
-                                    {/* REQ 4: Botons per exportar/importar JSON restablerts */}
+                                    {/* Botons per exportar/importar JSON restablerts */}
                                     <label className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors cursor-pointer" title="Carregar JSON">
                                         <IconUpload /> <span className="ml-2 hidden lg:inline">Obrir JSON</span>
                                         <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
@@ -884,7 +934,14 @@
                                         <IconSave /> <span className="ml-2 hidden lg:inline">Desar JSON</span>
                                     </button>
                                     
-                                    <button onClick={exportCSV} className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Exportar a CSV">
+                                    <button 
+                                        onClick={() => {
+                                            setExportCourseId(activeCourseId);
+                                            setExportUnitId(activeUnitId);
+                                            setShowExportModal(true);
+                                        }} 
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Exportar a Excel"
+                                    >
                                         <IconDownload /> <span className="ml-2 hidden lg:inline">Exportar Excel</span>
                                     </button>
                                 </div>
@@ -898,7 +955,7 @@
                                     <button
                                         key={course.id}
                                         onClick={() => setActiveCourseId(course.id)}
-                                        className={`whitespace-nowrap py-3 px-2 border-b-2 font-medium text-sm transition-colors flex items-center ${
+                                        className={`whitespace-nowrap py-3 px-2 border-b-2 font-medium text-sm transition-colors flex items-center group ${
                                             activeCourseId === course.id
                                                 ? 'border-orange-500 text-orange-600'
                                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -920,6 +977,9 @@
 
                                         {activeCourseId === course.id && index < data.length - 1 && (
                                             <div onClick={(e) => { e.stopPropagation(); moveCourse(course.id, 1); }} className="text-gray-400 hover:text-orange-500 p-1 ml-1 hover:bg-orange-50 rounded" title="Moure a la dreta"><IconChevronRight /></div>
+                                        )}
+                                        {activeCourseId === course.id && (
+                                            <div onClick={(e) => { e.stopPropagation(); deleteCourse(course.id); }} className="text-gray-400 hover:text-red-500 p-1 ml-1 hover:bg-red-50 rounded" title="Eliminar curs sencer"><IconTrash /></div>
                                         )}
                                     </button>
                                 ))}
@@ -958,6 +1018,9 @@
                                             }}
                                             className={`bg-transparent border-none outline-none w-32 ${activeUnit?.id === u.id ? 'font-bold' : ''}`}
                                         />
+                                        {activeUnit?.id === u.id && (
+                                            <div onClick={(e) => { e.stopPropagation(); deleteUnit(activeCourse.id, u.id); }} className="text-gray-400 hover:text-red-500 p-1 ml-2 hover:bg-red-50 rounded" title="Eliminar unitat temporal"><IconTrash /></div>
+                                        )}
                                     </div>
                                 ))}
                                 <button onClick={() => addUnit(activeCourse.id)} className="px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 rounded-t-lg transition-colors flex items-center">
@@ -1020,7 +1083,6 @@
                                         <table className="w-full text-left border-collapse min-w-[1000px] table-fixed">
                                             <thead className="sticky top-0 z-20 bg-gray-50 shadow-sm">
                                                 <tr className="border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
-                                                    {/* REQ 2: Assignem la nova distribució d'amplades de columna aquí */}
                                                     <th className="p-3 w-12 text-center font-semibold">Sessió</th>
                                                     <th className="p-3 w-[40%] font-semibold">Descripció d'activitats</th>
                                                     <th className="p-3 w-[20%] font-semibold">Materials</th>
@@ -1072,14 +1134,18 @@
 
                                                             if (session.completed && !showCompleted) return null;
 
-                                                            // REQ 3: bg-gray-200 per les sessions acabades
+                                                            // Càlcul de fons de fila parell/senar (senar=blanc, parell=gris claret)
+                                                            const sessionNum = sessionNumbers[session.id];
+                                                            const isEvenRow = sessionNum % 2 === 0;
+                                                            const baseRowColor = isEvenRow ? 'bg-gray-100/60' : 'bg-white';
+                                                            const rowBgClass = session.completed ? 'bg-gray-200 hover:bg-gray-300' : `${baseRowColor} hover:bg-orange-50/50`;
+
                                                             return (
-                                                                <tr key={session.id} className={`border-b border-gray-100 transition-colors ${session.completed ? 'bg-gray-200 hover:bg-gray-300' : 'hover:bg-orange-50/30'}`}>
+                                                                <tr key={session.id} className={`border-b border-gray-100 transition-colors ${rowBgClass}`}>
                                                                     
                                                                     <td className="p-3 text-center align-top border-r border-gray-100">
-                                                                        {/* REQ 2: Numeració absolutament automàtica, sense inputs */}
                                                                         <span className={`w-10 text-center font-bold text-gray-700 block ${session.completed ? 'opacity-50' : ''}`}>
-                                                                            {sessionNumbers[session.id]}
+                                                                            {sessionNum}
                                                                         </span>
                                                                     </td>
                                                                     
@@ -1123,6 +1189,11 @@
                                                                                         <HighlightedActivityTextarea 
                                                                                             value={act.text} 
                                                                                             onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: val })}
+                                                                                            onFocus={() => {
+                                                                                                if (act.text === '• Nova activitat') {
+                                                                                                    updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: '• ' });
+                                                                                                }
+                                                                                            }}
                                                                                             completed={session.completed}
                                                                                         />
                                                                                         <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'delete', act.id)} className="ml-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
@@ -1148,55 +1219,60 @@
                                                                         </button>
                                                                     </td>
                                                                     
-                                                                    <td className="p-3 align-top border-r border-gray-100 relative">
-                                                                        <ul className="space-y-2">
-                                                                            {session.materials.map((mat) => (
-                                                                                <li key={mat.id} className={`text-sm group flex items-start ${session.completed ? 'opacity-70' : ''}`}>
-                                                                                    <span className="text-gray-400 mr-2 mt-1 select-none">•</span>
-                                                                                    <div className="flex-1 flex flex-col min-w-0">
-                                                                                        <div className="flex items-center space-x-1">
-                                                                                            {mat.url ? (
-                                                                                                <a href={mat.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-blue-600 hover:text-blue-800 underline font-medium truncate" title={`Obrir: ${mat.url}`}>
-                                                                                                    {mat.name || 'Enllaç'}
-                                                                                                </a>
-                                                                                            ) : (
-                                                                                                <AutoTextarea 
-                                                                                                    value={mat.name} 
-                                                                                                    onChange={(v) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: v })} 
-                                                                                                    className="flex-1 text-sm text-gray-700 font-medium" 
-                                                                                                    placeholder="Nom del material" 
-                                                                                                />
-                                                                                            )}
-                                                                                            
-                                                                                            {mat.url && (
-                                                                                                <button 
-                                                                                                    onClick={() => { const newName = prompt("Edita el nom del material:", mat.name); if(newName !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: newName }); }} 
-                                                                                                    className="text-xs px-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity" title="Editar Nom"
-                                                                                                >✏️</button>
-                                                                                            )}
+                                                                    {/* Hack de CSS (h-[1px] a la taula, h-full al div interior) per evitar que les cel·les facin créixer la fila més enllà de la columna activitats */}
+                                                                    <td className="p-0 align-top border-r border-gray-100 relative h-[1px]">
+                                                                        <div className="h-full w-full overflow-y-auto custom-scroll p-3 flex flex-col">
+                                                                            <ul className="space-y-2">
+                                                                                {session.materials.map((mat) => (
+                                                                                    <li key={mat.id} className={`text-sm group flex items-start ${session.completed ? 'opacity-70' : ''}`}>
+                                                                                        <span className="text-gray-400 mr-2 mt-1 select-none">•</span>
+                                                                                        <div className="flex-1 flex flex-col min-w-0">
+                                                                                            <div className="flex items-center space-x-1">
+                                                                                                {mat.url ? (
+                                                                                                    <a href={mat.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-blue-600 hover:text-blue-800 underline font-medium truncate" title={`Obrir: ${mat.url}`}>
+                                                                                                        {mat.name || 'Enllaç'}
+                                                                                                    </a>
+                                                                                                ) : (
+                                                                                                    <AutoTextarea 
+                                                                                                        value={mat.name} 
+                                                                                                        onChange={(v) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: v })} 
+                                                                                                        className="flex-1 text-sm text-gray-700 font-medium" 
+                                                                                                        placeholder="Nom del material" 
+                                                                                                    />
+                                                                                                )}
+                                                                                                
+                                                                                                {mat.url && (
+                                                                                                    <button 
+                                                                                                        onClick={() => { const newName = prompt("Edita el nom del material:", mat.name); if(newName !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: newName }); }} 
+                                                                                                        className="text-xs px-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity" title="Editar Nom"
+                                                                                                    >✏️</button>
+                                                                                                )}
 
-                                                                                            <button 
-                                                                                                onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url); if(url !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }} 
-                                                                                                className={`text-xs px-1 hover:scale-110 transition-transform ${mat.url ? 'text-blue-600' : 'text-gray-300 hover:text-blue-400'}`} title="Afegir/Editar Enllaç"
-                                                                                            >🔗</button>
-                                                                                            <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
+                                                                                                <button 
+                                                                                                    onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url); if(url !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }} 
+                                                                                                    className={`text-xs px-1 hover:scale-110 transition-transform ${mat.url ? 'text-blue-600' : 'text-gray-300 hover:text-blue-400'}`} title="Afegir/Editar Enllaç"
+                                                                                                >🔗</button>
+                                                                                                <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
+                                                                                            </div>
                                                                                         </div>
-                                                                                    </div>
-                                                                                </li>
-                                                                            ))}
-                                                                        </ul>
-                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'add', { id: generateId(), name: "", url: "" })} className="text-xs text-orange-500 hover:text-orange-700 mt-3 flex items-center">
-                                                                            <IconPlus /><span className="ml-1">Afegir material</span>
-                                                                        </button>
+                                                                                    </li>
+                                                                                ))}
+                                                                            </ul>
+                                                                            <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'add', { id: generateId(), name: "", url: "" })} className="text-xs text-orange-500 hover:text-orange-700 mt-3 flex items-center">
+                                                                                <IconPlus /><span className="ml-1">Afegir material</span>
+                                                                            </button>
+                                                                        </div>
                                                                     </td>
                                                                     
-                                                                    <td className="p-3 align-top border-r border-gray-100">
-                                                                        <AutoTextarea 
-                                                                            value={session.comments}
-                                                                            onChange={(val) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', val)}
-                                                                            placeholder="Notes d'aplicació..."
-                                                                            className={`text-sm italic ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
-                                                                        />
+                                                                    <td className="p-0 align-top border-r border-gray-100 h-[1px]">
+                                                                        <div className="h-full w-full overflow-y-auto custom-scroll p-3 flex flex-col">
+                                                                            <AutoTextarea 
+                                                                                value={session.comments}
+                                                                                onChange={(val) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', val)}
+                                                                                placeholder="Notes d'aplicació..."
+                                                                                className={`text-sm italic flex-1 ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
+                                                                            />
+                                                                        </div>
                                                                     </td>
 
                                                                     <td className="p-3 align-middle text-center border-r border-gray-100">
@@ -1249,6 +1325,7 @@
                         )}
                     </main>
 
+                    {/* Modal per Enganxar des de l'Excel (Existent) */}
                     {showPasteModal && (
                         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
                             <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-5xl">
@@ -1259,7 +1336,6 @@
                                 
                                 <div className="border border-gray-300 rounded-lg overflow-hidden flex flex-col mb-5">
                                     <div className="overflow-y-auto max-h-72 bg-gray-50">
-                                        {/* REQ 6: Els thead (capçaleres) estan ara DINS la mateixa taula, garantint alineació perfecta al mil·límetre */}
                                         <table className="w-full border-collapse table-fixed">
                                             <thead className="bg-gray-100 border-b border-gray-300 shadow-sm sticky top-0 z-10">
                                                 <tr>
@@ -1321,6 +1397,56 @@
                         </div>
                     )}
 
+                    {/* Modal per Exportar Excel */}
+                    {showExportModal && (
+                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+                            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+                                <h2 className="text-xl font-bold mb-4 text-gray-800">Exportar Excel (.xlsx)</h2>
+                                <p className="text-sm text-gray-600 mb-6">Selecciona el Curs i la Unitat Temporal per descarregar les dades de forma estructurada.</p>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Curs a exportar:</label>
+                                        <select 
+                                            value={exportCourseId} 
+                                            onChange={e => {
+                                                setExportCourseId(e.target.value);
+                                                const firstUnit = data.find(c => c.id === e.target.value)?.units[0]?.id || "";
+                                                setExportUnitId(firstUnit);
+                                            }} 
+                                            className="w-full border border-gray-300 rounded p-2 text-sm bg-white focus:ring-orange-500 outline-none"
+                                        >
+                                            <option value="">-- Selecciona Curs --</option>
+                                            {data.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Unitat a exportar:</label>
+                                        <select 
+                                            value={exportUnitId} 
+                                            onChange={e => setExportUnitId(e.target.value)} 
+                                            className="w-full border border-gray-300 rounded p-2 text-sm bg-white focus:ring-orange-500 outline-none"
+                                            disabled={!exportCourseId}
+                                        >
+                                            <option value="">-- Selecciona Unitat --</option>
+                                            {data.find(c => c.id === exportCourseId)?.units.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="mt-8 flex justify-end space-x-3">
+                                    <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel·lar</button>
+                                    <button 
+                                        onClick={executeExportXLSX} 
+                                        disabled={!exportCourseId || !exportUnitId} 
+                                        className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors flex items-center"
+                                    >
+                                        <IconDownload /> <span className="ml-2">Descarregar Excel</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {toastMsg && (
                         <div className="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center animate-[fadeIn_0.3s_ease-out] z-50">
                             <span className="text-green-400 mr-2">✓</span>
@@ -1337,7 +1463,6 @@
     <script>
     document.addEventListener("DOMContentLoaded", function() {
         // Si s'ha obert des de l'Agenda mitjançant un script de finestres vinculades, enviem avís de retorn
-        // Com que la gestió de dades ja l'hem integrat a l'estat de React, aquí només deixem aquest passadís actiu.
         if (window.opener) {
             window.opener.postMessage({ action: 'PROGRAMACIO_READY' }, "*");
         }
