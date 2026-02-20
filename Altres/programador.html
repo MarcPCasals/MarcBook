@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Programació Docent Interactiva</title>
+    <title>Programació Docent</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,7 +20,7 @@
         
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #fff7ed;
+            background-color: #fff7ed; /* Fons taronja molt suau, estil agenda docent */
             color: #374151;
         }
 
@@ -39,11 +39,11 @@
             transition: background-color 0.2s;
         }
 
-        .phase-header-0 { background-color: #d1fae5; color: #065f46; border-left: 4px solid #059669; }
-        .phase-header-1 { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; }
-        .phase-header-2 { background-color: #fef3c7; color: #92400e; border-left: 4px solid #d97706; }
-        .phase-header-3 { background-color: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
-        .phase-header-4 { background-color: #f3e8ff; color: #6b21a8; border-left: 4px solid #9333ea; }
+        .phase-header-0 { background-color: #d1fae5; color: #065f46; border-left: 4px solid #059669; } /* Verd */
+        .phase-header-1 { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; } /* Blau */
+        .phase-header-2 { background-color: #fef3c7; color: #92400e; border-left: 4px solid #d97706; } /* Groc */
+        .phase-header-3 { background-color: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; } /* Vermell */
+        .phase-header-4 { background-color: #f3e8ff; color: #6b21a8; border-left: 4px solid #9333ea; } /* Lila */
     </style>
 </head>
 <body>
@@ -67,7 +67,7 @@
         const IconChevronLeft = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
         const IconChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
 
-        // --- DADES INICIALS NETES ---
+        // --- DADES INICIALS ---
         const generateId = () => Math.random().toString(36).substr(2, 9);
 
         const initialData = [
@@ -77,7 +77,7 @@
                 units: [
                     {
                         id: generateId(),
-                        title: 'Nova Unitat Temporal',
+                        title: 'Nova UT',
                         phases: [
                             { id: generateId(), name: 'FASE DE PREPARACIÓ', collapsed: false, sessions: [] },
                             { id: generateId(), name: 'FASE DE RESOLUCIÓ', collapsed: false, sessions: [] },
@@ -88,100 +88,75 @@
             }
         ];
 
-        // --- FUNCIONS DE LOCALSTORAGE ROBUSTES ---
+        // --- FUNCIONS DE LOCALSTORAGE ---
         const guardarDades = (coursesToSave) => {
-            try {
-                Object.keys(localStorage).forEach(k => {
-                    if (k.startsWith('programacio-')) localStorage.removeItem(k);
-                });
-                if (Array.isArray(coursesToSave)) {
-                    coursesToSave.forEach(curs => {
-                        if (curs && curs.name) {
-                            localStorage.setItem(`programacio-${curs.name}`, JSON.stringify(curs));
-                        }
-                    });
-                }
-            } catch (e) {
-                console.error("Error al guardar dades:", e);
-            }
+            Object.keys(localStorage).forEach(k => {
+                if (k.startsWith('programacio-')) localStorage.removeItem(k);
+            });
+            coursesToSave.forEach(curs => {
+                localStorage.setItem(`programacio-${curs.name}`, JSON.stringify(curs));
+            });
         };
 
         const llegirDades = () => {
-            try {
-                const keys = Object.keys(localStorage).filter(k => k.startsWith('programacio-'));
-                return keys.map(k => {
-                    try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
-                }).filter(Boolean);
-            } catch (e) {
-                return [];
-            }
+            const keys = Object.keys(localStorage).filter(k => k.startsWith('programacio-'));
+            return keys.map(k => {
+                try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
+            }).filter(Boolean);
         };
 
         const detectarDades = () => {
-            try {
-                return Object.keys(localStorage).some(k => k.startsWith('programacio-'));
-            } catch (e) {
-                return false;
-            }
+            return Object.keys(localStorage).some(k => k.startsWith('programacio-'));
         };
 
         const migrateData = (courses) => {
-            if (!Array.isArray(courses)) return initialData;
-            
             return courses.map(c => ({
                 ...c,
-                id: c.id || generateId(),
-                name: c.name || 'Curs Desconegut',
-                units: Array.isArray(c.units) ? c.units.map(u => ({
+                units: c.units.map(u => ({
                     ...u,
-                    id: u.id || generateId(),
-                    title: u.title || 'Unitat Desconeguda',
-                    phases: Array.isArray(u.phases) ? u.phases.map(p => ({
+                    phases: u.phases.map(p => ({
                         ...p,
-                        id: p.id || generateId(),
-                        name: p.name || 'Fase',
-                        collapsed: !!p.collapsed,
-                        sessions: Array.isArray(p.sessions) ? p.sessions.map(s => {
+                        collapsed: p.collapsed || false,
+                        sessions: p.sessions.map(s => {
                             let newS = { ...s };
                             delete newS.space;
-                            
                             if (typeof newS.activity === 'string') {
-                                newS.activities = (newS.activity || '').split('\n').filter(a=>a.trim()).map(a => ({ id: generateId(), text: a, detail: '', expanded: false }));
+                                newS.activities = newS.activity.split('\n').filter(a=>a.trim()).map(a => ({ id: generateId(), text: a, detail: '', expanded: false }));
                                 delete newS.activity;
-                            } else if (!Array.isArray(newS.activities)) newS.activities = [];
+                            } else if (!newS.activities) newS.activities = [];
                             
                             if (typeof newS.material === 'string') {
-                                newS.materials = (newS.material || '').split('\n').filter(m=>m.trim()).map(m => ({ id: generateId(), name: m, url: '' }));
+                                newS.materials = newS.material.split('\n').filter(m=>m.trim()).map(m => ({ id: generateId(), name: m, url: '' }));
                                 delete newS.material;
-                            } else if (!Array.isArray(newS.materials)) newS.materials = [];
-                            
-                            newS.comments = newS.comments || "";
-                            newS.completed = !!newS.completed;
+                            } else if (!newS.materials) newS.materials = [];
                             return newS;
-                        }) : []
-                    })) : []
-                })) : []
+                        })
+                    }))
+                }))
             }));
         };
 
-        // --- COMPONENTS PROTEGITS ---
+        // --- COMPONENTS ---
 
-        const AutoTextarea = ({ value = '', onChange, placeholder, className }) => {
+        const AutoTextarea = ({ value, onChange, placeholder, className }) => {
             const textareaRef = useRef(null);
 
             const adjustHeight = () => {
-                if (textareaRef.current) {
-                    textareaRef.current.style.height = 'auto';
-                    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+                const textarea = textareaRef.current;
+                if (textarea) {
+                    textarea.style.height = 'auto';
+                    textarea.style.height = `${textarea.scrollHeight}px`;
                 }
             };
 
-            useEffect(() => { adjustHeight(); }, [value]);
+            useEffect(() => {
+                adjustHeight();
+            }, [value]);
 
             return (
                 <textarea
                     ref={textareaRef}
-                    value={value || ''}
+                    value={value}
                     onChange={(e) => {
                         onChange(e.target.value);
                         adjustHeight();
@@ -193,7 +168,7 @@
             );
         };
 
-        const HighlightedActivityTextarea = ({ value = '', onChange, completed }) => {
+        const HighlightedActivityTextarea = ({ value, onChange, completed }) => {
             const textareaRef = useRef(null);
             
             const adjustHeight = () => {
@@ -206,13 +181,11 @@
             useEffect(() => { adjustHeight(); }, [value]);
 
             const handleChange = (e) => {
-                let val = e.target.value || '';
+                let val = e.target.value;
                 if (!val.startsWith('• ')) val = '• ' + val.replace(/^•?\s*/, '');
                 onChange(val);
                 adjustHeight();
             };
-
-            const displayValue = value || '';
 
             return (
                 <div className="relative w-full text-sm font-medium">
@@ -220,13 +193,13 @@
                         className={`absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-1 py-1 ${completed ? 'text-gray-500' : 'text-gray-800'}`} 
                         aria-hidden="true"
                     >
-                        {displayValue.split(/(\d+)/).map((part, i) =>
+                        {value.split(/(\d+)/).map((part, i) =>
                             /\d+/.test(part) ? <span key={i} className="text-red-600 font-bold">{part}</span> : <span key={i} className={completed ? "opacity-50" : ""}>{part}</span>
                         )}
                     </div>
                     <textarea
                         ref={textareaRef}
-                        value={displayValue}
+                        value={value}
                         onChange={handleChange}
                         rows={1}
                         className={`textarea-auto relative z-10 w-full px-1 py-1 bg-transparent text-transparent caret-black outline-none resize-none overflow-hidden rounded`}
@@ -240,20 +213,17 @@
         const App = () => {
             const [data, setData] = useState(() => {
                 let loadedData;
-                try {
-                    if (detectarDades()) {
-                        loadedData = llegirDades();
-                    } else {
-                        const antic = localStorage.getItem('programacio_docent_data');
-                        if (antic) { try { loadedData = JSON.parse(antic); } catch (e) {} }
-                    }
-                } catch (e) {}
-                const migrated = migrateData(loadedData && Array.isArray(loadedData) && loadedData.length > 0 ? loadedData : initialData);
-                return migrated;
+                if (detectarDades()) {
+                    loadedData = llegirDades();
+                } else {
+                    const antic = localStorage.getItem('programacio_docent_data');
+                    if (antic) { try { loadedData = JSON.parse(antic); } catch (e) {} }
+                }
+                return migrateData(loadedData && loadedData.length > 0 ? loadedData : initialData);
             });
 
-            const [activeCourseId, setActiveCourseId] = useState(() => data[0]?.id);
-            const [activeUnitId, setActiveUnitId] = useState(() => data[0]?.units?.[0]?.id);
+            const [activeCourseId, setActiveCourseId] = useState(data[0]?.id);
+            const [activeUnitId, setActiveUnitId] = useState(data[0]?.units[0]?.id);
             const [toastMsg, setToastMsg] = useState('');
             
             const [history, setHistory] = useState([]);
@@ -266,14 +236,145 @@
             
             const [showCompleted, setShowCompleted] = useState(false);
 
-            const [agendaUrl, setAgendaUrl] = useState(() => {
-                try { return localStorage.getItem('programacio_agenda_url') || ''; } 
-                catch(e) { return ''; }
-            });
+            // REQ 5: URL de l'Agenda Docent
+            const [agendaUrl, setAgendaUrl] = useState(() => localStorage.getItem('programacio_agenda_url') || '');
 
             useEffect(() => {
-                try { localStorage.setItem('programacio_agenda_url', agendaUrl); } catch(e){}
+                localStorage.setItem('programacio_agenda_url', agendaUrl);
             }, [agendaUrl]);
+
+            // --- SINCRONITZACIÓ AMB AGENDA (POSTMESSAGE I LOCALSTORAGE) ---
+            useEffect(() => {
+                const processarDadesAgenda = (payload) => {
+                    if (!payload || payload.action !== 'SYNC_TABLE') return;
+                    console.log("Dades rebudes de l'Agenda per integrar a l'estat:", payload);
+
+                    // Analitzar l'HTML i convertir-lo en l'estructura de dades de React
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString('<table>' + payload.html + '</table>', 'text/html');
+                    const rows = doc.querySelectorAll('tr');
+                    const newSessions = [];
+
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('td');
+                        if (cells.length >= 3) {
+                            // Parsejar Activitats
+                            const actDivs = cells[0].querySelectorAll('div');
+                            const activities = [];
+                            if (actDivs.length > 0) {
+                                actDivs.forEach(div => {
+                                    let text = div.textContent.trim();
+                                    if (text && !text.startsWith('•')) text = '• ' + text;
+                                    if (text) activities.push({ id: generateId(), text: text, detail: '', expanded: false });
+                                });
+                            } else {
+                                let text = cells[0].textContent.trim();
+                                if (text && !text.startsWith('•')) text = '• ' + text;
+                                if (text) activities.push({ id: generateId(), text: text, detail: '', expanded: false });
+                            }
+
+                            // Parsejar Materials i Enllaços
+                            const materials = [];
+                            const contentCol1 = cells[1].innerHTML;
+                            const splitParts = contentCol1.split(/<b>Enllaços:<\/b>/i);
+                            const textMaterials = splitParts[0].replace(/<br\s*[\/]?>/gi, '\n');
+                            const matDoc = parser.parseFromString(textMaterials, 'text/html');
+                            matDoc.body.textContent.split('\n').forEach(line => {
+                                if (line.trim()) materials.push({ id: generateId(), name: line.trim(), url: "" });
+                            });
+
+                            const links = cells[1].querySelectorAll('a');
+                            links.forEach(a => {
+                                materials.push({ id: generateId(), name: a.textContent.trim(), url: a.href });
+                            });
+
+                            // Parsejar Comentaris
+                            const commentsHtml = cells[2].innerHTML.replace(/<br\s*[\/]?>/gi, '\n');
+                            const comments = parser.parseFromString(commentsHtml, 'text/html').body.textContent.trim();
+
+                            newSessions.push({
+                                id: generateId(),
+                                activities: activities,
+                                materials: materials,
+                                comments: comments,
+                                completed: false
+                            });
+                        }
+                    });
+
+                    if (newSessions.length === 0) return;
+
+                    setData(prevData => {
+                        let newData = JSON.parse(JSON.stringify(prevData)); 
+                        
+                        // 1. Cercar o crear el Curs sol·licitat
+                        let course = newData.find(c => c.name.trim().toLowerCase() === (payload.curs || "").trim().toLowerCase());
+                        if (!course) {
+                            course = { id: generateId(), name: payload.curs || "Nou Curs Importat", units: [] };
+                            newData.push(course);
+                        }
+                        
+                        // 2. Cercar o crear la UT sol·licitada
+                        let unit = course.units.find(u => u.title.trim().toLowerCase() === (payload.ut || "").trim().toLowerCase());
+                        if (!unit) {
+                            unit = { 
+                                id: generateId(), 
+                                title: payload.ut || "Nova UT", 
+                                phases: [
+                                    { id: generateId(), name: 'FASE DE PREPARACIÓ', collapsed: false, sessions: [] },
+                                    { id: generateId(), name: 'FASE DE RESOLUCIÓ', collapsed: false, sessions: [] },
+                                    { id: generateId(), name: "FASE D'INTEGRACIÓ", collapsed: false, sessions: [] }
+                                ] 
+                            };
+                            course.units.push(unit);
+                        }
+
+                        // 3. Cercar la Fase
+                        let phase = unit.phases.find(p => p.name.trim().toLowerCase() === (payload.fase || "").trim().toLowerCase());
+                        if (!phase) phase = unit.phases[0]; // Si no troba la fase exacta, es col·locarà a la primera
+
+                        // 4. Afegir les noves sessions a la fase (s'apilaran correctament abans del botó d'afegir)
+                        phase.sessions.push(...newSessions);
+
+                        // Actualitzar les pestanyes actives automàticament per portar-te al lloc on s'han importat
+                        setTimeout(() => {
+                            setActiveCourseId(course.id);
+                            setActiveUnitId(unit.id);
+                            showToast(`Dades afegides a: ${course.name} > ${unit.title} > ${phase.name}`);
+                        }, 100);
+
+                        return newData;
+                    });
+                };
+
+                // Escoltar missatges de tipus postMessage
+                const handleMessage = (event) => {
+                    const originValid = event.origin.includes("marcpcasals.github.io") || 
+                                        event.origin.includes("localhost") || 
+                                        event.origin.includes("127.0.0.1");
+                    if (!originValid && event.origin !== window.location.origin) return;
+                    
+                    if (event.data && event.data.action === 'SYNC_TABLE') {
+                        processarDadesAgenda(event.data);
+                    }
+                };
+                window.addEventListener("message", handleMessage);
+
+                // Intents d'obrir per localStorage
+                const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
+                if (savedPayloadStr) {
+                    try {
+                        const savedPayload = JSON.parse(savedPayloadStr);
+                        processarDadesAgenda(savedPayload);
+                        localStorage.removeItem('cfn_sync_payload'); 
+                    } catch(e) {
+                        console.error("Error processant dades del localStorage:", e);
+                    }
+                }
+
+                // Neteja
+                return () => window.removeEventListener("message", handleMessage);
+            }, []);
 
             useEffect(() => {
                 guardarDades(data);
@@ -284,20 +385,19 @@
                 setHistory(prev => {
                     const newHistory = prev.slice(0, historyIndex + 1);
                     newHistory.push(data);
-                    setTimeout(() => setHistoryIndex(newHistory.length - 1), 0);
+                    setHistoryIndex(newHistory.length - 1);
                     return newHistory;
                 });
             }, [data]);
 
             const activeCourse = data.find(c => c.id === activeCourseId) || data[0];
-            
             useEffect(() => {
-                if (activeCourse && (!activeUnitId || !activeCourse.units?.find(u => u.id === activeUnitId))) {
-                    setActiveUnitId(activeCourse.units?.[0]?.id);
+                if (activeCourse && (!activeUnitId || !activeCourse.units.find(u => u.id === activeUnitId))) {
+                    setActiveUnitId(activeCourse.units[0]?.id);
                 }
             }, [activeCourseId, data]);
 
-            const activeUnit = activeCourse?.units?.find(u => u.id === activeUnitId) || activeCourse?.units?.[0];
+            const activeUnit = activeCourse?.units.find(u => u.id === activeUnitId);
 
             const showToast = (msg) => {
                 setToastMsg(msg);
@@ -330,21 +430,23 @@
                     return newData;
                 });
             };
+
+            // --- LÒGICA DE DADES ---
             
             const updateSession = (courseId, unitId, phaseId, sessionId, field, value) => {
                 setData(prev => prev.map(course => {
                     if (course.id !== courseId) return course;
                     return {
                         ...course,
-                        units: (course.units || []).map(unit => {
+                        units: course.units.map(unit => {
                             if (unit.id !== unitId) return unit;
                             return {
                                 ...unit,
-                                phases: (unit.phases || []).map(phase => {
+                                phases: unit.phases.map(phase => {
                                     if (phase.id !== phaseId) return phase;
                                     return {
                                         ...phase,
-                                        sessions: (phase.sessions || []).map(session => 
+                                        sessions: phase.sessions.map(session => 
                                             session.id === sessionId ? { ...session, [field]: value } : session
                                         )
                                     };
@@ -357,11 +459,11 @@
 
             const updateSessionArray = (courseId, unitId, phaseId, sessionId, arrayName, action, itemData) => {
                 setData(prev => prev.map(c => c.id !== courseId ? c : {
-                    ...c, units: (c.units || []).map(u => u.id !== unitId ? u : {
-                        ...u, phases: (u.phases || []).map(p => p.id !== phaseId ? p : {
-                            ...p, sessions: (p.sessions || []).map(s => {
+                    ...c, units: c.units.map(u => u.id !== unitId ? u : {
+                        ...u, phases: u.phases.map(p => p.id !== phaseId ? p : {
+                            ...p, sessions: p.sessions.map(s => {
                                 if (s.id !== sessionId) return s;
-                                let newArray = Array.isArray(s[arrayName]) ? [...s[arrayName]] : [];
+                                let newArray = [...s[arrayName]];
                                 if (action === 'add') newArray.push(itemData);
                                 else if (action === 'delete') newArray = newArray.filter(i => i.id !== itemData);
                                 else if (action === 'update') {
@@ -380,11 +482,11 @@
                     if (course.id !== courseId) return course;
                     return {
                         ...course,
-                        units: (course.units || []).map(unit => {
+                        units: course.units.map(unit => {
                             if (unit.id !== unitId) return unit;
                             return {
                                 ...unit,
-                                phases: (unit.phases || []).map(phase => {
+                                phases: unit.phases.map(phase => {
                                     if (phase.id !== phaseId) return phase;
                                     return { ...phase, [field]: value };
                                 })
@@ -394,15 +496,15 @@
                 }));
             };
 
-            const areAllExpanded = activeUnit?.phases?.every(p => (p.sessions || []).every(s => (s.activities || []).every(a => a.expanded)));
+            const areAllExpanded = activeUnit?.phases.every(p => p.sessions.every(s => s.activities.every(a => a.expanded)));
             
             const toggleAllDetails = () => {
                 const newState = !areAllExpanded; 
-                setData(prev => prev.map(c => c.id !== activeCourseId ? c : {
-                    ...c, units: (c.units || []).map(u => u.id !== activeUnit?.id ? u : {
-                        ...u, phases: (u.phases || []).map(p => ({
-                            ...p, sessions: (p.sessions || []).map(s => ({
-                                ...s, activities: (s.activities || []).map(a => ({ ...a, expanded: newState }))
+                setData(prev => prev.map(c => c.id !== activeCourse.id ? c : {
+                    ...c, units: c.units.map(u => u.id !== activeUnit.id ? u : {
+                        ...u, phases: u.phases.map(p => ({
+                            ...p, sessions: p.sessions.map(s => ({
+                                ...s, activities: s.activities.map(a => ({ ...a, expanded: newState }))
                             }))
                         }))
                     })
@@ -414,15 +516,15 @@
                     if (course.id !== courseId) return course;
                     return {
                         ...course,
-                        units: (course.units || []).map(unit => {
+                        units: course.units.map(unit => {
                             if (unit.id !== unitId) return unit;
                             return {
                                 ...unit,
-                                phases: (unit.phases || []).map(phase => {
+                                phases: unit.phases.map(phase => {
                                     if (phase.id !== phaseId) return phase;
                                     return {
                                         ...phase,
-                                        sessions: [...(phase.sessions || []), {
+                                        sessions: [...phase.sessions, {
                                             id: generateId(),
                                             activities: [],
                                             materials: [],
@@ -444,15 +546,15 @@
                     if (course.id !== courseId) return course;
                     return {
                         ...course,
-                        units: (course.units || []).map(unit => {
+                        units: course.units.map(unit => {
                             if (unit.id !== unitId) return unit;
                             return {
                                 ...unit,
-                                phases: (unit.phases || []).map(phase => {
+                                phases: unit.phases.map(phase => {
                                     if (phase.id !== phaseId) return phase;
                                     return {
                                         ...phase,
-                                        sessions: (phase.sessions || []).filter(s => s.id !== sessionId)
+                                        sessions: phase.sessions.filter(s => s.id !== sessionId)
                                     };
                                 })
                             };
@@ -466,12 +568,12 @@
                     if (course.id !== courseId) return course;
                     return {
                         ...course,
-                        units: (course.units || []).map(unit => {
+                        units: course.units.map(unit => {
                             if (unit.id !== unitId) return unit;
 
-                            let pIndex = (unit.phases || []).findIndex(p => p.id === phaseId);
+                            let pIndex = unit.phases.findIndex(p => p.id === phaseId);
                             if (pIndex < 0) return unit;
-                            let sIndex = (unit.phases[pIndex].sessions || []).findIndex(s => s.id === sessionId);
+                            let sIndex = unit.phases[pIndex].sessions.findIndex(s => s.id === sessionId);
                             if (sIndex < 0) return unit;
 
                             const newPhases = JSON.parse(JSON.stringify(unit.phases));
@@ -483,16 +585,14 @@
                                     newPhases[pIndex].sessions.splice(sIndex - 1, 0, sessionToMove);
                                 } else if (pIndex > 0) {
                                     newPhases[pIndex].sessions.splice(sIndex, 1);
-                                    if (!newPhases[pIndex - 1].sessions) newPhases[pIndex - 1].sessions = [];
                                     newPhases[pIndex - 1].sessions.push(sessionToMove);
                                 }
                             } else if (direction === 'down') {
-                                if (sIndex < (newPhases[pIndex].sessions || []).length - 1) {
+                                if (sIndex < newPhases[pIndex].sessions.length - 1) {
                                     newPhases[pIndex].sessions.splice(sIndex, 1);
                                     newPhases[pIndex].sessions.splice(sIndex + 1, 0, sessionToMove);
                                 } else if (pIndex < newPhases.length - 1) {
                                     newPhases[pIndex].sessions.splice(sIndex, 1);
-                                    if (!newPhases[pIndex + 1].sessions) newPhases[pIndex + 1].sessions = [];
                                     newPhases[pIndex + 1].sessions.unshift(sessionToMove);
                                 }
                             }
@@ -509,11 +609,11 @@
                     if (course.id !== courseId) return course;
                     return {
                         ...course,
-                        units: (course.units || []).map(unit => {
+                        units: course.units.map(unit => {
                             if (unit.id !== unitId) return unit;
                             return {
                                 ...unit,
-                                phases: (unit.phases || []).map(phase => ({ ...phase, sessions: [] }))
+                                phases: unit.phases.map(phase => ({ ...phase, sessions: [] }))
                             };
                         })
                     };
@@ -527,10 +627,11 @@
                     if(course.id !== courseId) return course;
                     return {
                         ...course,
-                        units: [...(course.units || []), {
+                        units: [...course.units, {
                             id: newUnitId,
                             title: 'Nova Unitat Temporal',
                             phases: [
+                                // REQ 1: Només tres fases predeterminades
                                 { id: generateId(), name: 'FASE DE PREPARACIÓ', collapsed: false, sessions: [] },
                                 { id: generateId(), name: 'FASE DE RESOLUCIÓ', collapsed: false, sessions: [] },
                                 { id: generateId(), name: "FASE D'INTEGRACIÓ", collapsed: false, sessions: [] }
@@ -541,6 +642,7 @@
                 setActiveUnitId(newUnitId);
             };
 
+            // REQ 4: Funcions per Desar i Carregar JSON
             const exportJSON = () => {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
                 const link = document.createElement("a");
@@ -570,15 +672,16 @@
 
             const exportCSV = () => {
                  let csvContent = "data:text/csv;charset=utf-8,Curs,Unitat,Fase,Sessió,Descriptiu activitat,Material,Comentaris,Estat\n";
-                 (data || []).forEach(c => {
-                     (c.units || []).forEach(u => {
+                 // REQ 2: Assignem la numeració on the fly per a l'exportació CSV
+                 data.forEach(c => {
+                     c.units.forEach(u => {
                          let exportCounter = 1;
-                         (u.phases || []).forEach(p => {
-                             (p.sessions || []).forEach(s => {
-                                 const actText = (s.activities || []).map(a => a.text || '').join(' | ').replace(/"/g, '""');
-                                 const matText = (s.materials || []).map(m => (m.name || '') + (m.url ? ` (${m.url})` : '')).join(' | ').replace(/"/g, '""');
+                         u.phases.forEach(p => {
+                             p.sessions.forEach(s => {
+                                 const actText = s.activities.map(a => a.text).join(' | ').replace(/"/g, '""');
+                                 const matText = s.materials.map(m => m.name + (m.url ? ` (${m.url})` : '')).join(' | ').replace(/"/g, '""');
                                  const comments = (s.comments || "").replace(/"/g, '""');
-                                 csvContent += `"${c.name || ''}","${u.title || ''}","${p.name || ''}","${exportCounter++}","${actText}","${matText}","${comments}","${s.completed ? 'Completada' : 'Pendent'}"\n`;
+                                 csvContent += `"${c.name}","${u.title}","${p.name}","${exportCounter++}","${actText}","${matText}","${comments}","${s.completed ? 'Completada' : 'Pendent'}"\n`;
                              });
                          });
                      });
@@ -601,7 +704,6 @@
             const handlePasteToGrid = (e, startRow, startCol) => {
                 e.preventDefault();
                 const pasteDataStr = e.clipboardData.getData('text/plain');
-                if (!pasteDataStr) return;
                 
                 let rows = [];
                 let currentRow = [];
@@ -652,7 +754,7 @@
                         row.forEach((cell, j) => {
                             const targetCol = startCol + j;
                             if (targetCol < 4) {
-                                newRows[targetRow][targetCol] = cell || '';
+                                newRows[targetRow][targetCol] = cell;
                             }
                         });
                     });
@@ -663,11 +765,11 @@
             const handlePasteSubmit = () => {
                 if (!pastePhaseId) return;
                 
-                const newSessions = pasteRows.filter(r => r.some(c => c && c.trim() !== '')).map(cols => {
+                const newSessions = pasteRows.filter(r => r.some(c => c.trim() !== '')).map(cols => {
                     return {
                         id: generateId(),
-                        activities: cols[1] ? cols[1].split('\n').filter(x=>x && x.trim()).map(a => ({ id: generateId(), text: (a.trim().startsWith('•') ? '' : '• ') + a.trim(), detail: "", expanded: false })) : [],
-                        materials: cols[2] ? cols[2].split('\n').filter(x=>x && x.trim()).map(m => ({ id: generateId(), name: m.trim(), url: "" })) : [],
+                        activities: cols[1] ? cols[1].split('\n').filter(x=>x.trim()).map(a => ({ id: generateId(), text: (a.trim().startsWith('•') ? '' : '• ') + a.trim(), detail: "", expanded: false })) : [],
+                        materials: cols[2] ? cols[2].split('\n').filter(x=>x.trim()).map(m => ({ id: generateId(), name: m.trim(), url: "" })) : [],
                         comments: cols[3] || "",
                         completed: false
                     };
@@ -675,11 +777,11 @@
 
                 if (newSessions.length === 0) return;
 
-                setData(prev => prev.map(c => c.id !== activeCourseId ? c : {
-                    ...c, units: (c.units || []).map(u => u.id !== activeUnit?.id ? u : {
-                        ...u, phases: (u.phases || []).map(p => {
+                setData(prev => prev.map(c => c.id !== activeCourse.id ? c : {
+                    ...c, units: c.units.map(u => u.id !== activeUnit?.id ? u : {
+                        ...u, phases: u.phases.map(p => {
                             if (p.id !== pastePhaseId) return p;
-                            return { ...p, sessions: [...(p.sessions || []), ...newSessions] };
+                            return { ...p, sessions: [...p.sessions, ...newSessions] };
                         })
                     })
                 }));
@@ -688,12 +790,12 @@
                 showToast("Dades importades a la taula correctament.");
             };
 
-            // PRE-CÀLCUL DE NÚMEROS DE SESSIÓ DE MANERA SEGURA
+            // REQ 2: Pre-càlcul absolutament robust de tots els números de sessió per la vista actual
             const sessionNumbers = {};
-            if (activeUnit?.phases) {
+            if (activeUnit) {
                 let sessionCounter = 1;
                 activeUnit.phases.forEach(phase => {
-                    (phase.sessions || []).forEach(session => {
+                    phase.sessions.forEach(session => {
                         sessionNumbers[session.id] = sessionCounter++;
                     });
                 });
@@ -701,6 +803,7 @@
 
             return (
                 <div className="min-h-screen pb-20">
+                    {/* Header Principal */}
                     <header className="bg-white border-b border-orange-200 shadow-sm sticky top-0 z-30">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex justify-between items-center h-16">
@@ -710,6 +813,7 @@
                                     </div>
                                     <h1 className="text-xl font-bold text-gray-800 truncate max-w-[150px] sm:max-w-none">Programador Docent</h1>
                                     
+                                    {/* REQ 5: Caixeta URL Agenda */}
                                     <div className="hidden md:flex items-center ml-4 pl-4 border-l-2 border-orange-200">
                                         <span className="text-sm font-semibold text-gray-500 mr-2">La meva agenda:</span>
                                         {agendaUrl ? (
@@ -729,6 +833,7 @@
                                          <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-1 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 rounded hover:bg-white transition-all" title="Refer"> <IconRedo /> </button>
                                     </div>
 
+                                    {/* REQ 4: Botons per exportar/importar JSON restablerts */}
                                     <label className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors cursor-pointer" title="Carregar JSON">
                                         <IconUpload /> <span className="ml-2 hidden lg:inline">Obrir JSON</span>
                                         <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
@@ -744,9 +849,10 @@
                             </div>
                         </div>
 
+                        {/* Tabs de Cursos amb Reordenació */}
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <nav className="flex space-x-2 overflow-x-auto custom-scroll pb-1">
-                                {(data || []).map((course, index) => (
+                                {data.map((course, index) => (
                                     <button
                                         key={course.id}
                                         onClick={() => setActiveCourseId(course.id)}
@@ -762,7 +868,7 @@
                                         
                                         <input 
                                             type="text" 
-                                            value={course.name || ''}
+                                            value={course.name}
                                             onChange={e => {
                                                 const nom = e.target.value;
                                                 setData(prev => prev.map(c => c.id !== course.id ? c : { ...c, name: nom }));
@@ -780,7 +886,7 @@
                                         const nom = prompt("Nom del nou curs:");
                                         if (nom) {
                                             const newCourse = { id: generateId(), name: nom, units: [] };
-                                            setData([...(data || []), newCourse]);
+                                            setData([...data, newCourse]);
                                             setActiveCourseId(newCourse.id);
                                         }
                                     }}
@@ -792,19 +898,20 @@
                         </div>
                     </header>
 
+                    {/* Cos Principal */}
                     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                         
                         {activeCourse && (
                             <div className="flex space-x-2 mb-4 overflow-x-auto custom-scroll pb-2 border-b border-orange-200">
-                                {(activeCourse.units || []).map(u => (
+                                {activeCourse.units.map(u => (
                                     <div key={u.id} className={`flex items-center px-4 py-2 rounded-t-lg border-b-2 transition-colors ${activeUnit?.id === u.id ? 'border-orange-500 bg-white text-orange-700 shadow-sm' : 'border-transparent bg-orange-50/50 text-gray-500 hover:bg-orange-50 cursor-pointer'}`} onClick={() => setActiveUnitId(u.id)}>
                                         <input 
                                             type="text" 
-                                            value={u.title || ''}
+                                            value={u.title}
                                             onChange={(e) => {
                                                 const newTitle = e.target.value;
-                                                setData(prev => prev.map(c => c.id !== activeCourseId ? c : {
-                                                    ...c, units: (c.units || []).map(unit => unit.id !== u.id ? unit : { ...unit, title: newTitle })
+                                                setData(prev => prev.map(c => c.id !== activeCourse.id ? c : {
+                                                    ...c, units: c.units.map(unit => unit.id !== u.id ? unit : { ...unit, title: newTitle })
                                                 }));
                                             }}
                                             className={`bg-transparent border-none outline-none w-32 ${activeUnit?.id === u.id ? 'font-bold' : ''}`}
@@ -818,13 +925,14 @@
                         )}
 
                         {activeUnit && (() => {
-                            const totalSessions = activeUnit.phases?.reduce((acc, phase) => acc + (phase.sessions || []).length, 0) || 0;
-                            const completedSessions = activeUnit.phases?.reduce((acc, phase) => acc + (phase.sessions || []).filter(s => s.completed).length, 0) || 0;
+                            const totalSessions = activeUnit.phases.reduce((acc, phase) => acc + phase.sessions.length, 0);
+                            const completedSessions = activeUnit.phases.reduce((acc, phase) => acc + phase.sessions.filter(s => s.completed).length, 0);
                             const progressPercent = totalSessions === 0 ? 0 : Math.round((completedSessions / totalSessions) * 100);
 
                             return (
                                 <div key={activeUnit.id} className="bg-white rounded-xl shadow-sm border border-orange-200 mb-8 animate-[fadeIn_0.3s_ease-out] flex flex-col">
                                     
+                                    {/* Capçalera Unitat */}
                                     <div className="bg-orange-50/50 p-4 sm:p-6 border-b border-orange-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                                         <div className="flex-1">
                                             <h2 className="text-xl font-bold text-gray-800 mb-1">{activeUnit.title}</h2>
@@ -848,8 +956,9 @@
                                                 {areAllExpanded ? <IconEyeOff /> : <IconEye />}
                                                 <span className="ml-2 hidden sm:inline">{areAllExpanded ? 'Ocultar tots els detalls' : 'Mostrar tots els detalls'}</span>
                                             </button>
+                                            {/* REQ 4: Botó canviat de nom i ús: Reiniciar programació */}
                                             <button 
-                                                onClick={() => resetUnit(activeCourseId, activeUnit.id)}
+                                                onClick={() => resetUnit(activeCourse.id, activeUnit.id)}
                                                 className="flex items-center px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-medium rounded-lg shadow-sm transition-all transform active:scale-95"
                                             >
                                                 <IconTrash />
@@ -858,13 +967,15 @@
                                         </div>
                                     </div>
 
+                                    {/* Taula Completa */}
                                     <div className="overflow-y-auto max-h-[75vh] custom-scroll relative">
                                         <table className="w-full text-left border-collapse min-w-[1000px] table-fixed">
                                             <thead className="sticky top-0 z-20 bg-gray-50 shadow-sm">
                                                 <tr className="border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
+                                                    {/* REQ 2: Assignem la nova distribució d'amplades de columna aquí */}
                                                     <th className="p-3 w-12 text-center font-semibold">Sessió</th>
-                                                    <th className="p-3 w-[40%] font-semibold">Descriptiu activitat</th>
-                                                    <th className="p-3 w-[20%] font-semibold">Material (prof. i alumne)</th>
+                                                    <th className="p-3 w-[40%] font-semibold">Descripció d'activitats</th>
+                                                    <th className="p-3 w-[20%] font-semibold">Materials</th>
                                                     <th className="p-3 w-[20%] font-semibold">Comentaris / Observacions</th>
                                                     <th className="p-3 w-16 text-center font-semibold">Estat</th>
                                                     <th className="p-3 w-12 text-center font-semibold">Accions</th>
@@ -872,7 +983,7 @@
                                             </thead>
                                             <tbody>
                                                 {(() => {
-                                                    const completedCount = activeUnit.phases?.reduce((acc, p) => acc + (p.sessions || []).filter(s => s.completed).length, 0) || 0;
+                                                    const completedCount = activeUnit.phases.reduce((acc, p) => acc + p.sessions.filter(s => s.completed).length, 0);
                                                     if (completedCount > 0) {
                                                         return (
                                                             <tr className="bg-gray-100/80 border-b border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => setShowCompleted(!showCompleted)}>
@@ -885,13 +996,13 @@
                                                     return null;
                                                 })()}
 
-                                                {(activeUnit.phases || []).map((phase, pIndex) => (
+                                                {activeUnit.phases.map((phase, pIndex) => (
                                                     <React.Fragment key={phase.id}>
                                                         <tr className={`border-b border-gray-200 ${`phase-header-${pIndex % 5}`}`}>
                                                             <td colSpan="6" className="p-2">
                                                                 <div className="flex items-center">
                                                                     <button
-                                                                        onClick={() => updatePhase(activeCourseId, activeUnit.id, phase.id, 'collapsed', !phase.collapsed)}
+                                                                        onClick={() => updatePhase(activeCourse.id, activeUnit.id, phase.id, 'collapsed', !phase.collapsed)}
                                                                         className="mr-2 text-current opacity-70 hover:opacity-100 focus:outline-none font-bold text-xs"
                                                                         title={phase.collapsed ? "Desplegar fase" : "Col·lapsar fase"}
                                                                     >
@@ -899,46 +1010,48 @@
                                                                     </button>
                                                                     <input 
                                                                         type="text"
-                                                                        value={phase.name || ''}
-                                                                        onChange={(e) => updatePhase(activeCourseId, activeUnit.id, phase.id, 'name', e.target.value)}
+                                                                        value={phase.name}
+                                                                        onChange={(e) => updatePhase(activeCourse.id, activeUnit.id, phase.id, 'name', e.target.value)}
                                                                         className="font-bold text-sm bg-transparent border-none w-full outline-none"
                                                                     />
                                                                 </div>
                                                             </td>
                                                         </tr>
                                                         
-                                                        {!phase.collapsed && (phase.sessions || []).map((session, sIndex) => {
+                                                        {!phase.collapsed && phase.sessions.map((session, sIndex) => {
                                                             const isFirstSession = pIndex === 0 && sIndex === 0;
-                                                            const isLastSession = pIndex === activeUnit.phases.length - 1 && sIndex === (phase.sessions || []).length - 1;
+                                                            const isLastSession = pIndex === activeUnit.phases.length - 1 && sIndex === phase.sessions.length - 1;
 
                                                             if (session.completed && !showCompleted) return null;
 
+                                                            // REQ 3: bg-gray-200 per les sessions acabades
                                                             return (
                                                                 <tr key={session.id} className={`border-b border-gray-100 transition-colors ${session.completed ? 'bg-gray-200 hover:bg-gray-300' : 'hover:bg-orange-50/30'}`}>
                                                                     
                                                                     <td className="p-3 text-center align-top border-r border-gray-100">
+                                                                        {/* REQ 2: Numeració absolutament automàtica, sense inputs */}
                                                                         <span className={`w-10 text-center font-bold text-gray-700 block ${session.completed ? 'opacity-50' : ''}`}>
-                                                                            {sessionNumbers[session.id] || ''}
+                                                                            {sessionNumbers[session.id]}
                                                                         </span>
                                                                     </td>
                                                                     
                                                                     <td className="p-3 align-top border-r border-gray-100 relative">
-                                                                        {(session.activities || []).map((act) => {
+                                                                        {session.activities.map((act) => {
                                                                             return (
                                                                                 <div key={act.id} className="mb-2 last:mb-0 group">
                                                                                     <div className="flex items-start">
                                                                                         <span 
                                                                                             className="text-orange-500 hover:text-orange-700 mr-1 mt-1.5 cursor-pointer select-none text-xs transition-colors" 
-                                                                                            onClick={() => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'expanded', value: !act.expanded })}
+                                                                                            onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'expanded', value: !act.expanded })}
                                                                                         >
                                                                                             {act.expanded ? '▼' : '▶'}
                                                                                         </span>
                                                                                         <HighlightedActivityTextarea 
                                                                                             value={act.text} 
-                                                                                            onChange={(val) => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: val })}
+                                                                                            onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: val })}
                                                                                             completed={session.completed}
                                                                                         />
-                                                                                        <button onClick={() => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'activities', 'delete', act.id)} className="ml-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
+                                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'delete', act.id)} className="ml-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
                                                                                     </div>
                                                                                     
                                                                                     {act.expanded && (
@@ -946,7 +1059,7 @@
                                                                                             <div className="border-l-4 border-orange-400 bg-orange-50/80 rounded-r-lg shadow-sm p-3 flex flex-col">
                                                                                                 <AutoTextarea 
                                                                                                     value={act.detail} 
-                                                                                                    onChange={(val) => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'detail', value: val })} 
+                                                                                                    onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'detail', value: val })} 
                                                                                                     placeholder="Descriu detalls de la dinàmica, pautes, agrupament..." 
                                                                                                     className="text-sm text-gray-800 w-full leading-relaxed placeholder-gray-400" 
                                                                                                 />
@@ -956,14 +1069,14 @@
                                                                                 </div>
                                                                             );
                                                                         })}
-                                                                        <button onClick={() => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "• Nova activitat", detail: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
+                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "• Nova activitat", detail: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
                                                                             <IconPlus /><span className="ml-1">Afegir activitat</span>
                                                                         </button>
                                                                     </td>
                                                                     
                                                                     <td className="p-3 align-top border-r border-gray-100 relative">
                                                                         <ul className="space-y-2">
-                                                                            {(session.materials || []).map((mat) => (
+                                                                            {session.materials.map((mat) => (
                                                                                 <li key={mat.id} className={`text-sm group flex items-start ${session.completed ? 'opacity-70' : ''}`}>
                                                                                     <span className="text-gray-400 mr-2 mt-1 select-none">•</span>
                                                                                     <div className="flex-1 flex flex-col min-w-0">
@@ -975,7 +1088,7 @@
                                                                                             ) : (
                                                                                                 <AutoTextarea 
                                                                                                     value={mat.name} 
-                                                                                                    onChange={(v) => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: v })} 
+                                                                                                    onChange={(v) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: v })} 
                                                                                                     className="flex-1 text-sm text-gray-700 font-medium" 
                                                                                                     placeholder="Nom del material" 
                                                                                                 />
@@ -983,22 +1096,22 @@
                                                                                             
                                                                                             {mat.url && (
                                                                                                 <button 
-                                                                                                    onClick={() => { const newName = prompt("Edita el nom del material:", mat.name || ''); if(newName !== null) updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: newName }); }} 
+                                                                                                    onClick={() => { const newName = prompt("Edita el nom del material:", mat.name); if(newName !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: newName }); }} 
                                                                                                     className="text-xs px-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity" title="Editar Nom"
                                                                                                 >✏️</button>
                                                                                             )}
 
                                                                                             <button 
-                                                                                                onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url || ''); if(url !== null) updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }} 
+                                                                                                onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url); if(url !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }} 
                                                                                                 className={`text-xs px-1 hover:scale-110 transition-transform ${mat.url ? 'text-blue-600' : 'text-gray-300 hover:text-blue-400'}`} title="Afegir/Editar Enllaç"
                                                                                             >🔗</button>
-                                                                                            <button onClick={() => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
+                                                                                            <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
                                                                                         </div>
                                                                                     </div>
                                                                                 </li>
                                                                             ))}
                                                                         </ul>
-                                                                        <button onClick={() => updateSessionArray(activeCourseId, activeUnit.id, phase.id, session.id, 'materials', 'add', { id: generateId(), name: "", url: "" })} className="text-xs text-orange-500 hover:text-orange-700 mt-3 flex items-center">
+                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'add', { id: generateId(), name: "", url: "" })} className="text-xs text-orange-500 hover:text-orange-700 mt-3 flex items-center">
                                                                             <IconPlus /><span className="ml-1">Afegir material</span>
                                                                         </button>
                                                                     </td>
@@ -1006,7 +1119,7 @@
                                                                     <td className="p-3 align-top border-r border-gray-100">
                                                                         <AutoTextarea 
                                                                             value={session.comments}
-                                                                            onChange={(val) => updateSession(activeCourseId, activeUnit.id, phase.id, session.id, 'comments', val)}
+                                                                            onChange={(val) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', val)}
                                                                             placeholder="Notes d'aplicació..."
                                                                             className={`text-sm italic ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
                                                                         />
@@ -1015,17 +1128,17 @@
                                                                     <td className="p-3 align-middle text-center border-r border-gray-100">
                                                                         <input 
                                                                             type="checkbox" 
-                                                                            checked={!!session.completed}
-                                                                            onChange={(e) => updateSession(activeCourseId, activeUnit.id, phase.id, session.id, 'completed', e.target.checked)}
+                                                                            checked={session.completed}
+                                                                            onChange={(e) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'completed', e.target.checked)}
                                                                             className="w-5 h-5 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer accent-green-600"
                                                                         />
                                                                     </td>
 
                                                                     <td className={`p-2 align-middle text-center ${session.completed ? 'opacity-70' : ''}`}>
                                                                         <div className="flex flex-col items-center space-y-2">
-                                                                            <button onClick={() => moveSession(activeCourseId, activeUnit.id, phase.id, session.id, 'up')} disabled={isFirstSession} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed rounded hover:bg-gray-100"><IconUp /></button>
-                                                                            <button onClick={() => moveSession(activeCourseId, activeUnit.id, phase.id, session.id, 'down')} disabled={isLastSession} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed rounded hover:bg-gray-100"><IconDown /></button>
-                                                                            <button onClick={() => deleteSession(activeCourseId, activeUnit.id, phase.id, session.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar sessió">
+                                                                            <button onClick={() => moveSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'up')} disabled={isFirstSession} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed rounded hover:bg-gray-100"><IconUp /></button>
+                                                                            <button onClick={() => moveSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'down')} disabled={isLastSession} className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed rounded hover:bg-gray-100"><IconDown /></button>
+                                                                            <button onClick={() => deleteSession(activeCourse.id, activeUnit.id, phase.id, session.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar sessió">
                                                                                 <IconTrash />
                                                                             </button>
                                                                         </div>
@@ -1038,7 +1151,7 @@
                                                             <tr className="bg-gray-50/50">
                                                                 <td colSpan="6" className="p-2 text-center">
                                                                     <button 
-                                                                        onClick={() => addSession(activeCourseId, activeUnit.id, phase.id)}
+                                                                        onClick={() => addSession(activeCourse.id, activeUnit.id, phase.id)}
                                                                         className="inline-flex items-center px-3 py-1 text-sm text-gray-500 hover:text-orange-600 hover:bg-orange-100 rounded-full transition-colors font-medium"
                                                                     >
                                                                         <IconPlus /> <span className="ml-1">Afegir sessió a "{phase.name}"</span>
@@ -1072,6 +1185,7 @@
                                 
                                 <div className="border border-gray-300 rounded-lg overflow-hidden flex flex-col mb-5">
                                     <div className="overflow-y-auto max-h-72 bg-gray-50">
+                                        {/* REQ 6: Els thead (capçaleres) estan ara DINS la mateixa taula, garantint alineació perfecta al mil·límetre */}
                                         <table className="w-full border-collapse table-fixed">
                                             <thead className="bg-gray-100 border-b border-gray-300 shadow-sm sticky top-0 z-10">
                                                 <tr>
@@ -1088,8 +1202,8 @@
                                                             <td key={cIndex} className={`p-1 align-top border-r border-gray-200 last:border-r-0 ${cIndex === 0 ? 'w-[10%]' : cIndex === 1 ? 'w-[40%]' : 'w-[25%]'}`}>
                                                                 <textarea
                                                                     className="w-full text-sm p-1.5 outline-none resize-none bg-transparent focus:bg-orange-50 focus:ring-1 focus:ring-orange-300 rounded overflow-hidden"
-                                                                    rows={Math.max(1, (cell || '').split('\n').length)}
-                                                                    value={cell || ''}
+                                                                    rows={Math.max(1, cell.split('\n').length)}
+                                                                    value={cell}
                                                                     onChange={e => {
                                                                         const newRows = [...pasteRows];
                                                                         newRows[rIndex][cIndex] = e.target.value;
@@ -1116,14 +1230,14 @@
                                     <label className="text-sm font-semibold text-gray-700">Afegir a la fase:</label>
                                     <select value={pastePhaseId} onChange={e=>setPastePhaseId(e.target.value)} className="border border-gray-300 rounded p-1.5 text-sm bg-white focus:ring-orange-500 w-full sm:w-auto">
                                         <option value="">-- Selecciona la fase de destí --</option>
-                                        {activeUnit?.phases?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                        {activeUnit?.phases.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="mt-6 flex justify-end space-x-3">
                                     <button onClick={() => setShowPasteModal(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel·lar</button>
                                     <button 
                                         onClick={handlePasteSubmit} 
-                                        disabled={!pastePhaseId || pasteRows.every(r => r.every(c => !c || !c.trim()))} 
+                                        disabled={!pastePhaseId || pasteRows.every(r => r.every(c => !c.trim()))} 
                                         className="px-5 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                                     >
                                         Afegir dades
@@ -1145,6 +1259,15 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+    </script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Si s'ha obert des de l'Agenda mitjançant un script de finestres vinculades, enviem avís de retorn
+        // Com que la gestió de dades ja l'hem integrat a l'estat de React, aquí només deixem aquest passadís actiu.
+        if (window.opener) {
+            window.opener.postMessage({ action: 'PROGRAMACIO_READY' }, "*");
+        }
+    });
     </script>
 </body>
 </html>
