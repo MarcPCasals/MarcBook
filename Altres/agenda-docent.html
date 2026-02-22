@@ -707,6 +707,7 @@
         const TaskListInput = ({ tasks, onChange, disabled, onAction, theme }) => {
             const [focusedIndex, setFocusedIndex] = useState(null);
             const [draggedIdx, setDraggedIdx] = useState(null);
+            const blurTimeoutRef = useRef(null);
 
             const updateTask = (idx, field, value) => {
                 const newTasks = [...tasks];
@@ -749,13 +750,6 @@
                 setDraggedIdx(null);
             };
 
-            const adjustTime = (idx, amount) => {
-                const currentVal = parseInt(tasks[idx].time) || 0;
-                let newVal = currentVal + amount;
-                if (newVal < 0) newVal = 0;
-                updateTask(idx, 'time', newVal);
-            };
-
             const getInputClass = (status) => {
                 if (status === 'skipped') return "task-skipped";
                 if (status === 'unfinished') return "task-unfinished";
@@ -781,73 +775,78 @@
                                 </div>
 
                                 <span className={`text-${theme}-400 font-bold mt-1`}>•</span>
-                                {task.tag === 'skipped' && <span className="text-red-500 text-[10px] mr-1" title="No feta">🔴</span>}
-                                {task.tag === 'unfinished' && <span className="text-red-600 text-[10px] mr-1" title="Inacabada">⚠️</span>}
+                            {task.tag === 'skipped' && <span className="text-red-500 text-[10px] mr-1" title="No feta">🔴</span>}
+                            {task.tag === 'unfinished' && <span className="text-red-600 text-[10px] mr-1" title="Inacabada">⚠️</span>}
 
-                                <div className="flex-shrink-0 min-w-[20px] text-right">
-                                    {task.time ? <span className="text-xs font-bold time-red">{task.time}'</span> : <span className="text-xs text-gray-200">-</span>}
-                                </div>
+                            <div className="flex-shrink-0 flex items-center justify-end w-[35px] relative">
                                 <input 
                                     type="text" 
-                                    className={`flex-1 bg-transparent hover:bg-gray-50 focus:bg-white rounded px-1 focus:ring-1 focus:ring-${theme}-200 focus:outline-none text-sm py-0.5 transition-colors ${getInputClass(task.status)}`}
-                                    placeholder={disabled ? "" : "Activitat..."}
-                                    value={task.text}
-                                    onChange={(e) => updateTask(idx, 'text', e.target.value)}
-                                    onFocus={() => { setFocusedIndex(idx); }}
-                                    onBlur={() => { setTimeout(() => setFocusedIndex(null), 200); }}
+                                    className="w-full bg-transparent hover:bg-gray-50 focus:bg-white rounded pl-1 pr-2 focus:ring-1 focus:ring-red-200 focus:outline-none text-xs font-bold time-red text-right placeholder-gray-300"
+                                    placeholder="-"
+                                    value={task.time}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '');
+                                        updateTask(idx, 'time', val);
+                                    }}
+                                    onFocus={() => { 
+                                        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+                                        setFocusedIndex(idx); 
+                                    }}
+                                    onBlur={() => { 
+                                        blurTimeoutRef.current = setTimeout(() => setFocusedIndex(null), 200); 
+                                    }}
                                     disabled={disabled}
                                 />
+                                <span className="text-xs font-bold time-red absolute right-0 pointer-events-none">'</span>
                             </div>
-                            
-                            {focusedIndex === idx && task.text.trim() !== '' && !disabled && (
-                                <div className="w-full flex justify-center mt-1 expand-open" onMouseDown={(e) => e.preventDefault()}>
-                                    <div className="flex gap-2 bg-white border border-gray-200 shadow-sm rounded-full px-2 py-0.5" onMouseDown={(e) => e.preventDefault()}>
-                                        <button 
-                                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); deleteTask(idx); }}
-                                            className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
-                                            title="Esborrar"
-                                        >
-                                            <Icons.Trash size={12}/> Esborrar
-                                        </button>
-
-                                        <button 
-                                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAction(task, 'save'); }}
-                                            className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded hover:bg-yellow-100 transition-colors"
-                                            title="Guardar al Radar"
-                                        >
-                                            <Icons.Save size={12}/> Guardar
-                                        </button>
-                                        
-                                        <button 
-                                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAction(task, 'alert_menu'); }}
-                                            className="flex items-center gap-1 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded hover:bg-orange-100 transition-colors"
-                                            title="Aplaçar / No feta"
-                                        >
-                                            <Icons.AlertTriangle size={12}/> Aplaçar
-                                        </button>
-                                        
-                                        <div className="flex items-center bg-red-50 text-red-700 border border-red-200 rounded overflow-hidden">
-                                            <button 
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); adjustTime(idx, -5); }}
-                                                className="px-2 py-0.5 hover:bg-red-100 border-r border-red-200 transition-colors font-bold text-[10px]"
-                                                title="Restar 5 minuts"
-                                            >
-                                                -
-                                            </button>
-                                            <span className="px-1 text-[10px] font-bold">5'</span>
-                                            <button 
-                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); adjustTime(idx, 5); }}
-                                                className="px-2 py-0.5 hover:bg-red-100 border-l border-red-200 transition-colors font-bold text-[10px]"
-                                                title="Afegir 5 minuts"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                            <input 
+                                type="text" 
+                                className={`flex-1 bg-transparent hover:bg-gray-50 focus:bg-white rounded px-1 focus:ring-1 focus:ring-${theme}-200 focus:outline-none text-sm py-0.5 transition-colors ${getInputClass(task.status)}`}
+                                placeholder={disabled ? "" : "Activitat..."}
+                                value={task.text}
+                                onChange={(e) => updateTask(idx, 'text', e.target.value)}
+                                onFocus={() => { 
+                                    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+                                    setFocusedIndex(idx); 
+                                }}
+                                onBlur={() => { 
+                                    blurTimeoutRef.current = setTimeout(() => setFocusedIndex(null), 200); 
+                                }}
+                                disabled={disabled}
+                            />
                         </div>
-                    ))}
+                        
+                        {focusedIndex === idx && task.text.trim() !== '' && !disabled && (
+                            <div className="w-full flex justify-center mt-1 expand-open" onMouseDown={(e) => e.preventDefault()}>
+                                <div className="flex gap-2 bg-white border border-gray-200 shadow-sm rounded-full px-2 py-0.5" onMouseDown={(e) => e.preventDefault()}>
+                                    <button 
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); deleteTask(idx); }}
+                                        className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
+                                        title="Esborrar"
+                                    >
+                                        <Icons.Trash size={12}/> Esborrar
+                                    </button>
+
+                                    <button 
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAction(task, 'save'); }}
+                                        className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded hover:bg-yellow-100 transition-colors"
+                                        title="Guardar al Radar"
+                                    >
+                                        <Icons.Save size={12}/> Guardar
+                                    </button>
+                                    
+                                    <button 
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAction(task, 'alert_menu'); }}
+                                        className="flex items-center gap-1 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded hover:bg-orange-100 transition-colors"
+                                        title="Aplaçar / No feta"
+                                    >
+                                        <Icons.AlertTriangle size={12}/> Aplaçar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
                 </div>
             );
         };
