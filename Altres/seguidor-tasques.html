@@ -63,16 +63,26 @@
         const AlertTriangle = (p) => <Icon {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>;
         const Layers = (p) => <Icon {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Icon>;
         const Settings = (p) => <Icon {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
+        const Triangle = (p) => <Icon {...p}><polygon points="12 2 22 20 2 20"/></Icon>;
 
         // --- Config inicial ---
         const STATUS_TYPES = {
             EMPTY: { value: null, color: 'text-slate-200 hover:text-slate-400', bg: 'bg-transparent', icon: null, label: 'Buit' },
             DONE: { value: 1, color: 'text-emerald-500', bg: 'bg-emerald-100', icon: 'check', label: 'Fet' },
             MISSING: { value: 0, color: 'text-rose-500', bg: 'bg-rose-100', icon: 'x', label: 'No fet' },
-            LATE: { value: 0.5, color: 'text-amber-500', bg: 'bg-amber-100', icon: 'clock', label: 'Mig fet / Tard' }
+            LATE: { value: 0.5, color: 'text-amber-500', bg: 'bg-amber-100', icon: 'clock', label: 'Mig fet / Tard' },
+            EXEMPT: { value: null, color: 'text-slate-400', bg: 'bg-slate-100', icon: 'triangle', label: 'No avaluable' }
         };
 
         const MAX_PENALTIES = 3;
+
+        const isAlertTriggered = (red, black) => {
+            if (black >= 3) return true;
+            if (red >= 3) return true;
+            if (red >= 2 && black >= 1) return true;
+            if (black >= 2 && red >= 2) return true; 
+            return false;
+        };
 
         // Estructura UTs per defecte (IDs fixos per facilitar la còpia)
         const DEFAULT_UTS = [
@@ -105,7 +115,7 @@
             const [classes, setClasses] = useState([{ id: 'default', name: 'Classe Principal' }]);
             const [activeClassId, setActiveClassId] = useState('default');
             const [allData, setAllData] = useState({ 
-                'default': { students: [], tasks: [], records: {}, penalties: {}, uts: DEFAULT_UTS } 
+                'default': { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: DEFAULT_UTS } 
             });
 
             // --- Estat UI Local ---
@@ -122,6 +132,10 @@
             const [editingTaskDate, setEditingTaskDate] = useState(null); 
             const [selectedStudent, setSelectedStudent] = useState(null); 
             const [penaltyAlert, setPenaltyAlert] = useState(null);
+            
+            const [isAddingIncident, setIsAddingIncident] = useState(null); // student Object
+            const [incidentText, setIncidentText] = useState("");
+            const [incidentDate, setIncidentDate] = useState("");
 
             // Form States
             const [newTaskName, setNewTaskName] = useState("");
@@ -135,9 +149,10 @@
             const [editUtName, setEditUtName] = useState(""); 
 
             // --- Derivats ---
-            const currentData = allData[activeClassId] || { students: [], tasks: [], records: {}, penalties: {}, uts: [] };
+            const currentData = allData[activeClassId] || { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: [] };
             const students = currentData.students || [];
             const uts = currentData.uts || DEFAULT_UTS;
+            const incidents = currentData.incidents || {};
             
             // FILTRE DE TASQUES
             const visibleTasks = useMemo(() => {
@@ -190,8 +205,6 @@
                 const classUts = allData[activeClassId]?.uts;
                 if (classUts && classUts.length > 0) {
                     if (!classUts.find(u => u.id === activeUtId)) {
-                        // Si la UT activa no existeix en la nova classe (poc probable amb IDs fixos, però per si de cas)
-                        // intentem anar a la mateixa ID (per mantenir context), si no a la primera.
                         const sameIdUt = classUts.find(u => u.id === activeUtId);
                         setActiveUtId(sameIdUt ? sameIdUt.id : classUts[0].id);
                     }
@@ -217,9 +230,8 @@
                             setClasses(parsed.classes);
                             const migratedData = { ...parsed.data };
                             Object.keys(migratedData).forEach(clsId => {
-                                if (!migratedData[clsId].uts) {
-                                    migratedData[clsId].uts = DEFAULT_UTS;
-                                }
+                                if (!migratedData[clsId].uts) migratedData[clsId].uts = DEFAULT_UTS;
+                                if (!migratedData[clsId].incidents) migratedData[clsId].incidents = {};
                                 migratedData[clsId].tasks = migratedData[clsId].tasks.map(t => ({
                                     ...t,
                                     utId: t.utId || 'default'
@@ -237,6 +249,7 @@
                             tasks: [{ id: 't1', title: 'Tasca Inicial', date: new Date().toISOString(), utId: 'ut1' }],
                             records: {},
                             penalties: {},
+                            incidents: {},
                             uts: DEFAULT_UTS
                         }
                     };
@@ -257,7 +270,7 @@
             const updateClassData = (classId, updater) => {
                 setAllData(prev => ({
                     ...prev,
-                    [classId]: updater(prev[classId] || { students: [], tasks: [], records: {}, penalties: {}, uts: [] })
+                    [classId]: updater(prev[classId] || { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: [] })
                 }));
             };
 
@@ -270,6 +283,7 @@
                     const newRecords = { ...d.records };
                     const newPenalties = { ...(d.penalties || {}) };
                     const currentPenalty = newPenalties[studentId] || 0;
+                    const studentBlackPoints = d.incidents?.[studentId]?.length || 0;
 
                     if (nextStatus === 'EMPTY') delete newRecords[key];
                     else newRecords[key] = nextStatus;
@@ -280,11 +294,13 @@
 
                     newPenalties[studentId] = nextPenalty;
 
-                    if (nextPenalty >= MAX_PENALTIES) {
+                    // Evaluate alert condition ONLY if red points went up
+                    if (nextPenalty > currentPenalty && isAlertTriggered(nextPenalty, studentBlackPoints)) {
                         setTimeout(() => setPenaltyAlert({ 
                             studentId, 
                             name: d.students.find(s=>s.id===studentId)?.name,
-                            missingTasks: d.tasks.filter(t => newRecords[`${studentId}_${t.id}`] === 'MISSING')
+                            missingTasks: d.tasks.filter(t => newRecords[`${studentId}_${t.id}`] === 'MISSING'),
+                            incidents: d.incidents?.[studentId] || []
                         }), 0);
                     }
 
@@ -292,8 +308,45 @@
                 });
             };
 
+            const handleSaveIncident = () => {
+                if (!incidentText.trim()) return;
+                const studentId = isAddingIncident.id;
+                
+                updateClassData(activeClassId, d => {
+                    const newIncidentsMap = { ...(d.incidents || {}) };
+                    const studentIncList = [...(newIncidentsMap[studentId] || [])];
+                    studentIncList.push({
+                        id: Date.now().toString(),
+                        text: incidentText,
+                        date: incidentDate
+                    });
+                    newIncidentsMap[studentId] = studentIncList;
+
+                    const red = d.penalties?.[studentId] || 0;
+                    const black = studentIncList.length;
+
+                    if (isAlertTriggered(red, black)) {
+                        setTimeout(() => setPenaltyAlert({
+                            studentId,
+                            name: isAddingIncident.name,
+                            missingTasks: d.tasks.filter(t => (d.records || {})[`${studentId}_${t.id}`] === 'MISSING'),
+                            incidents: studentIncList
+                        }), 0);
+                    }
+
+                    return { ...d, incidents: newIncidentsMap };
+                });
+                
+                setIsAddingIncident(null);
+                setIncidentText("");
+            };
+
             const resetPenalties = (studentId) => {
-                updateClassData(activeClassId, d => ({ ...d, penalties: { ...d.penalties, [studentId]: 0 } }));
+                updateClassData(activeClassId, d => ({ 
+                    ...d, 
+                    penalties: { ...d.penalties, [studentId]: 0 },
+                    incidents: { ...d.incidents, [studentId]: [] }
+                }));
                 setPenaltyAlert(null);
             };
 
@@ -318,13 +371,15 @@
                 let missingCount = 0;
 
                 taskList.forEach(task => {
-                    const statusKey = records[`${studentId}_${task.id}`];
-                    maxPoints += 1; 
-                    if (statusKey && STATUS_TYPES[statusKey]) {
-                        totalPoints += STATUS_TYPES[statusKey].value || 0;
-                        if (STATUS_TYPES[statusKey].value === 1) completedCount++;
-                        if (statusKey === 'LATE') lateCount++;
-                        if (statusKey === 'MISSING') missingCount++;
+                    const statusKey = records[`${studentId}_${task.id}`] || 'EMPTY';
+                    if (statusKey !== 'EXEMPT') {
+                        maxPoints += 1; 
+                        if (statusKey && STATUS_TYPES[statusKey] && STATUS_TYPES[statusKey].value !== null) {
+                            totalPoints += STATUS_TYPES[statusKey].value;
+                            if (STATUS_TYPES[statusKey].value === 1) completedCount++;
+                            if (statusKey === 'LATE') lateCount++;
+                            if (statusKey === 'MISSING') missingCount++;
+                        }
                     }
                 });
 
@@ -346,7 +401,7 @@
                 setClasses([...classes, { id: newId, name: newClassName }]);
                 setAllData(prev => ({ 
                     ...prev, 
-                    [newId]: { students: [], tasks: [], records: {}, penalties: {}, uts: DEFAULT_UTS } 
+                    [newId]: { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: DEFAULT_UTS } 
                 }));
                 setActiveClassId(newId);
                 setNewClassName("");
@@ -392,10 +447,6 @@
                 Object.entries(copyToClasses).forEach(([classId, config]) => {
                     if (config.checked) {
                         const targetClassData = allData[classId];
-                        
-                        // LÒGICA DE CÒPIA INTEL·LIGENT DE PESTANYES
-                        // Intentem trobar una UT amb la mateixa ID que l'activa (ex: 'ut3')
-                        // Si no existeix, anem a General ('default')
                         const targetUtId = targetClassData?.uts?.find(u => u.id === activeUtId)?.id || 'default';
                         
                         const classTask = { id: taskIdBase, title: newTaskName, date: config.date, utId: targetUtId };
@@ -413,6 +464,34 @@
             const deleteStudent = (id) => { if(confirm("Segur que vols eliminar aquest alumne?")) { updateClassData(activeClassId, d => ({ ...d, students: d.students.filter(s => s.id !== id) })); if (selectedStudent?.id === id) setSelectedStudent(null); } };
             const deleteTask = (id) => { if(confirm("Segur que vols eliminar aquesta tasca?")) { updateClassData(activeClassId, d => ({ ...d, tasks: d.tasks.filter(t => t.id !== id) })); } };
             const markTaskForAll = (taskId, status) => { if(!confirm(`Vols marcar "${STATUS_TYPES[status].label}" per a tots els alumnes?`)) return; updateClassData(activeClassId, d => { const newRecords = { ...d.records }; d.students.forEach(s => { newRecords[`${s.id}_${taskId}`] = status; }); return { ...d, records: newRecords }; }); };
+            
+            const toggleTaskForAll = (taskId) => {
+                updateClassData(activeClassId, d => {
+                    const newRecords = { ...d.records };
+                    const newPenalties = { ...(d.penalties || {}) };
+                    const allDone = d.students.length > 0 && d.students.every(s => newRecords[`${s.id}_${taskId}`] === 'DONE');
+                    
+                    d.students.forEach(s => {
+                        const key = `${s.id}_${taskId}`;
+                        const currentStatus = newRecords[key];
+                        const nextStatus = allDone ? 'EMPTY' : 'DONE';
+                        
+                        if (nextStatus === 'EMPTY') {
+                            delete newRecords[key];
+                        } else {
+                            newRecords[key] = nextStatus;
+                        }
+
+                        // Ajustar els punts vermells si sobreescrivim un alumne que ho tenia "No fet"
+                        if (currentStatus === 'MISSING' && nextStatus !== 'MISSING') {
+                            newPenalties[s.id] = Math.max(0, (newPenalties[s.id] || 0) - 1);
+                        }
+                    });
+
+                    return { ...d, records: newRecords, penalties: newPenalties };
+                });
+            };
+
             const handleExport = () => { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ version: 5, classes, currentId: activeClassId, data: allData })); const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", `seguidor_tasques_${new Date().toLocaleDateString()}.json`); document.body.appendChild(a); a.click(); a.remove(); };
             const handleImport = (e) => { const fr = new FileReader(); fr.readAsText(e.target.files[0], "UTF-8"); fr.onload = ev => { const parsed = JSON.parse(ev.target.result); if(confirm("Substituir totes les dades?")) { if (parsed.version >= 2) { setClasses(parsed.classes); setAllData(parsed.data); setActiveClassId(parsed.currentId); } } }; };
 
@@ -478,12 +557,11 @@
                                 </div>
                             </div>
 
-                            {/* Secondary Bar: UT Tabs - MODIFIED: Settings Icon */}
+                            {/* Secondary Bar: UT Tabs */}
                             <div className="px-4 pb-0 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 bg-slate-50/50">
                                 <div className="flex items-center gap-1 overflow-x-auto hide-scroll pt-1 pb-0 flex-1">
                                     <span className="text-xs font-bold text-slate-400 uppercase mr-2 tracking-wider flex items-center gap-1"><Layers size={12}/> Unitats:</span>
                                     
-                                    {/* Render Specific UTs First */}
                                     {uts.filter(u => u.id !== 'default').map(ut => (
                                         <div key={ut.id} className="relative group shrink-0 flex items-center border-b-2 transition-all border-transparent hover:border-slate-300">
                                             <button 
@@ -494,7 +572,6 @@
                                                 {ut.name}
                                             </button>
                                             
-                                            {/* Config Icon inside tab */}
                                             {activeUtId === ut.id && (
                                                 <div className="relative ml-2" style={{ marginBottom: '-2px' }}>
                                                     <span 
@@ -504,21 +581,10 @@
                                                         <Settings size={12} />
                                                     </span>
                                                     
-                                                    {/* Dropdown Menu */}
                                                     {utMenuOpen === ut.id && (
                                                         <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 flex flex-col min-w-[120px] overflow-hidden">
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); setEditUtName(ut.name); setIsEditingUt(true); setUtMenuOpen(null); }}
-                                                                className="px-3 py-2 text-left text-xs hover:bg-slate-50 flex items-center gap-2 text-slate-600"
-                                                            >
-                                                                <Edit2 size={12} /> Canviar nom
-                                                            </button>
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleDeleteUt(ut.id); setUtMenuOpen(null); }}
-                                                                className="px-3 py-2 text-left text-xs hover:bg-rose-50 flex items-center gap-2 text-rose-500"
-                                                            >
-                                                                <Trash2 size={12} /> Eliminar
-                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); setEditUtName(ut.name); setIsEditingUt(true); setUtMenuOpen(null); }} className="px-3 py-2 text-left text-xs hover:bg-slate-50 flex items-center gap-2 text-slate-600"><Edit2 size={12} /> Canviar nom</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteUt(ut.id); setUtMenuOpen(null); }} className="px-3 py-2 text-left text-xs hover:bg-rose-50 flex items-center gap-2 text-rose-500"><Trash2 size={12} /> Eliminar</button>
                                                         </div>
                                                     )}
                                                 </div>
@@ -530,16 +596,11 @@
                                         <Plus size={16} />
                                     </button>
 
-                                    {/* Spacer to push General to right */}
                                     <div className="flex-1"></div>
 
-                                    {/* Render General Fixed Right */}
                                     {uts.filter(u => u.id === 'default').map(ut => (
                                         <div key={ut.id} className="relative group shrink-0">
-                                            <button 
-                                                onClick={() => setActiveUtId(ut.id)}
-                                                className={`px-4 py-2 text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeUtId === ut.id ? 'border-indigo-500 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/30'}`}
-                                            >
+                                            <button onClick={() => setActiveUtId(ut.id)} className={`px-4 py-2 text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeUtId === ut.id ? 'border-indigo-500 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/30'}`}>
                                                 {ut.name}
                                             </button>
                                         </div>
@@ -561,24 +622,19 @@
                             <div className="overflow-auto custom-scroll flex-1 relative">
                                 <table className="w-full border-collapse">
                                     <thead className="bg-slate-50 sticky top-0 z-20 shadow-sm">
-                                        {/* Row for UT Groups (Only in General view) */}
                                         {activeUtId === 'default' && visibleTasks.length > 0 && (
                                             <tr>
-                                                <th className="sticky left-0 z-30 bg-slate-50 border-r border-slate-200"></th> {/* Spacer Student */}
+                                                <th className="sticky left-0 z-30 bg-slate-50 border-r border-slate-200"></th>
                                                 {groupedUtHeaders.map((header, idx) => (
-                                                    <th 
-                                                        key={idx} 
-                                                        colSpan={header.count} 
-                                                        className="p-1 text-[10px] font-bold text-indigo-400 uppercase tracking-wider border-b border-r border-slate-200 bg-indigo-50/30 text-center"
-                                                    >
+                                                    <th key={idx} colSpan={header.count} className="p-1 text-[10px] font-bold text-indigo-400 uppercase tracking-wider border-b border-r border-slate-200 bg-indigo-50/30 text-center">
                                                         {uts.find(u => u.id === header.id)?.name || 'General'}
                                                     </th>
                                                 ))}
-                                                <th className="bg-slate-50"></th> {/* Spacer End */}
+                                                <th className="bg-slate-50"></th>
                                             </tr>
                                         )}
                                         <tr>
-                                            <th className="sticky left-0 z-30 bg-slate-50 p-4 text-left min-w-[200px] border-b border-r border-slate-200 w-64">
+                                            <th className="sticky left-0 z-30 bg-slate-50 p-4 text-left min-w-[220px] border-b border-r border-slate-200 w-72">
                                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Alumne</span>
                                             </th>
                                             {visibleTasks.length === 0 ? (
@@ -586,21 +642,31 @@
                                                     Cap tasca visible a {uts.find(u=>u.id===activeUtId)?.name}.
                                                 </th>
                                             ) : (
-                                                visibleTasks.map((task, idx) => (
+                                                visibleTasks.map((task, idx) => {
+                                                    const allDone = students.length > 0 && students.every(s => records[`${s.id}_${task.id}`] === 'DONE');
+                                                    return (
                                                     <th key={task.id} className={`min-w-[140px] p-2 border-b border-slate-200 group relative text-center ${idx % 2 !== 0 ? 'bg-slate-50' : 'bg-white'}`}>
                                                         <div className="flex flex-col items-center justify-center">
-                                                            <span className="font-semibold text-slate-700 text-sm mb-1 truncate max-w-[120px]" title={task.title}>{task.title}</span>
+                                                            <div className="flex items-center justify-center gap-1.5 mb-1">
+                                                                <span className="font-semibold text-slate-700 text-sm truncate max-w-[100px]" title={task.title}>{task.title}</span>
+                                                                <button 
+                                                                    onClick={() => toggleTaskForAll(task.id)} 
+                                                                    className={`p-0.5 rounded-full transition-colors ${allDone ? 'text-emerald-600 bg-emerald-100' : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
+                                                                    title={allDone ? "Desmarcar tots" : "Marcar tots com a fets"}
+                                                                >
+                                                                    <CheckCircle size={14} />
+                                                                </button>
+                                                            </div>
                                                             <button onClick={() => setEditingTaskDate({ id: task.id, date: task.date })} className="text-[10px] text-slate-500 font-mono flex items-center gap-1 hover:bg-slate-100 px-1 rounded transition-colors">
                                                                 <Calendar size={10} />
                                                                 {new Date(task.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
                                                             </button>
                                                             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white/90 backdrop-blur rounded shadow-sm border border-slate-100 p-0.5">
-                                                                <button onClick={() => markTaskForAll(task.id, 'DONE')} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded"><CheckCircle size={12}/></button>
                                                                 <button onClick={() => deleteTask(task.id)} className="p-1 text-rose-400 hover:bg-rose-50 rounded"><Trash2 size={12}/></button>
                                                             </div>
                                                         </div>
                                                     </th>
-                                                ))
+                                                )})
                                             )}
                                             <th className="min-w-[50px] border-b border-slate-200 p-2 bg-slate-50"></th> 
                                         </tr>
@@ -609,16 +675,29 @@
                                         {students.map((student, idx) => {
                                             const stats = getStudentStats(student.id, visibleTasks);
                                             const penaltyCount = penalties[student.id] || 0;
+                                            const studentIncidents = incidents[student.id] || [];
                                             const rowClass = idx % 2 === 0 ? 'row-even' : 'row-odd';
 
                                             return (
                                                 <tr key={student.id} className={`${rowClass} hover:bg-slate-50 group`}>
                                                     <td className={`sticky left-0 ${rowClass} group-hover:bg-slate-50 p-3 border-b border-r border-slate-200 transition-colors z-10`}>
                                                         <div className="flex items-center justify-between mb-2">
-                                                            <button onClick={() => setSelectedStudent(student)} className="font-medium text-slate-700 hover:text-indigo-600 hover:underline text-left text-sm flex items-center gap-2">
-                                                                {student.name}
-                                                                {penaltyCount > 0 && <div className="flex -space-x-1">{[...Array(penaltyCount)].map((_, i) => <span key={i} className="w-2 h-2 rounded-full bg-rose-500 ring-1 ring-white"></span>)}</div>}
-                                                            </button>
+                                                            <div className="flex items-center gap-1">
+                                                                <button onClick={() => setSelectedStudent(student)} className="font-medium text-slate-700 hover:text-indigo-600 hover:underline text-left text-sm flex items-center gap-1.5">
+                                                                    {student.name}
+                                                                    <div className="flex gap-2">
+                                                                        {penaltyCount > 0 && <div className="flex -space-x-1" title="Tasques no entregades">{[...Array(penaltyCount)].map((_, i) => <span key={`r${i}`} className="w-2 h-2 rounded-full bg-rose-500 ring-1 ring-white"></span>)}</div>}
+                                                                        {studentIncidents.length > 0 && <div className="flex -space-x-1" title="Incidents de comportament">{[...Array(studentIncidents.length)].map((_, i) => <span key={`b${i}`} className="w-2 h-2 rounded-full bg-slate-800 ring-1 ring-white"></span>)}</div>}
+                                                                    </div>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); setIsAddingIncident(student); setIncidentDate(new Date().toISOString().split('T')[0]); }} 
+                                                                    className={`p-0.5 ml-1 rounded transition-colors ${studentIncidents.length > 0 ? 'text-rose-500 hover:bg-rose-50' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'}`} 
+                                                                    title="Afegir incident de comportament"
+                                                                >
+                                                                    <AlertTriangle size={14} />
+                                                                </button>
+                                                            </div>
                                                             <div className="text-base">{getMedal(stats.percentage)}</div>
                                                         </div>
                                                         <div className="flex items-center gap-2">
@@ -631,10 +710,11 @@
                                                         const colClass = tIdx % 2 !== 0 ? 'col-highlight' : '';
                                                         return (
                                                             <td key={task.id} className={`p-2 border-b border-slate-100 text-center align-middle ${colClass}`}>
-                                                                <div className="flex items-center justify-center gap-1.5">
-                                                                    <button onClick={() => toggleStatus(student.id, task.id, 'DONE')} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${statusKey === 'DONE' ? 'bg-emerald-100 text-emerald-600 ring-2 ring-emerald-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-emerald-300 hover:text-emerald-400 shadow-sm'}`}><CheckCircle size={16} /></button>
-                                                                    <button onClick={() => toggleStatus(student.id, task.id, 'LATE')} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${statusKey === 'LATE' ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-amber-300 hover:text-amber-400 shadow-sm'}`}><Clock size={16} /></button>
-                                                                    <button onClick={() => toggleStatus(student.id, task.id, 'MISSING')} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${statusKey === 'MISSING' ? 'bg-rose-100 text-rose-600 ring-2 ring-rose-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-rose-300 hover:text-rose-400 shadow-sm'}`}><XCircle size={16} /></button>
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    <button onClick={() => toggleStatus(student.id, task.id, 'DONE')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'DONE' ? 'bg-emerald-100 text-emerald-600 ring-2 ring-emerald-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-emerald-300 hover:text-emerald-400 shadow-sm'}`} title="Fet"><CheckCircle size={14} /></button>
+                                                                    <button onClick={() => toggleStatus(student.id, task.id, 'LATE')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'LATE' ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-amber-300 hover:text-amber-400 shadow-sm'}`} title="Mig / Tard"><Clock size={14} /></button>
+                                                                    <button onClick={() => toggleStatus(student.id, task.id, 'MISSING')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'MISSING' ? 'bg-rose-100 text-rose-600 ring-2 ring-rose-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-rose-300 hover:text-rose-400 shadow-sm'}`} title="No fet"><XCircle size={14} /></button>
+                                                                    <button onClick={() => toggleStatus(student.id, task.id, 'EXEMPT')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'EXEMPT' ? 'bg-slate-200 text-slate-600 ring-2 ring-slate-400 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-slate-300 hover:text-slate-400 shadow-sm'}`} title="No avaluable / No cal fer-la"><Triangle size={14} /></button>
                                                                 </div>
                                                             </td>
                                                         );
@@ -654,32 +734,146 @@
                     </main>
 
                     {/* Modals */}
-                    {penaltyAlert && <Modal title="🚨 Atenció: Acumulació de No Fets" onClose={() => {}} variant="danger"><div className="text-center"><div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><AlertTriangle size={32} /></div><h4 className="text-lg font-bold text-slate-800 mb-2">{penaltyAlert.name} ha acumulat 3 negatius!</h4><p className="text-slate-600 text-sm mb-4">Nota a l'agenda necessària. Tasques pendents:</p><ul className="bg-white border border-rose-200 rounded-lg p-4 text-left mb-6 space-y-2">{penaltyAlert.missingTasks.map(t => <li key={t.id} className="flex items-center gap-2 text-rose-700 font-medium text-sm"><XCircle size={14} /> {t.title} ({new Date(t.date).toLocaleDateString()})</li>)}</ul><button onClick={() => resetPenalties(penaltyAlert.studentId)} className="w-full bg-rose-600 text-white py-3 rounded-xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all">Entesos (Reiniciar punts)</button></div></Modal>}
+                    {isAddingIncident && (
+                        <Modal title={`Incident: ${isAddingIncident.name}`} onClose={() => setIsAddingIncident(null)}>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Motiu de l'incident (Comportament)</label>
+                                    <textarea autoFocus className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm" placeholder="Descripció breu..." value={incidentText} onChange={e => setIncidentText(e.target.value)}></textarea>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Data</label>
+                                    <input type="date" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" value={incidentDate} onChange={e => setIncidentDate(e.target.value)} />
+                                </div>
+                                <button onClick={handleSaveIncident} className="w-full bg-slate-800 text-white py-3 rounded-lg font-bold hover:bg-slate-900 transition-colors">Registrar Incident (Punt Negre)</button>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {penaltyAlert && (
+                        <Modal title="🚨 Atenció: Avís d'Agenda" onClose={() => setPenaltyAlert(null)} variant="danger">
+                            <div className="text-center">
+                                <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><AlertTriangle size={32} /></div>
+                                <h4 className="text-lg font-bold text-slate-800 mb-2">{penaltyAlert.name} requereix nota a l'agenda!</h4>
+                                <p className="text-slate-600 text-sm mb-4">Acumulació de negatius (tasques o comportament):</p>
+                                
+                                {penaltyAlert.missingTasks.length > 0 && (
+                                    <div className="mb-4">
+                                        <h5 className="text-xs font-bold text-rose-800 uppercase text-left mb-1">Tasques no entregades ({penaltyAlert.missingTasks.length})</h5>
+                                        <ul className="bg-white border border-rose-200 rounded-lg p-3 text-left space-y-1">
+                                            {penaltyAlert.missingTasks.map(t => <li key={t.id} className="flex items-center gap-2 text-rose-700 font-medium text-sm"><XCircle size={14} /> {t.title} ({new Date(t.date).toLocaleDateString()})</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+                                
+                                {penaltyAlert.incidents.length > 0 && (
+                                    <div className="mb-6">
+                                        <h5 className="text-xs font-bold text-slate-800 uppercase text-left mb-1">Incidents comportament ({penaltyAlert.incidents.length})</h5>
+                                        <ul className="bg-white border border-slate-300 rounded-lg p-3 text-left space-y-2">
+                                            {penaltyAlert.incidents.map(inc => <li key={inc.id} className="flex items-start gap-2 text-slate-700 text-sm"><span className="mt-0.5 text-slate-800"><AlertTriangle size={14}/></span> <div><strong>{new Date(inc.date).toLocaleDateString()}</strong>: {inc.text}</div></li>)}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <div className="flex flex-col gap-2">
+                                    <button onClick={() => resetPenalties(penaltyAlert.studentId)} className="w-full bg-rose-600 text-white py-3 rounded-xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all">Posar nota i reiniciar punts</button>
+                                    <button onClick={() => setPenaltyAlert(null)} className="w-full bg-white border border-slate-300 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all">Esperar un negatiu més (Tancar)</button>
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+
                     {isEditingClass && <Modal title="Canviar nom de la classe" onClose={() => setIsEditingClass(false)}><div className="space-y-4"><input autoFocus type="text" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" value={editClassName} onChange={e => setEditClassName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRenameClass()} /><button onClick={handleRenameClass} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Guardar canvis</button></div></Modal>}
                     {isEditingUt && <Modal title="Canviar nom de la Unitat" onClose={() => setIsEditingUt(false)}><div className="space-y-4"><input autoFocus type="text" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" value={editUtName} onChange={e => setEditUtName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleRenameUt()} /><button onClick={handleRenameUt} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Guardar canvis</button></div></Modal>}
                     {editingTaskDate && <Modal title="Canviar data d'entrega" onClose={() => setEditingTaskDate(null)}><div className="space-y-4"><p className="text-sm text-slate-500">La tasca es reordenarà automàticament.</p><input type="date" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" value={editingTaskDate.date} onChange={e => setEditingTaskDate({...editingTaskDate, date: e.target.value})} /><button onClick={handleUpdateTaskDate} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Actualitzar</button></div></Modal>}
                     {isAddingClass && <Modal title="Nova Classe" onClose={() => setIsAddingClass(false)}><div className="space-y-4"><input autoFocus type="text" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Nom de la classe (ex: 3r ESO B)" value={newClassName} onChange={e => setNewClassName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddClass()} /><button onClick={handleAddClass} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Crear Classe</button></div></Modal>}
                     {isAddingUt && <Modal title="Nova Unitat Temporal" onClose={() => setIsAddingUt(false)}><div className="space-y-4"><input autoFocus type="text" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Nom (ex: 2n Trimestre...)" value={newUtName} onChange={e => setNewUtName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddUt()} /><button onClick={handleAddUt} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Crear Unitat</button></div></Modal>}
-                    {isAddingTask && <Modal title="Nova Tasca" onClose={() => setIsAddingTask(false)}><div className="space-y-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Nom de la tasca</label><input autoFocus type="text" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Ex: Exercicis Tema 1..." value={newTaskName} onChange={e => setNewTaskName(e.target.value)} /></div><div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex gap-4"><div className="flex-1"><label className="block text-xs font-bold text-orange-800 mb-1 uppercase">Classe</label><div className="text-sm font-medium">{classes.find(c=>c.id===activeClassId)?.name}</div></div><div className="flex-1"><label className="block text-xs font-bold text-orange-800 mb-1 uppercase">Unitat</label><div className="text-sm font-medium">{uts.find(u=>u.id===activeUtId)?.name}</div></div></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Data</label><input type="date" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} /></div>{classes.length > 1 && <div className="border-t border-slate-100 pt-4"><label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">Copiar també a:</label><div className="space-y-3 max-h-40 overflow-y-auto custom-scroll pr-2">{classes.filter(c => c.id !== activeClassId).map(cls => <div key={cls.id} className={`flex items-center justify-between p-2 rounded-lg border transition-colors ${copyToClasses[cls.id]?.checked ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}><label className="flex items-center gap-2 cursor-pointer select-none"><input type="checkbox" className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500" checked={copyToClasses[cls.id]?.checked || false} onChange={e => setCopyToClasses({ ...copyToClasses, [cls.id]: { ...copyToClasses[cls.id], checked: e.target.checked, date: e.target.checked ? newTaskDate : (copyToClasses[cls.id]?.date || newTaskDate) } })} /><span className="text-sm font-medium text-slate-700">{cls.name}</span></label>{copyToClasses[cls.id]?.checked && <input type="date" className="text-xs p-1.5 border border-slate-300 rounded focus:border-indigo-500 outline-none w-32" value={copyToClasses[cls.id]?.date} onChange={e => setCopyToClasses({ ...copyToClasses, [cls.id]: { ...copyToClasses[cls.id], date: e.target.value } })} />}</div>)}</div></div>}<button onClick={handleAddTask} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Crear Tasca</button></div></Modal>}
-                    {isManagingStudents && <Modal title="Gestionar Alumnes" onClose={() => setIsManagingStudents(false)}>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Enganxa llista de noms</label>
-                                <textarea className="w-full p-3 border border-slate-300 rounded-lg h-32 focus:ring-2 focus:ring-orange-500 outline-none text-sm font-mono whitespace-pre" placeholder="Joan Pérez&#10;Maria Garcia&#10;..." value={newStudentList} onChange={e => setNewStudentList(e.target.value)}></textarea>
-                                <button onClick={handleAddStudents} className="mt-2 w-full bg-orange-100 text-orange-700 py-2 rounded-lg font-medium hover:bg-orange-200 transition-colors">Afegir a la classe</button>
+                    
+                    {isAddingTask && (
+                        <Modal title="Nova Tasca" onClose={() => setIsAddingTask(false)}>
+                            <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-slate-700 mb-1">Nom de la tasca</label><input autoFocus type="text" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Ex: Exercicis Tema 1..." value={newTaskName} onChange={e => setNewTaskName(e.target.value)} /></div>
+                                <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex gap-4"><div className="flex-1"><label className="block text-xs font-bold text-orange-800 mb-1 uppercase">Classe</label><div className="text-sm font-medium">{classes.find(c=>c.id===activeClassId)?.name}</div></div><div className="flex-1"><label className="block text-xs font-bold text-orange-800 mb-1 uppercase">Unitat</label><div className="text-sm font-medium">{uts.find(u=>u.id===activeUtId)?.name}</div></div></div>
+                                <div><label className="block text-sm font-medium text-slate-700 mb-1">Data</label><input type="date" className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} /></div>
+                                {classes.length > 1 && <div className="border-t border-slate-100 pt-4"><label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">Copiar també a:</label><div className="space-y-3 max-h-40 overflow-y-auto custom-scroll pr-2">{classes.filter(c => c.id !== activeClassId).map(cls => <div key={cls.id} className={`flex items-center justify-between p-2 rounded-lg border transition-colors ${copyToClasses[cls.id]?.checked ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}><label className="flex items-center gap-2 cursor-pointer select-none"><input type="checkbox" className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500" checked={copyToClasses[cls.id]?.checked || false} onChange={e => setCopyToClasses({ ...copyToClasses, [cls.id]: { ...copyToClasses[cls.id], checked: e.target.checked, date: e.target.checked ? newTaskDate : (copyToClasses[cls.id]?.date || newTaskDate) } })} /><span className="text-sm font-medium text-slate-700">{cls.name}</span></label>{copyToClasses[cls.id]?.checked && <input type="date" className="text-xs p-1.5 border border-slate-300 rounded focus:border-indigo-500 outline-none w-32" value={copyToClasses[cls.id]?.date} onChange={e => setCopyToClasses({ ...copyToClasses, [cls.id]: { ...copyToClasses[cls.id], date: e.target.value } })} />}</div>)}</div></div>}
+                                <button onClick={handleAddTask} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700">Crear Tasca</button>
                             </div>
-                            <div className="border-t border-slate-100 pt-4">
-                                <div className="flex justify-between items-center mb-2">
-                                    <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Alumnes ({students.length})</h4>
-                                    {students.length > 0 && <button onClick={handleDeleteAllStudents} className="text-rose-500 text-xs font-bold hover:underline hover:text-rose-700">Eliminar TOTS</button>}
+                        </Modal>
+                    )}
+                    
+                    {isManagingStudents && (
+                        <Modal title="Gestionar Alumnes" onClose={() => setIsManagingStudents(false)}>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Enganxa llista de noms</label>
+                                    <textarea className="w-full p-3 border border-slate-300 rounded-lg h-32 focus:ring-2 focus:ring-orange-500 outline-none text-sm font-mono whitespace-pre" placeholder="Joan Pérez&#10;Maria Garcia&#10;..." value={newStudentList} onChange={e => setNewStudentList(e.target.value)}></textarea>
+                                    <button onClick={handleAddStudents} className="mt-2 w-full bg-orange-100 text-orange-700 py-2 rounded-lg font-medium hover:bg-orange-200 transition-colors">Afegir a la classe</button>
                                 </div>
-                                <div className="max-h-48 overflow-y-auto custom-scroll space-y-1">
-                                    {students.map(s => <div key={s.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded"><span className="text-sm text-slate-700">{s.name}</span><button onClick={() => deleteStudent(s.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={14}/></button></div>)}
+                                <div className="border-t border-slate-100 pt-4">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Alumnes ({students.length})</h4>
+                                        {students.length > 0 && <button onClick={handleDeleteAllStudents} className="text-rose-500 text-xs font-bold hover:underline hover:text-rose-700">Eliminar TOTS</button>}
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto custom-scroll space-y-1">
+                                        {students.map(s => <div key={s.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded"><span className="text-sm text-slate-700">{s.name}</span><button onClick={() => deleteStudent(s.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={14}/></button></div>)}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </Modal>}
-                    {selectedStudent && <Modal title={`Fitxa: ${selectedStudent.name}`} onClose={() => setSelectedStudent(null)}>{(() => { const stats = getStudentStats(selectedStudent.id, allClassTasks); const currentPenalties = penalties[selectedStudent.id] || 0; return (<div className="space-y-6"><div className="grid grid-cols-2 gap-4"><div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center"><div className="text-3xl font-bold text-orange-600 mb-1">{stats.percentage}%</div><div className="text-xs text-slate-400 uppercase font-bold">Nota Global</div></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center"><div className="text-3xl mb-1">{getMedal(stats.percentage) || '🌱'}</div><div className="text-xs text-slate-400 uppercase font-bold">Nivell</div></div></div><div className="bg-rose-50 border border-rose-100 p-4 rounded-xl flex items-center justify-between"><div><h5 className="text-sm font-bold text-rose-800">Punts Negatius</h5><p className="text-xs text-rose-600">Alarma als 3 punts</p></div><div className="flex gap-1">{[...Array(3)].map((_, i) => <div key={i} className={`w-4 h-4 rounded-full border border-rose-300 ${i < currentPenalties ? 'bg-rose-500' : 'bg-white'}`}></div>)}</div></div><div className="text-center pt-2"><button onClick={() => deleteStudent(selectedStudent.id)} className="text-rose-400 text-sm hover:text-rose-600 hover:underline">Eliminar alumne</button></div></div>); })()}</Modal>}
+                        </Modal>
+                    )}
+
+                    {selectedStudent && (
+                        <Modal title={`Fitxa: ${selectedStudent.name}`} onClose={() => setSelectedStudent(null)}>
+                            {(() => { 
+                                const stats = getStudentStats(selectedStudent.id, allClassTasks); 
+                                const currentPenalties = penalties[selectedStudent.id] || 0; 
+                                const studentIncidents = incidents[selectedStudent.id] || [];
+                                return (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                                            <div className="text-3xl font-bold text-orange-600 mb-1">{stats.percentage}%</div>
+                                            <div className="text-xs text-slate-400 uppercase font-bold">Nota Global</div>
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                                            <div className="text-3xl mb-1">{getMedal(stats.percentage) || '🌱'}</div>
+                                            <div className="text-xs text-slate-400 uppercase font-bold">Nivell</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-3">
+                                        <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl flex items-center justify-between">
+                                            <div><h5 className="text-sm font-bold text-rose-800">Punts Vermells (Tasques)</h5></div>
+                                            <div className="flex gap-1">{[...Array(3)].map((_, i) => <div key={`r${i}`} className={`w-4 h-4 rounded-full border border-rose-300 ${i < currentPenalties ? 'bg-rose-500' : 'bg-white'}`}></div>)}</div>
+                                        </div>
+                                        <div className="bg-slate-100 border border-slate-200 p-4 rounded-xl flex items-center justify-between">
+                                            <div><h5 className="text-sm font-bold text-slate-800">Punts Negres (Comportament)</h5></div>
+                                            <div className="flex gap-1">{[...Array(3)].map((_, i) => <div key={`b${i}`} className={`w-4 h-4 rounded-full border border-slate-300 ${i < studentIncidents.length ? 'bg-slate-800' : 'bg-white'}`}></div>)}</div>
+                                        </div>
+                                    </div>
+
+                                    {studentIncidents.length > 0 && (
+                                        <div>
+                                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Historial d'incidents</h5>
+                                            <ul className="space-y-2 max-h-32 overflow-y-auto custom-scroll pr-2">
+                                                {studentIncidents.map(inc => (
+                                                    <li key={inc.id} className="bg-white border border-slate-200 rounded p-2 text-sm text-slate-700">
+                                                        <span className="font-bold text-xs text-slate-400 block mb-0.5">{new Date(inc.date).toLocaleDateString()}</span>
+                                                        {inc.text}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    <div className="text-center pt-2">
+                                        <button onClick={() => deleteStudent(selectedStudent.id)} className="text-rose-400 text-sm hover:text-rose-600 hover:underline">Eliminar alumne</button>
+                                    </div>
+                                </div>
+                            ); })()}
+                        </Modal>
+                    )}
+
                 </div>
             );
         };
