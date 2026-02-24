@@ -454,11 +454,16 @@
 
             const isCurrentWeek = (w) => {
                 const now = new Date();
+                // Normalitzem la data d'inici de la setmana a les 00:00:00
                 const start = new Date(w.startDate);
                 start.setHours(0, 0, 0, 0);
+                
+                // Calculem el final real de la setmana (Diumenge a les 23:59:59)
+                // w.startDate és Dilluns. Sumem 6 dies per arribar a Diumenge.
                 const end = new Date(w.startDate);
                 end.setDate(end.getDate() + 6); 
                 end.setHours(23, 59, 59, 999);
+
                 return now >= start && now <= end;
             };
 
@@ -484,17 +489,21 @@
                 });
             };
 
+            // Lògica per trobar la setmana actual i calcular les claus de data correctes
             const currentWeekObj = allWeeks.find(isCurrentWeek);
             let activeReminders = [];
             
             if (currentWeekObj && reminders) {
-                const todayIndex = new Date().getDay() - 1; 
+                const todayIndex = new Date().getDay() - 1; // Dilluns=0, Divendres=4, Diumenge=6
+                // Només si estem entre dilluns i divendres té sentit mirar la clau del planner
                 if (todayIndex >= 0 && todayIndex <= 4) {
                     const todayKey = addDays(currentWeekObj.id, todayIndex);
                     if (reminders[todayKey]) {
                         activeReminders.push(...reminders[todayKey].map(r => ({...r, day: 'AVUI'})));
                     }
                 }
+                
+                // Per demà (si demà és laborable)
                 const tomorrowIndex = todayIndex + 1;
                 if (tomorrowIndex >= 0 && tomorrowIndex <= 4) {
                     const tomorrowKey = addDays(currentWeekObj.id, tomorrowIndex);
@@ -512,6 +521,7 @@
                             <p className={`text-${theme}-500 font-medium`}>Curs {config.schoolYear} - {parseInt(config.schoolYear)+1}</p>
                         </div>
 
+                        {/* TARGETA DE RECORDATORIS AL HEADER */}
                         {activeReminders.length > 0 && (
                             <div className="flex-1 mx-4 max-w-xl w-full">
                                 <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-3 shadow-sm animate-in fade-in zoom-in duration-300">
@@ -1311,6 +1321,9 @@
 
             const handleStatusChange = (d, s, val) => {
                 const newData = { ...planData, [`${d}-${s}`]: { ...planData[`${d}-${s}`], status: val } };
+                if (val === null) {
+                    newData[`${d}-${s}`].zzzReason = "";
+                }
                 updatePlanData(newData);
             };
 
@@ -1462,6 +1475,7 @@
                 newData[currentKey] = { 
                     ...newData[currentKey], 
                     status: 'zzz', 
+                    zzzReason: newData[currentKey]?.zzzReason || "", 
                     tasks: [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}] 
                 };
 
@@ -1556,7 +1570,8 @@
                             
                             let contentHtml = "";
                             if (data.status === 'zzz') {
-                                contentHtml = "💤 NO ES FA CLASSE";
+                                const rao = data.zzzReason ? ` (${data.zzzReason})` : '';
+                                contentHtml = `💤 NO ES FA CLASSE${rao}`;
                             } else {
                                 contentHtml = validTasks.map(t => {
                                     let style = "margin-bottom: 4px;";
@@ -1722,7 +1737,25 @@
                                                     </div>
                                                 </div>
                                                 <div className={`flex-1 overflow-y-auto custom-scroll ${reviewMode ? 'opacity-50 pointer-events-none' : ''}`}>
-                                                    <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, slot.id, t)} onAction={(task, action) => handleTaskAction(d, slot.id, cid, task, action)} disabled={isZzz} theme={theme} />
+                                                    {isZzz ? (
+                                                        <div className="flex-1 flex items-center justify-center p-2 h-full">
+                                                            <textarea
+                                                                className="w-full h-full min-h-[80px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-500 focus:ring-0 focus:outline-none placeholder-gray-400"
+                                                                placeholder="Motiu de cancel·lació (ex: Excursió, Festiu...)"
+                                                                value={data.zzzReason || ""}
+                                                                onChange={(e) => {
+                                                                    const newData = { ...planData, [key]: { ...planData[key], zzzReason: e.target.value } };
+                                                                    setPlanData(newData); // No guardem a l'històric en cada pulsació de tecla per no saturar-lo
+                                                                }}
+                                                                onBlur={(e) => {
+                                                                    const newData = { ...planData, [key]: { ...planData[key], zzzReason: e.target.value } };
+                                                                    updatePlanData(newData, true); // Guardem a l'històric en sortir del focus
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, slot.id, t)} onAction={(task, action) => handleTaskAction(d, slot.id, cid, task, action)} disabled={isZzz} theme={theme} />
+                                                    )}
                                                 </div>
                                                 {(reviewMode || data.review) && (
                                                     <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={data.review||""} onChange={(e)=>handleReviewChange(d,slot.id,e.target.value)}></textarea>
@@ -1946,12 +1979,12 @@
                 const loader = document.getElementById('app-loader');
                 if (loader) loader.style.display = 'none';
                 
-                // Mètode de rescat automàtic
+                // Mètode de rescat automàtic: Escombra les versions anteriors si existeixen
                 let saved = localStorage.getItem('cfnPlannerData_v23'); 
                 if (!saved) {
                     saved = localStorage.getItem('cfnPlannerData_v22') || localStorage.getItem('cfnPlannerData_v21') || localStorage.getItem('cfnPlannerData');
                     if (saved) {
-                        localStorage.setItem('cfnPlannerData_v23', saved); // Actualitzem la caixa forta
+                        localStorage.setItem('cfnPlannerData_v23', saved); 
                     }
                 }
 
@@ -1995,6 +2028,7 @@
                                          updatedWeekData[key] = { 
                                              ...(updatedWeekData[key] || {}), 
                                              status: 'zzz',
+                                             zzzReason: 'Vacances 🎉',
                                              tasks: updatedWeekData[key]?.tasks || [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}]
                                          };
                                      }
