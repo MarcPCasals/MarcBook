@@ -736,13 +736,6 @@
                 onChange(newTasks);
             };
 
-            const adjustTime = (idx, amount) => {
-                const currentVal = parseInt(tasks[idx].time) || 0;
-                let newVal = currentVal + amount;
-                if (newVal < 0) newVal = 0;
-                updateTask(idx, 'time', newVal);
-            };
-
             // Drag and Drop
             const onDragStart = (e, index) => {
                 setDraggedIdx(index);
@@ -775,14 +768,14 @@
                 filtered.push({ text: '', time: '', status: null });
                 while(filtered.length < 3) filtered.push({ text: '', time: '', status: null });
 
-            const moveTask = (idx, direction) => {
-                if ((direction === -1 && idx === 0) || (direction === 1 && idx >= tasks.length - 1)) return;
-                const newTasks = [...tasks];
-                const temp = newTasks[idx];
-                newTasks[idx] = newTasks[idx + direction];
-                newTasks[idx + direction] = temp;
-                onChange(newTasks);
-                setMenuIdx(idx + direction); 
+                onChange(filtered);
+                setDragOverIdx(null);
+                setDraggedIdx(null);
+            };
+
+            const onDragEnd = () => {
+                setDragOverIdx(null);
+                setDraggedIdx(null);
             };
 
             const getInputClass = (status) => {
@@ -824,7 +817,7 @@
                                             const val = e.target.value.replace(/\D/g, ''); // Només números
                                             updateTask(idx, 'time', val);
                                         }}
-                                        onFocus={() => { setFocusedIndex(idx); setMenuIdx(null); }}
+                                        onFocus={() => { setFocusedIndex(idx); }}
                                         onBlur={() => setFocusedIndex(null)}
                                         disabled={disabled}
                                     />
@@ -1154,6 +1147,7 @@
                 if (!text.trim()) return;
                 const lines = text.split('\n').filter(l => l.trim());
                 const parsedTasks = lines.map(line => {
+                    // Regex per detectar "• 10' text" o "10 min text" o "text"
                     const timeMatch = line.match(/^[\•\-\*]?\s*(\d+)['’m\s]*(.*)/i);
                     if (timeMatch) {
                         return { 
