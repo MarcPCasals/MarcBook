@@ -189,7 +189,7 @@
             { name: "Gris", value: "bg-gray-100 border-gray-300 text-gray-900" },
         ];
 
-        // FUNCIÓ DE FORMATATGE LOCAL SEGURA
+        // FUNCIÓ DE FORMATATGE LOCAL SEGURA (Evita el bug UTC vs Hora Local)
         const getLocalISODate = (d) => {
             const year = d.getFullYear();
             const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -200,18 +200,15 @@
         const generateAllWeeks = (yearStr) => {
             const weeks = [];
             const year = parseInt(yearStr) || new Date().getFullYear();
-            // Inicialitzem al migdia (12:00:00) per evitar els salts de canvi d'hora (DST)
             let current = new Date(year, 8, 1, 12, 0, 0); 
             const day = current.getDay();
             const diff = current.getDate() - day + (day == 0 ? -6 : 1);
             current.setDate(diff);
-            
             const end = new Date(year + 1, 6, 15, 12, 0, 0);
             while (current < end) {
                 const weekStart = new Date(current);
                 const weekEnd = new Date(current);
                 weekEnd.setDate(weekEnd.getDate() + 4);
-                
                 weeks.push({
                     id: getLocalISODate(weekStart),
                     label: `Setmana ${weekStart.getDate()} ${MONTHS[weekStart.getMonth()]}`,
@@ -227,7 +224,7 @@
 
         const addDays = (dateStr, days) => {
             const [y, m, d] = dateStr.split('-');
-            const result = new Date(y, m - 1, d, 12, 0, 0); // Noon
+            const result = new Date(y, m - 1, d, 12, 0, 0); 
             result.setDate(result.getDate() + days);
             return getLocalISODate(result);
         };
@@ -237,8 +234,9 @@
         const ConfigScreen = ({ config, onSave }) => {
             const [localConfig, setLocalConfig] = useState(config);
             const [newClass, setNewClass] = useState({ name: "", color: DEFAULT_COLORS[0].value });
+            const [newUT, setNewUT] = useState({ name: "", date: "" });
             
-            const theme = localConfig.theme || 'orange'; // Fallback per render inicial
+            const theme = localConfig.theme || 'orange';
 
             const addClass = () => {
                 if (!newClass.name) return;
@@ -262,22 +260,29 @@
                 });
             };
 
-            // Nova funció per gestionar la durada
             const toggleDuration = (dayIndex, slotId) => {
                 setLocalConfig(prev => {
                     const key = `${dayIndex}-${slotId}`;
                     const currentDurations = prev.durations || {};
                     const is2h = currentDurations[key] === 2;
-                    
                     const newDurations = { ...currentDurations };
-                    if (is2h) {
-                        delete newDurations[key];
-                    } else {
-                        newDurations[key] = 2;
-                    }
-                    
+                    if (is2h) { delete newDurations[key]; } else { newDurations[key] = 2; }
                     return { ...prev, durations: newDurations };
                 });
+            };
+
+            // Funció per les UTs
+            const addUT = () => {
+                if (!newUT.name || !newUT.date) return;
+                setLocalConfig(prev => ({
+                    ...prev,
+                    utDates: [...(prev.utDates || []), { ...newUT, id: Date.now().toString() }].sort((a,b) => new Date(a.date) - new Date(b.date))
+                }));
+                setNewUT({ name: "", date: "" });
+            };
+
+            const removeUT = (id) => {
+                setLocalConfig(prev => ({ ...prev, utDates: (prev.utDates || []).filter(ut => ut.id !== id) }));
             };
 
             return (
@@ -310,6 +315,31 @@
                                     {t.name}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* DATES FINAL UT */}
+                    <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
+                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800"><Icons.Calendar /> Dates de final d'UT</h2>
+                        <div className="flex flex-wrap gap-2 mb-6">
+                            {(!localConfig.utDates || localConfig.utDates.length === 0) && <span className="text-gray-400 italic">No has afegit cap data.</span>}
+                            {(localConfig.utDates || []).map(ut => (
+                                <span key={ut.id} className="px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 shadow-sm bg-blue-100 text-blue-800 border border-blue-200">
+                                    {ut.name}: {new Date(ut.date).toLocaleDateString()}
+                                    <button onClick={() => removeUT(ut.id)} className="hover:bg-blue-200 rounded-full w-5 h-5 flex justify-center items-center text-blue-600 font-bold">×</button>
+                                </span>
+                            ))}
+                        </div>
+                        <div className="flex flex-col md:flex-row gap-4 items-end bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                            <div className="flex-1 w-full">
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Nom de la UT</label>
+                                <input type="text" className="border p-2 rounded-md w-full" value={newUT.name} onChange={(e) => setNewUT({...newUT, name: e.target.value})} placeholder="Ex: UT1" />
+                            </div>
+                            <div className="w-full md:w-48">
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data de finalització</label>
+                                <input type="date" className="border p-2 rounded-md w-full" value={newUT.date} onChange={(e) => setNewUT({...newUT, date: e.target.value})} />
+                            </div>
+                            <button onClick={addUT} className={`bg-${theme}-600 text-white px-6 py-2 rounded-md hover:bg-${theme}-700 font-medium transition-colors`}>Afegir</button>
                         </div>
                     </div>
 
@@ -424,16 +454,11 @@
 
             const isCurrentWeek = (w) => {
                 const now = new Date();
-                // Normalitzem la data d'inici de la setmana a les 00:00:00
                 const start = new Date(w.startDate);
                 start.setHours(0, 0, 0, 0);
-                
-                // Calculem el final real de la setmana (Diumenge a les 23:59:59)
-                // w.startDate és Dilluns. Sumem 6 dies per arribar a Diumenge.
                 const end = new Date(w.startDate);
                 end.setDate(end.getDate() + 6); 
                 end.setHours(23, 59, 59, 999);
-
                 return now >= start && now <= end;
             };
 
@@ -450,21 +475,26 @@
                 setEditingTaskLink(false);
             };
 
-            // Lògica per trobar la setmana actual i calcular les claus de data correctes
+            const getUTForWeek = (week) => {
+                if (!config.utDates || config.utDates.length === 0) return null;
+                return config.utDates.find(ut => {
+                    const [y, m, d] = ut.date.split('-');
+                    const utDate = new Date(y, m - 1, d, 12, 0, 0); 
+                    return utDate >= week.startDate && utDate <= week.endDate;
+                });
+            };
+
             const currentWeekObj = allWeeks.find(isCurrentWeek);
             let activeReminders = [];
             
             if (currentWeekObj && reminders) {
-                const todayIndex = new Date().getDay() - 1; // Dilluns=0, Divendres=4, Diumenge=6
-                // Només si estem entre dilluns i divendres té sentit mirar la clau del planner
+                const todayIndex = new Date().getDay() - 1; 
                 if (todayIndex >= 0 && todayIndex <= 4) {
                     const todayKey = addDays(currentWeekObj.id, todayIndex);
                     if (reminders[todayKey]) {
                         activeReminders.push(...reminders[todayKey].map(r => ({...r, day: 'AVUI'})));
                     }
                 }
-                
-                // Per demà (si demà és laborable)
                 const tomorrowIndex = todayIndex + 1;
                 if (tomorrowIndex >= 0 && tomorrowIndex <= 4) {
                     const tomorrowKey = addDays(currentWeekObj.id, tomorrowIndex);
@@ -482,7 +512,6 @@
                             <p className={`text-${theme}-500 font-medium`}>Curs {config.schoolYear} - {parseInt(config.schoolYear)+1}</p>
                         </div>
 
-                        {/* TARGETA DE RECORDATORIS AL HEADER */}
                         {activeReminders.length > 0 && (
                             <div className="flex-1 mx-4 max-w-xl w-full">
                                 <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-3 shadow-sm animate-in fade-in zoom-in duration-300">
@@ -532,12 +561,15 @@
                                     const isCompleted = completedWeeks.includes(week.id);
                                     const isHoliday = holidayWeeks?.includes(week.id);
                                     const isCurrent = isCurrentWeek(week);
+                                    const utEnding = getUTForWeek(week);
+                                    
                                     return (
                                         <div key={week.id} className={`relative p-5 rounded-xl border transition-all ${isCurrent ? `ring-2 ring-${theme}-500 bg-${theme}-300 shadow-lg scale-[1.02]` : `bg-white border-gray-200 hover:border-${theme}-200`}`}>
                                             <div onClick={() => onSelectWeek(week.id)} className="cursor-pointer">
                                                 <h3 className={`font-bold text-lg ${isCurrent ? `text-${theme}-900` : 'text-gray-800'}`}>{week.label}</h3>
                                                 <p className={`text-sm mb-2 ${isCurrent ? `text-${theme}-800` : 'text-gray-500'}`}>{week.startDate.toLocaleDateString()} - {week.endDate.toLocaleDateString()}</p>
-                                                {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm`}>Actual</span>}
+                                                {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm inline-block mr-1`}>Actual</span>}
+                                                {utEnding && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm mt-1 inline-block">Final {utEnding.name}</span>}
                                             </div>
                                             <button onClick={(e) => { e.stopPropagation(); onToggleWeekComplete(week.id); }} className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isCompleted ? 'bg-green-100 text-green-600 shadow-inner' : (isCurrent ? 'bg-white/50 text-orange-700 hover:bg-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200')}`}>{isCompleted ? <Icons.CheckCircle /> : <Icons.Check />}</button>
                                             <button onClick={(e) => { e.stopPropagation(); onToggleHoliday(week.id); }} className={`absolute top-4 right-16 w-9 h-9 flex items-center justify-center rounded-full transition-all ${isHoliday ? 'bg-purple-100 text-purple-600 shadow-inner' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`} title="Marcar com Vacances">🎉</button>
@@ -1548,7 +1580,6 @@
                                     return `<a href="${url}" target="_blank" style="color:#2563EB;text-decoration:underline;">${title}</a>`;
                                 }).join('<br>') + `</div>` : '';
                                 
-                                // FIX: Hem tornat a afegir el bloc sencer de <tr> (només sense el table exterior quan s'exporta a la programació)
                                 html += `<tr style="border-bottom: 1px solid #E5E7EB;">
                                     <td style="padding:12px; vertical-align:top; border-right: 1px solid #E5E7EB; width: 40%;">${contentHtml}</td>
                                     <td style="padding:12px; vertical-align:top; border-right: 1px solid #E5E7EB; width: 30%;">${data.materials ? data.materials.replace(/\n/g, '<br>') : ''}${linksHtml}</td>
@@ -1564,7 +1595,7 @@
             };
 
             const handleExportToProgramacio = () => {
-                const htmlRows = generateHTML(true); // NOMES FILES <tr>
+                const htmlRows = generateHTML(true); 
                 const payload = {
                     action: 'SYNC_TABLE',
                     curs: exportConfig.curs.trim(),
@@ -1882,7 +1913,7 @@
 
         const App = () => {
             const [view, setView] = useState('config');
-            const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange" });
+            const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] });
             const [radar, setRadar] = useState("");
             const [weeksData, setWeeksData] = useState({});
             const [currentWeekId, setCurrentWeekId] = useState(null);
@@ -1896,7 +1927,6 @@
                 if (themeData) {
                     document.body.style.backgroundColor = themeData.bg;
                     
-                    // Injectar estils dinàmics per scrollbar i altres elements que no son classes Tailwind
                     let styleTag = document.getElementById('dynamic-theme-styles');
                     if (!styleTag) {
                         styleTag = document.createElement('style');
@@ -1911,10 +1941,20 @@
                 }
             }, [config.theme]);
 
+            // CARREGADOR I AUTO-RESCAT DE DADES
             useEffect(() => {
                 const loader = document.getElementById('app-loader');
                 if (loader) loader.style.display = 'none';
-                const saved = localStorage.getItem('cfnPlannerData_v23'); 
+                
+                // Mètode de rescat automàtic
+                let saved = localStorage.getItem('cfnPlannerData_v23'); 
+                if (!saved) {
+                    saved = localStorage.getItem('cfnPlannerData_v22') || localStorage.getItem('cfnPlannerData_v21') || localStorage.getItem('cfnPlannerData');
+                    if (saved) {
+                        localStorage.setItem('cfnPlannerData_v23', saved); // Actualitzem la caixa forta
+                    }
+                }
+
                 if (saved) {
                     try {
                         const data = JSON.parse(saved);
@@ -1925,13 +1965,12 @@
                         if(data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
                         if(data.reminders) setReminders(data.reminders);
                         if(data.config?.teacherName) setView('dashboard');
-                    } catch(e) {}
+                    } catch(e) { console.error("Error carregant les dades", e); }
                 }
             }, []);
 
             useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
 
-            // Funció per actualitzar qualsevol setmana des del planner
             const handleUpdateWeekData = (weekId, data) => {
                 setWeeksData(prev => ({ ...prev, [weekId]: data }));
             };
@@ -1947,7 +1986,6 @@
                         const currentWeekData = prev[wid] || {};
                         const updatedWeekData = { ...currentWeekData };
                         
-                        // Loop through all days and slots
                         for (let d = 0; d < 5; d++) {
                             for (let s = 0; s < TIME_SLOTS.length; s++) {
                                 const slot = TIME_SLOTS[s];
@@ -1975,7 +2013,7 @@
                 }));
             };
 
-            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange" }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
+            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
             const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
             const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
 
