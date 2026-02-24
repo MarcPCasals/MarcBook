@@ -55,10 +55,14 @@
         .session-cancelled {
             background-color: #d1d5db !important; /* gray-300 */
             color: #6b7280 !important; /* gray-500 */
-            pointer-events: none; /* Opcional: per evitar editar si està cancel·lada */
+            /* El pointer-events ara es gestiona millor per permetre escriure el motiu */
         }
-        /* Per permetre clicar els botons de reactivar encara que la sessió estigui cancel·lada */
-        .session-cancelled .reactivate-btn {
+        
+        .session-cancelled input.task-input {
+             pointer-events: none;
+        }
+        
+        .session-cancelled .reactivate-btn, .session-cancelled textarea {
             pointer-events: auto !important;
         }
 
@@ -260,20 +264,13 @@
                 });
             };
 
-            // Nova funció per gestionar la durada
             const toggleDuration = (dayIndex, slotId) => {
                 setLocalConfig(prev => {
                     const key = `${dayIndex}-${slotId}`;
                     const currentDurations = prev.durations || {};
                     const is2h = currentDurations[key] === 2;
-                    
                     const newDurations = { ...currentDurations };
-                    if (is2h) {
-                        delete newDurations[key];
-                    } else {
-                        newDurations[key] = 2;
-                    }
-                    
+                    if (is2h) { delete newDurations[key]; } else { newDurations[key] = 2; }
                     return { ...prev, durations: newDurations };
                 });
             };
@@ -792,7 +789,7 @@
                                 </div>
                                 <input 
                                     type="text" 
-                                    className={`flex-1 bg-transparent hover:bg-gray-50 focus:bg-white rounded px-1 focus:ring-1 focus:ring-${theme}-200 focus:outline-none text-sm py-0.5 transition-colors ${getInputClass(task.status)}`}
+                                    className={`flex-1 bg-transparent hover:bg-gray-50 focus:bg-white rounded px-1 focus:ring-1 focus:ring-${theme}-200 focus:outline-none text-sm py-0.5 transition-colors task-input ${getInputClass(task.status)}`}
                                     placeholder={disabled ? "" : "Activitat..."}
                                     value={task.text}
                                     onChange={(e) => updateTask(idx, 'text', e.target.value)}
@@ -1460,6 +1457,7 @@
                             const targetKey = `${found.d}-${found.s}`;
                             const targetTasks = getTasks(found.d, found.s, nextWeekData);
                             const newTargetTasks = [newTaskObj, ...targetTasks];
+                            // L'ERROR ERA AQUÍ (ja està posat el ":")
                             const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...(nextWeekData[targetKey] || {}), tasks: newTargetTasks } };
                             onUpdateWeekData(nextWeekId, updatedNextWeekData);
                             alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
@@ -1517,6 +1515,7 @@
                                 const nextWeekData = weeksData[nextWeekId] || {};
                                 const targetKey = `${found.d}-${found.s}`;
                                 const targetTasks = getTasks(found.d, found.s, nextWeekData);
+                                // L'ERROR ERA AQUÍ (ja està posat el ":")
                                 const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...(nextWeekData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] } };
                                 onUpdateWeekData(nextWeekId, updatedNextWeekData);
                                 alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
@@ -1602,7 +1601,6 @@
                                     return `<a href="${url}" target="_blank" style="color:#2563EB;text-decoration:underline;">${title}</a>`;
                                 }).join('<br>') + `</div>` : '';
                                 
-                                // FIX: Hem tornat a afegir el bloc sencer de <tr> (només sense el table exterior quan s'exporta a la programació)
                                 html += `<tr style="border-bottom: 1px solid #E5E7EB;">
                                     <td style="padding:12px; vertical-align:top; border-right: 1px solid #E5E7EB; width: 40%;">${contentHtml}</td>
                                     <td style="padding:12px; vertical-align:top; border-right: 1px solid #E5E7EB; width: 30%;">${data.materials ? data.materials.replace(/\n/g, '<br>') : ''}${linksHtml}</td>
@@ -1748,17 +1746,17 @@
                                                     {isZzz ? (
                                                         <div className="flex-1 flex items-center justify-center p-2 h-full">
                                                             <textarea
-                                                                className="w-full h-full min-h-[80px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-500 focus:ring-0 focus:outline-none placeholder-gray-400"
+                                                                className="w-full h-full min-h-[80px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-600 focus:ring-0 focus:outline-none placeholder-gray-500"
                                                                 style={{ pointerEvents: 'auto' }}
-                                                                placeholder="Motiu de cancel·lació (ex: Excursió, Festiu...)"
+                                                                placeholder="Motiu (ex: Excursió)"
                                                                 value={data.zzzReason || ""}
                                                                 onChange={(e) => {
                                                                     const newData = { ...planData, [key]: { ...planData[key], zzzReason: e.target.value } };
-                                                                    setPlanData(newData); // No guardem a l'històric en cada pulsació de tecla per no saturar-lo
+                                                                    setPlanData(newData); 
                                                                 }}
                                                                 onBlur={(e) => {
                                                                     const newData = { ...planData, [key]: { ...planData[key], zzzReason: e.target.value } };
-                                                                    updatePlanData(newData, true); // Guardem a l'històric en sortir del focus
+                                                                    updatePlanData(newData, true); 
                                                                 }}
                                                             />
                                                         </div>
@@ -1983,23 +1981,71 @@
                 }
             }, [config.theme]);
 
-            // CARREGADOR I AUTO-RESCAT DE DADES
+            // CARREGADOR I AUTO-RESCAT DE DADES (AMB MIGRACIÓ DE DIES)
             useEffect(() => {
                 const loader = document.getElementById('app-loader');
                 if (loader) loader.style.display = 'none';
                 
-                // Mètode de rescat automàtic: Escombra les versions anteriors si existeixen
                 let saved = localStorage.getItem('cfnPlannerData_v23'); 
                 if (!saved) {
                     saved = localStorage.getItem('cfnPlannerData_v22') || localStorage.getItem('cfnPlannerData_v21') || localStorage.getItem('cfnPlannerData');
-                    if (saved) {
-                        localStorage.setItem('cfnPlannerData_v23', saved); 
-                    }
                 }
 
                 if (saved) {
                     try {
                         const data = JSON.parse(saved);
+                        let needsSave = false;
+
+                        // 1. MIGRACIÓ UT (de utEnds a utDates)
+                        if (data.config && data.config.utEnds && (!data.config.utDates || data.config.utDates.length === 0)) {
+                            data.config.utDates = Object.entries(data.config.utEnds).map(([date, name], idx) => ({
+                                id: 'migrated_' + idx,
+                                name: name,
+                                date: date
+                            }));
+                            delete data.config.utEnds;
+                            needsSave = true;
+                        }
+
+                        // 2. MIGRACIÓ DATES (Moure els diumenges a dilluns)
+                        const shiftDate = (dateStr) => {
+                            if (!dateStr || typeof dateStr !== 'string') return dateStr;
+                            const parts = dateStr.split('-');
+                            if (parts.length !== 3) return dateStr;
+                            const dObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+                            if (dObj.getDay() === 0) {
+                                dObj.setDate(dObj.getDate() + 1);
+                                return `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+                            }
+                            return dateStr;
+                        };
+
+                        if (data.weeksData) {
+                            const newWeeksData = {};
+                            for (const [key, val] of Object.entries(data.weeksData)) {
+                                const newKey = shiftDate(key);
+                                newWeeksData[newKey] = val;
+                                if (newKey !== key) needsSave = true;
+                            }
+                            data.weeksData = newWeeksData;
+                        }
+
+                        if (data.completedWeeks) {
+                            const newComp = data.completedWeeks.map(shiftDate);
+                            if (newComp.join(',') !== data.completedWeeks.join(',')) {
+                                data.completedWeeks = newComp;
+                                needsSave = true;
+                            }
+                        }
+                        
+                        if (data.holidayWeeks) {
+                            const newHol = data.holidayWeeks.map(shiftDate);
+                            if (newHol.join(',') !== data.holidayWeeks.join(',')) {
+                                data.holidayWeeks = newHol;
+                                needsSave = true;
+                            }
+                        }
+
                         if(data.config) setConfig(data.config);
                         if(data.radar) setRadar(data.radar);
                         if(data.weeksData) setWeeksData(data.weeksData);
@@ -2007,6 +2053,10 @@
                         if(data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
                         if(data.reminders) setReminders(data.reminders);
                         if(data.config?.teacherName) setView('dashboard');
+
+                        if (needsSave) {
+                             localStorage.setItem('cfnPlannerData_v23', JSON.stringify(data));
+                        }
                     } catch(e) { console.error("Error carregant les dades", e); }
                 }
             }, []);
