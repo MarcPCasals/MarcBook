@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ca">
 <head>
@@ -55,14 +56,10 @@
         .session-cancelled {
             background-color: #d1d5db !important; /* gray-300 */
             color: #6b7280 !important; /* gray-500 */
-            /* El pointer-events ara es gestiona millor per permetre escriure el motiu */
+            pointer-events: none; /* Opcional: per evitar editar si està cancel·lada */
         }
-        
-        .session-cancelled input.task-input {
-             pointer-events: none;
-        }
-        
-        .session-cancelled .reactivate-btn, .session-cancelled textarea {
+        /* Per permetre clicar els botons de reactivar encara que la sessió estigui cancel·lada */
+        .session-cancelled .reactivate-btn {
             pointer-events: auto !important;
         }
 
@@ -156,7 +153,8 @@
             Undo: () => <Icon><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 7"/></Icon>,
             Redo: () => <Icon><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 7"/></Icon>,
             Lightbulb: () => <Icon><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v1"/><path d="M12 14v-2"/><path d="M2 12h1"/><path d="M21 12h1"/><path d="M4.22 19.78l.71-.71"/><path d="M19.07 4.93l.71.71"/><path d="M4.22 4.22l.71.71"/><path d="M19.07 19.07l.71.71"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 10.38 5 9a7 7 0 0 1 7-7z"/></Icon>,
-            Paste: () => <Icon><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>
+            Paste: () => <Icon><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>,
+            Grip: () => <Icon><line x1="6" y1="9" x2="18" y2="9"/><line x1="6" y1="15" x2="18" y2="15"/></Icon>
         };
 
         // --- CONSTANTS & THEMES ---
@@ -193,28 +191,20 @@
             { name: "Gris", value: "bg-gray-100 border-gray-300 text-gray-900" },
         ];
 
-        // FUNCIÓ DE FORMATATGE LOCAL SEGURA (Evita el bug UTC vs Hora Local)
-        const getLocalISODate = (d) => {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
         const generateAllWeeks = (yearStr) => {
             const weeks = [];
             const year = parseInt(yearStr) || new Date().getFullYear();
-            let current = new Date(year, 8, 1, 12, 0, 0); 
+            let current = new Date(year, 8, 1); 
             const day = current.getDay();
             const diff = current.getDate() - day + (day == 0 ? -6 : 1);
-            current.setDate(diff);
-            const end = new Date(year + 1, 6, 15, 12, 0, 0);
+            current = new Date(current.setDate(diff));
+            const end = new Date(year + 1, 6, 15);
             while (current < end) {
                 const weekStart = new Date(current);
                 const weekEnd = new Date(current);
                 weekEnd.setDate(weekEnd.getDate() + 4);
                 weeks.push({
-                    id: getLocalISODate(weekStart),
+                    id: weekStart.toISOString().split('T')[0],
                     label: `Setmana ${weekStart.getDate()} ${MONTHS[weekStart.getMonth()]}`,
                     startDate: new Date(weekStart),
                     endDate: new Date(weekEnd),
@@ -227,10 +217,9 @@
         };
 
         const addDays = (dateStr, days) => {
-            const [y, m, d] = dateStr.split('-');
-            const result = new Date(y, m - 1, d, 12, 0, 0); 
+            const result = new Date(dateStr);
             result.setDate(result.getDate() + days);
-            return getLocalISODate(result);
+            return result.toISOString().split('T')[0];
         };
 
         // --- COMPONENTS ---
@@ -238,9 +227,10 @@
         const ConfigScreen = ({ config, onSave }) => {
             const [localConfig, setLocalConfig] = useState(config);
             const [newClass, setNewClass] = useState({ name: "", color: DEFAULT_COLORS[0].value });
-            const [newUT, setNewUT] = useState({ name: "", date: "" });
             
-            const theme = localConfig.theme || 'orange';
+            const theme = localConfig.theme || 'orange'; 
+            const allWeeks = useMemo(() => generateAllWeeks(localConfig.schoolYear), [localConfig.schoolYear]);
+            const [newUt, setNewUt] = useState({ weekId: "", name: "" });
 
             const addClass = () => {
                 if (!newClass.name) return;
@@ -269,24 +259,33 @@
                     const key = `${dayIndex}-${slotId}`;
                     const currentDurations = prev.durations || {};
                     const is2h = currentDurations[key] === 2;
+                    
                     const newDurations = { ...currentDurations };
-                    if (is2h) { delete newDurations[key]; } else { newDurations[key] = 2; }
+                    if (is2h) {
+                        delete newDurations[key];
+                    } else {
+                        newDurations[key] = 2;
+                    }
+                    
                     return { ...prev, durations: newDurations };
                 });
             };
 
-            // Funció per les UTs
-            const addUT = () => {
-                if (!newUT.name || !newUT.date) return;
+            const addUt = () => {
+                if (!newUt.name || !newUt.weekId) return;
                 setLocalConfig(prev => ({
                     ...prev,
-                    utDates: [...(prev.utDates || []), { ...newUT, id: Date.now().toString() }].sort((a,b) => new Date(a.date) - new Date(b.date))
+                    utEnds: { ...(prev.utEnds || {}), [newUt.weekId]: newUt.name }
                 }));
-                setNewUT({ name: "", date: "" });
+                setNewUt(prev => ({ ...prev, name: "" }));
             };
 
-            const removeUT = (id) => {
-                setLocalConfig(prev => ({ ...prev, utDates: (prev.utDates || []).filter(ut => ut.id !== id) }));
+            const removeUt = (weekId) => {
+                setLocalConfig(prev => {
+                    const newUts = { ...prev.utEnds };
+                    delete newUts[weekId];
+                    return { ...prev, utEnds: newUts };
+                });
             };
 
             return (
@@ -322,31 +321,6 @@
                         </div>
                     </div>
 
-                    {/* DATES FINAL UT */}
-                    <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
-                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800"><Icons.Calendar /> Dates de final d'UT</h2>
-                        <div className="flex flex-wrap gap-2 mb-6">
-                            {(!localConfig.utDates || localConfig.utDates.length === 0) && <span className="text-gray-400 italic">No has afegit cap data.</span>}
-                            {(localConfig.utDates || []).map(ut => (
-                                <span key={ut.id} className="px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 shadow-sm bg-blue-100 text-blue-800 border border-blue-200">
-                                    {ut.name}: {new Date(ut.date).toLocaleDateString()}
-                                    <button onClick={() => removeUT(ut.id)} className="hover:bg-blue-200 rounded-full w-5 h-5 flex justify-center items-center text-blue-600 font-bold">×</button>
-                                </span>
-                            ))}
-                        </div>
-                        <div className="flex flex-col md:flex-row gap-4 items-end bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                            <div className="flex-1 w-full">
-                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Nom de la UT</label>
-                                <input type="text" className="border p-2 rounded-md w-full" value={newUT.name} onChange={(e) => setNewUT({...newUT, name: e.target.value})} placeholder="Ex: UT1" />
-                            </div>
-                            <div className="w-full md:w-48">
-                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Data de finalització</label>
-                                <input type="date" className="border p-2 rounded-md w-full" value={newUT.date} onChange={(e) => setNewUT({...newUT, date: e.target.value})} />
-                            </div>
-                            <button onClick={addUT} className={`bg-${theme}-600 text-white px-6 py-2 rounded-md hover:bg-${theme}-700 font-medium transition-colors`}>Afegir</button>
-                        </div>
-                    </div>
-
                     <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
                         <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800"><Icons.Table /> Les meves classes</h2>
                         <div className="flex flex-wrap gap-2 mb-6">
@@ -371,6 +345,38 @@
                             <button onClick={addClass} className={`bg-${theme}-600 text-white px-6 py-2 rounded-md hover:bg-${theme}-700 font-medium transition-colors`}>Afegir</button>
                         </div>
                     </div>
+
+                    <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
+                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800"><Icons.CheckCircle /> Finals d'Unitat Temporal (UT)</h2>
+                        <div className="flex flex-wrap gap-2 mb-6">
+                            {!localConfig.utEnds || Object.keys(localConfig.utEnds).length === 0 ? <span className="text-gray-400 italic">No has marcat cap final d'UT.</span> : 
+                                Object.entries(localConfig.utEnds).map(([wId, name]) => {
+                                    const wObj = allWeeks.find(w => w.id === wId);
+                                    const label = wObj ? wObj.label : wId;
+                                    return (
+                                        <span key={wId} className="px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 bg-red-100 text-red-800 border border-red-200">
+                                            {name} ({label}) <button onClick={() => removeUt(wId)} className="hover:bg-red-200 rounded-full w-5 h-5 flex justify-center items-center">×</button>
+                                        </span>
+                                    );
+                                })
+                            }
+                        </div>
+                        <div className="flex flex-col md:flex-row gap-4 items-end bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                            <div className="w-full md:w-1/3">
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Setmana de finalització</label>
+                                <select className="border p-2 rounded-md w-full" value={newUt.weekId} onChange={(e) => setNewUt({...newUt, weekId: e.target.value})}>
+                                    <option value="">Selecciona setmana...</option>
+                                    {allWeeks.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex-1 w-full">
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Nom (Ex: UT 1)</label>
+                                <input type="text" className="border p-2 rounded-md w-full" value={newUt.name} onChange={(e) => setNewUt({...newUt, name: e.target.value})} placeholder="Ex: UT 1" onKeyDown={(e) => e.key === 'Enter' && addUt()} />
+                            </div>
+                            <button onClick={addUt} disabled={!newUt.weekId || !newUt.name} className={`bg-${theme}-600 text-white px-6 py-2 rounded-md hover:bg-${theme}-700 font-medium transition-colors disabled:opacity-50`}>Afegir</button>
+                        </div>
+                    </div>
+
                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm mb-6">
                         <table className="min-w-full bg-white">
                             <thead>
@@ -484,15 +490,6 @@
                 setEditingTaskLink(false);
             };
 
-            const getUTForWeek = (week) => {
-                if (!config.utDates || config.utDates.length === 0) return null;
-                return config.utDates.find(ut => {
-                    const [y, m, d] = ut.date.split('-');
-                    const utDate = new Date(y, m - 1, d, 12, 0, 0); 
-                    return utDate >= week.startDate && utDate <= week.endDate;
-                });
-            };
-
             // Lògica per trobar la setmana actual i calcular les claus de data correctes
             const currentWeekObj = allWeeks.find(isCurrentWeek);
             let activeReminders = [];
@@ -575,18 +572,18 @@
                                     const isCompleted = completedWeeks.includes(week.id);
                                     const isHoliday = holidayWeeks?.includes(week.id);
                                     const isCurrent = isCurrentWeek(week);
-                                    const utEnding = getUTForWeek(week);
+                                    const utName = config.utEnds?.[week.id];
                                     
                                     return (
                                         <div key={week.id} className={`relative p-5 rounded-xl border transition-all ${isCurrent ? `ring-2 ring-${theme}-500 bg-${theme}-300 shadow-lg scale-[1.02]` : `bg-white border-gray-200 hover:border-${theme}-200`}`}>
                                             <div onClick={() => onSelectWeek(week.id)} className="cursor-pointer">
                                                 <h3 className={`font-bold text-lg ${isCurrent ? `text-${theme}-900` : 'text-gray-800'}`}>{week.label}</h3>
                                                 <p className={`text-sm mb-2 ${isCurrent ? `text-${theme}-800` : 'text-gray-500'}`}>{week.startDate.toLocaleDateString()} - {week.endDate.toLocaleDateString()}</p>
-                                                {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm inline-block mr-1`}>Actual</span>}
-                                                {utEnding && <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm mt-1 inline-block">Final {utEnding.name}</span>}
+                                                {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm`}>Actual</span>}
                                             </div>
                                             <button onClick={(e) => { e.stopPropagation(); onToggleWeekComplete(week.id); }} className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isCompleted ? 'bg-green-100 text-green-600 shadow-inner' : (isCurrent ? 'bg-white/50 text-orange-700 hover:bg-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200')}`}>{isCompleted ? <Icons.CheckCircle /> : <Icons.Check />}</button>
                                             <button onClick={(e) => { e.stopPropagation(); onToggleHoliday(week.id); }} className={`absolute top-4 right-16 w-9 h-9 flex items-center justify-center rounded-full transition-all ${isHoliday ? 'bg-purple-100 text-purple-600 shadow-inner' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`} title="Marcar com Vacances">🎉</button>
+                                            {utName && <span className="absolute bottom-2 right-2 bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded font-bold border border-red-200 shadow-sm">Final {utName}</span>}
                                         </div>
                                     );
                                 })}
@@ -710,7 +707,8 @@
 
         const TaskListInput = ({ tasks, onChange, disabled, onAction, theme }) => {
             const [focusedIndex, setFocusedIndex] = useState(null);
-            const [menuIdx, setMenuIdx] = useState(null); // New state for menu
+            const [draggedIdx, setDraggedIdx] = useState(null);
+            const blurTimeoutRef = useRef(null);
 
             const updateTask = (idx, field, value) => {
                 const newTasks = [...tasks];
@@ -728,24 +726,29 @@
                 // Ensure last is empty
                 if(newTasks[newTasks.length-1].text.trim() !== '') newTasks.push({ text: '', time: '', status: null });
                 onChange(newTasks);
-                setMenuIdx(null);
+                setFocusedIndex(null);
             };
 
-            const moveTask = (idx, direction) => {
-                if ((direction === -1 && idx === 0) || (direction === 1 && idx >= tasks.length - 1)) return;
+            const handleDragStart = (e, idx) => {
+                setDraggedIdx(idx);
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", idx);
+            };
+
+            const handleDragOver = (e, idx) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+            };
+
+            const handleDrop = (e, idx) => {
+                e.preventDefault();
+                if (draggedIdx === null || draggedIdx === idx) return;
                 const newTasks = [...tasks];
-                const temp = newTasks[idx];
-                newTasks[idx] = newTasks[idx + direction];
-                newTasks[idx + direction] = temp;
+                const draggedTask = newTasks[draggedIdx];
+                newTasks.splice(draggedIdx, 1);
+                newTasks.splice(idx, 0, draggedTask);
                 onChange(newTasks);
-                setMenuIdx(idx + direction); 
-            };
-
-            const adjustTime = (idx, amount) => {
-                const currentVal = parseInt(tasks[idx].time) || 0;
-                let newVal = currentVal + amount;
-                if (newVal < 0) newVal = 0;
-                updateTask(idx, 'time', newVal);
+                setDraggedIdx(null);
             };
 
             const getInputClass = (status) => {
@@ -757,89 +760,94 @@
             return (
                 <div className="flex flex-col gap-2 w-full">
                     {tasks.map((task, idx) => (
-                        <div key={idx} className="flex flex-col group relative border-b border-dashed border-gray-100 pb-1 last:border-0 pl-8">
+                        <div key={idx} 
+                             draggable={!disabled}
+                             onDragStart={(e) => handleDragStart(e, idx)}
+                             onDragOver={(e) => handleDragOver(e, idx)}
+                             onDrop={(e) => handleDrop(e, idx)}
+                             onDragEnd={() => setDraggedIdx(null)}
+                             className={`flex flex-col group relative border-b border-dashed border-gray-100 pb-1 last:border-0 pl-8 ${draggedIdx === idx ? 'opacity-40 bg-gray-50' : ''}`}>
+                             
                             <div className="flex items-center gap-2 relative">
-                                {/* Left Menu (Move/Delete) - Modified positioning and layout */}
-                                <div className="absolute -left-7 top-1.5 z-20 flex items-center">
-                                    {menuIdx === idx ? (
-                                        <div className="flex flex-row items-center bg-white border border-gray-200 shadow-lg rounded p-0.5 gap-1 absolute left-0 top-0 z-30 min-w-[80px]">
-                                            <button onMouseDown={(e)=>{e.preventDefault(); moveTask(idx, -1)}} className="text-gray-500 hover:text-blue-600 p-0.5"><Icons.ChevronUp size={12}/></button>
-                                            <button onMouseDown={(e)=>{e.preventDefault(); moveTask(idx, 1)}} className="text-gray-500 hover:text-blue-600 p-0.5"><Icons.ChevronDown size={12}/></button>
-                                            <button onMouseDown={(e)=>{e.preventDefault(); deleteTask(idx)}} className="text-red-400 hover:text-red-600 p-0.5"><Icons.Trash size={12}/></button>
-                                            <button onMouseDown={(e)=>{e.preventDefault(); setMenuIdx(null)}} className="text-gray-400 hover:text-gray-600 p-0.5 border-l border-gray-100 ml-1"><Icons.XCircle size={10}/></button>
-                                        </div>
-                                    ) : (
-                                        <button 
-                                            className={`text-gray-300 hover:text-${theme}-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5`}
-                                            onClick={() => setMenuIdx(idx)}
-                                            disabled={disabled}
-                                            title="Opcions"
-                                        >
-                                            <Icons.Plus size={14}/> 
-                                        </button>
-                                    )}
+                                <div className="absolute -left-6 top-1.5 z-20 flex items-center">
+                                    <div className={`text-gray-300 hover:text-${theme}-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-grab active:cursor-grabbing`} title="Arrossega per moure">
+                                        <Icons.Grip size={14}/> 
+                                    </div>
                                 </div>
 
                                 <span className={`text-${theme}-400 font-bold mt-1`}>•</span>
-                                {task.tag === 'skipped' && <span className="text-red-500 text-[10px] mr-1" title="No feta">🔴</span>}
-                                {task.tag === 'unfinished' && <span className="text-red-600 text-[10px] mr-1" title="Inacabada">⚠️</span>}
+                            {task.tag === 'skipped' && <span className="text-red-500 text-[10px] mr-1" title="No feta">🔴</span>}
+                            {task.tag === 'unfinished' && <span className="text-red-600 text-[10px] mr-1" title="Inacabada">⚠️</span>}
 
-                                <div className="flex-shrink-0 min-w-[20px] text-right">
-                                    {task.time ? <span className="text-xs font-bold time-red">{task.time}'</span> : <span className="text-xs text-gray-200">-</span>}
-                                </div>
+                            <div className="flex-shrink-0 flex items-center justify-end w-[35px] relative">
                                 <input 
                                     type="text" 
-                                    className={`flex-1 bg-transparent hover:bg-gray-50 focus:bg-white rounded px-1 focus:ring-1 focus:ring-${theme}-200 focus:outline-none text-sm py-0.5 transition-colors task-input ${getInputClass(task.status)}`}
-                                    placeholder={disabled ? "" : "Activitat..."}
-                                    value={task.text}
-                                    onChange={(e) => updateTask(idx, 'text', e.target.value)}
-                                    onFocus={() => { setFocusedIndex(idx); setMenuIdx(null); }}
-                                    onBlur={() => setFocusedIndex(null)}
+                                    className="w-full bg-transparent hover:bg-gray-50 focus:bg-white rounded pl-1 pr-2 focus:ring-1 focus:ring-red-200 focus:outline-none text-xs font-bold time-red text-right placeholder-gray-300"
+                                    placeholder="-"
+                                    value={task.time}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '');
+                                        updateTask(idx, 'time', val);
+                                    }}
+                                    onFocus={() => { 
+                                        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+                                        setFocusedIndex(idx); 
+                                    }}
+                                    onBlur={() => { 
+                                        blurTimeoutRef.current = setTimeout(() => setFocusedIndex(null), 200); 
+                                    }}
                                     disabled={disabled}
                                 />
+                                <span className="text-xs font-bold time-red absolute right-0 pointer-events-none">'</span>
                             </div>
-                            
-                            {focusedIndex === idx && task.text.trim() !== '' && !disabled && (
-                                <div className="w-full flex justify-center mt-1 expand-open">
-                                    <div className="flex gap-2 bg-white border border-gray-200 shadow-sm rounded-full px-2 py-0.5">
-                                        <button 
-                                            onMouseDown={(e) => { e.preventDefault(); onAction(task, 'save'); }}
-                                            className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded hover:bg-yellow-100 transition-colors"
-                                            title="Guardar al Radar"
-                                        >
-                                            <Icons.Save size={12}/> Guardar
-                                        </button>
-                                        
-                                        <button 
-                                            onMouseDown={(e) => { e.preventDefault(); onAction(task, 'alert_menu'); }}
-                                            className="flex items-center gap-1 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded hover:bg-orange-100 transition-colors"
-                                            title="Aplaçar / No feta"
-                                        >
-                                            <Icons.AlertTriangle size={12}/> Aplaçar
-                                        </button>
-                                        
-                                        <div className="flex items-center bg-red-50 text-red-700 border border-red-200 rounded overflow-hidden">
-                                            <button 
-                                                onMouseDown={(e) => { e.preventDefault(); adjustTime(idx, -5); }}
-                                                className="px-2 py-0.5 hover:bg-red-100 border-r border-red-200 transition-colors font-bold text-[10px]"
-                                                title="Restar 5 minuts"
-                                            >
-                                                -
-                                            </button>
-                                            <span className="px-1 text-[10px] font-bold">5'</span>
-                                            <button 
-                                                onMouseDown={(e) => { e.preventDefault(); adjustTime(idx, 5); }}
-                                                className="px-2 py-0.5 hover:bg-red-100 border-l border-red-200 transition-colors font-bold text-[10px]"
-                                                title="Afegir 5 minuts"
-                                            >
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                            <input 
+                                type="text" 
+                                className={`flex-1 bg-transparent hover:bg-gray-50 focus:bg-white rounded px-1 focus:ring-1 focus:ring-${theme}-200 focus:outline-none text-sm py-0.5 transition-colors ${getInputClass(task.status)}`}
+                                placeholder={disabled ? "" : "Activitat..."}
+                                value={task.text}
+                                onChange={(e) => updateTask(idx, 'text', e.target.value)}
+                                onFocus={() => { 
+                                    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+                                    setFocusedIndex(idx); 
+                                }}
+                                onBlur={() => { 
+                                    blurTimeoutRef.current = setTimeout(() => setFocusedIndex(null), 200); 
+                                }}
+                                disabled={disabled}
+                            />
                         </div>
-                    ))}
+                        
+                        {focusedIndex === idx && task.text.trim() !== '' && !disabled && (
+                            <div className="w-full flex justify-center mt-1 expand-open" onMouseDown={(e) => e.preventDefault()}>
+                                <div className="flex gap-2 bg-white border border-gray-200 shadow-sm rounded-full px-2 py-0.5" onMouseDown={(e) => e.preventDefault()}>
+                                    <button 
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); deleteTask(idx); }}
+                                        className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded hover:bg-red-100 transition-colors"
+                                        title="Esborrar"
+                                    >
+                                        <Icons.Trash size={12}/> Esborrar
+                                    </button>
+
+                                    <button 
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAction(task, 'save'); }}
+                                        className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded hover:bg-yellow-100 transition-colors"
+                                        title="Guardar al Radar"
+                                    >
+                                        <Icons.Save size={12}/> Guardar
+                                    </button>
+                                    
+                                    <button 
+                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAction(task, 'alert_menu'); }}
+                                        className="flex items-center gap-1 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded hover:bg-orange-100 transition-colors"
+                                        title="Aplaçar / No feta"
+                                    >
+                                        <Icons.AlertTriangle size={12}/> Aplaçar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
                 </div>
             );
         };
@@ -974,7 +982,7 @@
         };
 
         const DailyNotepadModal = ({ dayIndex, dayName, config, planData, onClose, onSave }) => {
-            const daySlots = TIME_SLOTS.filter(slot => slot.type !== 'break' && config.schedule[dayIndex]?.[slot.id]);
+            const daySlots = TIME_SLOTS.filter(slot => slot.type !== 'break' && (config.schedule[dayIndex]?.[slot.id] || planData[`${dayIndex}-${slot.id}`]?.extraClassId));
 
             const [formData, setFormData] = useState(() => {
                 const init = {};
@@ -1041,7 +1049,7 @@
                             <p className="text-center text-gray-500 italic p-4">No hi ha classes programades per avui.</p>
                         ) : (
                             daySlots.map(slot => {
-                                const classId = config.schedule[dayIndex][slot.id];
+                                const classId = planData[`${dayIndex}-${slot.id}`]?.extraClassId || config.schedule[dayIndex][slot.id];
                                 const className = config.classes.find(c => c.id === classId)?.name || "Classe";
                                 const data = formData[slot.id] || { notes: "", materials: "", links: [] };
 
@@ -1325,9 +1333,6 @@
 
             const handleStatusChange = (d, s, val) => {
                 const newData = { ...planData, [`${d}-${s}`]: { ...planData[`${d}-${s}`], status: val } };
-                if (val === null) {
-                    newData[`${d}-${s}`].zzzReason = "";
-                }
                 updatePlanData(newData);
             };
 
@@ -1384,7 +1389,8 @@
                 for(let i=d; i<5; i++) { 
                     for(let j=0; j<TIME_SLOTS.length; j++) { 
                         if(i===d && j < startSlot) continue; 
-                        if(config.schedule[i]?.[j] === cid) { found={d:i, s:j, w:0}; break; } 
+                        const cellCid = planData[`${i}-${j}`]?.extraClassId || config.schedule[i]?.[j];
+                        if(cellCid === cid) { found={d:i, s:j, w:0}; break; } 
                     } 
                     if(found) break; 
                 }
@@ -1451,13 +1457,12 @@
                             return null;
                         };
 
-                        const nextWeekId = getNextActiveWeekId(weekId);
+                        const nextWeekId = getNextActiveWeekId(currentWid);
                         if (nextWeekId) {
                             const nextWeekData = weeksData[nextWeekId] || {};
                             const targetKey = `${found.d}-${found.s}`;
                             const targetTasks = getTasks(found.d, found.s, nextWeekData);
                             const newTargetTasks = [newTaskObj, ...targetTasks];
-                            // L'ERROR ERA AQUÍ (ja està posat el ":")
                             const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...(nextWeekData[targetKey] || {}), tasks: newTargetTasks } };
                             onUpdateWeekData(nextWeekId, updatedNextWeekData);
                             alert(`Activitat moguda a la setmana vinent (${DAYS[found.d]})`);
@@ -1480,7 +1485,6 @@
                 newData[currentKey] = { 
                     ...newData[currentKey], 
                     status: 'zzz', 
-                    zzzReason: newData[currentKey]?.zzzReason || "", 
                     tasks: [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}] 
                 };
 
@@ -1515,7 +1519,6 @@
                                 const nextWeekData = weeksData[nextWeekId] || {};
                                 const targetKey = `${found.d}-${found.s}`;
                                 const targetTasks = getTasks(found.d, found.s, nextWeekData);
-                                // L'ERROR ERA AQUÍ (ja està posat el ":")
                                 const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...(nextWeekData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] } };
                                 onUpdateWeekData(nextWeekId, updatedNextWeekData);
                                 alert(`Classe cancel·lada. Mogut a la setmana vinent (${DAYS[found.d]}).`);
@@ -1533,10 +1536,18 @@
 
             const handleAddExtraClass = () => {
                 if (!newExtra.classId) return;
-                const newSchedule = { ...config.schedule };
-                if (!newSchedule[newExtra.day]) newSchedule[newExtra.day] = {};
-                newSchedule[newExtra.day][newExtra.slot] = newExtra.classId;
-                onConfigChange({ ...config, schedule: newSchedule });
+                const key = `${newExtra.day}-${newExtra.slot}`;
+                const currentCell = planData[key] || {};
+                const newData = { 
+                    ...planData, 
+                    [key]: { 
+                        ...currentCell, 
+                        extraClassId: newExtra.classId,
+                        status: null,
+                        tasks: currentCell.tasks && currentCell.tasks.length > 0 ? currentCell.tasks : [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}]
+                    } 
+                };
+                updatePlanData(newData);
                 setShowAddClassModal(false);
             };
 
@@ -1568,7 +1579,7 @@
                 
                 DAYS.forEach((day, d) => {
                     TIME_SLOTS.forEach((slot, s) => {
-                        const cid = config.schedule[d]?.[slot.id];
+                        const cid = planData[`${d}-${slot.id}`]?.extraClassId || config.schedule[d]?.[slot.id];
                         if (cid && slot.type !== 'break' && (!exportClassId || cid === exportClassId)) {
                             const data = planData[`${d}-${slot.id}`] || {};
                             const tasks = data.tasks || [];
@@ -1576,8 +1587,7 @@
                             
                             let contentHtml = "";
                             if (data.status === 'zzz') {
-                                const rao = data.zzzReason ? ` (${data.zzzReason})` : '';
-                                contentHtml = `💤 NO ES FA CLASSE${rao}`;
+                                contentHtml = "💤 NO ES FA CLASSE";
                             } else {
                                 contentHtml = validTasks.map(t => {
                                     let style = "margin-bottom: 4px;";
@@ -1616,7 +1626,7 @@
             };
 
             const handleExportToProgramacio = () => {
-                const htmlRows = generateHTML(true); 
+                const htmlRows = generateHTML(true); // NOMES FILES <tr>
                 const payload = {
                     action: 'SYNC_TABLE',
                     curs: exportConfig.curs.trim(),
@@ -1634,10 +1644,10 @@
             const visibleSlots = TIME_SLOTS.filter((slot, index) => {
                 if (slot.type === 'break') return false; 
                 
-                const hasAnySchedule = DAYS.some((_, d) => TIME_SLOTS.some(s => config.schedule[d]?.[s.id]));
+                const hasAnySchedule = DAYS.some((_, d) => TIME_SLOTS.some(s => config.schedule[d]?.[s.id] || planData[`${d}-${s.id}`]?.extraClassId));
                 if (!hasAnySchedule) return true;
                 
-                const hasClass = DAYS.some((_, d) => config.schedule[d]?.[slot.id]);
+                const hasClass = DAYS.some((_, d) => config.schedule[d]?.[slot.id] || planData[`${d}-${slot.id}`]?.extraClassId);
                 if (hasClass) return true;
 
                 const prevSlotIndex = slot.id - 1;
@@ -1661,7 +1671,7 @@
                         </div>
                         <button onClick={handleUndo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${history.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={history.length === 0} title="Desfer última acció"><Icons.Undo /></button>
                         <button onClick={handleRedo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${future.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={future.length === 0} title="Refer última acció desfeta"><Icons.Redo /></button>
-                        <button onClick={() => setShowAddClassModal(true)} className="bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium">+ Afegir classe</button>
+                        <button onClick={() => setShowAddClassModal(true)} className="bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium">+ Afegir classe extra</button>
                         <div className="flex gap-2">
                             <button onClick={() => setReviewMode(!reviewMode)} className={`px-3 py-1 rounded-lg font-bold border flex gap-1 items-center transition-colors ${reviewMode ? 'bg-red-50 text-red-600 border-red-200 shadow-inner' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
                                 {reviewMode ? <Icons.AlertTriangle /> : <Icons.Settings />} {reviewMode ? 'MODE REVISIÓ' : 'Revisar'}
@@ -1708,7 +1718,7 @@
 
                                         if (isCovered) return null;
 
-                                        const cid = config.schedule[d]?.[slot.id];
+                                        const cid = planData[`${d}-${slot.id}`]?.extraClassId || config.schedule[d]?.[slot.id];
                                         if (!cid) return <div key={d} className="bg-gray-50/30 border-r border-b border-gray-100"></div>;
                                         
                                         const cinfo = config.classes.find(c => c.id === cid);
@@ -1726,7 +1736,7 @@
                                             <div key={d} style={is2h ? { gridRow: 'span 2' } : {}} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-colors ${cellBgClass}`}>
                                                 <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-1 shadow-sm ${cinfo.color} ${isZzz ? 'opacity-50 grayscale' : ''}`}>
                                                     <div className="flex items-center gap-1 overflow-hidden">
-                                                        <span className="truncate">{cinfo.name} {is2h && "(2h)"}</span>
+                                                        <span className="truncate">{cinfo.name} {is2h && "(2h)"} {data.extraClassId && "(Extra)"}</span>
                                                         <button 
                                                             onClick={() => setActiveSessionNotepad({dayIndex: d, slotId: slot.id, className: cinfo.name, slotLabel: slot.label})} 
                                                             className={`p-0.5 rounded ml-1 transition-colors ${hasContent ? 'text-orange-500 hover:bg-orange-50' : 'text-inherit hover:bg-black/10'}`} 
@@ -1743,26 +1753,7 @@
                                                     </div>
                                                 </div>
                                                 <div className={`flex-1 overflow-y-auto custom-scroll ${reviewMode ? 'opacity-50 pointer-events-none' : ''}`}>
-                                                    {isZzz ? (
-                                                        <div className="flex-1 flex items-center justify-center p-2 h-full">
-                                                            <textarea
-                                                                className="w-full h-full min-h-[80px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-600 focus:ring-0 focus:outline-none placeholder-gray-500"
-                                                                style={{ pointerEvents: 'auto' }}
-                                                                placeholder="Motiu (ex: Excursió)"
-                                                                value={data.zzzReason || ""}
-                                                                onChange={(e) => {
-                                                                    const newData = { ...planData, [key]: { ...planData[key], zzzReason: e.target.value } };
-                                                                    setPlanData(newData); 
-                                                                }}
-                                                                onBlur={(e) => {
-                                                                    const newData = { ...planData, [key]: { ...planData[key], zzzReason: e.target.value } };
-                                                                    updatePlanData(newData, true); 
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, slot.id, t)} onAction={(task, action) => handleTaskAction(d, slot.id, cid, task, action)} disabled={isZzz} theme={theme} />
-                                                    )}
+                                                    <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, slot.id, t)} onAction={(task, action) => handleTaskAction(d, slot.id, cid, task, action)} disabled={isZzz} theme={theme} />
                                                 </div>
                                                 {(reviewMode || data.review) && (
                                                     <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={data.review||""} onChange={(e)=>handleReviewChange(d,slot.id,e.target.value)}></textarea>
@@ -1936,7 +1927,7 @@
                     {showAddClassModal && ReactDOM.createPortal(
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
                             <div className="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl">
-                                <h3 className="text-lg font-bold text-gray-800 mb-4">Afegir Classe Extra</h3>
+                                <h3 className="text-lg font-bold text-gray-800 mb-4">Afegir Classe Extra (Aquesta Setmana)</h3>
                                 <div className="space-y-3">
                                     <div><label className="text-xs font-bold text-gray-500 uppercase">Dia</label><select className="w-full border p-2 rounded" value={newExtra.day} onChange={(e) => setNewExtra({...newExtra, day: parseInt(e.target.value)})}>{DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select></div>
                                     <div><label className="text-xs font-bold text-gray-500 uppercase">Hora</label><select className="w-full border p-2 rounded" value={newExtra.slot} onChange={(e) => setNewExtra({...newExtra, slot: parseInt(e.target.value)})}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
@@ -1953,7 +1944,7 @@
 
         const App = () => {
             const [view, setView] = useState('config');
-            const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] });
+            const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utEnds: {} });
             const [radar, setRadar] = useState("");
             const [weeksData, setWeeksData] = useState({});
             const [currentWeekId, setCurrentWeekId] = useState(null);
@@ -1967,6 +1958,7 @@
                 if (themeData) {
                     document.body.style.backgroundColor = themeData.bg;
                     
+                    // Injectar estils dinàmics per scrollbar i altres elements que no son classes Tailwind
                     let styleTag = document.getElementById('dynamic-theme-styles');
                     if (!styleTag) {
                         styleTag = document.createElement('style');
@@ -1981,88 +1973,27 @@
                 }
             }, [config.theme]);
 
-            // CARREGADOR I AUTO-RESCAT DE DADES (AMB MIGRACIÓ DE DIES)
             useEffect(() => {
                 const loader = document.getElementById('app-loader');
                 if (loader) loader.style.display = 'none';
-                
-                let saved = localStorage.getItem('cfnPlannerData_v23'); 
-                if (!saved) {
-                    saved = localStorage.getItem('cfnPlannerData_v22') || localStorage.getItem('cfnPlannerData_v21') || localStorage.getItem('cfnPlannerData');
-                }
-
+                const saved = localStorage.getItem('cfnPlannerData_v23'); 
                 if (saved) {
                     try {
                         const data = JSON.parse(saved);
-                        let needsSave = false;
-
-                        // 1. MIGRACIÓ UT (de utEnds a utDates)
-                        if (data.config && data.config.utEnds && (!data.config.utDates || data.config.utDates.length === 0)) {
-                            data.config.utDates = Object.entries(data.config.utEnds).map(([date, name], idx) => ({
-                                id: 'migrated_' + idx,
-                                name: name,
-                                date: date
-                            }));
-                            delete data.config.utEnds;
-                            needsSave = true;
-                        }
-
-                        // 2. MIGRACIÓ DATES (Moure els diumenges a dilluns)
-                        const shiftDate = (dateStr) => {
-                            if (!dateStr || typeof dateStr !== 'string') return dateStr;
-                            const parts = dateStr.split('-');
-                            if (parts.length !== 3) return dateStr;
-                            const dObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-                            if (dObj.getDay() === 0) {
-                                dObj.setDate(dObj.getDate() + 1);
-                                return `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
-                            }
-                            return dateStr;
-                        };
-
-                        if (data.weeksData) {
-                            const newWeeksData = {};
-                            for (const [key, val] of Object.entries(data.weeksData)) {
-                                const newKey = shiftDate(key);
-                                newWeeksData[newKey] = val;
-                                if (newKey !== key) needsSave = true;
-                            }
-                            data.weeksData = newWeeksData;
-                        }
-
-                        if (data.completedWeeks) {
-                            const newComp = data.completedWeeks.map(shiftDate);
-                            if (newComp.join(',') !== data.completedWeeks.join(',')) {
-                                data.completedWeeks = newComp;
-                                needsSave = true;
-                            }
-                        }
-                        
-                        if (data.holidayWeeks) {
-                            const newHol = data.holidayWeeks.map(shiftDate);
-                            if (newHol.join(',') !== data.holidayWeeks.join(',')) {
-                                data.holidayWeeks = newHol;
-                                needsSave = true;
-                            }
-                        }
-
-                        if(data.config) setConfig(data.config);
+                        if(data.config) setConfig({ ...data.config, utEnds: data.config.utEnds || {} });
                         if(data.radar) setRadar(data.radar);
                         if(data.weeksData) setWeeksData(data.weeksData);
                         if(data.completedWeeks) setCompletedWeeks(data.completedWeeks);
                         if(data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
                         if(data.reminders) setReminders(data.reminders);
                         if(data.config?.teacherName) setView('dashboard');
-
-                        if (needsSave) {
-                             localStorage.setItem('cfnPlannerData_v23', JSON.stringify(data));
-                        }
-                    } catch(e) { console.error("Error carregant les dades", e); }
+                    } catch(e) {}
                 }
             }, []);
 
             useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
 
+            // Funció per actualitzar qualsevol setmana des del planner
             const handleUpdateWeekData = (weekId, data) => {
                 setWeeksData(prev => ({ ...prev, [weekId]: data }));
             };
@@ -2078,6 +2009,7 @@
                         const currentWeekData = prev[wid] || {};
                         const updatedWeekData = { ...currentWeekData };
                         
+                        // Loop through all days and slots
                         for (let d = 0; d < 5; d++) {
                             for (let s = 0; s < TIME_SLOTS.length; s++) {
                                 const slot = TIME_SLOTS[s];
@@ -2087,7 +2019,6 @@
                                          updatedWeekData[key] = { 
                                              ...(updatedWeekData[key] || {}), 
                                              status: 'zzz',
-                                             zzzReason: 'Vacances 🎉',
                                              tasks: updatedWeekData[key]?.tasks || [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}]
                                          };
                                      }
@@ -2106,7 +2037,7 @@
                 }));
             };
 
-            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
+            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utEnds: {} }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
             const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
             const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
 
