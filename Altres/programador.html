@@ -42,6 +42,16 @@
             transition: background-color 0.2s;
         }
 
+        /* Ocultar fletxes dels inputs de tipus number per a un disseny més net */
+        input[type=number].hide-arrows::-webkit-inner-spin-button, 
+        input[type=number].hide-arrows::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number].hide-arrows {
+            -moz-appearance: textfield;
+        }
+
         .phase-header-0 { background-color: #d1fae5; color: #065f46; border-left: 4px solid #059669; } /* Verd */
         .phase-header-1 { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; } /* Blau */
         .phase-header-2 { background-color: #fef3c7; color: #92400e; border-left: 4px solid #d97706; } /* Groc */
@@ -125,9 +135,18 @@
                             let newS = { ...s };
                             delete newS.space;
                             if (typeof newS.activity === 'string') {
-                                newS.activities = newS.activity.split('\n').filter(a=>a.trim()).map(a => ({ id: generateId(), text: a, detail: '', expanded: false }));
+                                newS.activities = newS.activity.split('\n').filter(a=>a.trim()).map(a => ({ id: generateId(), text: a, detail: '', time: '', challengeResponse: '', expanded: false }));
                                 delete newS.activity;
-                            } else if (!newS.activities) newS.activities = [];
+                            } else if (!newS.activities) {
+                                newS.activities = [];
+                            } else {
+                                // Migració de propietats noves a activitats existents
+                                newS.activities = newS.activities.map(a => ({
+                                    ...a,
+                                    time: a.time || '',
+                                    challengeResponse: a.challengeResponse || ''
+                                }));
+                            }
                             
                             if (typeof newS.material === 'string') {
                                 newS.materials = newS.material.split('\n').filter(m=>m.trim()).map(m => ({ id: generateId(), name: m, url: '' }));
@@ -142,7 +161,7 @@
 
         // --- COMPONENTS ---
 
-        const AutoTextarea = ({ value, onChange, placeholder, className }) => {
+        const AutoTextarea = ({ value, onChange, placeholder, className, onFocus }) => {
             const textareaRef = useRef(null);
 
             const adjustHeight = () => {
@@ -165,52 +184,11 @@
                         onChange(e.target.value);
                         adjustHeight();
                     }}
+                    onFocus={onFocus}
                     placeholder={placeholder}
                     rows={1}
                     className={`textarea-auto ${className}`}
                 />
-            );
-        };
-
-        const HighlightedActivityTextarea = ({ value, onChange, completed, onFocus }) => {
-            const textareaRef = useRef(null);
-            
-            const adjustHeight = () => {
-                if (textareaRef.current) {
-                    textareaRef.current.style.height = 'auto';
-                    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-                }
-            };
-
-            useEffect(() => { adjustHeight(); }, [value]);
-
-            const handleChange = (e) => {
-                let val = e.target.value;
-                if (!val.startsWith('• ')) val = '• ' + val.replace(/^•?\s*/, '');
-                onChange(val);
-                adjustHeight();
-            };
-
-            return (
-                <div className="relative w-full text-sm font-medium">
-                    <div 
-                        className={`absolute inset-0 pointer-events-none whitespace-pre-wrap break-words px-1 py-1 ${completed ? 'text-gray-500' : 'text-gray-800'}`} 
-                        aria-hidden="true"
-                    >
-                        {value.split(/(\d+)/).map((part, i) =>
-                            /\d+/.test(part) ? <span key={i} className="text-red-600 font-bold">{part}</span> : <span key={i} className={completed ? "opacity-50" : ""}>{part}</span>
-                        )}
-                    </div>
-                    <textarea
-                        ref={textareaRef}
-                        value={value}
-                        onChange={handleChange}
-                        onFocus={onFocus}
-                        rows={1}
-                        className={`textarea-auto relative z-10 w-full px-1 py-1 bg-transparent text-transparent caret-black outline-none resize-none overflow-hidden rounded`}
-                        style={{ color: 'transparent', WebkitTextFillColor: 'transparent' }}
-                    />
-                </div>
             );
         };
 
@@ -275,12 +253,12 @@
                                 actDivs.forEach(div => {
                                     let text = div.textContent.trim();
                                     if (text && !text.startsWith('•')) text = '• ' + text;
-                                    if (text) activities.push({ id: generateId(), text: text, detail: '', expanded: false });
+                                    if (text) activities.push({ id: generateId(), text: text, detail: '', time: '', challengeResponse: '', expanded: false });
                                 });
                             } else {
                                 let text = cells[0].textContent.trim();
                                 if (text && !text.startsWith('•')) text = '• ' + text;
-                                if (text) activities.push({ id: generateId(), text: text, detail: '', expanded: false });
+                                if (text) activities.push({ id: generateId(), text: text, detail: '', time: '', challengeResponse: '', expanded: false });
                             }
 
                             // Parsejar Materials i Enllaços
@@ -553,6 +531,46 @@
                 }));
             };
 
+            const addPhase = (courseId, unitId) => {
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: [...unit.phases, {
+                                    id: generateId(),
+                                    name: 'NOVA FASE',
+                                    collapsed: false,
+                                    sessions: []
+                                }]
+                            };
+                        })
+                    };
+                }));
+                showToast("Nova fase afegida.");
+            };
+
+            const deletePhase = (courseId, unitId, phaseId) => {
+                if(!confirm("Segur que vols eliminar aquesta fase i TOTES les seves sessions? Aquesta acció no es pot desfer.")) return;
+                setData(prev => prev.map(course => {
+                    if (course.id !== courseId) return course;
+                    return {
+                        ...course,
+                        units: course.units.map(unit => {
+                            if (unit.id !== unitId) return unit;
+                            return {
+                                ...unit,
+                                phases: unit.phases.filter(p => p.id !== phaseId)
+                            };
+                        })
+                    };
+                }));
+                showToast("Fase eliminada.");
+            };
+
             const areAllExpanded = activeUnit?.phases.every(p => p.sessions.every(s => s.activities.every(a => a.expanded)));
             
             const toggleAllDetails = () => {
@@ -709,7 +727,6 @@
                             id: newUnitId,
                             title: 'Nova Unitat Temporal',
                             phases: [
-                                // REQ 1: Només tres fases predeterminades
                                 { id: generateId(), name: 'FASE DE PREPARACIÓ', collapsed: false, sessions: [] },
                                 { id: generateId(), name: 'FASE DE RESOLUCIÓ', collapsed: false, sessions: [] },
                                 { id: generateId(), name: "FASE D'INTEGRACIÓ", collapsed: false, sessions: [] }
@@ -760,7 +777,7 @@
 
                 targetUnit.phases.forEach(p => {
                     p.sessions.forEach(s => {
-                        const actText = s.activities.map(a => a.text).join('\n');
+                        const actText = s.activities.map(a => `${a.time ? a.time + "' - " : ""}${a.text}`).join('\n');
                         const matText = s.materials.map(m => m.name + (m.url ? ` (${m.url})` : '')).join('\n');
                         const comments = s.comments || "";
                         exportData.push({
@@ -860,7 +877,7 @@
                 const newSessions = pasteRows.filter(r => r.some(c => c.trim() !== '')).map(cols => {
                     return {
                         id: generateId(),
-                        activities: cols[1] ? cols[1].split('\n').filter(x=>x.trim()).map(a => ({ id: generateId(), text: (a.trim().startsWith('•') ? '' : '• ') + a.trim(), detail: "", expanded: false })) : [],
+                        activities: cols[1] ? cols[1].split('\n').filter(x=>x.trim()).map(a => ({ id: generateId(), text: (a.trim().startsWith('•') ? '' : '• ') + a.trim(), detail: "", time: "", challengeResponse: "", expanded: false })) : [],
                         materials: cols[2] ? cols[2].split('\n').filter(x=>x.trim()).map(m => ({ id: generateId(), name: m.trim(), url: "" })) : [],
                         comments: cols[3] || "",
                         completed: false
@@ -1110,7 +1127,7 @@
                                                     <React.Fragment key={phase.id}>
                                                         <tr className={`border-b border-gray-200 ${`phase-header-${pIndex % 5}`}`}>
                                                             <td colSpan="6" className="p-2">
-                                                                <div className="flex items-center">
+                                                                <div className="flex items-center group">
                                                                     <button
                                                                         onClick={() => updatePhase(activeCourse.id, activeUnit.id, phase.id, 'collapsed', !phase.collapsed)}
                                                                         className="mr-2 text-current opacity-70 hover:opacity-100 focus:outline-none font-bold text-xs"
@@ -1124,6 +1141,13 @@
                                                                         onChange={(e) => updatePhase(activeCourse.id, activeUnit.id, phase.id, 'name', e.target.value)}
                                                                         className="font-bold text-sm bg-transparent border-none w-full outline-none"
                                                                     />
+                                                                    <div 
+                                                                        onClick={(e) => { e.stopPropagation(); deletePhase(activeCourse.id, activeUnit.id, phase.id); }} 
+                                                                        className="text-current opacity-0 group-hover:opacity-50 hover:!opacity-100 p-1 ml-2 rounded cursor-pointer transition-opacity" 
+                                                                        title="Eliminar fase completa"
+                                                                    >
+                                                                        <IconTrash />
+                                                                    </div>
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -1151,7 +1175,7 @@
                                                                     
                                                                     <td className="p-3 align-top border-r border-gray-100 relative">
                                                                         {session.activities.map((act) => {
-                                                                            const hasDetail = act.detail && act.detail.trim() !== '';
+                                                                            const hasDetailOrChallenge = (act.detail && act.detail.trim() !== '') || (act.challengeResponse && act.challengeResponse.trim() !== '');
                                                                             return (
                                                                                 <div 
                                                                                     key={act.id} 
@@ -1181,12 +1205,25 @@
                                                                                     <div className="flex items-start">
                                                                                         <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing mr-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><IconGripVertical /></span>
                                                                                         <span 
-                                                                                            className={`${hasDetail ? 'text-orange-500 hover:text-orange-700' : 'text-gray-300 hover:text-gray-400'} mr-1 mt-1.5 cursor-pointer select-none text-xs transition-colors shrink-0`} 
+                                                                                            className={`${hasDetailOrChallenge ? 'text-orange-500 hover:text-orange-700' : 'text-gray-300 hover:text-gray-400'} mr-1 mt-1.5 cursor-pointer select-none text-xs transition-colors shrink-0`} 
                                                                                             onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'expanded', value: !act.expanded })}
                                                                                         >
                                                                                             {act.expanded ? '▼' : '▶'}
                                                                                         </span>
-                                                                                        <HighlightedActivityTextarea 
+                                                                                        
+                                                                                        {/* Caixetí del Temps */}
+                                                                                        <div className={`flex items-center mr-2 mt-0.5 shrink-0 rounded px-1 transition-colors ${act.time ? '' : 'opacity-30 group-hover:opacity-100 focus-within:opacity-100'}`}>
+                                                                                            <input 
+                                                                                                type="number" 
+                                                                                                value={act.time || ''} 
+                                                                                                onChange={(e) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'time', value: e.target.value })}
+                                                                                                className="w-6 bg-transparent text-right outline-none text-red-600 font-bold text-sm hide-arrows placeholder-red-300 focus:bg-red-50 focus:rounded"
+                                                                                                placeholder="0"
+                                                                                            />
+                                                                                            <span className="text-red-600 font-bold text-sm ml-px">'</span>
+                                                                                        </div>
+
+                                                                                        <AutoTextarea 
                                                                                             value={act.text} 
                                                                                             onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: val })}
                                                                                             onFocus={() => {
@@ -1194,27 +1231,37 @@
                                                                                                     updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: '• ' });
                                                                                                 }
                                                                                             }}
-                                                                                            completed={session.completed}
+                                                                                            className={`text-sm font-medium mt-0.5 ${session.completed ? 'text-gray-500' : 'text-gray-800'}`}
                                                                                         />
-                                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'delete', act.id)} className="ml-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
+                                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'delete', act.id)} className="ml-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold mt-0.5">×</button>
                                                                                     </div>
                                                                                     
                                                                                     {act.expanded && (
                                                                                         <div className="ml-5 mt-2 mb-2 relative animate-[fadeIn_0.2s_ease-out]">
-                                                                                            <div className="border-l-4 border-orange-400 bg-orange-50/80 rounded-r-lg shadow-sm p-3 flex flex-col">
+                                                                                            <div className="border-l-4 border-orange-400 bg-orange-50/80 rounded-r-lg shadow-sm p-3 flex flex-col space-y-3">
                                                                                                 <AutoTextarea 
                                                                                                     value={act.detail} 
                                                                                                     onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'detail', value: val })} 
                                                                                                     placeholder="Descriu detalls de la dinàmica, pautes, agrupament..." 
                                                                                                     className="text-sm text-gray-800 w-full leading-relaxed placeholder-gray-400" 
                                                                                                 />
+                                                                                                
+                                                                                                {/* Resposta al Repte */}
+                                                                                                <div className={`transition-all duration-300 rounded overflow-hidden border ${act.challengeResponse && act.challengeResponse.trim() !== '' ? 'border-green-400 bg-green-50/80' : 'border-gray-200 bg-gray-50/50 hover:bg-white'}`}>
+                                                                                                    <AutoTextarea
+                                                                                                        value={act.challengeResponse || ''}
+                                                                                                        onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'challengeResponse', value: val })}
+                                                                                                        placeholder="Com es respon al repte amb aquesta activitat?"
+                                                                                                        className={`w-full bg-transparent outline-none p-2 resize-none ${act.challengeResponse && act.challengeResponse.trim() !== '' ? 'text-sm font-bold text-green-900 leading-relaxed' : 'text-xs text-gray-400 h-6 min-h-[24px]'}`}
+                                                                                                    />
+                                                                                                </div>
                                                                                             </div>
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
                                                                             );
                                                                         })}
-                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "• Nova activitat", detail: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
+                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "• Nova activitat", detail: "", time: "", challengeResponse: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
                                                                             <IconPlus /><span className="ml-1">Afegir activitat</span>
                                                                         </button>
                                                                     </td>
@@ -1311,6 +1358,19 @@
                                                         )}
                                                     </React.Fragment>
                                                 ))}
+                                                
+                                                {/* Botó per afegir nova fase al final de la taula */}
+                                                <tr className="bg-white">
+                                                    <td colSpan="6" className="p-4 text-center border-t border-gray-200">
+                                                        <button 
+                                                            onClick={() => addPhase(activeCourse.id, activeUnit.id)}
+                                                            className="inline-flex items-center px-4 py-2 text-sm text-gray-500 border border-dashed border-gray-300 hover:border-orange-500 hover:text-orange-600 rounded-lg transition-colors font-medium bg-gray-50 hover:bg-orange-50"
+                                                        >
+                                                            <IconPlus /> <span className="ml-2">Afegir nova fase</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+
                                             </tbody>
                                         </table>
                                     </div>
