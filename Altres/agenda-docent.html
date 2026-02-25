@@ -17,7 +17,7 @@
         .mono { font-family: 'JetBrains Mono', monospace; }
         
         /* Scrollbar Base */
-        .custom-scroll::-webkit-scrollbar { width: 8px; }
+        .custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scroll::-webkit-scrollbar-track { background: #f9fafb; }
         /* Els colors del thumb es defineixen dinàmicament al JS */
         .custom-scroll::-webkit-scrollbar-thumb { border-radius: 4px; }
@@ -55,7 +55,6 @@
         .session-cancelled {
             background-color: #d1d5db !important; /* gray-300 */
             color: #6b7280 !important; /* gray-500 */
-            /* El pointer-events ara es gestiona millor per permetre escriure el motiu */
         }
         
         .session-cancelled input.task-input {
@@ -170,29 +169,72 @@
         };
 
         const TIME_SLOTS = [
-            { id: 0, label: "8:30h - 9:30h", type: "class" },
-            { id: 1, label: "9:30h - 10:30h", type: "class" },
-            { id: 2, label: "10:30h - 11:00h", type: "break", name: "PATI" },
-            { id: 3, label: "11:00h - 12:00h", type: "class" },
-            { id: 4, label: "12:00h - 13:00h", type: "class" },
-            { id: 5, label: "13:00h - 14:00h", type: "class" },
-            { id: 6, label: "14:00h - 15:00h", type: "class" }, 
-            { id: 7, label: "15:00h - 16:00h", type: "class" },
-            { id: 8, label: "16:00h - 17:00h", type: "class" },
-            { id: 9, label: "17:00h - 18:00h", type: "class" }
+            { id: 0, label: "8:30h - 9:30h", type: "class", endH: 9, endM: 30 },
+            { id: 1, label: "9:30h - 10:30h", type: "class", endH: 10, endM: 30 },
+            { id: 2, label: "10:30h - 11:00h", type: "break", name: "PATI", endH: 11, endM: 0 },
+            { id: 3, label: "11:00h - 12:00h", type: "class", endH: 12, endM: 0 },
+            { id: 4, label: "12:00h - 13:00h", type: "class", endH: 13, endM: 0 },
+            { id: 5, label: "13:00h - 14:00h", type: "class", endH: 14, endM: 0 },
+            { id: 6, label: "14:00h - 15:00h", type: "class", endH: 15, endM: 0 },
+            { id: 7, label: "15:00h - 16:00h", type: "class", endH: 16, endM: 0 },
+            { id: 8, label: "16:00h - 17:00h", type: "class", endH: 17, endM: 0 },
+            { id: 9, label: "17:00h - 18:00h", type: "class", endH: 18, endM: 0 },
+            { id: 10, label: "18:00h - 19:00h", type: "class", endH: 19, endM: 0 }
         ];
 
-        const DAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres"];
+        const WORK_DAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres"];
+        const WEEKEND_DAYS = ["Dissabte", "Diumenge"];
         const MONTHS = ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"];
+        
         const DEFAULT_COLORS = [
-            { name: "Blau", value: "bg-blue-100 border-blue-300 text-blue-900" },
-            { name: "Vermell", value: "bg-red-100 border-red-300 text-red-900" },
-            { name: "Verd", value: "bg-green-100 border-green-300 text-green-900" },
-            { name: "Groc", value: "bg-yellow-100 border-yellow-300 text-yellow-900" },
-            { name: "Lila", value: "bg-purple-100 border-purple-300 text-purple-900" },
-            { name: "Taronja", value: "bg-orange-100 border-orange-300 text-orange-900" },
-            { name: "Gris", value: "bg-gray-100 border-gray-300 text-gray-900" },
+            { name: "Blau Clar", value: "bg-sky-100 border-sky-300 text-sky-900", hex: "#bae6fd" },
+            { name: "Blau Fosc", value: "bg-blue-100 border-blue-300 text-blue-900", hex: "#bfdbfe" },
+            { name: "Vermell", value: "bg-red-100 border-red-300 text-red-900", hex: "#fecaca" },
+            { name: "Corall", value: "bg-rose-100 border-rose-300 text-rose-900", hex: "#fecdd3" },
+            { name: "Verd Clar", value: "bg-emerald-100 border-emerald-300 text-emerald-900", hex: "#a7f3d0" },
+            { name: "Verd Fosc", value: "bg-green-100 border-green-300 text-green-900", hex: "#bbf7d0" },
+            { name: "Groc", value: "bg-yellow-100 border-yellow-300 text-yellow-900", hex: "#fef08a" },
+            { name: "Lila", value: "bg-purple-100 border-purple-300 text-purple-900", hex: "#e9d5ff" },
+            { name: "Taronja", value: "bg-orange-100 border-orange-300 text-orange-900", hex: "#fed7aa" },
+            { name: "Gris", value: "bg-gray-100 border-gray-300 text-gray-900", hex: "#e5e7eb" },
         ];
+
+        // Component Personalitzat Select Color
+        const ColorSelect = ({ value, onChange }) => {
+            const [open, setOpen] = useState(false);
+            const selected = DEFAULT_COLORS.find(c => c.value === value) || DEFAULT_COLORS[0];
+            const dropdownRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (e) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            return (
+                <div className="relative" ref={dropdownRef}>
+                    <div onClick={() => setOpen(!open)} className="border p-2 rounded-md w-full flex items-center justify-between cursor-pointer bg-white">
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-full border border-black/10 shadow-inner" style={{ backgroundColor: selected.hex }}></div>
+                            <span className="text-sm">{selected.name}</span>
+                        </div>
+                        <Icons.ChevronDown size={14} className="text-gray-500" />
+                    </div>
+                    {open && (
+                        <div className="absolute top-full left-0 mt-1 w-full bg-white border rounded shadow-lg z-50 max-h-48 overflow-y-auto">
+                            {DEFAULT_COLORS.map(c => (
+                                <div key={c.name} onClick={() => {onChange(c.value); setOpen(false)}} className="p-2 hover:bg-gray-100 flex items-center gap-2 cursor-pointer">
+                                     <div className="w-4 h-4 rounded-full border border-black/10 shadow-inner" style={{ backgroundColor: c.hex }}></div>
+                                     <span className="text-sm">{c.name}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )
+        };
 
         // FUNCIÓ DE FORMATATGE LOCAL SEGURA (Evita el bug UTC vs Hora Local)
         const getLocalISODate = (d) => {
@@ -213,7 +255,7 @@
             while (current < end) {
                 const weekStart = new Date(current);
                 const weekEnd = new Date(current);
-                weekEnd.setDate(weekEnd.getDate() + 4);
+                weekEnd.setDate(weekEnd.getDate() + 6); // Diumenge
                 weeks.push({
                     id: getLocalISODate(weekStart),
                     label: `Setmana ${weekStart.getDate()} ${MONTHS[weekStart.getMonth()]}`,
@@ -365,9 +407,7 @@
                             </div>
                             <div className="w-full md:w-48">
                                 <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Color</label>
-                                <select className="border p-2 rounded-md w-full" value={newClass.color} onChange={(e) => setNewClass({...newClass, color: e.target.value})}>
-                                    {DEFAULT_COLORS.map(c => <option key={c.name} value={c.value}>{c.name}</option>)}
-                                </select>
+                                <ColorSelect value={newClass.color} onChange={(val) => setNewClass({...newClass, color: val})} />
                             </div>
                             <button onClick={addClass} className={`bg-${theme}-600 text-white px-6 py-2 rounded-md hover:bg-${theme}-700 font-medium transition-colors`}>Afegir</button>
                         </div>
@@ -375,7 +415,7 @@
                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm mb-6">
                         <table className="min-w-full bg-white">
                             <thead>
-                                <tr className="bg-gray-100 text-gray-700 text-xs uppercase"><th className="py-3 px-4 text-left w-32 border-b">Hora</th>{DAYS.map((day, i) => <th key={i} className="py-3 px-4 text-center border-b">{day}</th>)}</tr>
+                                <tr className="bg-gray-100 text-gray-700 text-xs uppercase"><th className="py-3 px-4 text-left w-32 border-b">Hora</th>{WORK_DAYS.map((day, i) => <th key={i} className="py-3 px-4 text-center border-b">{day}</th>)}</tr>
                             </thead>
                             <tbody className="text-gray-600 text-sm">
                                 {TIME_SLOTS.map((slot, index) => (
@@ -384,7 +424,7 @@
                                         {slot.type === 'break' ? (
                                             <td colSpan={5} className="py-3 bg-gray-100 text-center text-gray-400 font-bold tracking-widest text-xs">☕ {slot.name}</td>
                                         ) : (
-                                            DAYS.map((_, dayIndex) => {
+                                            WORK_DAYS.map((_, dayIndex) => {
                                                 const prevSlot = TIME_SLOTS[index - 1];
                                                 const prevKey = prevSlot ? `${dayIndex}-${prevSlot.id}` : null;
                                                 const isCovered = prevSlot && localConfig.durations?.[prevKey] === 2;
@@ -440,6 +480,9 @@
             const [editingTaskLink, setEditingTaskLink] = useState(false);
             const [tempTaskLink, setTempTaskLink] = useState(config.taskTrackingUrl || "");
             const fileInputRef = useRef(null);
+            
+            const [newRadarText, setNewRadarText] = useState("");
+            const [newRadarDate, setNewRadarDate] = useState("");
 
             const theme = config.theme || 'orange';
 
@@ -487,6 +530,23 @@
                     const utDate = new Date(y, m - 1, d, 12, 0, 0); 
                     return utDate >= week.startDate && utDate <= week.endDate;
                 });
+            };
+
+            const handleAddRadar = () => {
+                if (!newRadarText.trim()) return;
+                const newEntry = {
+                    id: Date.now(),
+                    text: newRadarText.trim(),
+                    date: newRadarDate || null,
+                    fromTask: false
+                };
+                setRadar([...radar, newEntry]);
+                setNewRadarText("");
+                setNewRadarDate("");
+            };
+
+            const handleRemoveRadar = (id) => {
+                setRadar(radar.filter(item => item.id !== id));
             };
 
             // Lògica per trobar la setmana actual i calcular les claus de data correctes
@@ -599,10 +659,49 @@
                             </div>
                         </div>
                         <div className="lg:col-span-1 h-full flex flex-col gap-6">
-                            {/* RADAR */}
-                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden h-[300px]">
-                                <div className="bg-gray-800 text-white p-4 flex justify-between items-center"><h2 className="font-bold flex items-center gap-2"><Icons.AlertCircle /> RADAR</h2></div>
-                                <textarea className="flex-1 w-full p-4 resize-none focus:outline-none bg-yellow-50/30 font-mono text-sm leading-relaxed text-gray-700" value={radar} onChange={(e) => setRadar(e.target.value)} placeholder="Notes importants, idees, recordatoris..."></textarea>
+                            {/* RADAR NOU FORMAT LLISTA */}
+                            <div className="bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden h-[350px]">
+                                <div className="bg-gray-800 text-white p-4 flex justify-between items-center shrink-0">
+                                    <h2 className="font-bold flex items-center gap-2"><Icons.AlertCircle /> RADAR</h2>
+                                </div>
+                                <div className="flex-1 bg-yellow-50/30 p-4 overflow-y-auto custom-scroll space-y-3">
+                                    {radar.length === 0 && <p className="text-gray-400 italic text-sm text-center mt-4">Cap entrada pendent.</p>}
+                                    {radar.map(item => (
+                                        <div key={item.id} className="relative group bg-white border border-gray-200 rounded p-2 shadow-sm flex gap-2">
+                                            {item.date && (
+                                                <div className="absolute -top-2 right-2 bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-red-200">
+                                                    {new Date(item.date).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                            <button onClick={() => handleRemoveRadar(item.id)} className="shrink-0 mt-0.5 text-gray-300 hover:text-green-500 transition-colors" title="Marcar com a fet">
+                                                <Icons.CheckCircle size={18} />
+                                            </button>
+                                            <p className={`text-sm text-gray-700 pt-0.5 ${item.date ? 'mt-1' : ''}`}>{item.text}</p>
+                                        </div>
+                                    ))}
+                                    
+                                    {/* Entrada buida al final per afegir */}
+                                    <div className="border-t border-gray-200 pt-3 mt-4">
+                                        <div className="bg-white border-2 border-dashed border-gray-200 rounded p-2 flex flex-col gap-2">
+                                            <textarea 
+                                                className="w-full text-sm resize-none outline-none focus:bg-gray-50"
+                                                placeholder="Nova nota o tasca al radar..."
+                                                value={newRadarText}
+                                                onChange={(e) => setNewRadarText(e.target.value)}
+                                                onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddRadar(); }}}
+                                            />
+                                            <div className="flex justify-between items-center">
+                                                <input 
+                                                    type="date" 
+                                                    className="text-[10px] text-gray-500 border rounded p-1 outline-none"
+                                                    value={newRadarDate}
+                                                    onChange={(e) => setNewRadarDate(e.target.value)}
+                                                />
+                                                <button onClick={handleAddRadar} disabled={!newRadarText.trim()} className="bg-gray-800 text-white text-xs px-3 py-1 rounded font-bold disabled:opacity-50">Afegir</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* CONTAINER FOR BOTH LINK BOXES */}
@@ -718,6 +817,18 @@
             const [focusedIndex, setFocusedIndex] = useState(null);
             const [draggedIdx, setDraggedIdx] = useState(null);
             const [dragOverIdx, setDragOverIdx] = useState(null);
+            const [dragEnabled, setDragEnabled] = useState(false);
+            const containerRef = useRef(null);
+
+            useEffect(() => {
+                const handleClickOutside = (e) => {
+                    if (containerRef.current && !containerRef.current.contains(e.target)) {
+                        setFocusedIndex(null);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
 
             const updateTask = (idx, field, value) => {
                 const newTasks = [...tasks];
@@ -771,11 +882,13 @@
                 onChange(filtered);
                 setDragOverIdx(null);
                 setDraggedIdx(null);
+                setDragEnabled(false);
             };
 
             const onDragEnd = () => {
                 setDragOverIdx(null);
                 setDraggedIdx(null);
+                setDragEnabled(false);
             };
 
             const getInputClass = (status) => {
@@ -785,11 +898,11 @@
             };
 
             return (
-                <div className="flex flex-col gap-1 w-full pb-2">
+                <div className="flex flex-col gap-1 w-full pb-2" ref={containerRef}>
                     {tasks.map((task, idx) => (
                         <div 
                             key={idx} 
-                            draggable={!disabled && task.text.trim() !== ''}
+                            draggable={dragEnabled && !disabled && task.text.trim() !== ''}
                             onDragStart={(e) => onDragStart(e, idx)}
                             onDragOver={(e) => onDragOver(e, idx)}
                             onDrop={(e) => onDrop(e, idx)}
@@ -798,7 +911,12 @@
                         >
                             <div className="flex items-center gap-1.5 relative">
                                 {!disabled && task.text.trim() !== '' && (
-                                    <div className="absolute -left-6 top-1.5 z-20 flex items-center text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing" title="Arrossega per moure">
+                                    <div 
+                                        className="absolute -left-6 top-1.5 z-20 flex items-center text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing" 
+                                        title="Arrossega per moure"
+                                        onMouseEnter={() => setDragEnabled(true)}
+                                        onMouseLeave={() => setDragEnabled(false)}
+                                    >
                                         <Icons.Menu size={16}/>
                                     </div>
                                 )}
@@ -818,7 +936,6 @@
                                             updateTask(idx, 'time', val);
                                         }}
                                         onFocus={() => { setFocusedIndex(idx); }}
-                                        onBlur={() => setFocusedIndex(null)}
                                         disabled={disabled}
                                     />
                                     <span className="text-xs font-bold time-red select-none">'</span>
@@ -830,7 +947,6 @@
                                     value={task.text}
                                     onChange={(e) => updateTask(idx, 'text', e.target.value)}
                                     onFocus={() => { setFocusedIndex(idx); }}
-                                    onBlur={() => setFocusedIndex(null)}
                                     disabled={disabled}
                                 />
                             </div>
@@ -1279,6 +1395,7 @@
             const [exportConfig, setExportConfig] = useState({ curs: "", ut: "", fase: "FASE DE PREPARACIÓ" });
             const [showAddClassModal, setShowAddClassModal] = useState(false);
             const [newExtra, setNewExtra] = useState({ day: 0, slot: 0, classId: "" });
+            const [showWeekends, setShowWeekends] = useState(false);
             
             const [showCopyModal, setShowCopyModal] = useState(false);
             const [copySource, setCopySource] = useState(null);
@@ -1293,6 +1410,7 @@
             const [activeSmartPaste, setActiveSmartPaste] = useState(null); 
 
             const theme = config.theme || 'orange';
+            const viewDays = showWeekends ? [...WORK_DAYS, ...WEEKEND_DAYS] : WORK_DAYS;
 
             useEffect(() => {
                 setPlanData(weeksData[weekId] || {});
@@ -1427,8 +1545,7 @@
 
             const handleTaskAction = (d, s, cid, task, action) => {
                 if (action === 'save') {
-                    onAddToRadar(task.text);
-                    alert("Afegit al Radar!");
+                    onAddToRadar(task.text, d);
                 } else if (action === 'alert_menu') {
                     const tasks = getTasks(d, s);
                     const idx = tasks.findIndex(t => t === task);
@@ -1671,17 +1788,17 @@
             const visibleSlots = TIME_SLOTS.filter((slot, index) => {
                 if (slot.type === 'break') return false; 
                 
-                const hasAnySchedule = DAYS.some((_, d) => TIME_SLOTS.some(s => config.schedule[d]?.[s.id] || planData.extraClasses?.[d]?.[s.id]));
+                const hasAnySchedule = viewDays.some((_, d) => TIME_SLOTS.some(s => config.schedule[d]?.[s.id] || planData.extraClasses?.[d]?.[s.id]));
                 if (!hasAnySchedule) return true;
                 
-                const hasClass = DAYS.some((_, d) => config.schedule[d]?.[slot.id] || planData.extraClasses?.[d]?.[slot.id]);
+                const hasClass = viewDays.some((_, d) => config.schedule[d]?.[slot.id] || planData.extraClasses?.[d]?.[slot.id]);
                 if (hasClass) return true;
 
                 const prevSlotIndex = slot.id - 1;
                 if (prevSlotIndex >= 0) {
                     const prevSlot = TIME_SLOTS[prevSlotIndex];
                     if (prevSlot && prevSlot.type === 'class') {
-                         const isCovered = DAYS.some((_, d) => config.durations?.[`${d}-${prevSlot.id}`] === 2);
+                         const isCovered = viewDays.some((_, d) => config.durations?.[`${d}-${prevSlot.id}`] === 2);
                          if (isCovered) return true;
                     }
                 }
@@ -1691,15 +1808,18 @@
 
             return (
                 <div className="max-w-full mx-auto p-4 fade-in pb-20">
-                    <div className="sticky top-0 z-20 bg-white/95 backdrop-blur shadow-md p-3 rounded-xl border border-gray-200 mb-4 flex justify-between items-center">
+                    <div className="sticky top-0 z-40 bg-white/95 backdrop-blur shadow-md p-3 rounded-xl border border-gray-200 mb-4 flex justify-between items-center">
                         <div className="flex items-center gap-3">
                             <button onClick={() => { onBack(); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-600"><Icons.ChevronLeft /></button>
                             <h2 className="font-bold text-gray-800">Planificador {config.schoolYear}</h2>
                         </div>
                         <button onClick={handleUndo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${history.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={history.length === 0} title="Desfer última acció"><Icons.Undo /></button>
                         <button onClick={handleRedo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${future.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={future.length === 0} title="Refer última acció desfeta"><Icons.Redo /></button>
-                        <button onClick={() => setShowAddClassModal(true)} className="bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium">+ Afegir classe</button>
+                        <button onClick={() => setShowAddClassModal(true)} className="bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium">+ Afegir classe extra</button>
                         <div className="flex gap-2">
+                            <button onClick={() => setShowWeekends(!showWeekends)} className={`px-3 py-1 rounded-lg text-sm border font-medium transition-colors ${showWeekends ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                                {showWeekends ? 'Amagar Cap de Setmana' : 'Mostrar Cap de Setmana'}
+                            </button>
                             <button onClick={() => setReviewMode(!reviewMode)} className={`px-3 py-1 rounded-lg font-bold border flex gap-1 items-center transition-colors ${reviewMode ? 'bg-red-50 text-red-600 border-red-200 shadow-inner' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
                                 {reviewMode ? <Icons.AlertTriangle /> : <Icons.Settings />} {reviewMode ? 'MODE REVISIÓ' : 'Revisar'}
                             </button>
@@ -1707,14 +1827,17 @@
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
-                        <div className="min-w-[1400px] grid" style={{ gridTemplateColumns: '6rem repeat(5, 1fr)' }}>
-                            <div className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex items-center justify-center">Hores</div>
-                            {DAYS.map((d, i) => {
+                    <div className="bg-white rounded-xl shadow border border-gray-200 overflow-auto h-[calc(100vh-140px)] custom-scroll relative">
+                        <div className={`min-w-[1200px] grid`} style={{ gridTemplateColumns: `6rem repeat(${viewDays.length}, minmax(0, 1fr))` }}>
+                            {/* Cantonada superior esquerra fixada */}
+                            <div className="sticky top-0 left-0 z-30 p-3 border-r border-b border-gray-200 bg-gray-100 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex items-center justify-center">Hores</div>
+                            
+                            {/* Fila de dies fixada a dalt */}
+                            {viewDays.map((d, i) => {
                                 const dateStr = addDays(weekId, i);
                                 const hasReminder = reminders && reminders[dateStr] && reminders[dateStr].length > 0;
                                 return (
-                                    <div key={i} className="p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 relative group">
+                                    <div key={i} className="sticky top-0 z-20 p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group">
                                         {d} {parseInt(dateStr.split('-')[2])}
                                         <button 
                                             onClick={() => setActiveDayNotepad({ dayIndex: i })}
@@ -1736,8 +1859,11 @@
                             
                             {visibleSlots.map((slot, visibleIndex) => (
                                 <React.Fragment key={slot.id}>
-                                    <div className="p-2 border-r border-b border-gray-100 bg-gray-50/50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[160px]">{slot.label}</div>
-                                    {DAYS.map((_, d) => {
+                                    {/* Columna d'hores fixada a l'esquerra */}
+                                    <div className="sticky left-0 z-10 p-2 border-r border-b border-gray-200 bg-gray-50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[160px]">{slot.label}</div>
+                                    
+                                    {/* Cel·les */}
+                                    {viewDays.map((_, d) => {
                                         const prevSlot = visibleSlots[visibleIndex - 1];
                                         const isSequential = prevSlot && (slot.id === prevSlot.id + 1);
                                         const prevKey = prevSlot ? `${d}-${prevSlot.id}` : null;
@@ -1749,10 +1875,32 @@
                                         const extraClassId = planData.extraClasses?.[d]?.[slot.id];
                                         const cid = globalClassId || extraClassId;
                                         const isExtraClass = !!extraClassId;
-
-                                        if (!cid) return <div key={d} className="bg-gray-50/30 border-r border-b border-gray-100"></div>;
                                         
-                                        const cinfo = config.classes.find(c => c.id === cid);
+                                        // Comprovació de si la classe ja ha passat
+                                        const now = new Date();
+                                        const dateStr = addDays(weekId, d);
+                                        const [y, m, day] = dateStr.split('-');
+                                        const cellEndTime = new Date(y, m - 1, day, slot.endH, slot.endM, 0);
+                                        const isPast = now > cellEndTime;
+
+                                        if (!cid && !isExtraClass && d > 4) {
+                                            // Cap de setmana sense classe extra assignada: permetre escriure text pla
+                                            const key = `${d}-${slot.id}`;
+                                            const data = planData[key] || {};
+                                            const tasks = getTasks(d, slot.id);
+                                            return (
+                                                <div key={d} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-colors ${isPast ? 'bg-gray-100 opacity-60' : 'bg-white hover:bg-gray-50/50'}`}>
+                                                    <div className="text-xs font-bold text-gray-400 mb-1 text-center italic">Temps lliure</div>
+                                                    <div className="flex-1 overflow-y-auto custom-scroll">
+                                                        <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, slot.id, t)} onAction={(task, action) => handleTaskAction(d, slot.id, cid, task, action)} disabled={false} theme={theme} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        if (!cid) return <div key={d} className={`border-r border-b border-gray-100 ${isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50/30'}`}></div>;
+                                        
+                                        const cinfo = config.classes.find(c => c.id === cid) || { name: "Extra", color: "bg-gray-100 text-gray-800 border-gray-300" };
                                         const key = `${d}-${slot.id}`;
                                         const data = planData[key] || {};
                                         const isZzz = data.status === 'zzz';
@@ -1761,10 +1909,11 @@
                                         const is2h = config.durations?.[key] === 2 && !isExtraClass;
                                         const hasContent = data.materials?.trim() || data.notes?.trim() || data.links?.length > 0;
 
-                                        const cellBgClass = isZzz ? 'session-cancelled' : `bg-white hover:bg-${theme}-50/10`;
+                                        let cellBgClass = isZzz ? 'session-cancelled' : `bg-white hover:bg-${theme}-50/10`;
+                                        if (isPast && !isZzz) cellBgClass += ' bg-gray-100 opacity-60'; // Efecte de passat
 
                                         return (
-                                            <div key={d} style={is2h ? { gridRow: 'span 2' } : {}} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-colors ${cellBgClass}`}>
+                                            <div key={d} style={is2h ? { gridRow: 'span 2' } : {}} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
                                                 <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-1 shadow-sm ${cinfo.color} ${isZzz ? 'opacity-50 grayscale' : ''}`}>
                                                     <div className="flex items-center gap-1 overflow-hidden">
                                                         <span className="truncate">{cinfo.name} {is2h && "(2h)"}</span>
@@ -1826,7 +1975,7 @@
                             <div onClick={(e) => e.stopPropagation()}>
                                 <DailyNotepadModal 
                                     dayIndex={activeDayNotepad.dayIndex}
-                                    dayName={DAYS[activeDayNotepad.dayIndex]}
+                                    dayName={viewDays[activeDayNotepad.dayIndex]}
                                     config={config}
                                     planData={planData}
                                     extraClasses={planData.extraClasses}
@@ -1966,7 +2115,7 @@
                                     <div className="bg-gray-50 p-3 rounded border border-gray-200">
                                         <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
                                         <div className="flex gap-2 mb-2">
-                                            <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{viewDays.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
                                             <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                                         </div>
                                         <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">Enganxar Aquí</button>
@@ -1983,7 +2132,7 @@
                             <div className="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl">
                                 <h3 className="text-lg font-bold text-gray-800 mb-4">Afegir Classe Extra Puntual</h3>
                                 <div className="space-y-3">
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Dia</label><select className="w-full border p-2 rounded" value={newExtra.day} onChange={(e) => setNewExtra({...newExtra, day: parseInt(e.target.value)})}>{DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Dia</label><select className="w-full border p-2 rounded" value={newExtra.day} onChange={(e) => setNewExtra({...newExtra, day: parseInt(e.target.value)})}>{viewDays.map((d, i) => <option key={i} value={i}>{d}</option>)}</select></div>
                                     <div><label className="text-xs font-bold text-gray-500 uppercase">Hora</label><select className="w-full border p-2 rounded" value={newExtra.slot} onChange={(e) => setNewExtra({...newExtra, slot: parseInt(e.target.value)})}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
                                     <div><label className="text-xs font-bold text-gray-500 uppercase">Classe</label><select className="w-full border p-2 rounded" value={newExtra.classId} onChange={(e) => setNewExtra({...newExtra, classId: e.target.value})}><option value="">Selecciona grup...</option>{config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                                 </div>
@@ -1999,7 +2148,7 @@
         const App = () => {
             const [view, setView] = useState('config');
             const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] });
-            const [radar, setRadar] = useState("");
+            const [radar, setRadar] = useState([]);
             const [weeksData, setWeeksData] = useState({});
             const [currentWeekId, setCurrentWeekId] = useState(null);
             const [completedWeeks, setCompletedWeeks] = useState([]);
@@ -2026,7 +2175,7 @@
                 }
             }, [config.theme]);
 
-            // CARREGADOR I AUTO-RESCAT DE DADES (AMB MIGRACIÓ DE DIES)
+            // CARREGADOR I AUTO-RESCAT DE DADES (AMB MIGRACIÓ)
             useEffect(() => {
                 const loader = document.getElementById('app-loader');
                 if (loader) loader.style.display = 'none';
@@ -2041,7 +2190,7 @@
                         const data = JSON.parse(saved);
                         let needsSave = false;
 
-                        // 1. MIGRACIÓ UT (de utEnds a utDates)
+                        // Migració UT (de utEnds a utDates)
                         if (data.config && data.config.utEnds && (!data.config.utDates || data.config.utDates.length === 0)) {
                             data.config.utDates = Object.entries(data.config.utEnds).map(([date, name], idx) => ({
                                 id: 'migrated_' + idx,
@@ -2052,7 +2201,25 @@
                             needsSave = true;
                         }
 
-                        // 2. MIGRACIÓ DATES (Moure els diumenges a dilluns)
+                        // Migració Radar (Text a Array) + Neteja de dates passades
+                        let parsedRadar = [];
+                        if (typeof data.radar === 'string') {
+                            if (data.radar.trim() !== '') {
+                                parsedRadar = [{ id: Date.now(), text: data.radar, date: null, fromTask: false }];
+                            }
+                            needsSave = true;
+                        } else if (Array.isArray(data.radar)) {
+                            const today = new Date();
+                            today.setHours(0,0,0,0);
+                            parsedRadar = data.radar.filter(item => {
+                                if (!item.date) return true;
+                                const itemDate = new Date(item.date);
+                                return itemDate >= today;
+                            });
+                            if (parsedRadar.length !== data.radar.length) needsSave = true;
+                        }
+
+                        // Migració Dates (Moure els diumenges a dilluns)
                         const shiftDate = (dateStr) => {
                             if (!dateStr || typeof dateStr !== 'string') return dateStr;
                             const parts = dateStr.split('-');
@@ -2092,7 +2259,7 @@
                         }
 
                         if(data.config) setConfig(data.config);
-                        if(data.radar) setRadar(data.radar);
+                        setRadar(parsedRadar);
                         if(data.weeksData) setWeeksData(data.weeksData);
                         if(data.completedWeeks) setCompletedWeeks(data.completedWeeks);
                         if(data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
@@ -2100,7 +2267,7 @@
                         if(data.config?.teacherName) setView('dashboard');
 
                         if (needsSave) {
-                             localStorage.setItem('cfnPlannerData_v23', JSON.stringify(data));
+                             localStorage.setItem('cfnPlannerData_v23', JSON.stringify({...data, radar: parsedRadar}));
                         }
                     } catch(e) { console.error("Error carregant les dades", e); }
                 }
@@ -2151,15 +2318,26 @@
                 }));
             };
 
-            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar(""); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
+            const handleAddToRadar = (text, dayIndex) => {
+                const dateStr = dayIndex !== undefined && currentWeekId ? addDays(currentWeekId, dayIndex) : getLocalISODate(new Date());
+                const newEntry = {
+                    id: Date.now(),
+                    text: text,
+                    date: dateStr,
+                    fromTask: true
+                };
+                setRadar(prev => [...prev, newEntry]);
+            };
+
+            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar([]); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
             const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
-            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(d.radar || ""); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
+            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(Array.isArray(d.radar) ? d.radar : []); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
 
             return (
                 <div className="min-h-screen">
                     {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
                     {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} />}
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={t => setRadar(`[${new Date().toLocaleDateString()}] ${t}\n` + radar)} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                 </div>
             );
         };
