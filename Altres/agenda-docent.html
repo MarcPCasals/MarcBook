@@ -1565,7 +1565,9 @@
 
             const handleTaskAction = (d, s, cid, task, action) => {
                 if (action === 'save') {
-                    onAddToRadar(task.text, d);
+                    const exactDateStr = addDays(weekId, d);
+                    onAddToRadar(task.text, exactDateStr);
+                    alert("Afegit al Radar!");
                 } else if (action === 'alert_menu') {
                     const tasks = getTasks(d, s);
                     const idx = tasks.findIndex(t => t === task);
@@ -2287,8 +2289,6 @@
                 const newHistory = history.slice(0, -1);
                 setFuture(prev => [weeksData, ...prev]); 
                 setHistory(newHistory);
-                // Requires restoring full weeksData, but we can only update one by one or need a global state setter
-                // For simplicity in this local scope, we'll restore all weeks that changed
                 Object.keys(previous).forEach(wId => {
                     if (JSON.stringify(previous[wId]) !== JSON.stringify(weeksData[wId])) {
                         onUpdateWeekData(wId, previous[wId]);
@@ -2363,7 +2363,8 @@
 
             const handleTaskAction = (wId, d, s, cid, task, action) => {
                 if (action === 'save') {
-                    onAddToRadar(task.text, d);
+                    const exactDateStr = addDays(wId, d);
+                    onAddToRadar(task.text, exactDateStr);
                     alert("Afegit al Radar!");
                 } else if (action === 'alert_menu') {
                     const tasks = getTasks(wId, d, s);
@@ -2436,14 +2437,73 @@
                             break;
                         }
                     }
-                if (found && found.w === 0) {
-                    const existingTasks = getTasks(found.d, found.s);
+
+                    if (nextSession) {
+                        const movedTasks = currentTasks.map(t => ({...t, text: `(Del ${DAYS[d]}) ${t.text}`, status: null}));
+                        if (nextSession.weekId === wId) {
+                            const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
+                            const targetTasks = getTasks(wId, nextSession.dayIndex, nextSession.slot.id);
+                            wData[targetKey] = { ...(wData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] };
+                            alert(`Classe cancel·lada. Mogut al següent dia.`);
+                        } else {
+                            const targetWData = { ...(weeksData[nextSession.weekId] || {}) };
+                            const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
+                            const targetTasks = getTasks(nextSession.weekId, nextSession.dayIndex, nextSession.slot.id);
+                            targetWData[targetKey] = { ...(targetWData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] };
+                            onUpdateWeekData(nextSession.weekId, targetWData);
+                            alert(`Classe cancel·lada. Mogut a la sessió del ${new Date(nextSession.dateStr).toLocaleDateString()}`);
+                        }
+                    } else {
+                        alert("Zzz marcat (sense moure, no hi ha propera sessió).");
+                    }
+                }
+                updatePlanData(wId, wData);
+            };
+
+            const openCopyModal = (wId, d, s, cid) => {
+                setCopySource({ weekId: wId, day: d, slot: s, classId: cid });
+                setShowCopyModal(true);
+            };
+
+            const executeCopy = (targetType) => {
+                const sourceTasks = getTasks(copySource.weekId, copySource.day, copySource.slot).filter(t => t.text.trim());
+                if(sourceTasks.length === 0) { alert("No hi ha activitats."); setShowCopyModal(false); return; }
+                
+                let targetSession = null;
+
+                if (targetType === 'next_same' || targetType === 'next_other') {
+                    const currentIdx = allClassSessions.findIndex(sess => sess.weekId === copySource.weekId && sess.dayIndex === copySource.day && sess.slot.id === copySource.slot);
+                    for (let i = currentIdx + 1; i < allClassSessions.length; i++) {
+                        if (!allClassSessions[i].isZzz && !allClassSessions[i].isHoliday) {
+                            targetSession = allClassSessions[i];
+                            break;
+                        }
+                    }
+                } else if (targetType === 'manual') {
+                     targetSession = { weekId: copySource.weekId, dayIndex: targetDay, slot: {id: targetSlot} };
+                }
+
+                if (targetSession) {
+                    const targetWData = { ...(weeksData[targetSession.weekId] || {}) };
+                    const existingTasks = getTasks(targetSession.weekId, targetSession.dayIndex, targetSession.slot.id);
                     const combined = [...existingTasks.filter(t => t.text.trim()), ...sourceTasks.map(t => ({...t, status: null}))];
                     while(combined.length < 3) combined.push({text:"", time:"", status: null});
-                    handleTasksChange(found.d, found.s, combined);
+                    
+                    targetWData[`${targetSession.dayIndex}-${targetSession.slot.id}`] = { 
+                        ...(targetWData[`${targetSession.dayIndex}-${targetSession.slot.id}`] || {}), 
+                        tasks: combined 
+                    };
+                    
+                    if (targetSession.weekId === copySource.weekId) {
+                        updatePlanData(targetSession.weekId, targetWData);
+                    } else {
+                        onUpdateWeekData(targetSession.weekId, targetWData);
+                    }
                     alert("Copiades!");
                     setShowCopyModal(false);
-                } else { alert("Només es pot copiar dins la mateixa setmana actualment."); }
+                } else { 
+                    alert("No s'ha trobat cap sessió de destí."); 
+                }
             };
 
             const generateHTML = (onlyRows = false, interval = "") => {
@@ -2511,7 +2571,6 @@
 
             const handleExportToProgramacio = () => {
                 const htmlRows = generateHTML(true, exportInterval);
-                // Netejar el codi the `<table><tbody>` només per enviar les files
                 const strippedRows = htmlRows.replace('<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>', '').replace('</tbody></table>', '');
                 
                 const payload = {
@@ -2609,7 +2668,7 @@
                                                             </div>
                                                             <div className="flex items-center gap-2">
                                                                 <button onClick={() => setActiveSmartPaste({wId: sess.weekId, day: sess.dayIndex, slot: sess.slot.id})} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Enganxar des de text"><Icons.Paste size={14}/></button>
-                                                                {/* Copiar només per referència (no obre modal aquí per complexitat, opcional afegir-ho) */}
+                                                                <button onClick={() => openCopyModal(sess.weekId, sess.dayIndex, sess.slot.id, classId)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14}/></button>
                                                                 <button onClick={() => { if(isZzz || isHoliday) { handleStatusChange(sess.weekId, sess.dayIndex, sess.slot.id, null); } else { handleZzzAction(sess.weekId, sess.dayIndex, sess.slot.id, classId); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors reactivate-btn ${isZzz || isHoliday ? 'text-gray-800' : ''}`} title={isZzz || isHoliday ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
                                                                 <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
                                                             </div>
@@ -2742,6 +2801,34 @@
                                     </button>
                                 </div>
                                 <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {showCopyModal && copySource && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
+                                <h3 className="text-xl font-bold mb-4 flex gap-2 text-blue-800"><Icons.Copy /> Copiar Sessió</h3>
+                                <div className="space-y-3">
+                                    <button onClick={() => executeCopy('next_same')} className="w-full text-left px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 font-semibold text-blue-800 transition-colors">1. Enganxar a la propera sessió d'aquest grup</button>
+                                    <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase">2. Enganxar a propera sessió de:</p>
+                                        <div className="flex gap-2">
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetClassId} onChange={(e) => setTargetClassId(e.target.value)}><option value="">Selecciona grup...</option>{config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                                            <button onClick={() => executeCopy('next_other')} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Enganxar</button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
+                                        <div className="flex gap-2 mb-2">
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                                        </div>
+                                        <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">Enganxar Aquí</button>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2 mt-4"><button onClick={() => setShowCopyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button></div>
                             </div>
                         </div>,
                         document.body
@@ -2882,80 +2969,4 @@
             useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
 
             const handleUpdateWeekData = (weekId, data) => {
-                setWeeksData(prev => ({ ...prev, [weekId]: data }));
-            };
-
-            const handleToggleComplete = (wid) => { setCompletedWeeks(prev => prev.includes(wid) ? prev.filter(id => id !== wid) : [...prev, wid]); };
-            
-            const handleToggleHoliday = (wid) => {
-                const isBecomingHoliday = !holidayWeeks.includes(wid);
-                setHolidayWeeks(prev => isBecomingHoliday ? [...prev, wid] : prev.filter(id => id !== wid));
-
-                if (isBecomingHoliday) {
-                    setWeeksData(prev => {
-                        const currentWeekData = prev[wid] || {};
-                        const updatedWeekData = { ...currentWeekData };
-                        
-                        for (let d = 0; d < 5; d++) {
-                            for (let s = 0; s < TIME_SLOTS.length; s++) {
-                                const slot = TIME_SLOTS[s];
-                                if (slot.type === 'class') { 
-                                     if (config.schedule[d]?.[slot.id]) {
-                                         const key = `${d}-${slot.id}`;
-                                         updatedWeekData[key] = { 
-                                             ...(updatedWeekData[key] || {}), 
-                                             status: 'zzz',
-                                             zzzReason: 'Vacances 🎉',
-                                             tasks: updatedWeekData[key]?.tasks || [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}]
-                                         };
-                                     }
-                                }
-                            }
-                        }
-                        return { ...prev, [wid]: updatedWeekData };
-                    });
-                }
-            };
-
-            const handleSaveReminder = (dateStr, newReminders) => {
-                setReminders(prev => ({
-                    ...prev,
-                    [dateStr]: newReminders
-                }));
-            };
-
-            const handleAddToRadar = (text, dayIndex) => {
-                const dateStr = dayIndex !== undefined && currentWeekId ? addDays(currentWeekId, dayIndex) : getLocalISODate(new Date());
-                const newEntry = {
-                    id: Date.now(),
-                    text: text,
-                    date: dateStr,
-                    fromTask: true
-                };
-                setRadar(prev => [...prev, newEntry]);
-            };
-
-            const handleSelectClassView = (cId) => {
-                setSelectedClassId(cId);
-                setView('class_planner');
-            };
-
-            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar([]); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
-            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
-            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(Array.isArray(d.radar) ? d.radar : []); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
-
-            return (
-                <div className="min-h-screen">
-                    {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} />}
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
-                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} weeksData={weeksData} config={config} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                setWeeksData(prev => ({ ...prev, [weekId]:
