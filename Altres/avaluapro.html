@@ -77,7 +77,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, Component } = React;
 
-        // --- ERROR BOUNDARY (A l'arrel de l'aplicació per evitar pantalleta blanca) ---
+        // --- ERROR BOUNDARY ---
         class ErrorBoundary extends Component {
             constructor(props) {
                 super(props);
@@ -121,13 +121,20 @@
             }
         }
 
-        // --- UTILITATS ---
+        // --- UTILITATS I DADES PER DEFECTE ---
         const generateUUID = () => {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                 var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
             });
         };
+
+        const createTransversalStructure = () => [
+            { id: generateUUID(), name: "C1: Emprenedoria", color: "orange", criteria: [{id: generateUUID(), name: "Criteri 1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] },
+            { id: generateUUID(), name: "C2: Gestió d'aprenentatge", color: "green", criteria: [{id: generateUUID(), name: "Criteri 1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] },
+            { id: generateUUID(), name: "C3: Relacions positives", color: "purple", criteria: [{id: generateUUID(), name: "Criteri 1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] },
+            { id: generateUUID(), name: "C4: Comunicació", color: "blue", criteria: [{id: generateUUID(), name: "Criteri 1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] }
+        ];
 
         const calculateGrade = (marks) => {
             if (!marks || marks.length === 0) return '';
@@ -295,9 +302,9 @@
             const [className, setClassName] = useState("Grup 1");
             const [classColor, setClassColor] = useState("blue");
             const [competencies, setCompetencies] = useState([
-                { id: generateUUID(), name: "Competència 1", criteria: [{id: generateUUID(), name: "Criteri 1.1"}, {id: generateUUID(), name: "Criteri 1.2"}] },
-                { id: generateUUID(), name: "Competència 2", criteria: [{id: generateUUID(), name: "Criteri 2.1"}, {id: generateUUID(), name: "Criteri 2.2"}] },
-                { id: generateUUID(), name: "Competència 3", criteria: [{id: generateUUID(), name: "Criteri 3.1"}, {id: generateUUID(), name: "Criteri 3.2"}] }
+                { id: generateUUID(), name: "Competència 1", criteria: [{id: generateUUID(), name: "Criteri 1.1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] },
+                { id: generateUUID(), name: "Competència 2", criteria: [{id: generateUUID(), name: "Criteri 2.1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] },
+                { id: generateUUID(), name: "Competència 3", criteria: [{id: generateUUID(), name: "Criteri 3.1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] }
             ]);
 
             const handleCompChange = (id, val) => {
@@ -321,7 +328,7 @@
             };
 
             const addCompetency = () => {
-                setCompetencies(prev => [...prev, { id: generateUUID(), name: `Competència ${prev.length + 1}`, criteria: [{id: generateUUID(), name: "Criteri 1"}] }]);
+                setCompetencies(prev => [...prev, { id: generateUUID(), name: `Competència ${prev.length + 1}`, criteria: [{id: generateUUID(), name: "Criteri 1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] }]);
             };
 
             const removeCompetency = (id) => {
@@ -334,7 +341,7 @@
                         if (c.id !== compId) return c;
                         return {
                             ...c,
-                            criteria: [...c.criteria, {id: generateUUID(), name: `Criteri ${c.criteria.length + 1}`}]
+                            criteria: [...c.criteria, {id: generateUUID(), name: `Criteri ${c.criteria.length + 1}`, indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}]
                         };
                     });
                 });
@@ -357,10 +364,7 @@
                     return competencies.map((c, idx) => {
                         return {
                             ...c,
-                            color: COMP_COLORS_ORDER[idx % COMP_COLORS_ORDER.length],
-                            criteria: c.criteria.map(crit => {
-                                return { ...crit, indicators: [{id: generateUUID(), name: "IA 1"}] };
-                            })
+                            color: COMP_COLORS_ORDER[idx % COMP_COLORS_ORDER.length]
                         };
                     });
                 };
@@ -372,8 +376,8 @@
                     semesters: [
                         { id: "S1", name: "1r Semestre", isActive: true, competencies: createSemesterStructure() },
                         { id: "S2", name: "2n Semestre", isActive: false, competencies: createSemesterStructure() },
-                        { id: "T1", name: "Transversals 1", isActive: false, competencies: [] },
-                        { id: "T2", name: "Transversals 2", isActive: false, competencies: [] }
+                        { id: "T1", name: "Transversals 1", isActive: false, competencies: createTransversalStructure() },
+                        { id: "T2", name: "Transversals 2", isActive: false, competencies: createTransversalStructure() }
                     ], 
                     students: [] 
                 };
@@ -713,22 +717,28 @@
             );
         }
 
-        const getFlatIndicators = (comps) => {
-            let inds = [];
-            if (comps) {
-                comps.forEach(c => {
-                    if (c.criteria) {
-                        c.criteria.forEach(crit => {
-                            if (crit.indicators) {
-                                crit.indicators.forEach(ind => {
-                                    inds.push(ind);
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-            return inds;
+        // --- NEW INDICATOR DESCRIPTION MODAL ---
+        const IndicatorDescModal = ({ isOpen, onClose, data, onSave }) => {
+            if (!isOpen || !data) return null;
+            const [desc, setDesc] = useState(data.currentDesc || "");
+            
+            useEffect(() => { setDesc(data.currentDesc || ""); }, [data]);
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Descripció de l'Indicador" size="md">
+                    <div className="space-y-4">
+                        <textarea 
+                            value={desc} 
+                            onChange={(e) => setDesc(e.target.value)} 
+                            className="w-full h-32 p-3 border rounded outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+                            placeholder="Ex: L'alumne és capaç de resoldre problemes de primer grau amb un 80% d'encert..."
+                        />
+                        <div className="flex justify-end pt-2 border-t">
+                            <button onClick={() => onSave(desc)} className="px-6 py-2 bg-brand-500 text-white rounded font-bold hover:bg-brand-600">Desar Descripció</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
         };
 
         const BulkImportModal = ({ isOpen, onClose, students, indicators, onImport }) => {
@@ -892,219 +902,6 @@
             );
         };
 
-        const SemesterStatsModal = ({ isOpen, onClose, competencies, students }) => {
-            if (!isOpen) return null;
-            
-            const cList = competencies ? competencies : [];
-            const sList = students ? students : [];
-
-            return (
-                <Modal isOpen={isOpen} onClose={onClose} title="Estadístiques Detallades del Semestre" size="lg">
-                    <div className="space-y-6">
-                        {cList.length === 0 && <p className="text-gray-500 text-center py-8 font-bold text-lg">No hi ha competències per analitzar.</p>}
-                        
-                        {cList.map(comp => {
-                            const styles = COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] ? COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] : COMP_COLORS_STYLES['blue'];
-                            let sum = 0; let count = 0;
-                            
-                            sList.forEach(s => {
-                                let marks = [];
-                                if(comp.criteria) {
-                                    comp.criteria.forEach(crit => {
-                                        if(crit.indicators) {
-                                            crit.indicators.forEach(i => { 
-                                                if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); 
-                                            });
-                                        }
-                                    });
-                                }
-                                const g = calculateGrade(marks);
-                                if(g) { sum += getNumericFromGrade(g); count++; }
-                            });
-                            
-                            const avgNum = count > 0 ? sum/count : 0;
-                            const avgLetter = count > 0 ? getGradeFromNumeric(avgNum) : '-';
-                            
-                            return (
-                                <div key={comp.id} className={`border rounded-xl overflow-hidden shadow-sm ${styles.sub.replace('bg-', 'border-')}`}>
-                                    <div className={`p-4 flex justify-between items-center ${styles.header} text-white`}>
-                                        <h4 className="font-bold text-xl">{comp.name}</h4>
-                                        <div className="bg-white/20 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 shadow-inner">
-                                            <span className="uppercase tracking-wide text-xs">Mitjana Global:</span>
-                                            <span className="font-black text-2xl">{avgNum.toFixed(2)}</span>
-                                            <span className="bg-white text-gray-800 px-2 py-0.5 rounded text-sm font-bold">{avgLetter}</span>
-                                        </div>
-                                    </div>
-                                    <div className="p-4 bg-white space-y-6">
-                                        {comp.criteria && comp.criteria.map(crit => (
-                                            <div key={crit.id} className="ml-2">
-                                                <h5 className={`text-sm font-black uppercase mb-3 border-b pb-1 ${styles.text.replace('text-', 'border-')} ${styles.text}`}>{crit.name}</h5>
-                                                <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                                                    <table className="w-full text-sm">
-                                                        <thead>
-                                                            <tr className="bg-gray-50 border-b border-gray-200">
-                                                                <th className="p-3 text-left font-bold text-gray-600 uppercase text-xs tracking-wider">Indicador d'Avaluació</th>
-                                                                <th className="p-3 text-center font-bold text-gray-600 uppercase text-xs tracking-wider border-l w-28 bg-gray-100/50">Moda</th>
-                                                                <th className="p-3 text-center font-bold text-gray-600 uppercase text-xs tracking-wider border-l w-32 bg-gray-100/50">Mitjana</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-100">
-                                                            {crit.indicators && crit.indicators.map(ind => {
-                                                                const m = sList.map(s => s.marks && s.marks[ind.id] ? s.marks[ind.id] : null).filter(val => val !== null);
-                                                                const avg = calculateNumericAverage(m);
-                                                                const lAvg = getGradeFromNumeric(avg);
-                                                                return (
-                                                                    <tr key={ind.id} className="hover:bg-gray-50 transition-colors">
-                                                                        <td className="p-3 text-gray-800 font-medium">{ind.name}</td>
-                                                                        <td className="p-3 text-center border-l font-mono font-bold text-gray-500 bg-gray-50/20 text-lg">{calculateMode(m)}</td>
-                                                                        <td className="p-3 text-center border-l bg-gray-50/20">
-                                                                            <span className="font-bold text-lg mr-2 text-gray-700">{avg.toFixed(2)}</span>
-                                                                            {m.length > 0 && <span className={`text-xs px-2 py-1 rounded font-bold shadow-sm ${getGradeColor(lAvg)}`}>{lAvg}</span>}
-                                                                        </td>
-                                                                    </tr>
-                                                                )
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </Modal>
-            );
-        };
-
-        const StudentEvolutionModal = ({ isOpen, onClose, studentData, classData }) => {
-            if (!isOpen || !studentData) return null;
-            const { name, history, radarFirst, radarLast, labels, studentId } = studentData;
-            
-            const improvement = history.length >= 2 ? (history[history.length-1] - history[0]) : 0;
-            let status = { text: "Estable", color: "text-gray-500", icon: "minus" };
-            if (improvement > 0.5) status = { text: "Progrés Alt", color: "text-green-600", icon: "arrow-trend-up" };
-            if (improvement < -0.5) status = { text: "Regressió", color: "text-red-600", icon: "arrow-trend-down" };
-
-            const compSummary = {}; 
-            
-            if (classData && classData.students && classData.semesters) {
-                const student = classData.students.find(s => s.id === studentId);
-                if (student) {
-                    classData.semesters.forEach(sem => {
-                        if (sem.id === 'S1' || sem.id === 'S2') {
-                            if (sem.competencies) {
-                                sem.competencies.forEach(comp => {
-                                    if (!compSummary[comp.name]) {
-                                        compSummary[comp.name] = { S1: '-', S2: '-' };
-                                    }
-                                    
-                                    let marks = [];
-                                    if (comp.criteria) {
-                                        comp.criteria.forEach(c => {
-                                            if(c.indicators) {
-                                                c.indicators.forEach(i => { 
-                                                    if(student.marks && student.marks[i.id]) marks.push(student.marks[i.id]); 
-                                                });
-                                            }
-                                        });
-                                    }
-                                    const g = calculateGrade(marks);
-                                    if (sem.id === 'S1') compSummary[comp.name].S1 = g ? g : '-';
-                                    if (sem.id === 'S2') compSummary[comp.name].S2 = g ? g : '-';
-                                });
-                            }
-                        }
-                    });
-                }
-            }
-
-            return (
-                <Modal isOpen={isOpen} onClose={onClose} title={`Evolució Individual: ${name}`} size="lg">
-                    <div className="space-y-6">
-                        <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border">
-                            <div>
-                                <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-1">Ritme de Millora</p>
-                                <p className={`text-2xl font-bold ${status.color} flex items-center gap-2`}>
-                                    <Icon name={status.icon}/> {status.text}
-                                </p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold mb-1">Nota Mitjana Actual</p>
-                                <p className="text-3xl font-bold text-gray-800">
-                                    {history.length>0 ? (
-                                        <span>
-                                            {getGradeFromNumeric(history[history.length-1])} <span className="text-lg text-gray-500 font-normal">({history[history.length-1].toFixed(2)})</span>
-                                        </span>
-                                    ) : '-'}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="bg-white p-4 border rounded-xl shadow-sm">
-                            <h4 className="text-sm font-bold text-gray-700 mb-3 text-center uppercase tracking-wide border-b pb-2">Resum de Notes per Competències</h4>
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50 text-gray-600">
-                                    <tr>
-                                        <th className="p-2 text-left">Competència</th>
-                                        <th className="p-2 text-center w-28">1r Semestre</th>
-                                        <th className="p-2 text-center w-28">2n Semestre</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {Object.keys(compSummary).map(cName => {
-                                        const grades = compSummary[cName];
-                                        return (
-                                            <tr key={cName}>
-                                                <td className="p-2 font-medium text-gray-800">{cName}</td>
-                                                <td className="p-2 text-center">
-                                                    <span className={`px-2 py-1 rounded font-bold text-sm shadow-sm border ${getGradeColor(grades.S1).replace('bg-','border-').split(' ')[2]} ${getGradeColor(grades.S1)}`}>{grades.S1}</span>
-                                                </td>
-                                                <td className="p-2 text-center">
-                                                    <span className={`px-2 py-1 rounded font-bold text-sm shadow-sm border ${getGradeColor(grades.S2).replace('bg-','border-').split(' ')[2]} ${getGradeColor(grades.S2)}`}>{grades.S2}</span>
-                                                </td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white p-4 border rounded-xl shadow-sm">
-                                <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Trajectòria Temporal</h4>
-                                <ChartComponent 
-                                    className="h-64"
-                                    type="line" 
-                                    data={{
-                                        labels: history.map((_,i)=>`Evidència ${i+1}`), 
-                                        datasets:[{label:'Mitjana Acumulada', data:history, borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.1)', fill:true, tension:0.3, pointRadius: 5}]
-                                    }} 
-                                    options={{scales:{y:{min:1, max:4}}, plugins: { legend: { display: false } }}}
-                                />
-                            </div>
-                            <div className="bg-white p-4 border rounded-xl shadow-sm">
-                                <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Inici vs Final</h4>
-                                <ChartComponent 
-                                    className="h-64"
-                                    type="radar" 
-                                    data={{
-                                        labels: labels, 
-                                        datasets:[
-                                            {label:'Primera Evidència', data:radarFirst, borderColor:'#9ca3af', backgroundColor: 'rgba(156, 163, 175, 0.2)'}, 
-                                            {label:'Darrera Evidència', data:radarLast, borderColor:'#f97316', backgroundColor: 'rgba(249, 115, 22, 0.2)'}
-                                        ]
-                                    }} 
-                                    options={{scales:{r:{min:0, max:4, ticks: { display: false }}}}}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </Modal>
-            );
-        };
-
         // --- APP PRINCIPAL ---
 
         const App = () => {
@@ -1130,9 +927,9 @@
             const [showStudentNotes, setShowStudentNotes] = useState(null); 
             const [showGlobalNotes, setShowGlobalNotes] = useState(false);
             const [showCopyTable, setShowCopyTable] = useState(false);
-            const [showSemesterStats, setShowSemesterStats] = useState(false);
             const [showBulkImport, setShowBulkImport] = useState(false);
             const [showStudentEvoModal, setShowStudentEvoModal] = useState(null);
+            const [editingIndicatorDesc, setEditingIndicatorDesc] = useState(null); // { id, compId, critId, currentDesc }
 
             const [visibleCompetencies, setVisibleCompetencies] = useState({});
             const [expandedComps, setExpandedComps] = useState({});
@@ -1157,16 +954,17 @@
                             newCls.semesters = [
                                 { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
                                 { id: 'S2', name: '2n Semestre', isActive: false, competencies: [] },
-                                { id: 'T1', name: 'Transversals 1', isActive: false, competencies: [] },
-                                { id: 'T2', name: 'Transversals 2', isActive: false, competencies: [] }
+                                { id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() },
+                                { id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() }
                             ];
                         } else {
-                            // Check for transversal tabs, add if missing
                             const hasT1 = newCls.semesters.find(s => s.id === 'T1');
-                            if (!hasT1) newCls.semesters.push({ id: 'T1', name: 'Transversals 1', isActive: false, competencies: [] });
+                            if (!hasT1) newCls.semesters.push({ id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() });
+                            else if (!hasT1.competencies || hasT1.competencies.length === 0) hasT1.competencies = createTransversalStructure();
                             
                             const hasT2 = newCls.semesters.find(s => s.id === 'T2');
-                            if (!hasT2) newCls.semesters.push({ id: 'T2', name: 'Transversals 2', isActive: false, competencies: [] });
+                            if (!hasT2) newCls.semesters.push({ id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() });
+                            else if (!hasT2.competencies || hasT2.competencies.length === 0) hasT2.competencies = createTransversalStructure();
                         }
                         if (!newCls.students) {
                             newCls.students = [];
@@ -1366,12 +1164,12 @@
                         } 
                         return {...s, competencies: s.competencies.map(comp => { 
                             if(type === 'crit' && comp.id === parentId) {
-                                return {...comp, criteria: [...comp.criteria, {id:generateUUID(), name: name, indicators:[{id:generateUUID(), name: "IA 1"}]}]}; 
+                                return {...comp, criteria: [...comp.criteria, {id:generateUUID(), name: name, indicators:[{id:generateUUID(), name: "IA 1", description: ""}]}]}; 
                             }
                             if(type === 'ind' && comp.id === grandParentId) {
                                 return {...comp, criteria: comp.criteria.map(crit => {
                                     if (crit.id === parentId) {
-                                        return {...crit, indicators: [...crit.indicators, {id:generateUUID(), name: name}]};
+                                        return {...crit, indicators: [...crit.indicators, {id:generateUUID(), name: name, description: ""}]};
                                     }
                                     return crit;
                                 })}; 
@@ -1424,7 +1222,19 @@
             };
 
             const handleBulkImportSave = (gridData) => {
-                const flatInds = getFlatIndicators(visibleCompsList);
+                let inds = [];
+                visibleCompsList.forEach(c => {
+                    if (c.criteria) {
+                        c.criteria.forEach(crit => {
+                            if (crit.indicators) {
+                                crit.indicators.forEach(ind => {
+                                    inds.push(ind);
+                                });
+                            }
+                        });
+                    }
+                });
+                const flatInds = inds;
 
                 const updated = currentClass.students.map((s, r) => { 
                     const marks = s.marks ? {...s.marks} : {}; 
@@ -1440,58 +1250,40 @@
                 updateClasses(classes.map(c => c.id === activeClassId ? {...c, students: updated} : c));
             };
 
-            const handleExportExcel = () => {
-                if(!currentClass) return; 
-                const headers = ["Alumne"];
-                const subH = [""]; 
+            const saveIndicatorDescription = (desc) => {
+                if(!editingIndicatorDesc) return;
+                const { id, compId, critId } = editingIndicatorDesc;
                 
-                visibleCompsList.forEach(c => { 
-                    if(c.criteria) {
-                        c.criteria.forEach(k => { 
-                            if(k.indicators) {
-                                k.indicators.forEach(i => { 
-                                    headers.push(c.name); 
-                                    subH.push(`${k.name}-${i.name}`); 
-                                }); 
-                            }
-                            headers.push(c.name); 
-                            subH.push('Nota '+k.name); 
-                        }); 
-                    }
-                    headers.push(c.name); 
-                    subH.push('FINAL'); 
-                }); 
-                
-                const d = [headers, subH]; 
-                
-                if(currentClass.students) {
-                    currentClass.students.forEach(s => { 
-                        const r = [s.name]; 
-                        visibleCompsList.forEach(c => { 
-                            let cm = []; 
-                            if(c.criteria) {
-                                c.criteria.forEach(k => { 
-                                    let km = []; 
-                                    if(k.indicators) {
-                                        k.indicators.forEach(i => { 
-                                            const v = (s.marks && s.marks[i.id]) ? s.marks[i.id] : ""; 
-                                            r.push(v); 
-                                            if(v) km.push(v); 
-                                        }); 
+                const newClasses = classes.map(c => {
+                    if(c.id !== activeClassId) return c;
+                    return {
+                        ...c,
+                        semesters: c.semesters.map(s => {
+                            if(s.id !== activeTab) return s;
+                            return {
+                                ...s,
+                                competencies: s.competencies.map(comp => {
+                                    if(comp.id !== compId) return comp;
+                                    return {
+                                        ...comp,
+                                        criteria: comp.criteria.map(crit => {
+                                            if(crit.id !== critId) return crit;
+                                            return {
+                                                ...crit,
+                                                indicators: crit.indicators.map(ind => {
+                                                    if(ind.id !== id) return ind;
+                                                    return {...ind, description: desc};
+                                                })
+                                            }
+                                        })
                                     }
-                                    const g = calculateGrade(km); 
-                                    r.push(g); 
-                                    if(g) cm.push(g); 
-                                }); 
+                                })
                             }
-                            r.push(calculateGrade(cm)); 
-                        }); 
-                        d.push(r); 
-                    }); 
-                }
-                const wb = window.XLSX.utils.book_new(); 
-                window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(d), currentClass.name.substring(0,31)); 
-                window.XLSX.writeFile(wb, `avaluacio_${currentClass.name}.xlsx`); 
+                        })
+                    };
+                });
+                updateClasses(newClasses);
+                setEditingIndicatorDesc(null);
             };
 
             // --- GLOBAL DASHBOARD LOGIC ---
@@ -1958,8 +1750,6 @@
                         <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0 overflow-x-auto">
                             <div className="flex items-center space-x-2">
                                 <button onClick={() => setIsEditingStructure(!isEditingStructure)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 ${isEditingStructure ? 'bg-orange-100 text-orange-700 shadow-inner' : 'bg-white text-gray-600 border hover:bg-gray-50 shadow-sm'}`}><Icon name={isEditingStructure ? "lock" : "pen-to-square"} />{isEditingStructure ? "Bloquejar Taula" : "Editar Taula"}</button>
-                                <button onClick={() => setShowSemesterStats(true)} className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="chart-simple" className="text-blue-500 mr-1"/> Estadístiques</button>
-                                <button onClick={() => setShowBulkImport(true)} className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="table" className="text-green-600 mr-1"/> Importar Excel</button>
                                 <div className="relative group">
                                     <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar</button>
                                     <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-50 hidden group-hover:block w-56 text-sm">
@@ -1995,11 +1785,12 @@
                                 )}
                             </div>
                             <div className="flex gap-2 pl-2">
+                                <button onClick={() => setShowBulkImport(true)} className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition font-bold whitespace-nowrap"><Icon name="table" className="text-green-600 mr-1"/> Importar Excel</button>
                                 <button onClick={() => setShowManageStudents(true)} className="px-4 py-1.5 bg-slate-800 text-white rounded-lg shadow-sm hover:bg-slate-700 transition text-sm font-bold whitespace-nowrap"><Icon name="users" className="mr-2" /> Gestió d'Alumnes</button>
                             </div>
                         </div>
 
-                        <div className="overflow-auto custom-scroll flex-1 relative bg-gray-100/50">
+                        <div className="overflow-auto custom-scroll flex-1 relative bg-gray-100/50 pb-24">
                             <table className="text-sm border-separate border-spacing-0 table-auto w-full">
                                 <thead className="bg-gray-50 text-gray-700 sticky-header z-40">
                                     <tr>
@@ -2054,11 +1845,23 @@
                                                 {(comp.criteria ? comp.criteria : []).map(crit => (
                                                     <React.Fragment key={crit.id}>
                                                         {(crit.indicators ? crit.indicators : []).map(ind => (
-                                                            <th key={ind.id} className="p-0 border-b border-r bg-white font-medium text-gray-600 min-w-[5rem] w-24 text-center text-xs group relative hover:bg-gray-50 transition">
+                                                            <th key={ind.id} className="p-0 border-b border-r bg-white font-medium text-gray-600 min-w-[5rem] w-24 text-center text-xs group/ind hover:bg-gray-50 transition z-10 relative">
                                                                 <div className="w-full h-full p-2 flex items-center justify-center relative">
-                                                                    <span onClick={() => isEditingStructure && renameItem('ind', ind.id)} className={`block truncate w-full ${isEditingStructure ? 'cursor-pointer hover:text-brand-600 border-b border-dashed border-brand-300 pb-0.5' : ''}`} title={ind.name}>{ind.name}</span>
-                                                                    {isEditingStructure && (<button onClick={() => deleteItem('ind', ind.id, crit.id, comp.id)} className="absolute -top-2 -right-2 text-white bg-red-500 rounded-full w-4 h-4 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 shadow"><Icon name="xmark"/></button>)}
+                                                                    <span onClick={() => isEditingStructure && renameItem('ind', ind.id)} className={`block truncate max-w-[80%] ${isEditingStructure ? 'cursor-pointer hover:text-brand-600 border-b border-dashed border-brand-300 pb-0.5' : ''}`} title={ind.name}>{ind.name}</span>
+                                                                    
+                                                                    <button onClick={() => setEditingIndicatorDesc({id: ind.id, compId: comp.id, critId: crit.id, currentDesc: ind.description ? ind.description : ""})} className="ml-1 text-gray-400 hover:text-blue-500 focus:outline-none shrink-0" title="Informació / Descripció">
+                                                                        <Icon name="circle-info" className="text-[10px]" />
+                                                                    </button>
+
+                                                                    {isEditingStructure && (<button onClick={() => deleteItem('ind', ind.id, crit.id, comp.id)} className="absolute -top-2 -right-2 text-white bg-red-500 rounded-full w-4 h-4 text-[8px] flex items-center justify-center opacity-0 group-hover/ind:opacity-100 shadow z-20"><Icon name="xmark"/></button>)}
                                                                 </div>
+
+                                                                {ind.description && (
+                                                                    <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 hidden group-hover/ind:block w-56 bg-gray-800 text-white text-xs text-left p-3 rounded-lg shadow-xl z-50 whitespace-normal pointer-events-none font-normal leading-relaxed">
+                                                                        {ind.description}
+                                                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-gray-800"></div>
+                                                                    </div>
+                                                                )}
                                                             </th>
                                                         ))}
                                                         <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner">CA</th>
@@ -2138,96 +1941,98 @@
 
             return (
                 <div className="flex h-screen overflow-hidden text-gray-800">
-                    {/* MODALS */}
-                    {showWizard && <SetupWizard onComplete={handleCreateClass} />}
-                    <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
-                    <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
-                    <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
-                    <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} competencies={activeCompetencies} onSave={updateStudentNotes} />
-                    <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} competencies={activeCompetencies} />
-                    <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
-                    <SemesterStatsModal isOpen={showSemesterStats} onClose={() => setShowSemesterStats(false)} competencies={visibleCompsList} students={currentClass && currentClass.students ? currentClass.students : []} />
-                    {showBulkImport && <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass && currentClass.students ? currentClass.students : []} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />}
-                    <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
+                    <ErrorBoundary>
+                        {/* MODALS */}
+                        {showWizard && <SetupWizard onComplete={handleCreateClass} />}
+                        <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
+                        <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
+                        <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
+                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} competencies={activeCompetencies} onSave={updateStudentNotes} />
+                        <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} competencies={activeCompetencies} />
+                        <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
+                        <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
+                        {showBulkImport && <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass && currentClass.students ? currentClass.students : []} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />}
+                        <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
 
-                    {/* SIDEBAR */}
-                    <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
-                        <div className="p-6 border-b border-slate-800">
-                            <h1 className="text-2xl font-black tracking-tight text-brand-500 flex items-center gap-2"><Icon name="graduation-cap"/> Avalua Pro</h1>
-                            <p className="text-xs text-slate-300 mt-2 font-medium leading-relaxed">Eina docent d’avaluació i seguiment competencial</p>
-                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-bold">Creat per Marc Pérez Casals</p>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll">
-                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-2">Les teves classes</div>
-                            {classes.map(c => {
-                                const cKey = c.color && CLASS_COLORS[c.color] ? c.color : 'blue';
-                                const classColor = CLASS_COLORS[cKey];
-                                return (
-                                    <div key={c.id} className="flex items-center group relative">
-                                        <button onClick={() => setActiveClassId(c.id)} className={`w-full text-left px-4 py-3 rounded-xl transition flex items-center justify-between border-l-4 ${activeClassId === c.id ? `${classColor.bg} border-${c.color}-400 text-white shadow-lg` : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                                            <span className="font-semibold truncate pr-4">{c.name}</span>
-                                        </button>
-                                        <button onClick={() => setShowEditClassModal(c)} className="absolute right-2 text-slate-400 hover:text-white p-2 opacity-0 group-hover:opacity-100 transition"><Icon name="gear"/></button>
-                                    </div>
-                                );
-                            })}
-                            <button onClick={() => setShowNewClassModal(true)} className="w-full mt-4 border-2 border-dashed border-slate-700 text-slate-400 p-3 rounded-xl hover:border-brand-500 hover:text-brand-500 transition flex items-center justify-center text-sm font-bold"><Icon name="plus" className="mr-2"/> Nova Classe</button>
-                        </div>
-                         <div className="p-4 border-t border-slate-800 bg-slate-950">
-                             <button onClick={handleExportExcel} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-3 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
-                                 <Icon name="file-excel" className="mr-2 text-lg"/> Exportar a Excel
-                             </button>
-                        </div>
-                    </aside>
-
-                    {/* MAIN CONTENT */}
-                    <main className="flex-1 flex flex-col min-w-0 bg-gray-100 h-full overflow-hidden">
-                        {currentClass ? (
-                            <>
-                                <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10 shrink-0">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-4 h-8 rounded-full ${CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'] ? CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'].bg : 'bg-blue-600'}`}></div>
-                                        <h2 className={`text-3xl font-black text-gray-800 tracking-tight`}>{currentClass.name}</h2>
-                                    </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="flex bg-gray-100 p-1.5 rounded-xl shadow-inner border border-gray-200 overflow-x-auto max-w-full custom-scroll">
-                                            {(currentClass.semesters ? currentClass.semesters : []).map(s => (
-                                                <button key={s.id} onClick={() => setActiveTab(s.id)} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${activeTab === s.id ? 'bg-white text-brand-600 shadow border border-gray-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'}`}>{s.name}</button>
-                                            ))}
-                                            <button onClick={() => setActiveTab('GLOBAL')} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${activeTab === 'GLOBAL' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'}`}><Icon name="chart-pie" className="mr-2"/>Global</button>
-                                        </div>
-                                        <div className="h-8 w-px bg-gray-300"></div>
-                                        <div className="flex items-center gap-4">
-                                            <button onClick={resetAllData} className="p-2 text-red-300 hover:text-red-600 transition" title="Reiniciar curs"><Icon name="trash-can" className="text-lg"/></button>
-                                            <div className="flex bg-gray-100 rounded-lg p-1"><button onClick={undo} disabled={historyIndex <= 0} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-left"/></button><button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-right"/></button></div>
-                                        </div>
-                                    </div>
-                                </header>
-                                <div className="flex-1 overflow-hidden relative flex flex-col bg-gray-50/50">
-                                    {isGlobalView ? (
-                                        <div className="flex-1 overflow-y-auto custom-scroll">
-                                            <GlobalDashboard />
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 p-6 h-full overflow-hidden flex flex-col">
-                                            {renderSpreadsheet()}
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
-                                <Icon name="folder-open" className="text-6xl mb-4 text-gray-300"/>
-                                <p className="text-xl font-medium">Selecciona o crea una classe per començar.</p>
+                        {/* SIDEBAR */}
+                        <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
+                            <div className="p-6 border-b border-slate-800">
+                                <h1 className="text-2xl font-black tracking-tight text-brand-500 flex items-center gap-2"><Icon name="graduation-cap"/> Avalua Pro</h1>
+                                <p className="text-xs text-slate-300 mt-2 font-medium leading-relaxed">Eina docent d’avaluació i seguiment competencial</p>
+                                <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-bold">Creat per Marc Pérez Casals</p>
                             </div>
-                        )}
-                    </main>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-2">Les teves classes</div>
+                                {classes.map(c => {
+                                    const cKey = c.color && CLASS_COLORS[c.color] ? c.color : 'blue';
+                                    const classColor = CLASS_COLORS[cKey];
+                                    return (
+                                        <div key={c.id} className="flex items-center group relative">
+                                            <button onClick={() => setActiveClassId(c.id)} className={`w-full text-left px-4 py-3 rounded-xl transition flex items-center justify-between border-l-4 ${activeClassId === c.id ? `${classColor.bg} border-${c.color}-400 text-white shadow-lg` : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                                                <span className="font-semibold truncate pr-4">{c.name}</span>
+                                            </button>
+                                            <button onClick={() => setShowEditClassModal(c)} className="absolute right-2 text-slate-400 hover:text-white p-2 opacity-0 group-hover:opacity-100 transition"><Icon name="gear"/></button>
+                                        </div>
+                                    );
+                                })}
+                                <button onClick={() => setShowNewClassModal(true)} className="w-full mt-4 border-2 border-dashed border-slate-700 text-slate-400 p-3 rounded-xl hover:border-brand-500 hover:text-brand-500 transition flex items-center justify-center text-sm font-bold"><Icon name="plus" className="mr-2"/> Nova Classe</button>
+                            </div>
+                             <div className="p-4 border-t border-slate-800 bg-slate-950">
+                                 <button onClick={handleExportExcel} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-3 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
+                                     <Icon name="file-excel" className="mr-2 text-lg"/> Exportar a Excel
+                                 </button>
+                            </div>
+                        </aside>
+
+                        {/* MAIN CONTENT */}
+                        <main className="flex-1 flex flex-col min-w-0 bg-gray-100 h-full overflow-hidden">
+                            {currentClass ? (
+                                <>
+                                    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10 shrink-0">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-4 h-8 rounded-full ${CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'] ? CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'].bg : 'bg-blue-600'}`}></div>
+                                            <h2 className={`text-3xl font-black text-gray-800 tracking-tight`}>{currentClass.name}</h2>
+                                        </div>
+                                        <div className="flex items-center gap-6">
+                                            <div className="flex bg-gray-100 p-1.5 rounded-xl shadow-inner border border-gray-200 overflow-x-auto max-w-full custom-scroll">
+                                                {(currentClass.semesters ? currentClass.semesters : []).map(s => (
+                                                    <button key={s.id} onClick={() => setActiveTab(s.id)} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${activeTab === s.id ? 'bg-white text-brand-600 shadow border border-gray-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'}`}>{s.name}</button>
+                                                ))}
+                                                <button onClick={() => setActiveTab('GLOBAL')} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${activeTab === 'GLOBAL' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'}`}><Icon name="chart-pie" className="mr-2"/>Global</button>
+                                            </div>
+                                            <div className="h-8 w-px bg-gray-300"></div>
+                                            <div className="flex items-center gap-4">
+                                                <button onClick={resetAllData} className="p-2 text-red-300 hover:text-red-600 transition" title="Reiniciar curs"><Icon name="trash-can" className="text-lg"/></button>
+                                                <div className="flex bg-gray-100 rounded-lg p-1"><button onClick={undo} disabled={historyIndex <= 0} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-left"/></button><button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-right"/></button></div>
+                                            </div>
+                                        </div>
+                                    </header>
+                                    <div className="flex-1 overflow-hidden relative flex flex-col bg-gray-50/50">
+                                        {isGlobalView ? (
+                                            <div className="flex-1 overflow-y-auto custom-scroll">
+                                                <GlobalDashboard />
+                                            </div>
+                                        ) : (
+                                            <div className="flex-1 p-6 h-full overflow-hidden flex flex-col">
+                                                {renderSpreadsheet()}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+                                    <Icon name="folder-open" className="text-6xl mb-4 text-gray-300"/>
+                                    <p className="text-xl font-medium">Selecciona o crea una classe per començar.</p>
+                                </div>
+                            )}
+                        </main>
+                    </ErrorBoundary>
                 </div>
             );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<ErrorBoundary><App /></ErrorBoundary>);
+        root.render(<App />);
     </script>
 </body>
 </html>
