@@ -1283,7 +1283,6 @@
                 if (!text.trim()) return;
                 const lines = text.split('\n').filter(l => l.trim());
                 const parsedTasks = lines.map(line => {
-                    // Regex per detectar "• 10' text" o "10 min text" o "text"
                     const timeMatch = line.match(/^[\•\-\*]?\s*(\d+)['’m\s]*(.*)/i);
                     if (timeMatch) {
                         return { 
@@ -2969,4 +2968,80 @@
             useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
 
             const handleUpdateWeekData = (weekId, data) => {
-                setWeeksData(prev => ({ ...prev, [weekId]:
+                setWeeksData(prev => ({ ...prev, [weekId]: data }));
+            };
+
+            const handleToggleComplete = (wid) => { setCompletedWeeks(prev => prev.includes(wid) ? prev.filter(id => id !== wid) : [...prev, wid]); };
+            
+            const handleToggleHoliday = (wid) => {
+                const isBecomingHoliday = !holidayWeeks.includes(wid);
+                setHolidayWeeks(prev => isBecomingHoliday ? [...prev, wid] : prev.filter(id => id !== wid));
+
+                if (isBecomingHoliday) {
+                    setWeeksData(prev => {
+                        const currentWeekData = prev[wid] || {};
+                        const updatedWeekData = { ...currentWeekData };
+                        
+                        for (let d = 0; d < 5; d++) {
+                            for (let s = 0; s < TIME_SLOTS.length; s++) {
+                                const slot = TIME_SLOTS[s];
+                                if (slot.type === 'class') { 
+                                     if (config.schedule[d]?.[slot.id]) {
+                                         const key = `${d}-${slot.id}`;
+                                         updatedWeekData[key] = { 
+                                             ...(updatedWeekData[key] || {}), 
+                                             status: 'zzz',
+                                             zzzReason: 'Vacances 🎉',
+                                             tasks: updatedWeekData[key]?.tasks || [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}]
+                                         };
+                                     }
+                                }
+                            }
+                        }
+                        return { ...prev, [wid]: updatedWeekData };
+                    });
+                }
+            };
+
+            const handleSaveReminder = (dateStr, newReminders) => {
+                setReminders(prev => ({
+                    ...prev,
+                    [dateStr]: newReminders
+                }));
+            };
+
+            const handleAddToRadar = (text, dayIndex) => {
+                const dateStr = dayIndex !== undefined && currentWeekId ? addDays(currentWeekId, dayIndex) : getLocalISODate(new Date());
+                const newEntry = {
+                    id: Date.now(),
+                    text: text,
+                    date: dateStr,
+                    fromTask: true
+                };
+                setRadar(prev => [...prev, newEntry]);
+            };
+
+            const handleSelectClassView = (cId) => {
+                setSelectedClassId(cId);
+                setView('class_planner');
+            };
+
+            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar([]); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
+            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
+            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(Array.isArray(d.radar) ? d.radar : []); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
+
+            return (
+                <div className="min-h-screen">
+                    {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
