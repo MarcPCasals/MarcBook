@@ -187,16 +187,16 @@
         const MONTHS = ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"];
         
         const DEFAULT_COLORS = [
-            { name: "Blau Clar", value: "bg-sky-100 border-sky-300 text-sky-900", hex: "#bae6fd" },
-            { name: "Blau Fosc", value: "bg-blue-100 border-blue-300 text-blue-900", hex: "#bfdbfe" },
-            { name: "Vermell", value: "bg-red-100 border-red-300 text-red-900", hex: "#fecaca" },
-            { name: "Corall", value: "bg-rose-100 border-rose-300 text-rose-900", hex: "#fecdd3" },
-            { name: "Verd Clar", value: "bg-emerald-100 border-emerald-300 text-emerald-900", hex: "#a7f3d0" },
-            { name: "Verd Fosc", value: "bg-green-100 border-green-300 text-green-900", hex: "#bbf7d0" },
-            { name: "Groc", value: "bg-yellow-100 border-yellow-300 text-yellow-900", hex: "#fef08a" },
-            { name: "Lila", value: "bg-purple-100 border-purple-300 text-purple-900", hex: "#e9d5ff" },
-            { name: "Taronja", value: "bg-orange-100 border-orange-300 text-orange-900", hex: "#fed7aa" },
-            { name: "Gris", value: "bg-gray-100 border-gray-300 text-gray-900", hex: "#e5e7eb" },
+            { name: "Blau Clar", value: "bg-sky-100 border-sky-300 text-sky-900", hex: "#e0f2fe" },
+            { name: "Blau Fosc", value: "bg-indigo-200 border-indigo-400 text-indigo-900", hex: "#c7d2fe" },
+            { name: "Verd Clar", value: "bg-lime-100 border-lime-300 text-lime-900", hex: "#ecfccb" },
+            { name: "Verd Fosc", value: "bg-emerald-200 border-emerald-400 text-emerald-900", hex: "#a7f3d0" },
+            { name: "Vermell", value: "bg-red-200 border-red-400 text-red-900", hex: "#fecaca" },
+            { name: "Corall", value: "bg-rose-100 border-rose-300 text-rose-900", hex: "#ffe4e6" },
+            { name: "Groc", value: "bg-yellow-200 border-yellow-400 text-yellow-900", hex: "#fef08a" },
+            { name: "Taronja", value: "bg-orange-200 border-orange-400 text-orange-900", hex: "#fed7aa" },
+            { name: "Lila", value: "bg-purple-200 border-purple-400 text-purple-900", hex: "#e9d5ff" },
+            { name: "Gris", value: "bg-gray-200 border-gray-400 text-gray-900", hex: "#e5e7eb" },
         ];
 
         // Component Personalitzat Select Color
@@ -470,7 +470,7 @@
             );
         };
 
-        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders }) => {
+        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
             const [showInfoModal, setShowInfoModal] = useState(false);
@@ -613,6 +613,26 @@
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
                         <div className="flex justify-between text-sm font-bold text-gray-600 mb-2"><span>Progrés Real del Curs</span><span>{calculateProgress()}%</span></div>
                         <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden"><div className={`bg-${theme}-500 h-4 rounded-full transition-all duration-500`} style={{ width: `${calculateProgress()}%` }}></div></div>
+                    </div>
+
+                    {/* NOVA SECCIÓ: PROGRAMACIÓ PER CLASSES */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+                        <h2 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2"><Icons.Table /> Programació per Classes</h2>
+                        {config.classes.length === 0 ? (
+                            <p className="text-sm text-gray-500 italic">No tens cap classe configurada encara.</p>
+                        ) : (
+                            <div className="flex flex-wrap gap-3">
+                                {config.classes.map(c => (
+                                    <button 
+                                        key={c.id} 
+                                        onClick={() => onSelectClassView(c.id)} 
+                                        className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all hover:scale-105 border ${c.color.replace('text-', 'text-gray-900 border-').replace('bg-', 'bg-').split(' ')[0]}`}
+                                    >
+                                        {c.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -2145,12 +2165,589 @@
             );
         };
 
+        const ClassPlannerScreen = ({ classId, config, weeksData, allWeeks, holidayWeeks, onUpdateWeekData, onBack, onAddToRadar }) => {
+            const classInfo = config.classes.find(c => c.id === classId);
+            const theme = config.theme || 'orange';
+
+            const [history, setHistory] = useState([]);
+            const [future, setFuture] = useState([]);
+            const [reviewMode, setReviewMode] = useState(false);
+            const [showExportModal, setShowExportModal] = useState(false);
+            const [exportConfig, setExportConfig] = useState({ curs: classInfo ? classInfo.name : "", ut: "", fase: "FASE DE PREPARACIÓ" });
+            const [selectedUTId, setSelectedUTId] = useState("");
+
+            const [pendingActionTask, setPendingActionTask] = useState(null);
+            const [activeSessionNotepad, setActiveSessionNotepad] = useState(null);
+            const [activeSmartPaste, setActiveSmartPaste] = useState(null);
+            const [showCopyModal, setShowCopyModal] = useState(false);
+            const [copySource, setCopySource] = useState(null);
+            const [targetClassId, setTargetClassId] = useState("");
+            const [targetDay, setTargetDay] = useState(0);
+            const [targetSlot, setTargetSlot] = useState(0);
+
+            // Compute current UT context
+            const utList = useMemo(() => {
+                return [...(config.utDates || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+            }, [config.utDates]);
+
+            useEffect(() => {
+                if (utList.length > 0 && !selectedUTId) {
+                    const now = new Date();
+                    const nextUT = utList.find(ut => new Date(ut.date) >= now);
+                    setSelectedUTId(nextUT ? nextUT.id : utList[utList.length - 1].id);
+                }
+            }, [utList]);
+
+            const currentUT = useMemo(() => utList.find(ut => ut.id === selectedUTId), [utList, selectedUTId]);
+
+            // All sessions globally for this class
+            const allClassSessions = useMemo(() => {
+                let counter = 1;
+                const sessions = [];
+                allWeeks.forEach(w => {
+                    const wData = weeksData[w.id] || {};
+                    const isHoliday = holidayWeeks?.includes(w.id);
+                    
+                    for (let d = 0; d < 5; d++) {
+                        for (let s = 0; s < TIME_SLOTS.length; s++) {
+                            const slot = TIME_SLOTS[s];
+                            if (slot.type === 'break') continue;
+                            
+                            const isGlobal = config.schedule[d]?.[slot.id] === classId;
+                            const isExtra = wData.extraClasses?.[d]?.[slot.id] === classId;
+                            
+                            if (isGlobal || isExtra) {
+                                const prevSlot = TIME_SLOTS[s - 1];
+                                const isCovered = prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                                if (isCovered) continue;
+
+                                const dateStr = addDays(w.id, d);
+                                const cellData = wData[`${d}-${slot.id}`] || {};
+                                const isZzz = cellData.status === 'zzz';
+                                
+                                let sessionNumber = null;
+                                if (!isHoliday && !isZzz) {
+                                    sessionNumber = counter++;
+                                }
+
+                                const now = new Date();
+                                const [y, m, day] = dateStr.split('-');
+                                const cellEndTime = new Date(y, m - 1, day, slot.endH, slot.endM, 0);
+                                const isPast = now > cellEndTime;
+
+                                sessions.push({
+                                    weekId: w.id,
+                                    weekLabel: w.label,
+                                    dayIndex: d,
+                                    slot: slot,
+                                    dateStr: dateStr,
+                                    sessionNumber: sessionNumber,
+                                    isHoliday: isHoliday,
+                                    isZzz: isZzz,
+                                    isExtra: isExtra,
+                                    isPast: isPast,
+                                    data: cellData
+                                });
+                            }
+                        }
+                    }
+                });
+                return sessions;
+            }, [allWeeks, weeksData, config, holidayWeeks, classId]);
+
+            // Filter weeks to show based on selected UT
+            const visibleWeeks = useMemo(() => {
+                if (!currentUT) return allWeeks;
+                const currentIdx = utList.findIndex(ut => ut.id === currentUT.id);
+                const prevUT = currentIdx > 0 ? utList[currentIdx - 1] : null;
+                
+                const start = prevUT ? new Date(prevUT.date) : new Date(config.schoolYear, 8, 1);
+                const end = new Date(currentUT.date);
+                end.setHours(23, 59, 59, 999);
+
+                return allWeeks.filter(w => {
+                    const wStart = new Date(w.startDate);
+                    const wEnd = new Date(w.endDate);
+                    return wEnd >= start && wStart <= end;
+                });
+            }, [allWeeks, currentUT, utList, config.schoolYear]);
+
+            const updatePlanData = (wId, newData, saveToHistory = true) => {
+                if (saveToHistory) {
+                    setHistory(prev => [...prev, weeksData]);
+                    setFuture([]); 
+                }
+                onUpdateWeekData(wId, newData);
+            };
+
+            const handleUndo = () => {
+                if (history.length === 0) return;
+                const previous = history[history.length - 1];
+                const newHistory = history.slice(0, -1);
+                setFuture(prev => [weeksData, ...prev]); 
+                setHistory(newHistory);
+                // Requires restoring full weeksData, but we can only update one by one or need a global state setter
+                // For simplicity in this local scope, we'll restore all weeks that changed
+                Object.keys(previous).forEach(wId => {
+                    if (JSON.stringify(previous[wId]) !== JSON.stringify(weeksData[wId])) {
+                        onUpdateWeekData(wId, previous[wId]);
+                    }
+                });
+            };
+
+            const handleRedo = () => {
+                if (future.length === 0) return;
+                const next = future[0];
+                const newFuture = future.slice(1);
+                setHistory(prev => [...prev, weeksData]); 
+                setFuture(newFuture);
+                Object.keys(next).forEach(wId => {
+                    if (JSON.stringify(next[wId]) !== JSON.stringify(weeksData[wId])) {
+                        onUpdateWeekData(wId, next[wId]);
+                    }
+                });
+            };
+
+            const getTasks = (wId, d, s) => {
+                const wData = weeksData[wId] || {};
+                const k = `${d}-${s}`;
+                const existing = wData[k]?.tasks;
+                if (existing && Array.isArray(existing) && existing.length > 0) return existing;
+                return [{ text: '', time: '', status: null }, { text: '', time: '', status: null }, { text: '', time: '', status: null }];
+            };
+
+            const getTotalTime = (wId, d, s) => {
+                const tasks = getTasks(wId, d, s);
+                return tasks.reduce((acc, t) => acc + (parseInt(t.time) || 0), 0);
+            };
+
+            const handleTasksChange = (wId, d, s, newTasks) => {
+                const wData = { ...(weeksData[wId] || {}) };
+                wData[`${d}-${s}`] = { ...wData[`${d}-${s}`], tasks: newTasks };
+                updatePlanData(wId, wData);
+            };
+
+            const handleReviewChange = (wId, d, s, val) => {
+                const wData = { ...(weeksData[wId] || {}) };
+                wData[`${d}-${s}`] = { ...wData[`${d}-${s}`], review: val };
+                updatePlanData(wId, wData);
+            };
+
+            const handleStatusChange = (wId, d, s, val) => {
+                const wData = { ...(weeksData[wId] || {}) };
+                wData[`${d}-${s}`] = { ...wData[`${d}-${s}`], status: val };
+                if (val === null) {
+                    wData[`${d}-${s}`].zzzReason = "";
+                }
+                updatePlanData(wId, wData);
+            };
+
+            const handleSessionNotepadSave = (wId, dayIndex, slotId, data) => {
+                const wData = { ...(weeksData[wId] || {}) };
+                const k = `${dayIndex}-${slotId}`;
+                wData[k] = { ...wData[k], notes: data.notes, materials: data.materials, links: data.links };
+                updatePlanData(wId, wData);
+            };
+
+            const handleSmartPaste = (tasks) => {
+                if (!activeSmartPaste) return;
+                const { wId, day, slot } = activeSmartPaste;
+                const currentTasks = getTasks(wId, day, slot).filter(t => t.text.trim() !== '');
+                const combinedTasks = [...currentTasks, ...tasks];
+                while(combinedTasks.length < 3) combinedTasks.push({text: "", time: "", status: null});
+                const wData = { ...(weeksData[wId] || {}) };
+                wData[`${day}-${slot}`] = { ...(wData[`${day}-${slot}`] || {}), tasks: combinedTasks };
+                updatePlanData(wId, wData);
+            };
+
+            const handleTaskAction = (wId, d, s, cid, task, action) => {
+                if (action === 'save') {
+                    onAddToRadar(task.text, d);
+                    alert("Afegit al Radar!");
+                } else if (action === 'alert_menu') {
+                    const tasks = getTasks(wId, d, s);
+                    const idx = tasks.findIndex(t => t === task);
+                    setPendingActionTask({ wId, d, s, cid, idx, task });
+                }
+            };
+
+            const executePendingAction = (type) => {
+                if (!pendingActionTask) return;
+                const { wId, d, s, idx, task } = pendingActionTask;
+                const wData = { ...(weeksData[wId] || {}) };
+                const sourceKey = `${d}-${s}`;
+                const sourceTasks = getTasks(wId, d, s); 
+                const newSourceTasks = [...sourceTasks];
+                newSourceTasks[idx] = { ...newSourceTasks[idx], status: type }; 
+                wData[sourceKey] = { ...(wData[sourceKey] || {}), tasks: newSourceTasks };
+
+                // Find next session globally
+                const currentIdx = allClassSessions.findIndex(sess => sess.weekId === wId && sess.dayIndex === d && sess.slot.id === s);
+                let nextSession = null;
+                for (let i = currentIdx + 1; i < allClassSessions.length; i++) {
+                    if (!allClassSessions[i].isZzz && !allClassSessions[i].isHoliday) {
+                        nextSession = allClassSessions[i];
+                        break;
+                    }
+                }
+
+                if(nextSession) {
+                    const newTaskObj = { text: task.text, time: task.time, status: null, tag: type === 'skipped' ? 'skipped' : 'unfinished' };
+                    if (nextSession.weekId === wId) {
+                        const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
+                        const targetTasks = getTasks(wId, nextSession.dayIndex, nextSession.slot.id);
+                        wData[targetKey] = { ...(wData[targetKey] || {}), tasks: [newTaskObj, ...targetTasks] };
+                        updatePlanData(wId, wData);
+                        alert(`Activitat moguda al proper dia d'aquesta setmana.`);
+                    } else {
+                        updatePlanData(wId, wData); // Save source week
+                        const targetWData = { ...(weeksData[nextSession.weekId] || {}) };
+                        const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
+                        const targetTasks = getTasks(nextSession.weekId, nextSession.dayIndex, nextSession.slot.id);
+                        targetWData[targetKey] = { ...(targetWData[targetKey] || {}), tasks: [newTaskObj, ...targetTasks] };
+                        onUpdateWeekData(nextSession.weekId, targetWData); // Save target week
+                        alert(`Activitat moguda a la sessió del ${new Date(nextSession.dateStr).toLocaleDateString()}`);
+                    }
+                } else {
+                    updatePlanData(wId, wData);
+                    alert("No s'ha trobat cap altra sessió per moure l'activitat.");
+                }
+                setPendingActionTask(null);
+            };
+
+            const handleZzzAction = (wId, d, s) => {
+                const currentTasks = getTasks(wId, d, s).filter(t => t.text.trim());
+                const wData = { ...(weeksData[wId] || {}) };
+                const currentKey = `${d}-${s}`;
+                wData[currentKey] = { 
+                    ...wData[currentKey], 
+                    status: 'zzz', 
+                    zzzReason: wData[currentKey]?.zzzReason || "", 
+                    tasks: [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}] 
+                };
+
+                if (currentTasks.length > 0) {
+                    const currentIdx = allClassSessions.findIndex(sess => sess.weekId === wId && sess.dayIndex === d && sess.slot.id === s);
+                    let nextSession = null;
+                    for (let i = currentIdx + 1; i < allClassSessions.length; i++) {
+                        if (!allClassSessions[i].isZzz && !allClassSessions[i].isHoliday) {
+                            nextSession = allClassSessions[i];
+                            break;
+                        }
+                    }
+
+                    if (nextSession) {
+                        const movedTasks = currentTasks.map(t => ({...t, text: `(Del ${DAYS[d]}) ${t.text}`, status: null}));
+                        if (nextSession.weekId === wId) {
+                            const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
+                            const targetTasks = getTasks(wId, nextSession.dayIndex, nextSession.slot.id);
+                            wData[targetKey] = { ...(wData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] };
+                            alert(`Classe cancel·lada. Mogut al següent dia.`);
+                        } else {
+                            const targetWData = { ...(weeksData[nextSession.weekId] || {}) };
+                            const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
+                            const targetTasks = getTasks(nextSession.weekId, nextSession.dayIndex, nextSession.slot.id);
+                            targetWData[targetKey] = { ...(targetWData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] };
+                            onUpdateWeekData(nextSession.weekId, targetWData);
+                            alert(`Classe cancel·lada. Mogut a la sessió del ${new Date(nextSession.dateStr).toLocaleDateString()}`);
+                        }
+                    } else {
+                        alert("Zzz marcat (sense moure, no hi ha propera sessió).");
+                    }
+                }
+                updatePlanData(wId, wData);
+            };
+
+            const generateHTML = () => {
+                let html = `<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>`;
+                
+                visibleWeeks.forEach(w => {
+                    const sessions = allClassSessions.filter(sess => sess.weekId === w.id);
+                    sessions.forEach(sess => {
+                        if (sess.isHoliday) return;
+                        const data = sess.data || {};
+                        const tasks = data.tasks || [];
+                        const validTasks = tasks.filter(t => t.text.trim());
+                        
+                        let contentHtml = "";
+                        if (data.status === 'zzz') {
+                            const rao = data.zzzReason ? ` (${data.zzzReason})` : '';
+                            contentHtml = `💤 NO ES FA CLASSE${rao}`;
+                        } else {
+                            contentHtml = validTasks.map(t => {
+                                let style = "margin-bottom: 4px;";
+                                let prefix = "";
+                                if(t.status === 'skipped') style += "text-decoration:line-through;color:#DC2626;font-style:italic;";
+                                if(t.status === 'unfinished') style += "text-decoration:underline;text-decoration-color:#DC2626;font-weight:600;color:#b91c1c;";
+                                if(t.tag === 'skipped') prefix = "🔴 ";
+                                if(t.tag === 'unfinished') prefix = "⚠️ ";
+                                const timeStr = t.time ? `<span style="color:#DC2626;font-weight:bold;">${t.time}'</span> ` : "";
+                                return `<div style="${style}">• ${prefix}${timeStr}${t.text}</div>`;
+                            }).join('');
+                            if (data.review) contentHtml += `<div style="color:#DC2626; margin-top: 4px; font-weight: bold;">[REV: ${data.review}]</div>`;
+                        }
+
+                        if (contentHtml || validTasks.length > 0 || data.notes || data.materials) {
+                            const linksHtml = data.links && data.links.length > 0 ? `<div style="margin-top: 6px;"><b>Enllaços:</b><br>` + data.links.map(l => {
+                                const url = typeof l === 'string' ? l : l.url;
+                                const title = typeof l === 'string' ? l : (l.title || l.url);
+                                return `<a href="${url}" target="_blank" style="color:#2563EB;text-decoration:underline;">${title}</a>`;
+                            }).join('<br>') + `</div>` : '';
+                            
+                            html += `<tr style="border-bottom: 1px solid #E5E7EB;">
+                                <td style="padding:12px; vertical-align:top; border-right: 1px solid #E5E7EB; width: 40%;">${contentHtml}</td>
+                                <td style="padding:12px; vertical-align:top; border-right: 1px solid #E5E7EB; width: 30%;">${data.materials ? data.materials.replace(/\n/g, '<br>') : ''}${linksHtml}</td>
+                                <td style="padding:12px; font-style:italic; vertical-align:top; width: 30%; color: #4B5563;">${data.notes ? data.notes.replace(/\n/g, '<br>') : ''}</td>
+                            </tr>`;
+                        }
+                    });
+                });
+                
+                html += `</tbody></table>`;
+                return html;
+            };
+
+            const handleExportToProgramacio = () => {
+                const htmlRows = generateHTML();
+                // Netejar el codi the `<table><tbody>` només per enviar les files
+                const strippedRows = htmlRows.replace('<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>', '').replace('</tbody></table>', '');
+                
+                const payload = {
+                    action: 'SYNC_TABLE',
+                    curs: exportConfig.curs.trim(),
+                    ut: exportConfig.ut.trim(),
+                    fase: exportConfig.fase,
+                    html: strippedRows,
+                    mode: 'append',
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('cfn_sync_payload', JSON.stringify(payload));
+                window.open('https://marcpcasals.github.io/MarcBook/Altres/programador.html', '_blank');
+                setShowExportModal(false);
+            };
+
+            return (
+                <div className="max-w-full mx-auto p-4 fade-in pb-20">
+                    <div className="sticky top-0 z-40 bg-white/95 backdrop-blur shadow-md p-3 rounded-xl border border-gray-200 mb-4 flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => { onBack(); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-600"><Icons.ChevronLeft /></button>
+                            <div>
+                                <h2 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                                    <div className={`w-3 h-3 rounded-full ${classInfo?.color.split(' ')[0]}`}></div>
+                                    Programació: {classInfo?.name || 'Classe'}
+                                </h2>
+                            </div>
+                            <div className="ml-4 flex items-center gap-2 border-l pl-4">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Filtrar per UT:</span>
+                                <select 
+                                    className="border p-1.5 rounded text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={selectedUTId}
+                                    onChange={(e) => setSelectedUTId(e.target.value)}
+                                >
+                                    <option value="">Totes les setmanes</option>
+                                    {utList.map(ut => <option key={ut.id} value={ut.id}>{ut.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={handleUndo} className={`p-2 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 border border-gray-300 ${history.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={history.length === 0} title="Desfer última acció"><Icons.Undo size={16}/></button>
+                            <button onClick={handleRedo} className={`p-2 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 border border-gray-300 ${future.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={future.length === 0} title="Refer última acció desfeta"><Icons.Redo size={16}/></button>
+                            <button onClick={() => setReviewMode(!reviewMode)} className={`px-3 py-1 rounded-lg font-bold border flex gap-1 items-center transition-colors ${reviewMode ? 'bg-red-50 text-red-600 border-red-200 shadow-inner' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                                {reviewMode ? <Icons.AlertTriangle /> : <Icons.Settings />} {reviewMode ? 'MODE REVISIÓ' : 'Revisar'}
+                            </button>
+                            <button onClick={() => setShowExportModal(true)} className={`bg-${theme}-600 text-white px-4 py-1 rounded-lg font-bold flex items-center gap-2 hover:bg-${theme}-700 shadow-md`}><Icons.Table /> Exportar</button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-4">
+                        {visibleWeeks.map(w => {
+                            const sessions = allClassSessions.filter(s => s.weekId === w.id);
+                            if (sessions.length === 0) return null;
+                            
+                            return (
+                                <div key={w.id} className="flex flex-col bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden fade-in">
+                                    <div className="bg-gray-100 p-2 font-bold text-gray-700 text-sm border-b">
+                                        {w.label} <span className="text-gray-500 font-normal">({w.startDate.toLocaleDateString()} - {w.endDate.toLocaleDateString()})</span>
+                                    </div>
+                                    <div className="flex overflow-x-auto p-3 gap-3 custom-scroll">
+                                        {sessions.map(sess => {
+                                            const isZzz = sess.isZzz;
+                                            const isHoliday = sess.isHoliday;
+                                            const tasks = getTasks(sess.weekId, sess.dayIndex, sess.slot.id);
+                                            const totalTime = getTotalTime(sess.weekId, sess.dayIndex, sess.slot.id);
+                                            const hasContent = sess.data.materials?.trim() || sess.data.notes?.trim() || sess.data.links?.length > 0;
+                                            
+                                            let cellBgClass = isZzz || isHoliday ? 'session-cancelled' : `bg-white hover:bg-${theme}-50/10`;
+                                            if (sess.isPast && !isZzz && !isHoliday) cellBgClass += ' bg-gray-50 opacity-70';
+
+                                            return (
+                                                <div key={`${w.id}-${sess.dayIndex}-${sess.slot.id}`} className={`min-w-[300px] max-w-[320px] shrink-0 border border-gray-200 rounded-lg flex flex-col relative group transition-all ${cellBgClass} shadow-sm`}>
+                                                    {/* Header de Sessió Específic */}
+                                                    <div className="bg-gray-50 border-b border-gray-200 px-3 py-1.5 flex justify-between items-center rounded-t-lg">
+                                                        <span className={`text-xs font-extrabold uppercase ${sess.sessionNumber ? 'text-blue-700' : 'text-gray-400'}`}>
+                                                            {sess.sessionNumber ? `Sessió ${sess.sessionNumber}` : (isHoliday ? 'Festiu 🎉' : 'No Lectiu')}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-500 font-mono font-bold">
+                                                            {new Date(sess.dateStr).toLocaleDateString('ca-ES', {weekday: 'short', day:'numeric', month:'short'})} | {sess.slot.label.split(' - ')[0]}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Contingut Estandard Cel·la */}
+                                                    <div className="p-2 flex-1 flex flex-col">
+                                                        <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-2 shadow-sm ${classInfo?.color || 'bg-gray-100'} ${isZzz || isHoliday ? 'opacity-50 grayscale' : ''}`}>
+                                                            <div className="flex items-center gap-1 overflow-hidden">
+                                                                <span className="truncate">{classInfo?.name}</span>
+                                                                <button 
+                                                                    onClick={() => setActiveSessionNotepad({weekId: sess.weekId, dayIndex: sess.dayIndex, slotId: sess.slot.id, className: classInfo?.name, slotLabel: sess.slot.label, data: sess.data})} 
+                                                                    className={`p-0.5 rounded ml-1 transition-colors ${hasContent ? 'text-orange-500 hover:bg-orange-50' : 'text-inherit hover:bg-black/10'}`} 
+                                                                    title={hasContent ? "Notes (amb contingut)" : "Notes de sessió"}
+                                                                >
+                                                                    <Icons.FileText size={12}/>
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <button onClick={() => setActiveSmartPaste({wId: sess.weekId, day: sess.dayIndex, slot: sess.slot.id})} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Enganxar des de text"><Icons.Paste size={14}/></button>
+                                                                {/* Copiar només per referència (no obre modal aquí per complexitat, opcional afegir-ho) */}
+                                                                <button onClick={() => { if(isZzz || isHoliday) { handleStatusChange(sess.weekId, sess.dayIndex, sess.slot.id, null); } else { handleZzzAction(sess.weekId, sess.dayIndex, sess.slot.id, classId); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors reactivate-btn ${isZzz || isHoliday ? 'text-gray-800' : ''}`} title={isZzz || isHoliday ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
+                                                                <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className={`flex-1 overflow-y-auto custom-scroll ${reviewMode ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                            {isZzz || isHoliday ? (
+                                                                <div className="flex-1 flex items-center justify-center p-2 h-full">
+                                                                    <textarea
+                                                                        className="w-full h-full min-h-[60px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-600 focus:ring-0 focus:outline-none placeholder-gray-500"
+                                                                        style={{ pointerEvents: 'auto' }}
+                                                                        placeholder={isHoliday ? "Festiu" : "Motiu (ex: Excursió)"}
+                                                                        value={sess.data.zzzReason || (isHoliday ? 'Festiu 🎉' : '')}
+                                                                        onChange={(e) => {
+                                                                            const wData = { ...(weeksData[sess.weekId] || {}) };
+                                                                            wData[`${sess.dayIndex}-${sess.slot.id}`] = { ...wData[`${sess.dayIndex}-${sess.slot.id}`], zzzReason: e.target.value };
+                                                                            setWeeksData(prev => ({...prev, [sess.weekId]: wData}));
+                                                                        }}
+                                                                        onBlur={(e) => {
+                                                                            const wData = { ...(weeksData[sess.weekId] || {}) };
+                                                                            wData[`${sess.dayIndex}-${sess.slot.id}`] = { ...wData[`${sess.dayIndex}-${sess.slot.id}`], zzzReason: e.target.value };
+                                                                            updatePlanData(sess.weekId, wData, true);
+                                                                        }}
+                                                                        disabled={isHoliday}
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(sess.weekId, sess.dayIndex, sess.slot.id, t)} onAction={(task, action) => handleTaskAction(sess.weekId, sess.dayIndex, sess.slot.id, classId, task, action)} disabled={isZzz || isHoliday} theme={theme} />
+                                                            )}
+                                                        </div>
+                                                        {(reviewMode || sess.data.review) && (
+                                                            <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={sess.data.review||""} onChange={(e)=>handleReviewChange(sess.weekId, sess.dayIndex, sess.slot.id, e.target.value)}></textarea>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {visibleWeeks.filter(w => allClassSessions.some(s => s.weekId === w.id)).length === 0 && (
+                            <div className="text-center p-12 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500">
+                                No hi ha sessions programades per aquesta classe en la UT seleccionada.
+                            </div>
+                        )}
+                    </div>
+
+                    {/* MODALS REUTILITZATS */}
+                    {activeSessionNotepad && ReactDOM.createPortal(
+                        <SessionNotepadModal 
+                            dayIndex={activeSessionNotepad.dayIndex}
+                            slotId={activeSessionNotepad.slotId}
+                            className={activeSessionNotepad.className}
+                            slotLabel={activeSessionNotepad.slotLabel}
+                            planData={weeksData[activeSessionNotepad.weekId] || {}}
+                            onClose={() => setActiveSessionNotepad(null)}
+                            onSave={(d, s, data) => handleSessionNotepadSave(activeSessionNotepad.weekId, d, s, data)}
+                        />,
+                        document.body
+                    )}
+
+                    {activeSmartPaste && ReactDOM.createPortal(
+                        <SmartPasteModal 
+                            onPaste={handleSmartPaste}
+                            onClose={() => setActiveSmartPaste(null)}
+                        />,
+                        document.body
+                    )}
+
+                    {showExportModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
+                            <div className={`bg-white p-6 rounded-xl max-w-2xl w-full m-4 shadow-2xl border-t-4 border-${theme}-500`}>
+                                <h3 className="text-xl font-bold mb-6 flex gap-2 text-gray-800"><Icons.Table /> Exportar Programació: {classInfo?.name}</h3>
+                                
+                                <div className="p-5 bg-blue-50 border border-blue-200 rounded-xl mb-4">
+                                    <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icons.Link size={18} /> Sincronitzar amb Programació Docent</h4>
+                                    <p className="text-xs text-blue-600 mb-4">L'artefacte de programació s'obrirà i la taula d'aquesta UT s'enganxarà automàticament on indiquis.</p>
+                                    
+                                    <div className="flex gap-4 mb-4">
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Curs / Pestanya</label>
+                                            <input type="text" placeholder="Ex: 2n ESO" className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={exportConfig.curs} onChange={e=>setExportConfig({...exportConfig, curs: e.target.value})} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">UT</label>
+                                            <input type="text" placeholder="Ex: UT1" className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={exportConfig.ut} onChange={e=>setExportConfig({...exportConfig, ut: e.target.value})} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Fase</label>
+                                            <select className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={exportConfig.fase} onChange={e=>setExportConfig({...exportConfig, fase: e.target.value})}>
+                                                <option value="FASE DE PREPARACIÓ">FASE DE PREPARACIÓ</option>
+                                                <option value="FASE DE RESOLUCIÓ">FASE DE RESOLUCIÓ</option>
+                                                <option value="FASE D'INTEGRACIÓ">FASE D'INTEGRACIÓ</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button onClick={handleExportToProgramacio} disabled={!exportConfig.curs || !exportConfig.ut || !exportConfig.fase} className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md flex items-center justify-center gap-2">
+                                        Exportar a la meva Programació <Icons.ArrowRight size={20}/>
+                                    </button>
+                                </div>
+
+                                <div className="flex justify-end gap-2 mt-2">
+                                    <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {pendingActionTask && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                                <h3 className="text-lg font-bold mb-4">Què ha passat amb l'activitat?</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={() => executePendingAction('skipped')} className="p-4 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 font-bold flex flex-col items-center">
+                                        <span className="text-2xl mb-2">❌</span>
+                                        No feta
+                                    </button>
+                                    <button onClick={() => executePendingAction('unfinished')} className="p-4 bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 font-bold flex flex-col items-center">
+                                        <span className="text-2xl mb-2">🚧</span>
+                                        Inacabada
+                                    </button>
+                                </div>
+                                <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+                </div>
+            );
+        };
+
         const App = () => {
-            const [view, setView] = useState('config');
+            const [view, setView] = useState('config'); // 'config', 'dashboard', 'planner', 'class_planner'
             const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] });
             const [radar, setRadar] = useState([]);
             const [weeksData, setWeeksData] = useState({});
             const [currentWeekId, setCurrentWeekId] = useState(null);
+            const [selectedClassId, setSelectedClassId] = useState(null);
             const [completedWeeks, setCompletedWeeks] = useState([]);
             const [holidayWeeks, setHolidayWeeks] = useState([]);
             const [reminders, setReminders] = useState({});
@@ -2329,6 +2926,11 @@
                 setRadar(prev => [...prev, newEntry]);
             };
 
+            const handleSelectClassView = (cId) => {
+                setSelectedClassId(cId);
+                setView('class_planner');
+            };
+
             const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar([]); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
             const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
             const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(Array.isArray(d.radar) ? d.radar : []); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
@@ -2336,8 +2938,9 @@
             return (
                 <div className="min-h-screen">
                     {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} />}
                     {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} weeksData={weeksData} config={config} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                 </div>
             );
         };
