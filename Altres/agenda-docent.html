@@ -615,26 +615,6 @@
                         <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden"><div className={`bg-${theme}-500 h-4 rounded-full transition-all duration-500`} style={{ width: `${calculateProgress()}%` }}></div></div>
                     </div>
 
-                    {/* NOVA SECCIÓ: PROGRAMACIÓ PER CLASSES */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
-                        <h2 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2"><Icons.Table /> Programació per Classes</h2>
-                        {config.classes.length === 0 ? (
-                            <p className="text-sm text-gray-500 italic">No tens cap classe configurada encara.</p>
-                        ) : (
-                            <div className="flex flex-wrap gap-3">
-                                {config.classes.map(c => (
-                                    <button 
-                                        key={c.id} 
-                                        onClick={() => onSelectClassView(c.id)} 
-                                        className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all hover:scale-105 border ${c.color.replace('text-', 'text-gray-900 border-').replace('bg-', 'bg-').split(' ')[0]}`}
-                                    >
-                                        {c.name}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2">
                             <div className="flex justify-between items-center mb-4">
@@ -676,6 +656,26 @@
                                         </div>
                                     );
                                 })}
+                            </div>
+
+                            {/* NOVA SECCIÓ: PROGRAMACIÓ PER CLASSES (MOGUT AQUÍ) */}
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mt-8">
+                                <h2 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2"><Icons.Table /> Programació per Classes</h2>
+                                {config.classes.length === 0 ? (
+                                    <p className="text-sm text-gray-500 italic">No tens cap classe configurada encara.</p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-3">
+                                        {config.classes.map(c => (
+                                            <button 
+                                                key={c.id} 
+                                                onClick={() => onSelectClassView(c.id)} 
+                                                className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all hover:scale-105 border ${c.color.replace('text-', 'text-gray-900 border-').replace('bg-', 'bg-').split(' ')[0]}`}
+                                            >
+                                                {c.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="lg:col-span-1 h-full flex flex-col gap-6">
@@ -2174,6 +2174,7 @@
             const [reviewMode, setReviewMode] = useState(false);
             const [showExportModal, setShowExportModal] = useState(false);
             const [exportConfig, setExportConfig] = useState({ curs: classInfo ? classInfo.name : "", ut: "", fase: "FASE DE PREPARACIÓ" });
+            const [exportInterval, setExportInterval] = useState("");
             const [selectedUTId, setSelectedUTId] = useState("");
 
             const [pendingActionTask, setPendingActionTask] = useState(null);
@@ -2200,11 +2201,28 @@
 
             const currentUT = useMemo(() => utList.find(ut => ut.id === selectedUTId), [utList, selectedUTId]);
 
-            // All sessions globally for this class
+            // Filter weeks to show based on selected UT
+            const visibleWeeks = useMemo(() => {
+                if (!currentUT) return allWeeks;
+                const currentIdx = utList.findIndex(ut => ut.id === currentUT.id);
+                const prevUT = currentIdx > 0 ? utList[currentIdx - 1] : null;
+                
+                const start = prevUT ? new Date(prevUT.date) : new Date(config.schoolYear, 8, 1);
+                const end = new Date(currentUT.date);
+                end.setHours(23, 59, 59, 999);
+
+                return allWeeks.filter(w => {
+                    const wStart = new Date(w.startDate);
+                    const wEnd = new Date(w.endDate);
+                    return wEnd >= start && wStart <= end;
+                });
+            }, [allWeeks, currentUT, utList, config.schoolYear]);
+
+            // All sessions for this class (NOW FILTERED BY VISIBLE WEEKS SO COUNTER RESETS PER UT)
             const allClassSessions = useMemo(() => {
                 let counter = 1;
                 const sessions = [];
-                allWeeks.forEach(w => {
+                visibleWeeks.forEach(w => {
                     const wData = weeksData[w.id] || {};
                     const isHoliday = holidayWeeks?.includes(w.id);
                     
@@ -2253,24 +2271,7 @@
                     }
                 });
                 return sessions;
-            }, [allWeeks, weeksData, config, holidayWeeks, classId]);
-
-            // Filter weeks to show based on selected UT
-            const visibleWeeks = useMemo(() => {
-                if (!currentUT) return allWeeks;
-                const currentIdx = utList.findIndex(ut => ut.id === currentUT.id);
-                const prevUT = currentIdx > 0 ? utList[currentIdx - 1] : null;
-                
-                const start = prevUT ? new Date(prevUT.date) : new Date(config.schoolYear, 8, 1);
-                const end = new Date(currentUT.date);
-                end.setHours(23, 59, 59, 999);
-
-                return allWeeks.filter(w => {
-                    const wStart = new Date(w.startDate);
-                    const wEnd = new Date(w.endDate);
-                    return wEnd >= start && wStart <= end;
-                });
-            }, [allWeeks, currentUT, utList, config.schoolYear]);
+            }, [visibleWeeks, weeksData, config, holidayWeeks, classId]);
 
             const updatePlanData = (wId, newData, saveToHistory = true) => {
                 if (saveToHistory) {
@@ -2435,36 +2436,37 @@
                             break;
                         }
                     }
-
-                    if (nextSession) {
-                        const movedTasks = currentTasks.map(t => ({...t, text: `(Del ${DAYS[d]}) ${t.text}`, status: null}));
-                        if (nextSession.weekId === wId) {
-                            const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
-                            const targetTasks = getTasks(wId, nextSession.dayIndex, nextSession.slot.id);
-                            wData[targetKey] = { ...(wData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] };
-                            alert(`Classe cancel·lada. Mogut al següent dia.`);
-                        } else {
-                            const targetWData = { ...(weeksData[nextSession.weekId] || {}) };
-                            const targetKey = `${nextSession.dayIndex}-${nextSession.slot.id}`;
-                            const targetTasks = getTasks(nextSession.weekId, nextSession.dayIndex, nextSession.slot.id);
-                            targetWData[targetKey] = { ...(targetWData[targetKey] || {}), tasks: [...movedTasks, ...targetTasks] };
-                            onUpdateWeekData(nextSession.weekId, targetWData);
-                            alert(`Classe cancel·lada. Mogut a la sessió del ${new Date(nextSession.dateStr).toLocaleDateString()}`);
-                        }
-                    } else {
-                        alert("Zzz marcat (sense moure, no hi ha propera sessió).");
-                    }
-                }
-                updatePlanData(wId, wData);
+                if (found && found.w === 0) {
+                    const existingTasks = getTasks(found.d, found.s);
+                    const combined = [...existingTasks.filter(t => t.text.trim()), ...sourceTasks.map(t => ({...t, status: null}))];
+                    while(combined.length < 3) combined.push({text:"", time:"", status: null});
+                    handleTasksChange(found.d, found.s, combined);
+                    alert("Copiades!");
+                    setShowCopyModal(false);
+                } else { alert("Només es pot copiar dins la mateixa setmana actualment."); }
             };
 
-            const generateHTML = () => {
-                let html = `<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>`;
+            const generateHTML = (onlyRows = false, interval = "") => {
+                let html = onlyRows ? '' : `<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>`;
                 
+                let minSess = 1, maxSess = 999;
+                if (interval.trim() !== "") {
+                    if (interval.includes('-')) {
+                        const parts = interval.split('-');
+                        minSess = parseInt(parts[0]) || 1;
+                        maxSess = parseInt(parts[1]) || 999;
+                    } else {
+                        minSess = parseInt(interval) || 1;
+                        maxSess = parseInt(interval) || 999;
+                    }
+                }
+
                 visibleWeeks.forEach(w => {
                     const sessions = allClassSessions.filter(sess => sess.weekId === w.id);
                     sessions.forEach(sess => {
                         if (sess.isHoliday) return;
+                        if (sess.sessionNumber !== null && (sess.sessionNumber < minSess || sess.sessionNumber > maxSess)) return;
+
                         const data = sess.data || {};
                         const tasks = data.tasks || [];
                         const validTasks = tasks.filter(t => t.text.trim());
@@ -2503,12 +2505,12 @@
                     });
                 });
                 
-                html += `</tbody></table>`;
+                if (!onlyRows) html += `</tbody></table>`;
                 return html;
             };
 
             const handleExportToProgramacio = () => {
-                const htmlRows = generateHTML();
+                const htmlRows = generateHTML(true, exportInterval);
                 // Netejar el codi the `<table><tbody>` només per enviar les files
                 const strippedRows = htmlRows.replace('<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>', '').replace('</tbody></table>', '');
                 
@@ -2705,7 +2707,14 @@
                                             </select>
                                         </div>
                                     </div>
-                                    <button onClick={handleExportToProgramacio} disabled={!exportConfig.curs || !exportConfig.ut || !exportConfig.fase} className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md flex items-center justify-center gap-2">
+                                    
+                                    <div className="mb-4 pt-2 border-t border-blue-200">
+                                        <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Sessions a exportar (opcional)</label>
+                                        <input type="text" placeholder="Ex: 2-6 (deixa en blanc per exportar-les totes)" className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={exportInterval} onChange={e=>setExportInterval(e.target.value)} />
+                                        <p className="text-[10px] text-blue-600 mt-1">S'exportaran les sessions incloses dins d'aquest interval.</p>
+                                    </div>
+                                    
+                                    <button onClick={handleExportToProgramacio} disabled={!exportConfig.curs || !exportConfig.ut || !exportConfig.fase} className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md flex items-center justify-center gap-2 mt-2">
                                         Exportar a la meva Programació <Icons.ArrowRight size={20}/>
                                     </button>
                                 </div>
