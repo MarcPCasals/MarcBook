@@ -64,6 +64,7 @@
         const Layers = (p) => <Icon {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Icon>;
         const Settings = (p) => <Icon {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
         const Triangle = (p) => <Icon {...p}><polygon points="12 2 22 20 2 20"/></Icon>;
+        const Info = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Icon>;
 
         // --- Config inicial ---
         const STATUS_TYPES = {
@@ -132,6 +133,7 @@
             const [editingTaskDate, setEditingTaskDate] = useState(null); 
             const [selectedStudent, setSelectedStudent] = useState(null); 
             const [penaltyAlert, setPenaltyAlert] = useState(null);
+            const [editingCellNote, setEditingCellNote] = useState(null); 
             
             const [isAddingIncident, setIsAddingIncident] = useState(null); // student Object
             const [incidentText, setIncidentText] = useState("");
@@ -232,6 +234,7 @@
                             Object.keys(migratedData).forEach(clsId => {
                                 if (!migratedData[clsId].uts) migratedData[clsId].uts = DEFAULT_UTS;
                                 if (!migratedData[clsId].incidents) migratedData[clsId].incidents = {};
+                                if (!migratedData[clsId].cellNotes) migratedData[clsId].cellNotes = {};
                                 migratedData[clsId].tasks = migratedData[clsId].tasks.map(t => ({
                                     ...t,
                                     utId: t.utId || 'default'
@@ -250,6 +253,7 @@
                             records: {},
                             penalties: {},
                             incidents: {},
+                            cellNotes: {},
                             uts: DEFAULT_UTS
                         }
                     };
@@ -355,6 +359,21 @@
                     localStorage.removeItem('seguidor_tasques_data');
                     window.location.reload();
                 }
+            };
+
+            const handleSaveCellNote = () => {
+                if (!editingCellNote) return;
+                updateClassData(activeClassId, d => {
+                    const newNotes = { ...(d.cellNotes || {}) };
+                    const key = `${editingCellNote.studentId}_${editingCellNote.taskId}`;
+                    if (editingCellNote.text.trim() === "") {
+                        delete newNotes[key];
+                    } else {
+                        newNotes[key] = editingCellNote.text;
+                    }
+                    return { ...d, cellNotes: newNotes };
+                });
+                setEditingCellNote(null);
             };
 
             const handleDeleteAllStudents = () => {
@@ -644,6 +663,7 @@
                                             ) : (
                                                 visibleTasks.map((task, idx) => {
                                                     const allDone = students.length > 0 && students.every(s => records[`${s.id}_${task.id}`] === 'DONE');
+                                                    const doneCount = students.filter(s => records[`${s.id}_${task.id}`] === 'DONE').length;
                                                     return (
                                                     <th key={task.id} className={`min-w-[140px] p-2 border-b border-slate-200 group relative text-center ${idx % 2 !== 0 ? 'bg-slate-50' : 'bg-white'}`}>
                                                         <div className="flex flex-col items-center justify-center">
@@ -657,10 +677,15 @@
                                                                     <CheckCircle size={14} />
                                                                 </button>
                                                             </div>
-                                                            <button onClick={() => setEditingTaskDate({ id: task.id, date: task.date })} className="text-[10px] text-slate-500 font-mono flex items-center gap-1 hover:bg-slate-100 px-1 rounded transition-colors">
-                                                                <Calendar size={10} />
-                                                                {new Date(task.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
-                                                            </button>
+                                                            <div className="flex items-center gap-2">
+                                                                <button onClick={() => setEditingTaskDate({ id: task.id, date: task.date })} className="text-[10px] text-slate-500 font-mono flex items-center gap-1 hover:bg-slate-100 px-1 rounded transition-colors">
+                                                                    <Calendar size={10} />
+                                                                    {new Date(task.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+                                                                </button>
+                                                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded" title="Alumnes que han acabat la tasca">
+                                                                    {doneCount}/{students.length}
+                                                                </span>
+                                                            </div>
                                                             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white/90 backdrop-blur rounded shadow-sm border border-slate-100 p-0.5">
                                                                 <button onClick={() => deleteTask(task.id)} className="p-1 text-rose-400 hover:bg-rose-50 rounded"><Trash2 size={12}/></button>
                                                             </div>
@@ -707,10 +732,20 @@
                                                     </td>
                                                     {visibleTasks.map((task, tIdx) => {
                                                         const statusKey = records[`${student.id}_${task.id}`] || 'EMPTY';
+                                                        const cellNoteKey = `${student.id}_${task.id}`;
+                                                        const noteText = (currentData.cellNotes || {})[cellNoteKey] || "";
+                                                        const hasNote = noteText.trim().length > 0;
                                                         const colClass = tIdx % 2 !== 0 ? 'col-highlight' : '';
                                                         return (
-                                                            <td key={task.id} className={`p-2 border-b border-slate-100 text-center align-middle ${colClass}`}>
-                                                                <div className="flex items-center justify-center gap-1">
+                                                            <td key={task.id} className={`p-2 border-b border-slate-100 text-center align-middle relative ${colClass}`}>
+                                                                <button 
+                                                                    onClick={() => setEditingCellNote({ studentId: student.id, taskId: task.id, text: noteText })}
+                                                                    className={`absolute top-0.5 right-0.5 p-0.5 rounded hover:bg-slate-200 transition-colors ${hasNote ? 'text-amber-500' : 'text-slate-300'}`}
+                                                                    title={hasNote ? "Veure/Editar informació" : "Afegir informació de la tasca"}
+                                                                >
+                                                                    <Info size={12} />
+                                                                </button>
+                                                                <div className="flex items-center justify-center gap-1 mt-2">
                                                                     <button onClick={() => toggleStatus(student.id, task.id, 'DONE')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'DONE' ? 'bg-emerald-100 text-emerald-600 ring-2 ring-emerald-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-emerald-300 hover:text-emerald-400 shadow-sm'}`} title="Fet"><CheckCircle size={14} /></button>
                                                                     <button onClick={() => toggleStatus(student.id, task.id, 'LATE')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'LATE' ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-amber-300 hover:text-amber-400 shadow-sm'}`} title="Mig / Tard"><Clock size={14} /></button>
                                                                     <button onClick={() => toggleStatus(student.id, task.id, 'MISSING')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'MISSING' ? 'bg-rose-100 text-rose-600 ring-2 ring-rose-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-rose-300 hover:text-rose-400 shadow-sm'}`} title="No fet"><XCircle size={14} /></button>
@@ -734,6 +769,32 @@
                     </main>
 
                     {/* Modals */}
+                    {editingCellNote && (() => {
+                        const student = students.find(s => s.id === editingCellNote.studentId);
+                        const task = visibleTasks.find(t => t.id === editingCellNote.taskId) || allClassTasks.find(t => t.id === editingCellNote.taskId);
+                        return (
+                            <Modal title={`Informació de la tasca`} onClose={() => setEditingCellNote(null)}>
+                                <div className="space-y-4">
+                                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm text-slate-600">
+                                        <p><strong>Alumne:</strong> {student?.name}</p>
+                                        <p><strong>Tasca:</strong> {task?.title}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Anotacions</label>
+                                        <textarea 
+                                            autoFocus 
+                                            className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm h-32" 
+                                            placeholder="Ex: Li ha costat molt l'exercici 2, va entregar tard perquè no va entendre l'enunciat..." 
+                                            value={editingCellNote.text} 
+                                            onChange={e => setEditingCellNote({...editingCellNote, text: e.target.value})}
+                                        ></textarea>
+                                    </div>
+                                    <button onClick={handleSaveCellNote} className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700 transition-colors">Guardar Anotació</button>
+                                </div>
+                            </Modal>
+                        );
+                    })()}
+
                     {isAddingIncident && (
                         <Modal title={`Incident: ${isAddingIncident.name}`} onClose={() => setIsAddingIncident(null)}>
                             <div className="space-y-4">
