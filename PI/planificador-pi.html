@@ -71,16 +71,34 @@
         const IconFileJson = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
         const IconFilePdf = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
         const IconMoon = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>;
+        const IconCalendar = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
+        const IconEdit = ({ className }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
 
         // --- CONSTANTS ---
         const PHASE_DEFS = {
-            1: { name: 'Autoconeixement', color: 'bg-blue-500', bgLight: 'bg-blue-50', text: 'text-blue-600', borderColor: 'border-blue-200' },
-            2: { name: 'Planificació', color: 'bg-purple-500', bgLight: 'bg-purple-50', text: 'text-purple-600', borderColor: 'border-purple-200' },
-            3: { name: 'Realització', color: 'bg-orange-500', bgLight: 'bg-orange-50', text: 'text-orange-600', borderColor: 'border-orange-200' },
-            4: { name: 'Comunicació', color: 'bg-green-500', bgLight: 'bg-green-50', text: 'text-green-600', borderColor: 'border-green-200' }
+            1: { name: 'Planificació', color: 'bg-purple-500', bgLight: 'bg-purple-50', text: 'text-purple-600', borderColor: 'border-purple-200' },
+            2: { name: 'Realització', color: 'bg-orange-500', bgLight: 'bg-orange-50', text: 'text-orange-600', borderColor: 'border-orange-200' },
+            3: { name: 'Comunicació', color: 'bg-green-500', bgLight: 'bg-green-50', text: 'text-green-600', borderColor: 'border-green-200' }
         };
 
-        const STORAGE_KEY = 'pi_flow_v5';
+        const STORAGE_KEY = 'pi_flow_v6';
+
+        const getWeekIdFromDate = (dateStr, startDateStr) => {
+            if (!dateStr || !startDateStr) return null;
+            const target = new Date(dateStr);
+            const start = new Date(startDateStr);
+            
+            // Normalize to prevent timezone issues
+            target.setHours(12, 0, 0, 0);
+            start.setHours(12, 0, 0, 0);
+            
+            const diffTime = target - start;
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) return null;
+            const weekIndex = Math.floor(diffDays / 7);
+            return weekIndex + 1; // 1-indexed for visual matching
+        };
 
         const formatDate = (date) => new Date(date).toLocaleDateString('ca-ES', { day: 'numeric', month: 'short' });
         const getWeekRange = (startDateStr, weekIndex) => {
@@ -96,9 +114,8 @@
         const generateInitialWeeks = () => {
             const config = [
                 { phaseId: 1, count: 1 },  
-                { phaseId: 2, count: 2 },  
-                { phaseId: 3, count: 12 }, 
-                { phaseId: 4, count: 3 }   
+                { phaseId: 2, count: 12 }, 
+                { phaseId: 3, count: 3 }   
             ];
             
             let weeks = [];
@@ -201,33 +218,35 @@
                             {completedWeeks.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400">Encara no has tancat cap setmana.</div>
                             ) : (
-                                completedWeeks.map(week => (
-                                    <div key={week.id} className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${PHASE_DEFS[week.phaseId].bgLight} ${PHASE_DEFS[week.phaseId].text}`}>
-                                                Setmana {week.id} - {PHASE_DEFS[week.phaseId].name}
-                                            </span>
-                                            {/* DATA ORIGINAL DE LA SETMANA */}
-                                            <span className="text-xs text-slate-400 font-mono">
-                                                {getWeekRange(startDate, week.id - 1)}
-                                            </span>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <h4 className="text-xs font-bold text-red-500 uppercase mb-1">Dificultats i Solucions</h4>
-                                                <p className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-100 italic whitespace-pre-wrap">
-                                                    "{week.reflection?.difficulties || 'Sense registres'}"
-                                                </p>
+                                completedWeeks.map(week => {
+                                    const def = PHASE_DEFS[week.phaseId] || PHASE_DEFS[Object.keys(PHASE_DEFS)[0]];
+                                    return (
+                                        <div key={week.id} className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${def.bgLight} ${def.text}`}>
+                                                    Setmana {week.id} - {def.name}
+                                                </span>
+                                                <span className="text-xs text-slate-400 font-mono">
+                                                    {getWeekRange(startDate, week.id - 1)}
+                                                </span>
                                             </div>
-                                            <div>
-                                                <h4 className="text-xs font-bold text-green-600 uppercase mb-1">Aprenentatges</h4>
-                                                <p className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-100 italic whitespace-pre-wrap">
-                                                    "{week.reflection?.learned || 'Sense registres'}"
-                                                </p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <h4 className="text-xs font-bold text-red-500 uppercase mb-1">Dificultats i Solucions</h4>
+                                                    <p className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-100 italic whitespace-pre-wrap">
+                                                        "{week.reflection?.difficulties || 'Sense registres'}"
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-xs font-bold text-green-600 uppercase mb-1">Aprenentatges</h4>
+                                                    <p className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-100 italic whitespace-pre-wrap">
+                                                        "{week.reflection?.learned || 'Sense registres'}"
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>
@@ -235,7 +254,6 @@
             );
         };
 
-        // --- NEW: DOWNLOAD MODAL ---
         const DownloadModal = ({ onClose, onExportJSON, onExportPDF }) => {
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -274,7 +292,6 @@
             );
         };
 
-        // --- NEW: RESET MODAL ---
         const ResetModal = ({ onClose, onConfirm }) => {
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -300,7 +317,6 @@
             );
         };
 
-        // --- COMPONENT: TASK INPUT LIST ---
         const TaskInputList = ({ tasks, onChange, disabled }) => {
             const handleInputChange = (id, newText) => {
                 const newTasks = tasks.map(t => t.id === id ? { ...t, text: newText } : t);
@@ -342,7 +358,7 @@
         };
 
         // --- PHASE I: PLANNING VIEW ---
-        const PlanningView = ({ weeks, setWeeks, onConfirm, startDate }) => {
+        const PlanningView = ({ weeks, setWeeks, onConfirm, startDate, milestones, setMilestones }) => {
             const weeksByPhase = useMemo(() => {
                 const grouped = {};
                 Object.keys(PHASE_DEFS).forEach(id => grouped[id] = []);
@@ -352,9 +368,9 @@
 
             const handleAddWeek = (phaseIdStr) => {
                 const phaseId = parseInt(phaseIdStr);
-                const currentPhaseWeeks = weeksByPhase[phaseId];
-                const lastWeekOfPhase = currentPhaseWeeks[currentPhaseWeeks.length - 1];
-                const insertionIdx = weeks.indexOf(lastWeekOfPhase);
+                const currentPhaseWeeks = weeksByPhase[phaseId] || [];
+                const lastWeekOfPhase = currentPhaseWeeks.length > 0 ? currentPhaseWeeks[currentPhaseWeeks.length - 1] : null;
+                const insertionIdx = lastWeekOfPhase ? weeks.indexOf(lastWeekOfPhase) : weeks.length - 1;
                 
                 const newWeek = {
                     id: 0, 
@@ -379,7 +395,7 @@
             const handleRemoveWeek = (phaseIdStr) => {
                 const phaseId = parseInt(phaseIdStr);
                 const currentPhaseWeeks = weeksByPhase[phaseId];
-                if (currentPhaseWeeks.length <= 1) return alert("Mínim 1 setmana per fase.");
+                if (!currentPhaseWeeks || currentPhaseWeeks.length <= 1) return alert("Mínim 1 setmana per fase.");
                 const lastWeek = currentPhaseWeeks[currentPhaseWeeks.length - 1];
                 const hasRealTasks = lastWeek.tasks.some(t => t.text.trim() !== '');
                 if (hasRealTasks) {
@@ -414,8 +430,36 @@
                     </div>
 
                     <div className="max-w-4xl mx-auto p-6 space-y-8">
+                        {/* FITES IMPORTANTS */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-blue-100 overflow-hidden">
+                            <div className="bg-blue-50 p-4 border-b border-blue-100">
+                                <h2 className="font-bold font-heading text-xl text-blue-800 flex items-center gap-2">
+                                    <IconCalendar className="w-5 h-5 text-blue-500" /> Fites Importants
+                                </h2>
+                                <p className="text-xs text-blue-600 mt-1">Aquestes dates apareixeran al mapa general per recordar-t'ho.</p>
+                            </div>
+                            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-sm font-bold text-slate-600">Entrega 1a Versió</label>
+                                    <input type="date" value={milestones.draftDate || ''} onChange={(e) => setMilestones({...milestones, draftDate: e.target.value})} className="p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-sm font-bold text-slate-600">Memòria Definitiva</label>
+                                    <input type="date" value={milestones.finalDate || ''} onChange={(e) => setMilestones({...milestones, finalDate: e.target.value})} className="p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500" />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-sm font-bold text-slate-600">Setmana Presentació</label>
+                                    <select value={milestones.presentationWeek || ''} onChange={(e) => setMilestones({...milestones, presentationWeek: e.target.value})} className="p-3 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">Selecciona setmana...</option>
+                                        {weeks.map(w => <option key={w.id} value={w.id}>Setmana {w.id}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
                         {Object.entries(weeksByPhase).map(([phaseId, phaseWeeks]) => {
-                            const def = PHASE_DEFS[phaseId];
+                            if (phaseWeeks.length === 0) return null;
+                            const def = PHASE_DEFS[phaseId] || { name: 'Fase', color: 'bg-slate-500', bgLight: 'bg-slate-50', text: 'text-slate-600', borderColor: 'border-slate-200' };
                             return (
                                 <div key={phaseId} className="bg-white rounded-2xl shadow-sm border border-blue-100 overflow-hidden">
                                     <div className={`${def.bgLight} p-4 border-b ${def.borderColor} flex justify-between items-center`}>
@@ -430,38 +474,44 @@
                                         </div>
                                     </div>
                                     <div className="divide-y divide-slate-100">
-                                        {phaseWeeks.map(week => (
-                                            <div key={week.id} className={`p-4 flex flex-col md:flex-row gap-4 transition-colors ${week.isHoliday ? 'bg-slate-100' : ''}`}>
-                                                <div className="w-32 pt-2 flex flex-col items-start gap-1">
-                                                    <span className={`text-sm font-bold uppercase ${week.isHoliday ? 'text-slate-400 line-through' : 'text-slate-500'}`}>Setmana {week.id}</span>
-                                                    <span className="text-xs text-slate-400 font-mono">{getWeekRange(startDate, week.id - 1)}</span>
-                                                    
-                                                    <button 
-                                                        onClick={() => toggleHoliday(week.id)}
-                                                        className={`mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border transition-colors ${week.isHoliday ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200 hover:border-blue-400 hover:text-blue-500'}`}
-                                                        title="Marcar com a setmana de vacances"
-                                                    >
-                                                        <IconMoon className="w-3 h-3" /> {week.isHoliday ? 'Vacances' : 'Vacances?'}
-                                                    </button>
-                                                </div>
-                                                <div className="flex-1 relative">
-                                                    {week.isHoliday && (
-                                                        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-                                                            <div className="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-xl border border-slate-200 shadow-sm text-slate-500 font-heading font-bold flex items-center gap-2">
-                                                                <IconCoffee className="w-5 h-5 text-blue-400" /> 🏖️ Setmana de Vacances
+                                        {phaseWeeks.map(week => {
+                                            const tasksToRender = week.tasks.length === 0 || week.tasks[week.tasks.length - 1].text.trim() !== '' 
+                                                ? [...week.tasks, { id: crypto.randomUUID(), text: '', column: 'todo' }] 
+                                                : week.tasks;
+
+                                            return (
+                                                <div key={week.id} className={`p-4 flex flex-col md:flex-row gap-4 transition-colors ${week.isHoliday ? 'bg-slate-100' : ''}`}>
+                                                    <div className="w-32 pt-2 flex flex-col items-start gap-1">
+                                                        <span className={`text-sm font-bold uppercase ${week.isHoliday ? 'text-slate-400 line-through' : 'text-slate-500'}`}>Setmana {week.id}</span>
+                                                        <span className="text-xs text-slate-400 font-mono">{getWeekRange(startDate, week.id - 1)}</span>
+                                                        
+                                                        <button 
+                                                            onClick={() => toggleHoliday(week.id)}
+                                                            className={`mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border transition-colors ${week.isHoliday ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200 hover:border-blue-400 hover:text-blue-500'}`}
+                                                            title="Marcar com a setmana de vacances"
+                                                        >
+                                                            <IconMoon className="w-3 h-3" /> {week.isHoliday ? 'Vacances' : 'Vacances?'}
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex-1 relative">
+                                                        {week.isHoliday && (
+                                                            <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                                                                <div className="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-xl border border-slate-200 shadow-sm text-slate-500 font-heading font-bold flex items-center gap-2">
+                                                                    <IconCoffee className="w-5 h-5 text-blue-400" /> 🏖️ Setmana de Vacances
+                                                                </div>
                                                             </div>
+                                                        )}
+                                                        <div className={week.isHoliday ? 'opacity-20 pointer-events-none' : ''}>
+                                                            <TaskInputList 
+                                                                tasks={tasksToRender} 
+                                                                onChange={(newTasks) => updateTasksForWeek(week.id, newTasks)}
+                                                                disabled={week.isHoliday}
+                                                            />
                                                         </div>
-                                                    )}
-                                                    <div className={week.isHoliday ? 'opacity-20 pointer-events-none' : ''}>
-                                                        <TaskInputList 
-                                                            tasks={week.tasks} 
-                                                            onChange={(newTasks) => updateTasksForWeek(week.id, newTasks)}
-                                                            disabled={week.isHoliday}
-                                                        />
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             );
@@ -480,11 +530,10 @@
         };
 
         // --- PHASE II: TRACKING ---
-        const MapView = ({ userData, weeks, onSelectWeek, score, onOpenMeta, onOpenReset, onOpenDownload }) => {
+        const MapView = ({ userData, weeks, onSelectWeek, score, onOpenMeta, onOpenReset, onOpenDownload, setAppPhase, milestones }) => {
             const totalTasks = weeks.reduce((acc, w) => acc + w.tasks.length, 0);
             const completedTasks = weeks.reduce((acc, w) => acc + w.tasks.filter(t => t.column === 'done').length, 0);
             
-            // MODIFICAT: Progrés global basat en setmanes completades (no tasques)
             const completedWeeksCount = weeks.filter(w => w.status === 'completed').length;
             const progress = Math.round((completedWeeksCount / weeks.length) * 100);
             
@@ -513,20 +562,33 @@
             const nextWeekData = weeks[safeCurrentWeekIdx + 1];
             const allDoneTasks = weeks.flatMap(w => w.tasks.filter(t => t.column === 'done').map(t => ({...t, week: w.id})));
 
+            const draftWeekId = getWeekIdFromDate(milestones?.draftDate, userData.startDate);
+            const finalWeekId = getWeekIdFromDate(milestones?.finalDate, userData.startDate);
+            const presentationWeekId = parseInt(milestones?.presentationWeek);
+
             return (
                 <div className="min-h-screen pb-10 bg-orange-50 flex flex-col">
                     <div className="bg-white shadow-sm sticky top-0 z-30 px-6 py-3 flex flex-col md:flex-row justify-between items-center border-b border-orange-100 gap-4 md:gap-0">
                         <div className="flex items-center gap-3">
-                            <span className="text-3xl bg-orange-100 p-2 rounded-full">{userData.avatar}</span>
+                            <span className="text-3xl bg-orange-100 p-2 rounded-full cursor-pointer hover:bg-orange-200 transition-colors" onClick={() => setAppPhase('setup')} title="Editar Dades">{userData.avatar}</span>
                             <div>
-                                <h2 className="font-heading font-bold text-slate-800 leading-tight">{userData.name}</h2>
+                                <div className="flex items-center gap-2">
+                                    <h2 className="font-heading font-bold text-slate-800 leading-tight">{userData.name}</h2>
+                                    <button onClick={() => setAppPhase('setup')} className="text-slate-400 hover:text-orange-500" title="Editar Dades"><IconEdit className="w-4 h-4" /></button>
+                                </div>
                                 <p className="text-xs text-slate-500">Creat per Marc Pérez Casals</p>
                             </div>
                         </div>
                         
                         <div className="flex flex-col md:flex-row items-center gap-3 md:gap-6">
-                            
                             <div className="flex gap-2">
+                                <button onClick={() => setAppPhase('planning')} className="flex flex-col items-center group">
+                                    <div className="p-2 bg-blue-50 rounded-full text-blue-500 group-hover:text-blue-600 group-hover:bg-blue-100 transition-colors">
+                                        <IconCalendar className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 group-hover:text-blue-500">Planificar</span>
+                                </button>
+
                                 <button onClick={onOpenDownload} className="flex flex-col items-center group">
                                     <div className="p-2 bg-orange-50 rounded-full text-orange-500 group-hover:text-orange-600 group-hover:bg-orange-100 transition-colors">
                                         <IconDownload className="w-5 h-5" />
@@ -542,7 +604,6 @@
                                 </button>
                             </div>
                             
-                            {/* Spacer for reset button */}
                             <div className="hidden md:block w-4"></div>
 
                             <button onClick={onOpenReset} className="flex flex-col items-center group">
@@ -605,7 +666,8 @@
                         <div className="md:col-span-6 space-y-6">
                             <h1 className="text-center font-heading font-bold text-2xl text-slate-800 mb-2">Seguiment del PI</h1>
                             {Object.entries(weeksByPhase).map(([phaseId, phaseWeeks]) => {
-                                const def = PHASE_DEFS[phaseId];
+                                if (phaseWeeks.length === 0) return null;
+                                const def = PHASE_DEFS[phaseId] || PHASE_DEFS[Object.keys(PHASE_DEFS)[0]];
                                 return (
                                     <div key={phaseId} className="relative bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
                                         <div className={`inline-block px-3 py-1 rounded-lg text-xs font-bold uppercase mb-4 ${def.color} text-white shadow-md`}>
@@ -615,18 +677,25 @@
                                             {phaseWeeks.map(weekData => {
                                                 const isLocked = weekData.status === 'locked';
                                                 const isCompleted = weekData.status === 'completed';
-                                                // Progrés individual de la setmana
                                                 const wProg = weekData.tasks.length === 0 ? (isCompleted ? 100 : 0) : (weekData.tasks.filter(t => t.column === 'done').length / weekData.tasks.length) * 100;
 
                                                 return (
-                                                    <button key={weekData.id} onClick={() => !isLocked && onSelectWeek(weekData.id - 1)} disabled={isLocked}
-                                                        className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center p-2 border-b-4 transition-all transform active:scale-95
-                                                        ${isLocked ? 'bg-slate-100 border-slate-200 text-slate-400' : isCompleted ? 'bg-green-50 border-green-500 text-slate-800 shadow-md' : 'bg-white border-orange-400 text-slate-800 card-pulse shadow-lg ring-2 ring-orange-100'}`}>
-                                                        {isLocked ? <IconLock className="w-6 h-6 mb-1 opacity-30" /> : isCompleted ? <div className="bg-green-500 text-white rounded-full p-1 mb-1 shadow"><IconCheck className="w-4 h-4" /></div> : <span className="text-2xl font-heading font-bold mb-1">{weekData.id}</span>}
-                                                        <span className="text-[10px] font-bold uppercase tracking-wide">Setmana {weekData.id}</span>
-                                                        <span className="text-[9px] text-slate-500 font-mono mt-1">{getWeekRange(userData.startDate, weekData.id - 1)}</span>
-                                                        {!isLocked && <div className="absolute bottom-3 left-3 right-3 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full ${isCompleted ? 'bg-green-500' : 'bg-orange-500'}`} style={{width: `${wProg}%`}}></div></div>}
-                                                    </button>
+                                                    <div key={weekData.id} className="relative flex flex-col w-full h-full pt-4">
+                                                        {/* Milestone Badges Area */}
+                                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col gap-0.5 z-20 items-center w-max pointer-events-none">
+                                                            {draftWeekId === weekData.id && <span className="bg-yellow-400 text-yellow-900 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-yellow-500">1a Versió</span>}
+                                                            {finalWeekId === weekData.id && <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-red-600">Memòria Final</span>}
+                                                            {presentationWeekId === weekData.id && <span className="bg-blue-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-blue-600">Presentació</span>}
+                                                        </div>
+                                                        <button onClick={() => !isLocked && onSelectWeek(weekData.id - 1)} disabled={isLocked}
+                                                            className={`relative w-full h-full aspect-square rounded-2xl flex flex-col items-center justify-center p-2 border-b-4 transition-all transform active:scale-95
+                                                            ${isLocked ? 'bg-slate-100 border-slate-200 text-slate-400' : isCompleted ? 'bg-green-50 border-green-500 text-slate-800 shadow-md' : 'bg-white border-orange-400 text-slate-800 card-pulse shadow-lg ring-2 ring-orange-100'}`}>
+                                                            {isLocked ? <IconLock className="w-6 h-6 mb-1 opacity-30" /> : isCompleted ? <div className="bg-green-500 text-white rounded-full p-1 mb-1 shadow"><IconCheck className="w-4 h-4" /></div> : <span className="text-2xl font-heading font-bold mb-1">{weekData.id}</span>}
+                                                            <span className="text-[10px] font-bold uppercase tracking-wide">Setmana {weekData.id}</span>
+                                                            <span className="text-[9px] text-slate-500 font-mono mt-1">{getWeekRange(userData.startDate, weekData.id - 1)}</span>
+                                                            {!isLocked && <div className="absolute bottom-3 left-3 right-3 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full ${isCompleted ? 'bg-green-500' : 'bg-orange-500'}`} style={{width: `${wProg}%`}}></div></div>}
+                                                        </button>
+                                                    </div>
                                                 );
                                             })}
                                         </div>
@@ -641,11 +710,11 @@
                                 <h3 className="font-heading font-bold text-slate-800 mb-4 flex items-center gap-2"><span className="text-2xl">📡</span> Radar</h3>
                                 <div className="mb-6">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h4 className="text-xs font-bold uppercase text-orange-600">Ara (Setmana {currentWeekData.id})</h4>
+                                        <h4 className="text-xs font-bold uppercase text-orange-600">Ara (Setmana {currentWeekData?.id || '-'})</h4>
                                     </div>
                                     <div className="space-y-2">
-                                        {currentWeekData.tasks.filter(t => t.column !== 'done').length === 0 ? <p className="text-xs text-slate-400">Tot net! 🎉</p> : 
-                                            currentWeekData.tasks.filter(t => t.column !== 'done').map(t => (
+                                        {currentWeekData?.tasks.filter(t => t.column !== 'done').length === 0 ? <p className="text-xs text-slate-400">Tot net! 🎉</p> : 
+                                            currentWeekData?.tasks.filter(t => t.column !== 'done').map(t => (
                                                 <div key={t.id} className="text-sm p-2 bg-slate-50 border-l-2 border-orange-400 rounded-r-lg">{t.text}</div>
                                             ))
                                         }
@@ -792,20 +861,20 @@
         };
 
         // --- MAIN APP ---
-        const Onboarding = ({ onComplete }) => {
-            const [d, setD] = useState({ name: '', project: '', avatar: '🧑‍🎓', startDate: new Date().toISOString().split('T')[0] });
+        const Onboarding = ({ initialData, onComplete }) => {
+            const [d, setD] = useState(initialData || { name: '', project: '', avatar: '🧑‍🎓', startDate: new Date().toISOString().split('T')[0] });
             const emojis = ['🧑‍🎓', '🚀', '🧠', '🦁', '🦊', '🦉', '⚡', '🌟', '🎨', '🔬'];
             return (
                 <div className="min-h-screen flex items-center justify-center p-4 bg-blue-50">
                     <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md border-b-4 border-blue-500">
                         <h1 className="text-4xl font-heading text-blue-500 mb-2 text-center">Planificador del PI</h1>
-                        <p className="text-slate-500 text-center mb-6">Configura el teu projecte</p>
+                        <p className="text-slate-500 text-center mb-6">{initialData ? 'Edita les teves dades' : 'Configura el teu projecte'}</p>
                         <form onSubmit={(e) => { e.preventDefault(); if(d.name && d.project) onComplete(d); }} className="space-y-6">
                             <input required type="text" className="w-full p-3 bg-slate-50 border rounded-xl" value={d.name} onChange={e => setD({...d, name: e.target.value})} placeholder="El teu nom" />
                             <input required type="text" className="w-full p-3 bg-slate-50 border rounded-xl" value={d.project} onChange={e => setD({...d, project: e.target.value})} placeholder="Títol del Projecte" />
                             <input required type="date" className="w-full p-3 bg-slate-50 border rounded-xl" value={d.startDate} onChange={e => setD({...d, startDate: e.target.value})} />
                             <div className="grid grid-cols-5 gap-2">{emojis.map(em => <button key={em} type="button" onClick={() => setD({...d, avatar: em})} className={`text-2xl p-2 rounded-lg ${d.avatar === em ? 'bg-blue-100 ring-2 ring-blue-500' : 'bg-slate-50'}`}>{em}</button>)}</div>
-                            <button type="submit" className="w-full bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg">Començar</button>
+                            <button type="submit" className="w-full bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg">{initialData ? 'Guardar Canvis' : 'Començar'}</button>
                         </form>
                     </div>
                 </div>
@@ -821,8 +890,9 @@
             const [msgHalfwayShown, setMsgHalfwayShown] = useState(false);
             const [showMeta, setShowMeta] = useState(false);
             const [showReset, setShowReset] = useState(false);
-            const [showDownload, setShowDownload] = useState(false); // NEW STATE
+            const [showDownload, setShowDownload] = useState(false);
             const [penaltyAnim, setPenaltyAnim] = useState(null);
+            const [milestones, setMilestones] = useState({ draftDate: '', finalDate: '', presentationWeek: '' });
 
             useEffect(() => {
                 const saved = localStorage.getItem(STORAGE_KEY);
@@ -830,24 +900,33 @@
                     try {
                         const parsed = JSON.parse(saved);
                         setUser(parsed.user);
-                        setWeeks(parsed.weeks);
+                        setWeeks(parsed.weeks || []);
                         setScore(parsed.score || 0);
                         setAppPhase(parsed.appPhase || 'setup');
                         setMsgHalfwayShown(parsed.msgHalfwayShown || false);
+                        if (parsed.milestones) setMilestones(parsed.milestones);
                     } catch (e) { localStorage.removeItem(STORAGE_KEY); }
                 }
             }, []);
 
             useEffect(() => {
-                if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, weeks, score, appPhase, msgHalfwayShown }));
-            }, [user, weeks, score, appPhase, msgHalfwayShown]);
+                if (user) localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, weeks, score, appPhase, msgHalfwayShown, milestones }));
+            }, [user, weeks, score, appPhase, msgHalfwayShown, milestones]);
 
-            const handleOnboarding = (u) => { setUser(u); setWeeks(generateInitialWeeks()); setAppPhase('planning'); };
+            const handleOnboarding = (u) => { 
+                setUser(u); 
+                if (weeks.length === 0) {
+                    setWeeks(generateInitialWeeks()); 
+                    setAppPhase('planning'); 
+                } else {
+                    setAppPhase('tracking');
+                }
+            };
             
             const handleConfirmPlanning = () => {
                 const cleanedWeeks = weeks.map((w, i) => ({
                     ...w,
-                    status: i === 0 ? 'active' : 'locked', // Unlock first week
+                    status: (w.status === 'locked' && i === 0) ? 'active' : w.status,
                     tasks: w.tasks.filter(t => t.text.trim() !== '')
                 }));
                 setWeeks(cleanedWeeks);
@@ -856,7 +935,7 @@
             };
 
             const handleExportJSON = () => {
-                const dataStr = JSON.stringify({ user, weeks, score, appPhase, msgHalfwayShown });
+                const dataStr = JSON.stringify({ user, weeks, score, appPhase, msgHalfwayShown, milestones });
                 const blob = new Blob([dataStr], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -868,19 +947,14 @@
                 setShowDownload(false);
             };
 
-            // MODIFIED PDF GENERATION - TABLE FORMAT
             const handleExportPDF = () => {
                 const completedWeeksCount = weeks.filter(w => w.status === 'completed').length;
                 const totalMinutes = completedWeeksCount * 150; 
                 const hours = Math.floor(totalMinutes / 60);
                 const minutes = totalMinutes % 60;
-                // Progrés per setmanes
                 const progress = Math.round((completedWeeksCount / weeks.length) * 100);
 
-                // Collect all completed tasks
                 const allDoneTasks = weeks.flatMap(w => w.tasks.filter(t => t.column === 'done').map(t => ({...t, week: w.id})));
-                
-                // Collect "Pending/Antena" tasks (from current active week)
                 const currentWeekIdx = weeks.findIndex(w => w.status === 'active');
                 const activeWeekTasks = currentWeekIdx !== -1 ? weeks[currentWeekIdx].tasks.filter(t => t.column !== 'done') : [];
 
@@ -988,8 +1062,10 @@
 
                 if (idx < weeks.length - 1) {
                     const next = newWeeks[idx + 1];
-                    if (PHASE_DEFS[current.phaseId].id !== PHASE_DEFS[next.phaseId].id) {
-                        alert(`Felicitats! Has acabat la fase ${PHASE_DEFS[current.phaseId].name}. \n\nComencem amb la fase de ${PHASE_DEFS[next.phaseId].name}, som-hi!`);
+                    if (current.phaseId !== next.phaseId) {
+                        const nextPhaseDef = PHASE_DEFS[next.phaseId] || PHASE_DEFS[Object.keys(PHASE_DEFS).pop()];
+                        const currPhaseDef = PHASE_DEFS[current.phaseId] || PHASE_DEFS[Object.keys(PHASE_DEFS)[0]];
+                        alert(`Felicitats! Has acabat la fase ${currPhaseDef.name}. \n\nComencem amb la fase de ${nextPhaseDef.name}, som-hi!`);
                     }
                     next.status = 'active';
                     if (incomplete.length > 0) {
@@ -1017,8 +1093,8 @@
                 window.location.reload();
             };
 
-            if (appPhase === 'setup') return <Onboarding onComplete={handleOnboarding} />;
-            if (appPhase === 'planning') return <PlanningView weeks={weeks} setWeeks={setWeeks} onConfirm={handleConfirmPlanning} startDate={user?.startDate} />;
+            if (appPhase === 'setup') return <Onboarding initialData={user} onComplete={handleOnboarding} />;
+            if (appPhase === 'planning') return <PlanningView weeks={weeks} setWeeks={setWeeks} onConfirm={handleConfirmPlanning} startDate={user?.startDate} milestones={milestones} setMilestones={setMilestones} />;
             
             return (
                 <>
@@ -1028,7 +1104,7 @@
                     {selectedWeekIdx !== null ? 
                         <KanbanView weekIndex={selectedWeekIdx} weekData={weeks[selectedWeekIdx]} startDate={user.startDate} totalScore={score} onBack={() => setSelectedWeekIdx(null)} onUpdateWeek={(i, d) => { const n = [...weeks]; n[i] = { ...n[i], ...d }; setWeeks(n); }} onCloseWeek={handleCloseWeek} onScoreChange={d => setScore(s => s + d)} /> 
                     : 
-                        <MapView userData={user} weeks={weeks} score={score} onSelectWeek={setSelectedWeekIdx} onOpenMeta={() => setShowMeta(true)} onOpenReset={() => setShowReset(true)} onOpenDownload={() => setShowDownload(true)} />
+                        <MapView userData={user} weeks={weeks} score={score} onSelectWeek={setSelectedWeekIdx} onOpenMeta={() => setShowMeta(true)} onOpenReset={() => setShowReset(true)} onOpenDownload={() => setShowDownload(true)} setAppPhase={setAppPhase} milestones={milestones} />
                     }
                     {showMeta && <MetaLogModal weeks={weeks} startDate={user.startDate} onClose={() => setShowMeta(false)} />}
                     {showReset && <ResetModal onClose={() => setShowReset(false)} onConfirm={handleFullReset} />}
