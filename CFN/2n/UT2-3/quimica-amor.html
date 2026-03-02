@@ -106,9 +106,17 @@
                     <span class="font-bold text-slate-700">Órganos</span>
                 </button>
                 
-                <button onpointerdown="event.preventDefault(); undoLast();" class="ml-3 px-3 py-2 text-slate-400 hover:text-red-500 hover:bg-slate-200 rounded transition-colors touch-none" title="Deshacer último resaltado">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
-                </button>
+                <div class="flex items-center ml-2 border-l border-slate-300 pl-2 gap-1">
+                    <button onpointerdown="event.preventDefault(); undoAction();" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-200 rounded transition-colors touch-none" title="Deshacer (Atrás)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                    </button>
+                    <button onpointerdown="event.preventDefault(); redoAction();" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-200 rounded transition-colors touch-none" title="Rehacer (Adelante)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l6 3.7"/></svg>
+                    </button>
+                    <button onpointerdown="event.preventDefault(); clearData();" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded transition-colors touch-none ml-1" title="Borrar todos los datos guardados">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                    </button>
+                </div>
             </div>
         </div>
     </header>
@@ -451,7 +459,8 @@
         // --- CONFIGURACIÓN ---
         let currentTool = 'blue';
         let highlights = { blue: [], red: [], green: [] }; // Datos del alumno
-        const history = [];
+        let historyStates = []; // Canvi: Substituït per desar l'estat complet HTML
+        let redoStates = []; // Canvi: Nova variable pel refer
         let isTeacherMode = false;
 
         // Metas para el contador
@@ -490,8 +499,113 @@
         // --- INICIALIZACIÓN ---
         function init() {
             setTool('blue');
+            
+            // Canvi: Escoltem els canvis als inputs per guardar-los a localStorage JSON
+            document.querySelectorAll('#ans-1, #ans-2, #ans-3, #ref-1, #ref-2, #ref-3, .path-select').forEach(el => {
+                el.addEventListener('input', saveToLocalStorage);
+                el.addEventListener('change', saveToLocalStorage);
+            });
+
+            if (!loadFromLocalStorage()) {
+                // Canvi: Guardar estat inicial si no hi ha dades al JSON
+                historyStates.push({
+                    html: document.getElementById('text-content').innerHTML,
+                    highlights: JSON.parse(JSON.stringify(highlights))
+                });
+            }
+
+            updateAllCounters();
+            updateDictionaryDOM();
+        }
+
+        // Canvi: Funcions de Local Storage i Gestió de Dades en format JSON
+        function saveToLocalStorage() {
+            if (isTeacherMode) return;
+            
+            const inputsData = {
+                ans1: document.getElementById('ans-1').value,
+                ans2: document.getElementById('ans-2').value,
+                ans3: document.getElementById('ans-3').value,
+                ref1: document.getElementById('ref-1').value,
+                ref2: document.getElementById('ref-2').value,
+                ref3: document.getElementById('ref-3').value,
+                selects: Array.from(document.querySelectorAll('.path-select')).map(s => s.value)
+            };
+
+            const dataToSave = {
+                historyStates: historyStates,
+                inputsData: inputsData
+            };
+            localStorage.setItem('quimicaAmorDataJSON', JSON.stringify(dataToSave));
+        }
+
+        function loadFromLocalStorage() {
+            const savedData = localStorage.getItem('quimicaAmorDataJSON');
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    if (parsed.historyStates && parsed.historyStates.length > 0) {
+                        historyStates = parsed.historyStates;
+                        const lastState = historyStates[historyStates.length - 1];
+                        document.getElementById('text-content').innerHTML = lastState.html;
+                        highlights = JSON.parse(JSON.stringify(lastState.highlights));
+                        
+                        if (parsed.inputsData) {
+                            if(parsed.inputsData.ans1 !== undefined) document.getElementById('ans-1').value = parsed.inputsData.ans1;
+                            if(parsed.inputsData.ans2 !== undefined) document.getElementById('ans-2').value = parsed.inputsData.ans2;
+                            if(parsed.inputsData.ans3 !== undefined) document.getElementById('ans-3').value = parsed.inputsData.ans3;
+                            if(parsed.inputsData.ref1 !== undefined) document.getElementById('ref-1').value = parsed.inputsData.ref1;
+                            if(parsed.inputsData.ref2 !== undefined) document.getElementById('ref-2').value = parsed.inputsData.ref2;
+                            if(parsed.inputsData.ref3 !== undefined) document.getElementById('ref-3').value = parsed.inputsData.ref3;
+                            
+                            const selects = document.querySelectorAll('.path-select');
+                            if (parsed.inputsData.selects && parsed.inputsData.selects.length === selects.length) {
+                                selects.forEach((sel, i) => sel.value = parsed.inputsData.selects[i]);
+                            }
+                            // Validem per reactivar els colors visuals correctes al carregar
+                            validateConnections();
+                        }
+                        return true;
+                    }
+                } catch(e) { console.log(e); }
+            }
+            return false;
+        }
+
+        function clearData() {
+            if (confirm("¿Estás seguro de que quieres borrar todos tus datos y volver a empezar?")) {
+                localStorage.removeItem('quimicaAmorDataJSON');
+                location.reload();
+            }
+        }
+
+        // Canvi: Nova lògica d'historial per Desfer/Refer
+        function undoAction() {
+            if (isTeacherMode || historyStates.length <= 1) return;
+            const currentState = historyStates.pop();
+            redoStates.push(currentState);
+            
+            const prevState = historyStates[historyStates.length - 1];
+            restoreState(prevState);
+            saveToLocalStorage();
+        }
+
+        function redoAction() {
+            if (isTeacherMode || redoStates.length === 0) return;
+            const nextState = redoStates.pop();
+            historyStates.push(nextState);
+            
+            restoreState(nextState);
+            saveToLocalStorage();
+        }
+
+        function restoreState(state) {
+            document.getElementById('text-content').innerHTML = state.html;
+            highlights = JSON.parse(JSON.stringify(state.highlights));
+            updateDictionaryDOM();
             updateAllCounters();
         }
+
 
         // --- HERRAMIENTAS DE COLOR (Adaptadas para iPad/Touch) ---
         function setTool(color) {
@@ -510,9 +624,8 @@
 
         function isRangeValid(range) {
             const container = document.getElementById('text-content');
-            if (!container.contains(range.commonAncestorContainer)) return false;
-            if (range.commonAncestorContainer.nodeType !== 3 && range.commonAncestorContainer.tagName !== 'P') return false;
-            return true;
+            // Canvi: Eliminem la restricció de nodeType 3 per permetre subratllar a tot arreu de l'article sense talls
+            return container.contains(range.commonAncestorContainer);
         }
 
         // Esta función se lanza cuando tocan el botón del color en la barra superior
@@ -551,7 +664,15 @@
                     updateDictionaryDOM();
                 }
                 
-                history.push({ span, color: color, text });
+                // Canvi: Guardar el nou estat a l'historial per permetre Desfer/Refer correctament
+                const newState = {
+                    html: document.getElementById('text-content').innerHTML,
+                    highlights: JSON.parse(JSON.stringify(highlights))
+                };
+                historyStates.push(newState);
+                redoStates = []; // Buidem la pila de refer
+                saveToLocalStorage();
+
                 updateAllCounters();
                 
                 // Abrir panel auto si está cerrado
@@ -627,6 +748,11 @@
 
         function updateDef(color, index, value) {
             highlights[color][index].def = value;
+            // Canvi: Actualitzem l'estat actual per a que el localStorage no perdi la definició al carregar
+            if (historyStates.length > 0) {
+                historyStates[historyStates.length - 1].highlights = JSON.parse(JSON.stringify(highlights));
+            }
+            saveToLocalStorage();
         }
 
         function updateAllCounters() {
@@ -648,22 +774,6 @@
             document.getElementById('total-count').textContent = totalFound;
         }
 
-        function undoLast() {
-            if (isTeacherMode) return;
-            if (history.length === 0) return;
-            const last = history.pop();
-            const parent = last.span.parentNode;
-            parent.replaceChild(document.createTextNode(last.text), last.span);
-            parent.normalize();
-            
-            const idx = highlights[last.color].findIndex(i => i.term === last.text);
-            if (idx > -1) {
-                highlights[last.color].splice(idx, 1);
-                updateDictionaryDOM();
-            }
-            updateAllCounters();
-        }
-
         // --- MODO DOCENTE ---
         function toggleTeacherAuth() {
             if (isTeacherMode) {
@@ -673,7 +783,7 @@
                 document.getElementById('teacherBtn').classList.remove('bg-indigo-600', 'text-white');
                 document.getElementById('teacherBtn').classList.add('bg-slate-800', 'text-slate-300');
                 
-                // Limpiar respuestas de texto
+                // Limpiar respuestas de texto (es restauraran de localStorage properament en recarregar o podem buidar ara)
                 document.getElementById('ans-1').value = "";
                 document.getElementById('ans-2').value = "";
                 document.getElementById('ans-3').value = "";
@@ -690,6 +800,7 @@
                 document.querySelectorAll('.connection-row').forEach(r => r.classList.remove('bg-green-900/20'));
 
                 // Restaurar vista alumno en el diccionario
+                loadFromLocalStorage(); // Forçar restauració de les dades del JSON de l'alumne
                 updateDictionaryDOM();
                 alert("Modo docente desactivado. Vista de alumno restaurada.");
 
@@ -746,26 +857,32 @@
             rows.forEach(row => {
                 const selects = row.querySelectorAll('select');
                 let allCorrect = true;
+                let anySelected = false;
                 
                 selects.forEach(sel => {
+                    if (sel.value) anySelected = true;
                     if (sel.value === sel.dataset.correct) {
                         sel.classList.remove('border-red-500', 'text-red-400');
                         sel.classList.add('border-green-500', 'text-green-400', 'font-bold');
-                    } else {
+                    } else if (sel.value !== "") {
                         allCorrect = false;
                         sel.classList.remove('border-green-500', 'text-green-400');
                         sel.classList.add('border-red-500', 'text-red-400');
+                    } else {
+                        allCorrect = false;
                     }
                 });
 
-                const feedback = row.querySelector('.feedback');
-                feedback.classList.remove('hidden');
-                if (allCorrect) {
-                    feedback.textContent = "✅";
-                    row.classList.add('bg-green-900/20');
-                } else {
-                    feedback.textContent = "❌";
-                    row.classList.remove('bg-green-900/20');
+                if(anySelected) {
+                    const feedback = row.querySelector('.feedback');
+                    feedback.classList.remove('hidden');
+                    if (allCorrect) {
+                        feedback.textContent = "✅";
+                        row.classList.add('bg-green-900/20');
+                    } else {
+                        feedback.textContent = "❌";
+                        row.classList.remove('bg-green-900/20');
+                    }
                 }
             });
         }
