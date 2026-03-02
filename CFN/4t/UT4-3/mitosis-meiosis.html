@@ -159,6 +159,7 @@
                 <path d={`M20,${h/2} Q30,${h/4} 25,5 Q15,${h/4} 20,${h/2} Q30,${h*0.75} 25,${h-5} Q15,${h*0.75} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
             );
 
+            // CROMOSOMA SIMPLE (1 Cromátida = Cromosoma Entero Haploide, en biología tras separarse se considera cromosoma)
             const singleChromatid = crossedOver ? (
                 <g>
                     <path d={`M20,${h/2} Q15,${h/4} 20,5 Q25,${h/4} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
@@ -227,7 +228,7 @@
         // --- COMPONENTE PRINCIPAL ---
         const App = () => {
             const getSaved = () => {
-                try { return JSON.parse(localStorage.getItem('pigeonetics_sim_data_v16')) || {}; }
+                try { return JSON.parse(localStorage.getItem('pigeonetics_sim_data_v17')) || {}; }
                 catch(e) { return {}; }
             };
             const saved = getSaved();
@@ -244,7 +245,7 @@
             const [chromosomes, setChromosomes] = useState(saved.chromosomes || getInitialChromosomes());
             const [health, setHealth] = useState(saved.health ?? 100);
             const [feedback, setFeedback] = useState({ type: 'info', msg: 'Toca o arrastra la cromatina desde la caja de herramientas hacia el citoplasma para empezar.' });
-            const [cytokinesisDone, setCytokinesisDone] = useState(saved.cytokinesisDone || false); // NUEVO ESTADO PARA CITOCINESIS
+            const [cytokinesisDone, setCytokinesisDone] = useState(saved.cytokinesisDone || false);
             
             const [selectedItem, setSelectedItem] = useState(null); 
             const [selectedFrag, setSelectedFrag] = useState(null); 
@@ -258,7 +259,7 @@
             const [phaseToast, setPhaseToast] = useState(null);
 
             useEffect(() => {
-                localStorage.setItem('pigeonetics_sim_data_v16', JSON.stringify({ mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone }));
+                localStorage.setItem('pigeonetics_sim_data_v17', JSON.stringify({ mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone }));
             }, [mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone]);
             
             useEffect(() => {
@@ -289,7 +290,7 @@
 
             const clearData = () => {
                 if(window.confirm('¿Seguro que quieres borrar todos los datos guardados y empezar de cero?')) {
-                    localStorage.removeItem('pigeonetics_sim_data_v16');
+                    localStorage.removeItem('pigeonetics_sim_data_v17');
                     window.location.reload();
                 }
             };
@@ -812,15 +813,22 @@ R: ${answers.reto_1 || ''}
                         <div className="w-full flex justify-between items-center relative pt-2 md:pt-4 border-t border-slate-100">
                             <div className="absolute left-0 top-[18px] md:top-[26px] w-full h-1 bg-slate-200 -z-10"></div>
                             {['profase', 'metafase', 'anafase', 'telofase1', 'telofase'].map((step, idx) => {
+                                // Ocultar telofase1 si no es meiosis
                                 if (step === 'telofase1' && mode !== 'meiosis') return null;
+                                
                                 const stepLabel = step === 'telofase1' ? 'Meiosis I' : (step === 'telofase' && mode === 'meiosis' ? 'Gametos' : step);
+                                
+                                // Determinar estado de la bola
                                 let stateIdx = ['profase', 'metafase', 'anafase'];
                                 if(mode === 'meiosis') stateIdx.push('telofase1');
                                 stateIdx.push('telofase');
+                                
                                 const currentIndex = stateIdx.indexOf(phase);
                                 const myIndex = stateIdx.indexOf(step);
+                                
                                 const isActive = phase === step;
                                 const isPast = currentIndex > myIndex;
+                                
                                 return (
                                     <div key={step} className={`flex flex-col items-center gap-1 bg-white px-1 md:px-3 ${isActive || isPast ? '' : 'opacity-50'}`}>
                                         <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full ${isActive ? phaseBgColors[step] : isPast ? 'bg-slate-400' : 'bg-slate-200'} transition-colors shadow-sm`}></div>
@@ -1148,10 +1156,10 @@ R: ${answers.reto_1 || ''}
                                                     <span className="absolute top-2 md:top-4 text-[10px] md:text-xs font-bold text-slate-600 uppercase">Célula 1</span>
                                                     <div className="flex gap-2 md:gap-4 mb-2 bg-white/50 p-2 md:p-3 rounded-xl border border-slate-300 mt-4">
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
                                                         </div>
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
                                                         </div>
                                                     </div>
                                                     <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
@@ -1162,10 +1170,10 @@ R: ${answers.reto_1 || ''}
                                                     <span className="absolute top-2 md:top-4 text-[10px] md:text-xs font-bold text-slate-600 uppercase">Célula 2</span>
                                                     <div className="flex gap-2 md:gap-4 mb-2 bg-white/50 p-2 md:p-3 rounded-xl border border-slate-300 mt-4">
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
                                                         </div>
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
                                                         </div>
                                                     </div>
                                                     <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
@@ -1208,7 +1216,7 @@ R: ${answers.reto_1 || ''}
                                     </div>
                                 ) : (
                                     /* RENDERIZADO CÉLULA NORMAL (Fases Activas o Telofase sin dividir) */
-                                    <div className="flex-1 bg-blue-50/30 rounded-[40px] md:rounded-[80px] border-4 border-blue-100 flex flex-col relative min-h-[400px] shrink-0 overflow-hidden">
+                                    <div className="flex-1 bg-blue-50/30 rounded-[40px] md:rounded-[80px] border-4 border-blue-100 flex flex-col relative min-h-[500px] md:min-h-[600px] shrink-0 overflow-visible">
                                         {/* Capa oculta solo para que el huso no se salga de la célula */}
                                         <div className="absolute inset-0 z-0 overflow-hidden rounded-[36px] md:rounded-[76px] pointer-events-none">
                                             {(phase === 'metafase' || phase === 'anafase' || (!cytokinesisDone && (phase === 'telofase' || phase === 'telofase1'))) && <div className={`spindle-fibers ${spindleActive ? 'opacity-100' : 'opacity-30'}`}></div>}
@@ -1454,11 +1462,11 @@ R: ${answers.reto_1 || ''}
                                     <div className="grid grid-cols-5 gap-1 md:gap-2 text-center text-xs md:text-sm font-bold min-w-[360px] md:min-w-[800px] w-full">
                                         
                                         {/* Fila 1: Cabeceras Óvulos */}
-                                        <div className="bg-slate-100 p-1 md:p-2 rounded-xl flex items-center justify-center text-slate-500 text-[8px] md:text-[10px] uppercase shadow-inner">
+                                        <div className="bg-slate-100 p-1 md:p-2 rounded-xl flex items-center justify-center text-slate-500 text-[8px] md:text-[10px] uppercase shadow-inner min-w-[70px]">
                                             ♂ Macho ↓ <br/><br/> ♀ Hembra →
                                         </div>
                                         {generatedEggs.map((egg, idx) => (
-                                            <div key={idx} className="bg-pink-100 text-pink-800 p-1 rounded-xl flex flex-col items-center justify-center shadow-sm border border-pink-200">
+                                            <div key={idx} className="bg-pink-100 text-pink-800 p-1 rounded-xl flex flex-col items-center justify-center shadow-sm border border-pink-200 min-w-[70px]">
                                                 <span className="text-[8px] md:text-[10px] uppercase mb-1 md:mb-2">Óvulo {idx+1}</span>
                                                 <div className="flex gap-1 md:gap-2 mb-1 md:mb-2 transform scale-50 md:scale-100 origin-bottom">
                                                     <ChromosomeSVG {...egg.lg} isSelectable={false} />
@@ -1471,7 +1479,7 @@ R: ${answers.reto_1 || ''}
                                         {/* Filas 2 a 5: Cabecera Macho + Inputs */}
                                         {maleSperms.map((sperm, rowIdx) => (
                                             <React.Fragment key={rowIdx}>
-                                                <div className="bg-blue-100 text-blue-800 p-1 rounded-xl flex flex-col items-center justify-center shadow-sm border border-blue-200">
+                                                <div className="bg-blue-100 text-blue-800 p-1 rounded-xl flex flex-col items-center justify-center shadow-sm border border-blue-200 min-w-[70px]">
                                                     <span className="text-[8px] md:text-[10px] uppercase mb-1 md:mb-2">Esperm. {rowIdx+1}</span>
                                                     <div className="flex gap-1 md:gap-2 mb-1 md:mb-2 transform scale-50 md:scale-100 origin-bottom">
                                                         <ChromosomeSVG {...sperm.lg} isSelectable={false} />
@@ -1483,7 +1491,7 @@ R: ${answers.reto_1 || ''}
                                                     const cellIdx = rowIdx * 4 + colIdx;
                                                     const isTicked = punnettTicks[cellIdx];
                                                     return (
-                                                        <div key={cellIdx} className={`border-2 rounded-xl h-28 md:h-36 relative flex flex-col items-center justify-center p-1 md:p-2 transition-colors ${isTicked ? 'bg-orange-50 border-orange-400 shadow-md' : 'bg-slate-50 border-slate-300 hover:border-purple-400'}`}>
+                                                        <div key={cellIdx} className={`border-2 rounded-xl h-24 md:h-36 relative flex flex-col items-center justify-center p-1 md:p-2 transition-colors min-w-[70px] ${isTicked ? 'bg-orange-50 border-orange-400 shadow-md' : 'bg-slate-50 border-slate-300 hover:border-purple-400'}`}>
                                                             <button 
                                                                 onClick={() => togglePunnettTick(cellIdx)} 
                                                                 className={`absolute top-1 right-1 md:top-2 md:right-2 p-1 md:p-1.5 rounded-full transition-colors z-10 shadow-sm ${isTicked ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-white text-slate-300 border border-slate-300 hover:bg-slate-100 hover:text-slate-500'}`} 
@@ -1493,10 +1501,10 @@ R: ${answers.reto_1 || ''}
                                                             </button>
                                                             
                                                             <div className="flex gap-1 md:gap-2 w-full justify-center mt-2 md:mt-4">
-                                                                <input type="text" maxLength="2" className="w-8 md:w-12 text-center border border-slate-300 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="cc" />
-                                                                <input type="text" maxLength="2" className="w-8 md:w-12 text-center border border-slate-300 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="ZW" />
+                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-200 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="cc" />
+                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-200 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="ZW" />
                                                             </div>
-                                                            <div className="flex items-center justify-center w-[95%] md:w-[90%] mt-2 md:mt-3 text-[8px] md:text-xs text-slate-600 font-medium bg-white rounded border border-slate-300 focus-within:border-purple-500 shadow-sm px-0.5 md:px-1 overflow-hidden">
+                                                            <div className="flex items-center justify-center w-[95%] md:w-[90%] mt-2 md:mt-3 text-[8px] md:text-xs text-slate-600 font-medium bg-white rounded border border-slate-200 focus-within:border-purple-500 shadow-sm px-0.5 md:px-1 overflow-hidden">
                                                                 <span className="text-slate-400 font-bold ml-0.5 md:ml-1">[</span>
                                                                 <input type="text" className="w-full text-center bg-transparent outline-none py-0.5 md:py-1 mx-0.5 md:mx-1 placeholder-slate-300" placeholder="Fenotipo" />
                                                                 <span className="text-slate-400 font-bold mr-0.5 md:mr-1">]</span>
@@ -1509,7 +1517,7 @@ R: ${answers.reto_1 || ''}
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col md:flex-row items-center justify-between gap-4 max-w-4xl w-full mt-auto pt-6 border-t border-slate-200 shrink-0">
+                                <div className="flex flex-col md:flex-row items-center justify-between gap-4 max-w-4xl mx-auto w-full mt-4">
                                     <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 md:p-4 rounded-xl font-bold flex-1 flex items-center justify-center gap-3 shadow-sm w-full text-xs md:text-base">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                                         ¡Haz una foto del cuadro resuelto y ponlo en el Google Sites!
