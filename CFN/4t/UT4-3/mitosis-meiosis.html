@@ -228,7 +228,7 @@
         // --- COMPONENTE PRINCIPAL ---
         const App = () => {
             const getSaved = () => {
-                try { return JSON.parse(localStorage.getItem('pigeonetics_sim_data_v17')) || {}; }
+                try { return JSON.parse(localStorage.getItem('pigeonetics_sim_data_v18')) || {}; }
                 catch(e) { return {}; }
             };
             const saved = getSaved();
@@ -245,7 +245,7 @@
             const [chromosomes, setChromosomes] = useState(saved.chromosomes || getInitialChromosomes());
             const [health, setHealth] = useState(saved.health ?? 100);
             const [feedback, setFeedback] = useState({ type: 'info', msg: 'Toca o arrastra la cromatina desde la caja de herramientas hacia el citoplasma para empezar.' });
-            const [cytokinesisDone, setCytokinesisDone] = useState(saved.cytokinesisDone || false);
+            const [cytokinesisDone, setCytokinesisDone] = useState(saved.cytokinesisDone || false); // ESTADO PARA CITOCINESIS
             
             const [selectedItem, setSelectedItem] = useState(null); 
             const [selectedFrag, setSelectedFrag] = useState(null); 
@@ -259,7 +259,7 @@
             const [phaseToast, setPhaseToast] = useState(null);
 
             useEffect(() => {
-                localStorage.setItem('pigeonetics_sim_data_v17', JSON.stringify({ mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone }));
+                localStorage.setItem('pigeonetics_sim_data_v18', JSON.stringify({ mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone }));
             }, [mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone]);
             
             useEffect(() => {
@@ -290,7 +290,7 @@
 
             const clearData = () => {
                 if(window.confirm('¿Seguro que quieres borrar todos los datos guardados y empezar de cero?')) {
-                    localStorage.removeItem('pigeonetics_sim_data_v17');
+                    localStorage.removeItem('pigeonetics_sim_data_v18');
                     window.location.reload();
                 }
             };
@@ -575,7 +575,7 @@
                 setPhase('telofase');
                 setCytokinesisDone(true); // Se asume automática en la M2 para simplificar la simulación
                 setFeedback({ type: 'success', msg: '¡Meiosis II finalizada! Gametos Haploides generados.' });
-                setTutorialPopup({ show: true, minimized: false, title: 'El milagro de la Meiosis', text: <span>¡Impresionante! Has completado la Meiosis II.<br/><br/>Análisis y Simplificación:<br/>La Meiosis I separó los homólogos. La Meiosis II es similar a una mitosis, pero ocurre en células haploides, separando las cromátidas hermanas.<br/><br/>El resultado final son <strong className="text-green-600">4 óvulos HAPLOIDES (n) genéticamente diferentes</strong>. Cada uno tiene un <strong className="text-green-600">CROMOSOMA ENTERO SIMPLE (cantidad ½C)</strong>. ¡No son cromosomas rotos, son cromosomas simples maduros!<br/><br/>Abre la fase de fecundación para el paso final.</span> });
+                setTutorialPopup({ show: true, minimized: false, title: 'El milagro de la Meiosis', text: <span>¡Impresionante! Has completado la Meiosis II.<br/><br/>Análisis y Simplificación:<br/>En clase simulamos con un solo par, pero recuerda que el ADN se duplicó antes en la Interfase (C a 2C). La Meiosis I separó los homólogos. La Meiosis II es similar a una mitosis, pero ocurre en células haploides, separando las cromátidas hermanas.<br/><br/>El resultado final son <strong className="text-green-600">4 óvulos HAPLOIDES (n) genéticamente diferentes</strong>. Cada uno tiene un <strong className="text-green-600">CROMOSOMA ENTERO SIMPLE (cantidad ½C)</strong>. ¡No son cromosomas rotos, son cromosomas simples maduros!<br/><br/>Abre la fase de fecundación para el paso final.</span> });
             };
 
             const processDropCO = (target, fragObj) => {
@@ -869,13 +869,13 @@ R: ${answers.reto_1 || ''}
                                 </button>
                             )}
                             
-                            {phase === 'telofase1' && mode === 'meiosis' && (
+                            {phase === 'telofase1' && mode === 'meiosis' && cytokinesisDone && (
                                 <button onClick={triggerMeiosisII} className="w-full py-3 rounded-xl font-extrabold text-white text-base shadow-lg transition-transform hover:scale-105 bg-gradient-to-r from-pink-500 to-rose-600 animate-pulse">
                                     Simular Meiosis II
                                 </button>
                             )}
 
-                            {phase === 'telofase' && mode === 'meiosis' && (
+                            {phase === 'telofase' && mode === 'meiosis' && cytokinesisDone && (
                                 <button onClick={() => setShowPunnett(true)} className="w-full py-3 rounded-xl font-extrabold text-white text-md shadow-lg transition-transform hover:scale-105 bg-purple-600 animate-bounce">
                                     📊 Fase de Fecundación
                                 </button>
@@ -1080,7 +1080,7 @@ R: ${answers.reto_1 || ''}
                                                 setSpindleActive(true);
                                                 setFeedback({ type: 'success', msg: '¡Huso mitótico activado! Cromosomas separados automáticamente.' });
                                                 
-                                                // AUTO SEPARACIÓN 
+                                                // AUTO SEPARACIÓN INFALIBLE PARA IPAD
                                                 if (phase === 'anafase') {
                                                     if (mode === 'mitosis' || mode === 'repte') {
                                                         let newChroms = [];
@@ -1156,10 +1156,10 @@ R: ${answers.reto_1 || ''}
                                                     <span className="absolute top-2 md:top-4 text-[10px] md:text-xs font-bold text-slate-600 uppercase">Célula 1</span>
                                                     <div className="flex gap-2 md:gap-4 mb-2 bg-white/50 p-2 md:p-3 rounded-xl border border-slate-300 mt-4">
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
                                                         </div>
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleTop' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
                                                         </div>
                                                     </div>
                                                     <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
@@ -1170,10 +1170,10 @@ R: ${answers.reto_1 || ''}
                                                     <span className="absolute top-2 md:top-4 text-[10px] md:text-xs font-bold text-slate-600 uppercase">Célula 2</span>
                                                     <div className="flex gap-2 md:gap-4 mb-2 bg-white/50 p-2 md:p-3 rounded-xl border border-slate-300 mt-4">
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'lg').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
                                                         </div>
                                                         <div className="flex gap-1 md:gap-2 items-end transform scale-75 md:scale-100">
-                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} chromatids={2} isSelectable={false} />)}
+                                                            {chromosomes.filter(c => c.zone === 'poleBottom' && c.type === 'sm').map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
                                                         </div>
                                                     </div>
                                                     <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
@@ -1501,10 +1501,10 @@ R: ${answers.reto_1 || ''}
                                                             </button>
                                                             
                                                             <div className="flex gap-1 md:gap-2 w-full justify-center mt-2 md:mt-4">
-                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-200 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="cc" />
-                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-200 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="ZW" />
+                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-300 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="cc" />
+                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-300 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="ZW" />
                                                             </div>
-                                                            <div className="flex items-center justify-center w-[95%] md:w-[90%] mt-2 md:mt-3 text-[8px] md:text-xs text-slate-600 font-medium bg-white rounded border border-slate-200 focus-within:border-purple-500 shadow-sm px-0.5 md:px-1 overflow-hidden">
+                                                            <div className="flex items-center justify-center w-[95%] md:w-[90%] mt-2 md:mt-3 text-[8px] md:text-xs text-slate-600 font-medium bg-white rounded border border-slate-300 focus-within:border-purple-500 shadow-sm px-0.5 md:px-1 overflow-hidden">
                                                                 <span className="text-slate-400 font-bold ml-0.5 md:ml-1">[</span>
                                                                 <input type="text" className="w-full text-center bg-transparent outline-none py-0.5 md:py-1 mx-0.5 md:mx-1 placeholder-slate-300" placeholder="Fenotipo" />
                                                                 <span className="text-slate-400 font-bold mr-0.5 md:mr-1">]</span>
