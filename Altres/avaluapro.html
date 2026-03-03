@@ -77,7 +77,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, Component } = React;
 
-        // --- ERROR BOUNDARY ---
+        // --- ERROR BOUNDARY (ROBUSTESA MÀXIMA: A l'arrel de l'app) ---
         class ErrorBoundary extends Component {
             constructor(props) {
                 super(props);
@@ -98,7 +98,7 @@
                     return (
                         <div className="flex flex-col items-center justify-center h-screen bg-red-50 text-red-800 p-8 text-center">
                             <h1 className="text-3xl font-bold mb-4">Ups! L'aplicació ha fallat.</h1>
-                            <p className="mb-4 text-gray-700">Això passa perquè les teves dades antigues desades al navegador no coincideixen amb el nou disseny o hi ha un error fatal.</p>
+                            <p className="mb-4 text-gray-700">Això passa perquè les teves dades antigues desades al navegador no coincideixen amb el nou disseny.</p>
                             <div className="bg-white p-4 rounded border border-red-200 w-full max-w-2xl overflow-auto mb-6 text-left shadow-sm">
                                 <p className="font-bold text-red-600 mb-2">Codi de l'error:</p>
                                 <pre className="text-xs text-gray-600">{this.state.error ? this.state.error.toString() : "Error desconegut"}</pre>
@@ -266,6 +266,14 @@
             gray: { header: 'bg-gray-500', sub: 'bg-gray-50 border-gray-200', text: 'text-gray-800', light: '#f3f4f6', border: '#e5e7eb' }
         };
 
+        const DIAGNOSTICS = [
+            { id: 'dislexia', label: 'Dislèxia / Discalcúlia', colorClass: 'bg-blue-100 text-blue-900 border-blue-300' },
+            { id: 'tdah', label: 'TDAH', colorClass: 'bg-green-100 text-green-900 border-green-300' },
+            { id: 'ta', label: 'TA', colorClass: 'bg-yellow-100 text-yellow-900 border-yellow-300' },
+            { id: 'qi_tel', label: 'QI límit o TDL', colorClass: 'bg-red-100 text-red-900 border-red-300' },
+            { id: 'progres', label: 'Alumne de progrés', colorClass: 'bg-purple-100 text-purple-900 border-purple-300' }
+        ];
+
         // --- COMPONENTS UI ---
         const Icon = ({ name, className }) => {
             return <i className={`fa-solid fa-${name} ${className ? className : ""}`}></i>;
@@ -397,14 +405,14 @@
                     id: generateUUID(), 
                     name: className, 
                     color: classColor, 
-                    subgroups: [],
                     semesters: [
                         { id: "S1", name: "1r Semestre", isActive: true, competencies: createSemesterStructure() },
                         { id: "S2", name: "2n Semestre", isActive: false, competencies: createSemesterStructure() },
                         { id: "T1", name: "Transversals 1", isActive: false, competencies: createTransversalStructure() },
                         { id: "T2", name: "Transversals 2", isActive: false, competencies: createTransversalStructure() }
                     ], 
-                    students: [] 
+                    students: [],
+                    halfGroups: []
                 };
                 onComplete(newClass);
             };
@@ -448,6 +456,68 @@
                         <button onClick={handleSubmit} className="w-full bg-brand-500 text-white py-3 rounded-xl font-bold hover:bg-brand-600 shadow-md">Començar a Avaluar</button>
                     </div>
                 </div>
+            );
+        };
+
+        const HalfGroupsModal = ({ isOpen, onClose, halfGroups, onSave }) => {
+            if (!isOpen) return null;
+            const [list, setList] = useState(halfGroups || []);
+            
+            useEffect(() => { setList(halfGroups || []); }, [halfGroups]);
+
+            const handleAdd = () => {
+                const name = prompt("Nom del mig grup (ex: Grup A, Desdoblament 1...):");
+                if (name && name.trim()) {
+                    setList([...list, { id: generateUUID(), name: name.trim() }]);
+                }
+            };
+            
+            const handleRemove = (id) => {
+                if(confirm("Segur que vols eliminar aquest mig grup?")) {
+                    setList(list.filter(hg => hg.id !== id));
+                }
+            };
+
+            const handleRename = (id) => {
+                const item = list.find(hg => hg.id === id);
+                if (item) {
+                    const newName = prompt("Nou nom:", item.name);
+                    if (newName && newName.trim()) {
+                        setList(list.map(hg => hg.id === id ? { ...hg, name: newName.trim() } : hg));
+                    }
+                }
+            };
+
+            const handleSave = () => {
+                onSave(list);
+                onClose();
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Gestió de Mitjos Grups" size="md">
+                    <div className="space-y-4">
+                        <div className="bg-purple-50 p-3 rounded text-sm text-purple-800 border border-purple-200">
+                            <Icon name="circle-info" className="mr-2"/>
+                            Aquí pots crear divisions de la classe (ex: Grup A i Grup B). Després podràs assignar cada alumne des de la taula principal i filtrar-los.
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto custom-scroll">
+                            {list.length === 0 && <p className="text-gray-400 text-center italic py-4">No hi ha cap mig grup creat.</p>}
+                            {list.map(hg => (
+                                <div key={hg.id} className="flex justify-between items-center p-3 bg-white border rounded shadow-sm">
+                                    <span className="font-bold text-gray-700">{hg.name}</span>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleRename(hg.id)} className="text-blue-500 hover:text-blue-700"><Icon name="pen"/></button>
+                                        <button onClick={() => handleRemove(hg.id)} className="text-red-500 hover:text-red-700"><Icon name="trash"/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={handleAdd} className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded hover:border-purple-500 hover:text-purple-500 transition font-bold">+ Crear Mig Grup</button>
+                        <div className="flex justify-end pt-4 mt-2 border-t">
+                            <button onClick={handleSave} className="px-6 py-2 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 shadow">Desar i Tancar</button>
+                        </div>
+                    </div>
+                </Modal>
             );
         };
 
@@ -509,11 +579,9 @@
             if (!isOpen || !cls) return null;
             const [name, setName] = useState(cls.name);
             const [color, setColor] = useState(cls.color ? cls.color : 'blue');
-            const [subgroupsStr, setSubgroupsStr] = useState(cls.subgroups ? cls.subgroups.join(', ') : '');
 
             const handleSave = () => {
-                const subgroupsArray = subgroupsStr.split(',').map(s => s.trim()).filter(s => s !== "");
-                onUpdate(cls.id, {name: name, color: color, subgroups: subgroupsArray});
+                onUpdate(cls.id, {name: name, color: color});
                 onClose();
             };
 
@@ -532,11 +600,7 @@
                             <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500"/>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Mitjos Grups (separats per comes)</label>
-                            <input value={subgroupsStr} onChange={(e)=>setSubgroupsStr(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500" placeholder="Ex: Grup A, Grup B" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2 mt-2">Color del Grup</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Color del Grup</label>
                             <div className="flex gap-2">
                                 {Object.keys(CLASS_COLORS).map(c => (
                                     <button key={c} onClick={()=>setColor(c)} className={`w-8 h-8 rounded-full ${CLASS_COLORS[c].bg} ${color===c?'ring-2 ring-offset-2 ring-gray-400':''}`}/>
@@ -576,7 +640,7 @@
                 } else {
                     newStudents = names.map(name => {
                         const existing = sList.find(s => s.name === name);
-                        return existing ? existing : { id: generateUUID(), name: name, marks: {}, notes: { general: "", competencies: {} } };
+                        return existing ? existing : { id: generateUUID(), name: name, marks: {}, notes: { general: "", competencies: {}, diagnostics: [], diagnosticText: "", personal: "", equips: "", tutoria: "" }, halfGroup: "" };
                     });
                 }
 
@@ -600,12 +664,19 @@
             );
         };
 
-        const StudentNotesModal = ({ isOpen, onClose, student, competencies, onSave, currentClass }) => {
+        const StudentNotesModal = ({ isOpen, onClose, student, competencies, onSave }) => {
             if (!isOpen || !student) return null;
-            const initialNotes = student.notes ? student.notes : { general: "", competencies: {}, tutoria: "" };
-            const [notes, setNotes] = useState(initialNotes);
-            const [subgroup, setSubgroup] = useState(student.subgroup ? student.subgroup : "");
-            const [nee, setNee] = useState(student.nee ? student.nee : "");
+            const initialNotes = student.notes ? student.notes : {};
+            const [notes, setNotes] = useState({
+                general: initialNotes.general || "",
+                competencies: initialNotes.competencies || {},
+                diagnostics: initialNotes.diagnostics || [],
+                diagnosticText: initialNotes.diagnosticText || "",
+                personal: initialNotes.personal || "",
+                equips: initialNotes.equips || "",
+                tutoria: initialNotes.tutoria || ""
+            });
+            const [openSection, setOpenSection] = useState(null);
 
             const handleNotesChange = (key, val, isComp) => {
                 if(isComp) {
@@ -620,13 +691,39 @@
                 }
             };
 
+            const toggleDiagnostic = (id) => {
+                setNotes(prev => ({
+                    ...prev,
+                    diagnostics: prev.diagnostics.includes(id)
+                        ? prev.diagnostics.filter(d => d !== id)
+                        : [...prev.diagnostics, id]
+                }));
+            };
+
+            const addEquipEntry = () => {
+                const dateStr = new Date().toLocaleDateString('ca-ES');
+                setNotes(prev => ({
+                    ...prev,
+                    equips: prev.equips ? `${prev.equips}\n[${dateStr}] - ` : `[${dateStr}] - `
+                }));
+            };
+
             const copyNotes = () => {
                 let text = `Alumne\tTipus\tComentari\n`;
-                if(notes.general) text += `${student.name}\tGeneral\t${notes.general}\n`;
-                if(competencies && competencies.length > 0 && notes.competencies) {
+                if(notes.diagnostics.length > 0) {
+                    const diagLabels = notes.diagnostics.map(dId => DIAGNOSTICS.find(d => d.id === dId)?.label).join(', ');
+                    text += `${student.name}\tDiagnòstics\t${diagLabels}\n`;
+                }
+                if(notes.diagnosticText) text += `${student.name}\tDetall Diagnòstics\t${notes.diagnosticText.replace(/\n/g, ' ')}\n`;
+                if(notes.personal) text += `${student.name}\tPersonal\t${notes.personal.replace(/\n/g, ' ')}\n`;
+                if(notes.equips) text += `${student.name}\tEquips/Avaluacions\t${notes.equips.replace(/\n/g, ' ')}\n`;
+                if(notes.general) text += `${student.name}\tGeneral\t${notes.general.replace(/\n/g, ' ')}\n`;
+                if(notes.tutoria) text += `${student.name}\tTutoria\t${notes.tutoria.replace(/\n/g, ' ')}\n`;
+                
+                if(competencies && notes.competencies) {
                     competencies.forEach(c => { 
                         if(notes.competencies[c.id]) {
-                            text += `${student.name}\t${c.name}\t${notes.competencies[c.id]}\n`; 
+                            text += `${student.name}\t${c.name}\t${notes.competencies[c.id].replace(/\n/g, ' ')}\n`; 
                         }
                     });
                 }
@@ -635,7 +732,7 @@
             };
 
             const handleSaveAndClose = () => {
-                onSave(student.id, notes, subgroup, nee);
+                onSave(student.id, notes);
                 onClose();
             };
 
@@ -648,47 +745,101 @@
                                 <Icon name="copy" className="mr-1"/> Copiar
                             </button>
                         </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Mig Grup</label>
-                                <select value={subgroup} onChange={e=>setSubgroup(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500 text-sm">
-                                    <option value="">-- Cap --</option>
-                                    {currentClass && currentClass.subgroups && currentClass.subgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Etiqueta NEE</label>
-                                <select value={nee} onChange={e=>setNee(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500 text-sm">
-                                    <option value="">-- Cap --</option>
-                                    <option value="Dislèxia / Discalcúlia">Dislèxia / Discalcúlia</option>
-                                    <option value="TDAH">TDAH</option>
-                                    <option value="TA">TA</option>
-                                    <option value="QI limit o TDL">QI limit o TDL</option>
-                                    <option value="Alumne de progrés">Alumne de progrés</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Comentari General del Semestre</label>
-                            <textarea value={notes.general ? notes.general : ""} onChange={(e) => handleNotesChange("general", e.target.value, false)} className="w-full p-3 border border-yellow-300 rounded-lg h-24 bg-yellow-50 outline-none focus:ring-2 focus:ring-yellow-400" placeholder="Anotacions generals sobre el progrés, actitud, etc."/>
-                        </div>
-                        {competencies && competencies.length > 0 && (
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="font-bold text-gray-700 uppercase tracking-wide text-sm mb-2">Notes Específiques per Competència</h4>
-                                {competencies.map(c => (
-                                    <div key={c.id}>
-                                        <label className="block text-xs font-bold text-brand-600 mb-1">{c.name}</label>
-                                        <textarea value={(notes.competencies && notes.competencies[c.id]) ? notes.competencies[c.id] : ""} onChange={(e) => handleNotesChange(c.id, e.target.value, true)} className="w-full p-2 border rounded h-16 text-sm outline-none focus:border-brand-500" placeholder={`Comentari associat només a aquesta competència...`}/>
-                                    </div>
+                        
+                        {/* 1. Diagnòstics */}
+                        <div className="bg-gray-50 p-4 rounded-xl border">
+                            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">1. Diagnòstics</label>
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                {DIAGNOSTICS.map(d => (
+                                    <button
+                                        key={d.id}
+                                        onClick={() => toggleDiagnostic(d.id)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${notes.diagnostics.includes(d.id) ? d.colorClass + ' shadow-sm' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-100'}`}
+                                    >
+                                        {d.label}
+                                    </button>
                                 ))}
                             </div>
-                        )}
-                        <div className="pt-4 border-t">
-                            <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide text-blue-800">6. Comentari tutoria</label>
-                            <textarea value={notes.tutoria ? notes.tutoria : ""} onChange={(e) => handleNotesChange("tutoria", e.target.value, false)} className="w-full p-3 border border-blue-300 rounded-lg h-20 bg-blue-50 outline-none focus:ring-2 focus:ring-blue-400 text-sm" placeholder="Anotacions per a tutoria..."/>
+                            <textarea value={notes.diagnosticText} onChange={(e) => handleNotesChange("diagnosticText", e.target.value, false)} className="w-full p-2 border rounded-lg h-16 text-sm outline-none focus:ring-2 focus:ring-brand-400 bg-white" placeholder="Anotacions addicionals sobre diagnòstics..."/>
                         </div>
+
+                        {/* 2. Informació personal */}
+                        <div className="border rounded-xl overflow-hidden">
+                            <button onClick={() => setOpenSection(openSection === 'personal' ? null : 'personal')} className="w-full p-3 bg-gray-50 hover:bg-gray-100 flex justify-between items-center font-bold text-gray-700 text-sm">
+                                <span>2. Informació personal</span>
+                                <Icon name={openSection === 'personal' ? "chevron-up" : "chevron-down"} />
+                            </button>
+                            {openSection === 'personal' && (
+                                <div className="p-3 bg-white border-t">
+                                    <textarea value={notes.personal} onChange={(e) => handleNotesChange("personal", e.target.value, false)} className="w-full p-3 border rounded-lg h-24 outline-none focus:ring-2 focus:ring-brand-400 text-sm" placeholder="Informació personal rellevant..."/>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 3. Equips educatius i Avaluacions */}
+                        <div className="border rounded-xl overflow-hidden">
+                            <button onClick={() => setOpenSection(openSection === 'equips' ? null : 'equips')} className="w-full p-3 bg-gray-50 hover:bg-gray-100 flex justify-between items-center font-bold text-gray-700 text-sm">
+                                <span>3. Equips educatius i Avaluacions</span>
+                                <Icon name={openSection === 'equips' ? "chevron-up" : "chevron-down"} />
+                            </button>
+                            {openSection === 'equips' && (
+                                <div className="p-3 bg-white border-t">
+                                    <div className="flex justify-end mb-2">
+                                        <button onClick={addEquipEntry} className="text-xs bg-brand-100 text-brand-700 hover:bg-brand-200 px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1">
+                                            <Icon name="plus" className="text-[10px]" /> Nova entrada (Data d'avui)
+                                        </button>
+                                    </div>
+                                    <textarea value={notes.equips} onChange={(e) => handleNotesChange("equips", e.target.value, false)} className="w-full p-3 border border-yellow-300 rounded-lg h-32 bg-yellow-50 outline-none focus:ring-2 focus:ring-yellow-400 text-sm" placeholder="Anotacions de reunions, avaluacions, etc."/>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 4. Comentari general */}
+                        <div className="border rounded-xl overflow-hidden">
+                            <button onClick={() => setOpenSection(openSection === 'general' ? null : 'general')} className="w-full p-3 bg-gray-50 hover:bg-gray-100 flex justify-between items-center font-bold text-gray-700 text-sm">
+                                <span>4. Comentari general</span>
+                                <Icon name={openSection === 'general' ? "chevron-up" : "chevron-down"} />
+                            </button>
+                            {openSection === 'general' && (
+                                <div className="p-3 bg-white border-t">
+                                    <textarea value={notes.general} onChange={(e) => handleNotesChange("general", e.target.value, false)} className="w-full p-3 border rounded-lg h-24 outline-none focus:ring-2 focus:ring-brand-400 text-sm" placeholder="Anotacions generals sobre el progrés, actitud, etc."/>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 5. Comentaris per competències */}
+                        {competencies && competencies.length > 0 && (
+                            <div className="border rounded-xl overflow-hidden">
+                                <button onClick={() => setOpenSection(openSection === 'competencies' ? null : 'competencies')} className="w-full p-3 bg-gray-50 hover:bg-gray-100 flex justify-between items-center font-bold text-gray-700 text-sm">
+                                    <span>5. Comentaris per competències</span>
+                                    <Icon name={openSection === 'competencies' ? "chevron-up" : "chevron-down"} />
+                                </button>
+                                {openSection === 'competencies' && (
+                                    <div className="p-3 bg-white border-t space-y-3">
+                                        {competencies.map(c => (
+                                            <div key={c.id}>
+                                                <label className="block text-xs font-bold text-brand-600 mb-1">{c.name}</label>
+                                                <textarea value={(notes.competencies && notes.competencies[c.id]) ? notes.competencies[c.id] : ""} onChange={(e) => handleNotesChange(c.id, e.target.value, true)} className="w-full p-2 border rounded h-16 text-sm outline-none focus:border-brand-500" placeholder={`Comentari associat només a aquesta competència...`}/>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* 6. Comentari tutoria */}
+                        <div className="border rounded-xl overflow-hidden">
+                            <button onClick={() => setOpenSection(openSection === 'tutoria' ? null : 'tutoria')} className="w-full p-3 bg-gray-50 hover:bg-gray-100 flex justify-between items-center font-bold text-gray-700 text-sm">
+                                <span>6. Comentari tutoria</span>
+                                <Icon name={openSection === 'tutoria' ? "chevron-up" : "chevron-down"} />
+                            </button>
+                            {openSection === 'tutoria' && (
+                                <div className="p-3 bg-white border-t">
+                                    <textarea value={notes.tutoria} onChange={(e) => handleNotesChange("tutoria", e.target.value, false)} className="w-full p-3 border rounded-lg h-24 outline-none focus:ring-2 focus:ring-brand-400 text-sm" placeholder="Anotacions de tutoria..."/>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="pt-4 flex justify-end">
                             <button onClick={handleSaveAndClose} className="px-6 py-2 bg-brand-500 text-white rounded font-bold hover:bg-brand-600 shadow">Desar i Tancar</button>
                         </div>
@@ -704,21 +855,21 @@
             const cList = competencies ? competencies : [];
 
             const copyAllNotes = () => {
-                let text = `Alumne\tGrup\tNEE\tTipus\tCompetència\tComentari\n`;
+                let text = `Alumne\tTipus\tCompetència\tComentari\n`;
                 sList.forEach(s => {
-                    const grp = s.subgroup ? s.subgroup : "-";
-                    const nee = s.nee ? s.nee : "-";
-
                     if (s.notes && s.notes.general) {
-                        text += `${s.name}\t${grp}\t${nee}\tGeneral\t-\t${s.notes.general.replace(/\n/g, ' ')}\n`;
+                        text += `${s.name}\tGeneral\t-\t${s.notes.general.replace(/\n/g, ' ')}\n`;
+                    }
+                    if (s.notes && s.notes.equips) {
+                        text += `${s.name}\tEquips/Avaluacions\t-\t${s.notes.equips.replace(/\n/g, ' ')}\n`;
                     }
                     if (s.notes && s.notes.tutoria) {
-                        text += `${s.name}\t${grp}\t${nee}\tTutoria\t-\t${s.notes.tutoria.replace(/\n/g, ' ')}\n`;
+                        text += `${s.name}\tTutoria\t-\t${s.notes.tutoria.replace(/\n/g, ' ')}\n`;
                     }
                     if (s.notes && s.notes.competencies) {
                         cList.forEach(c => { 
                             if (s.notes.competencies[c.id]) {
-                                text += `${s.name}\t${grp}\t${nee}\tCompetencial\t${c.name}\t${s.notes.competencies[c.id].replace(/\n/g, ' ')}\n`; 
+                                text += `${s.name}\tCompetencial\t${c.name}\t${s.notes.competencies[c.id].replace(/\n/g, ' ')}\n`; 
                             }
                         });
                     }
@@ -731,8 +882,11 @@
                 let hasGen = false;
                 if (s.notes && s.notes.general && s.notes.general.trim() !== "") hasGen = true;
                 
-                let hasTut = false;
-                if (s.notes && s.notes.tutoria && s.notes.tutoria.trim() !== "") hasTut = true;
+                let hasEquip = false;
+                if (s.notes && s.notes.equips && s.notes.equips.trim() !== "") hasEquip = true;
+                
+                let hasTutoria = false;
+                if (s.notes && s.notes.tutoria && s.notes.tutoria.trim() !== "") hasTutoria = true;
 
                 let hasComp = false;
                 if (s.notes && s.notes.competencies) {
@@ -743,7 +897,7 @@
                         }
                     }
                 }
-                return hasGen || hasTut || hasComp;
+                return hasGen || hasComp || hasEquip || hasTutoria;
             });
 
             return (
@@ -759,20 +913,22 @@
                             {studentsWithNotes.length === 0 && <p className="text-center text-gray-400 py-10 font-bold text-lg">No hi ha cap comentari registrat per a cap alumne.</p>}
                             {studentsWithNotes.map(s => (
                                 <div key={s.id} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-                                    <h4 className="font-bold text-lg mb-3 text-gray-800 border-b pb-1">
-                                        {s.name}
-                                        {s.subgroup && <span className="ml-2 text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded">{s.subgroup}</span>}
-                                        {s.nee && <span className="ml-2 text-xs font-normal text-purple-700 bg-purple-100 px-2 py-1 rounded">{s.nee}</span>}
-                                    </h4>
-                                    {s.notes && s.notes.general && (
+                                    <h4 className="font-bold text-lg mb-3 text-gray-800 border-b pb-1">{s.name}</h4>
+                                    {s.notes && s.notes.equips && (
                                         <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-gray-800">
-                                            <span className="font-black text-[10px] text-yellow-600 uppercase block mb-1">Anotació General</span>
+                                            <span className="font-black text-[10px] text-yellow-600 uppercase block mb-1">Equips i Avaluacions</span>
+                                            {s.notes.equips}
+                                        </div>
+                                    )}
+                                    {s.notes && s.notes.general && (
+                                        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-800">
+                                            <span className="font-black text-[10px] text-blue-600 uppercase block mb-1">Anotació General</span>
                                             {s.notes.general}
                                         </div>
                                     )}
                                     {s.notes && s.notes.tutoria && (
-                                        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-800">
-                                            <span className="font-black text-[10px] text-blue-600 uppercase block mb-1">Tutoria</span>
+                                        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-gray-800">
+                                            <span className="font-black text-[10px] text-green-600 uppercase block mb-1">Comentari Tutoria</span>
                                             {s.notes.tutoria}
                                         </div>
                                     )}
@@ -798,15 +954,9 @@
 
         const IndicatorDescModal = ({ isOpen, onClose, data, onSave }) => {
             if (!isOpen || !data) return null;
-            const [desc, setDesc] = useState("");
+            const [desc, setDesc] = useState(data.currentDesc || "");
             
-            useEffect(() => { 
-                if (data && data.currentDesc) {
-                    setDesc(data.currentDesc);
-                } else {
-                    setDesc("");
-                }
-            }, [data]);
+            useEffect(() => { setDesc(data.currentDesc || ""); }, [data]);
 
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Descripció de l'Indicador" size="md">
@@ -853,7 +1003,7 @@
                             const targetCol = colIdx + cOffset;
                             if (targetCol < newRow.length) {
                                 let cleanVal = val.trim().toUpperCase();
-                                if(cleanVal === 'A' || cleanVal === 'B' || cleanVal === 'C' || cleanVal === 'D' || cleanVal === 'NA' || cleanVal === '') {
+                                if(['A','B','C','D','NA'].includes(cleanVal) || cleanVal === '') {
                                     newRow[targetCol] = cleanVal;
                                 }
                             }
@@ -1013,10 +1163,7 @@
                                     });
                                 }
                                 const g = calculateGrade(marks);
-                                if(g && g !== 'NA') { 
-                                    sum += getNumericFromGrade(g); 
-                                    count++; 
-                                }
+                                if(g) { sum += getNumericFromGrade(g); count++; }
                             });
                             
                             const avgNum = count > 0 ? sum/count : 0;
@@ -1217,7 +1364,7 @@
             
             const [activeClassId, setActiveClassId] = useState(null);
             const [activeTab, setActiveTab] = useState('S1'); 
-            const [activeSubgroupFilter, setActiveSubgroupFilter] = useState('ALL');
+            const [activeHalfGroupFilter, setActiveHalfGroupFilter] = useState("");
             
             // Modal States
             const [isEditingStructure, setIsEditingStructure] = useState(false);
@@ -1225,6 +1372,7 @@
             const [showNewClassModal, setShowNewClassModal] = useState(false);
             const [showEditClassModal, setShowEditClassModal] = useState(null);
             const [showManageStudents, setShowManageStudents] = useState(false);
+            const [showHalfGroupsModal, setShowHalfGroupsModal] = useState(false);
             const [showStudentNotes, setShowStudentNotes] = useState(null); 
             const [showGlobalNotes, setShowGlobalNotes] = useState(false);
             const [showCopyTable, setShowCopyTable] = useState(false);
@@ -1252,12 +1400,6 @@
 
                     initialData = parsed.map(cls => {
                         let newCls = {...cls};
-                        
-                        // Migració a la nova estructura de classes amb Subgrups
-                        if (!newCls.subgroups) {
-                            newCls.subgroups = [];
-                        }
-
                         if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
                             newCls.semesters = [
                                 { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
@@ -1278,6 +1420,9 @@
                         }
                         if (!newCls.students) {
                             newCls.students = [];
+                        }
+                        if (!newCls.halfGroups) {
+                            newCls.halfGroups = [];
                         }
                         return newCls;
                     });
@@ -1307,9 +1452,8 @@
                 }
             }, [classes]);
 
-            // Reset filtre de grups en canviar de classe
-            useEffect(() => {
-                setActiveSubgroupFilter('ALL');
+            useEffect(() => { 
+                setActiveHalfGroupFilter(""); 
             }, [activeClassId]);
 
             const updateClasses = (newClasses) => {
@@ -1361,8 +1505,11 @@
             const saveStudentsList = (ns) => { 
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: ns } : c)); 
             };
-            const updateStudentNotes = (sid, notes, subgroup, nee) => { 
-                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, notes: notes, subgroup: subgroup, nee: nee } : s) } : c)); 
+            const updateStudentNotes = (sid, notes) => { 
+                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, notes: notes } : s) } : c)); 
+            };
+            const updateStudentHalfGroup = (sid, hgId) => {
+                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, halfGroup: hgId } : s) } : c));
             };
             const handleUpdateClass = (id, data) => {
                 updateClasses(classes.map(c => c.id === id ? { ...c, ...data } : c));
@@ -1593,8 +1740,8 @@
 
             const handleExportExcel = () => {
                 if(!currentClass) return; 
-                const headers = ["Alumne", "Grup", "NEE"];
-                const subH = ["", "", ""]; 
+                const headers = ["Alumne"];
+                const subH = [""]; 
                 
                 visibleCompsList.forEach(c => { 
                     if(c.criteria) {
@@ -1616,8 +1763,9 @@
                 const d = [headers, subH]; 
                 
                 if(currentClass.students) {
-                    currentClass.students.forEach(s => { 
-                        const r = [s.name, s.subgroup ? s.subgroup : "", s.nee ? s.nee : ""]; 
+                    const studentsToExport = activeHalfGroupFilter ? currentClass.students.filter(s => s.halfGroup === activeHalfGroupFilter) : currentClass.students;
+                    studentsToExport.forEach(s => { 
+                        const r = [s.name]; 
                         visibleCompsList.forEach(c => { 
                             let cm = []; 
                             if(c.criteria) {
@@ -1846,6 +1994,21 @@
                         }
                     });
 
+                    const stats = { 
+                        studentStats: studentStats, 
+                        criteriaStats: criteriaStats, 
+                        compStats: compStats, 
+                        bestComp: bestComp, 
+                        worstComp: worstComp, 
+                        semesterCounts: semesterCounts, 
+                        semesterCompCounts: semesterCompCounts,
+                        iecg: { range: range, level: iecgLevel }, 
+                        iecgExplanation: iecgExplanation,
+                        progressMap: progressMap, 
+                        achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit },
+                        allCompNames: compNamesSet
+                    };
+
                     const handleToggleComp = (name) => { 
                         setExpandedComps(prev => {
                             let newObj = {};
@@ -1873,13 +2036,13 @@
                                                 </div>
                                                 <div className="flex-1 grid grid-cols-2 divide-x divide-gray-100">
                                                     {['S1', 'S2'].map((semId, i) => {
-                                                        const totalForGrade = semesterCounts[semId] ? semesterCounts[semId][grade] : 0;
+                                                        const totalForGrade = stats.semesterCounts[semId] ? stats.semesterCounts[semId][grade] : 0;
                                                         return (
                                                             <div key={semId} className="p-3 bg-gray-50/50 hover:bg-gray-50 transition">
                                                                 <div className="text-center font-bold text-gray-700 border-b border-gray-200 pb-1 mb-2">{i===0 ? '1r Sem' : '2n Sem'} ({totalForGrade})</div>
                                                                 <div className="space-y-1.5 mt-2">
-                                                                    {semesterCompCounts[semId] && Object.keys(semesterCompCounts[semId]).map(cName => {
-                                                                        const counts = semesterCompCounts[semId][cName];
+                                                                    {stats.semesterCompCounts[semId] && Object.keys(stats.semesterCompCounts[semId]).map(cName => {
+                                                                        const counts = stats.semesterCompCounts[semId][cName];
                                                                         if (counts[grade] > 0) {
                                                                             return (
                                                                                 <div key={cName} className="flex justify-between text-[11px] items-center pb-1 border-b border-gray-100 last:border-0">
@@ -1910,26 +2073,26 @@
                                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
                                         <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Equilibri Competencial</h4>
-                                        <div className="text-2xl font-black text-gray-800">{iecgLevel.split(' ')[0]}</div>
-                                        <div className="text-sm font-bold text-gray-600 mb-3">{iecgLevel.substring(2)}</div>
-                                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2"><div className="h-2 rounded-full bg-blue-500" style={{width: `${Math.min(100, range*25)}%`, backgroundColor: range > 1.5 ? '#ef4444' : range > 0.8 ? '#f97316' : '#22c55e'}}></div></div>
-                                        <p className="text-xs text-gray-500 font-medium leading-tight">{iecgExplanation}</p>
+                                        <div className="text-2xl font-black text-gray-800">{stats.iecg.level.split(' ')[0]}</div>
+                                        <div className="text-sm font-bold text-gray-600 mb-3">{stats.iecg.level.substring(2)}</div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2"><div className="h-2 rounded-full bg-blue-500" style={{width: `${Math.min(100, stats.iecg.range*25)}%`, backgroundColor: stats.iecg.range > 1.5 ? '#ef4444' : stats.iecg.range > 0.8 ? '#f97316' : '#22c55e'}}></div></div>
+                                        <p className="text-xs text-gray-500 font-medium leading-tight">{stats.iecgExplanation}</p>
                                     </div>
                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
                                         <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Tendència Global</h4>
-                                        <div className="h-24"><ChartComponent className="h-full" type="line" data={{labels: progressMap.map((_, i) => `T${i+1}`), datasets: [{ data: progressMap, borderColor: '#4f46e5', tension: 0.4, pointRadius: 4 }]}} options={{plugins: { legend: { display: false } }, scales: { y: { min: 1, max: 4, display: false }, x: { display: false } }, maintainAspectRatio: false}}/></div>
-                                        <p className="text-xs text-center font-bold text-indigo-600 mt-2">{progressMap.length > 1 ? (progressMap[progressMap.length-1] > progressMap[0] ? "↗ Progrés Sostingut" : "↘ Estancament/Regressió") : "Dades insuficients"}</p>
+                                        <div className="h-24"><ChartComponent className="h-full" type="line" data={{labels: stats.progressMap.map((_, i) => `T${i+1}`), datasets: [{ data: stats.progressMap, borderColor: '#4f46e5', tension: 0.4, pointRadius: 4 }]}} options={{plugins: { legend: { display: false } }, scales: { y: { min: 1, max: 4, display: false }, x: { display: false } }, maintainAspectRatio: false}}/></div>
+                                        <p className="text-xs text-center font-bold text-indigo-600 mt-2">{stats.progressMap.length > 1 ? (stats.progressMap[stats.progressMap.length-1] > stats.progressMap[0] ? "↗ Progrés Sostingut" : "↘ Estancament/Regressió") : "Dades insuficients"}</p>
                                     </div>
                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
                                         <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Nivells d'Assoliment</h4>
-                                        <div className="flex h-24 items-center justify-center relative"><ChartComponent type="doughnut" className="h-full w-full" data={{labels: ['Assolit', 'Procés', 'No'], datasets: [{ data: [assolit, proces, noAssolit], backgroundColor: ['#22c55e', '#f97316', '#ef4444'], borderWidth: 0 }]}} options={{ cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }}/><div className="absolute text-center z-10 flex flex-col items-center justify-center"><span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none">Total</span><span className="font-black text-2xl text-gray-700 leading-tight">{assolit+proces+noAssolit}</span></div></div>
-                                        <div className="flex justify-between text-xs font-bold mt-3 px-2"><span className="text-green-600 bg-green-50 px-2 py-1 rounded">High: {(assolit+proces+noAssolit) > 0 ? Math.round(assolit/(assolit+proces+noAssolit)*100) : 0}%</span><span className="text-red-600 bg-red-50 px-2 py-1 rounded">Risc: {(assolit+proces+noAssolit) > 0 ? Math.round(noAssolit/(assolit+proces+noAssolit)*100) : 0}%</span></div>
+                                        <div className="flex h-24 items-center justify-center relative"><ChartComponent type="doughnut" className="h-full w-full" data={{labels: ['Assolit', 'Procés', 'No'], datasets: [{ data: [stats.achievement.assolit, stats.achievement.proces, stats.achievement.noAssolit], backgroundColor: ['#22c55e', '#f97316', '#ef4444'], borderWidth: 0 }]}} options={{ cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }}/><div className="absolute text-center z-10 flex flex-col items-center justify-center"><span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none">Total</span><span className="font-black text-2xl text-gray-700 leading-tight">{stats.achievement.total}</span></div></div>
+                                        <div className="flex justify-between text-xs font-bold mt-3 px-2"><span className="text-green-600 bg-green-50 px-2 py-1 rounded">High: {stats.achievement.total > 0 ? Math.round(stats.achievement.assolit/stats.achievement.total*100) : 0}%</span><span className="text-red-600 bg-red-50 px-2 py-1 rounded">Risc: {stats.achievement.total > 0 ? Math.round(stats.achievement.noAssolit/stats.achievement.total*100) : 0}%</span></div>
                                     </div>
                                     <div className="bg-red-50 p-4 rounded-xl border border-red-200 flex flex-col justify-center text-center shadow-inner">
                                         <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3"><Icon name="triangle-exclamation" className="text-2xl"/></div>
                                         <h4 className="font-bold text-red-800 text-xs uppercase tracking-wider mb-2">Intervenció Prioritària</h4>
-                                        <p className="font-black text-xl text-gray-900 leading-tight">{worstComp ? worstComp.name : "-"}</p>
-                                        <div className="mt-2 inline-block bg-red-200 text-red-800 px-3 py-1 rounded-full text-xs font-bold">Mitjana: {worstComp ? worstComp.avg.toFixed(2) : '0.00'}</div>
+                                        <p className="font-black text-xl text-gray-900 leading-tight">{stats.worstComp ? stats.worstComp.name : "-"}</p>
+                                        <div className="mt-2 inline-block bg-red-200 text-red-800 px-3 py-1 rounded-full text-xs font-bold">Mitjana: {stats.worstComp ? stats.worstComp.avg.toFixed(2) : '0.00'}</div>
                                     </div>
                                 </div>
                             </div>
@@ -1949,8 +2112,8 @@
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
-                                                {Object.keys(studentStats).map(k => {
-                                                    const s = studentStats[k];
+                                                {Object.keys(stats.studentStats).map(k => {
+                                                    const s = stats.studentStats[k];
                                                     return (
                                                         <tr key={s.name} className="hover:bg-blue-50/50 transition">
                                                             <td className="p-3 font-medium text-gray-700">{s.name}</td>
@@ -1965,7 +2128,7 @@
                                                                 <button 
                                                                     onClick={() => {
                                                                         let rf = []; let rl = []; let lb = [];
-                                                                        Object.keys(compStats).forEach(ck => {
+                                                                        Object.keys(stats.compStats).forEach(ck => {
                                                                             lb.push(ck);
                                                                             rf.push(s.radarFirst[ck] ? s.radarFirst[ck] : 0);
                                                                             rl.push(s.radarLast[ck] ? s.radarLast[ck] : 0);
@@ -1998,16 +2161,16 @@
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                                                 <div className="flex items-center gap-2 mb-2"><Icon name="award" className="text-green-600 text-lg"/><span className="text-xs font-bold text-green-700 uppercase tracking-wider">Millor Competència</span></div>
-                                                <span className="font-bold text-gray-800 text-lg leading-tight block">{bestComp ? bestComp.name : "-"}</span>
+                                                <span className="font-bold text-gray-800 text-lg leading-tight block">{stats.bestComp ? stats.bestComp.name : "-"}</span>
                                             </div>
                                             <div className="bg-red-50 p-4 rounded-xl border border-red-100">
                                                 <div className="flex items-center gap-2 mb-2"><Icon name="fire" className="text-red-600 text-lg"/><span className="text-xs font-bold text-red-700 uppercase tracking-wider">Més Dificultat</span></div>
-                                                <span className="font-bold text-gray-800 text-lg leading-tight block">{worstComp ? worstComp.name : "-"}</span>
+                                                <span className="font-bold text-gray-800 text-lg leading-tight block">{stats.worstComp ? stats.worstComp.name : "-"}</span>
                                             </div>
                                         </div>
                                         <div className="mt-auto p-5 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100 text-gray-700 italic rounded-xl shadow-inner relative">
                                             <Icon name="quote-left" className="text-purple-200 text-4xl absolute top-2 left-2 opacity-50"/>
-                                            <p className="relative z-10 font-medium">Es recomana centrar els esforços de reforç en <span className="font-bold text-purple-700">{worstComp ? worstComp.name : '...'}</span>, especialment treballant els criteris amb més suspensos. {noAssolit > 0 ? `Hi ha ${noAssolit} alumnes que requereixen atenció directa i un possible pla individualitzat.` : 'El grup avança favorablement sense riscos greus d\'estancament generalitzat.'}</p>
+                                            <p className="relative z-10 font-medium">Es recomana centrar els esforços de reforç en <span className="font-bold text-purple-700">{stats.worstComp ? stats.worstComp.name : '...'}</span>, especialment treballant els criteris amb més suspensos. {stats.achievement.noAssolit > 0 ? `Hi ha ${stats.achievement.noAssolit} alumnes que requereixen atenció directa i un possible pla individualitzat.` : 'El grup avança favorablement sense riscos greus d\'estancament generalitzat.'}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -2016,8 +2179,8 @@
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                 <h3 className="font-bold text-xl text-gray-800 mb-6"><Icon name="layer-group" className="text-orange-500 mr-2"/> Distribució per Criteris d'Avaluació</h3>
                                 <div className="space-y-4">
-                                    {compNamesSet.map(compName => {
-                                        const compInfo = compStats[compName];
+                                    {stats.allCompNames.map(compName => {
+                                        const compInfo = stats.compStats[compName];
                                         const styles = compInfo ? COMP_COLORS_STYLES[compInfo.color ? compInfo.color : 'blue'] : COMP_COLORS_STYLES['gray'];
                                         
                                         return (
@@ -2038,14 +2201,14 @@
                                                             <div key={sem.id} className="flex-1 w-full lg:w-1/2">
                                                                 <h5 className="font-bold text-gray-600 border-b border-gray-300 pb-2 mb-4 uppercase tracking-wider text-sm">{sem.name}</h5>
                                                                 <div className="space-y-3">
-                                                                    {criteriaStats[sem.id] && criteriaStats[sem.id][compName] && criteriaStats[sem.id][compName].map((c,i)=>(
+                                                                    {stats.criteriaStats[sem.id] && stats.criteriaStats[sem.id][compName] && stats.criteriaStats[sem.id][compName].map((c,i)=>(
                                                                         <div key={i} className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow transition">
                                                                             <div className="font-bold text-gray-800 mb-3 line-clamp-2 h-10 leading-tight text-sm" title={c.name}>{c.name}</div>
                                                                             <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 mb-2">
-                                                                                <div style={{width:`${c.counts.A/((assolit+proces+noAssolit)||1)*100}%`}} className="bg-green-500"/>
-                                                                                <div style={{width:`${c.counts.B/((assolit+proces+noAssolit)||1)*100}%`}} className="bg-blue-500"/>
-                                                                                <div style={{width:`${c.counts.C/((assolit+proces+noAssolit)||1)*100}%`}} className="bg-orange-500"/>
-                                                                                <div style={{width:`${c.counts.D/((assolit+proces+noAssolit)||1)*100}%`}} className="bg-red-500"/>
+                                                                                <div style={{width:`${c.counts.A/(stats.achievement.total||1)*100}%`}} className="bg-green-500"/>
+                                                                                <div style={{width:`${c.counts.B/(stats.achievement.total||1)*100}%`}} className="bg-blue-500"/>
+                                                                                <div style={{width:`${c.counts.C/(stats.achievement.total||1)*100}%`}} className="bg-orange-500"/>
+                                                                                <div style={{width:`${c.counts.D/(stats.achievement.total||1)*100}%`}} className="bg-red-500"/>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs font-bold mt-2">
                                                                                 <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">Excel·lents: {c.counts.A}</span>
@@ -2053,7 +2216,7 @@
                                                                             </div>
                                                                         </div>
                                                                     ))}
-                                                                    {(!criteriaStats[sem.id] || !criteriaStats[sem.id][compName] || criteriaStats[sem.id][compName].length === 0) && (
+                                                                    {(!stats.criteriaStats[sem.id] || !stats.criteriaStats[sem.id][compName] || stats.criteriaStats[sem.id][compName].length === 0) && (
                                                                         <p className="text-sm text-gray-400 italic text-center py-4">Sense criteris avaluats en aquest semestre.</p>
                                                                     )}
                                                                 </div>
@@ -2077,34 +2240,15 @@
             const renderSpreadsheet = () => {
                 if (!currentClass) return <div className="p-10 text-center text-gray-500 font-bold text-xl">Selecciona o crea una classe per començar.</div>;
                 
-                const filteredStudents = (currentClass.students ? currentClass.students : []).filter(s => {
-                    if (activeSubgroupFilter === "ALL") return true;
-                    if (activeSubgroupFilter === "NONE") return !s.subgroup;
-                    return s.subgroup === activeSubgroupFilter;
-                });
+                const filteredStudents = (currentClass.students || []).filter(s => !activeHalfGroupFilter || s.halfGroup === activeHalfGroupFilter);
 
                 return (
                     <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 flex flex-col h-full">
-                        <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0 overflow-x-auto">
+                        <div className="p-3 bg-gray-50 border-b flex flex-wrap justify-between items-center shrink-0 z-50 relative gap-2">
                             <div className="flex items-center space-x-2">
                                 <button onClick={() => setIsEditingStructure(!isEditingStructure)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 ${isEditingStructure ? 'bg-orange-100 text-orange-700 shadow-inner' : 'bg-white text-gray-600 border hover:bg-gray-50 shadow-sm'}`}><Icon name={isEditingStructure ? "lock" : "pen-to-square"} />{isEditingStructure ? "Bloquejar Taula" : "Editar Taula"}</button>
-                                
-                                {currentClass.subgroups && currentClass.subgroups.length > 0 && (
-                                    <div className="relative group">
-                                        <select 
-                                            value={activeSubgroupFilter} 
-                                            onChange={(e) => setActiveSubgroupFilter(e.target.value)}
-                                            className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition font-bold"
-                                        >
-                                            <option value="ALL">Tots els grups</option>
-                                            <option value="NONE">Sense grup</option>
-                                            {currentClass.subgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
-                                        </select>
-                                    </div>
-                                )}
-
                                 <div className="relative group">
-                                    <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar Comp.</button>
+                                    <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar</button>
                                     <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-50 hidden group-hover:block w-56 text-sm">
                                         {activeCompetencies.map(c => (
                                             <div key={c.id} className="p-1.5 hover:bg-gray-50 rounded transition">
@@ -2130,6 +2274,19 @@
                                         ))}
                                     </div>
                                 </div>
+                                {currentClass.halfGroups && currentClass.halfGroups.length > 0 && (
+                                    <div className="flex items-center ml-2 border-l pl-2 border-gray-300">
+                                        <Icon name="filter" className="text-gray-400 mr-2 text-xs" />
+                                        <select 
+                                            value={activeHalfGroupFilter} 
+                                            onChange={(e) => setActiveHalfGroupFilter(e.target.value)}
+                                            className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-brand-500 font-medium text-gray-600"
+                                        >
+                                            <option value="">Tots els alumnes</option>
+                                            {currentClass.halfGroups.map(hg => <option key={hg.id} value={hg.id}>{hg.name}</option>)}
+                                        </select>
+                                    </div>
+                                )}
                                 {isEditingStructure && (
                                     <React.Fragment>
                                         <button onClick={() => addStructureItem('comp')} className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm font-bold shadow-sm hover:bg-purple-200 transition whitespace-nowrap"><Icon name="plus" className="mr-1"/> Comp</button>
@@ -2138,6 +2295,7 @@
                                 )}
                             </div>
                             <div className="flex gap-2 pl-2">
+                                <button onClick={() => setShowHalfGroupsModal(true)} className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition font-bold whitespace-nowrap"><Icon name="users-viewfinder" className="text-purple-600 mr-1"/> Mitjos Grups</button>
                                 <button onClick={() => setShowBulkImport(true)} className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition font-bold whitespace-nowrap"><Icon name="table" className="text-green-600 mr-1"/> Importar Excel</button>
                                 <button onClick={() => setShowManageStudents(true)} className="px-4 py-1.5 bg-slate-800 text-white rounded-lg shadow-sm hover:bg-slate-700 transition text-sm font-bold whitespace-nowrap"><Icon name="users" className="mr-2" /> Gestió d'Alumnes</button>
                             </div>
@@ -2226,66 +2384,99 @@
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-100">
-                                    {filteredStudents.map((student, sIdx) => (
-                                        <tr key={student.id} className="hover:bg-blue-50/30 group transition-colors">
-                                            <td className="p-2 sticky-col w-64 border-r border-b font-medium text-gray-800 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] group-hover:bg-blue-50/50">
-                                                <div className="flex items-center gap-2 w-full pl-2">
-                                                    <span className="text-xs font-bold text-gray-400 w-4 text-right shrink-0">{sIdx + 1}.</span>
-                                                    <button onClick={() => setShowStudentNotes(student)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition shadow-sm ${student.notes && student.notes.general ? 'bg-yellow-100 text-yellow-600 border border-yellow-200' : 'text-gray-400 bg-gray-50 border border-gray-200 hover:bg-yellow-50 hover:text-yellow-500 hover:border-yellow-200'}`} title="Notes personals"><Icon name="note-sticky"/></button>
-                                                    <span className="font-bold text-gray-700 truncate flex-1 tracking-tight" title={student.name}>{student.name}</span>
-                                                    {student.subgroup && <span className="ml-1 text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">{student.subgroup}</span>}
-                                                    {student.nee && <span className="ml-1 text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold shadow-sm whitespace-nowrap" title={student.nee}>NEE</span>}
-                                                </div>
-                                            </td>
-                                            {visibleCompsList.map(comp => {
-                                                let compMarks = [];
-                                                return (
-                                                    <React.Fragment key={comp.id}>
-                                                        {(comp.criteria ? comp.criteria : []).map(crit => {
-                                                            let critMarks = [];
-                                                            return (
-                                                                <React.Fragment key={crit.id}>
-                                                                    {(crit.indicators ? crit.indicators : []).map(ind => {
-                                                                        const val = (student.marks && student.marks[ind.id]) ? student.marks[ind.id] : "";
-                                                                        if(val) critMarks.push(val);
-                                                                        return (
-                                                                            <td key={ind.id} className="p-0 border-r border-b text-center w-24 min-w-[5rem]">
-                                                                                <select 
-                                                                                    value={val} 
-                                                                                    onChange={(e) => updateMark(student.id, ind.id, e.target.value)} 
-                                                                                    className={`w-full h-11 px-1 text-center text-sm font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 bg-transparent transition-colors ${getGradeTextColor(val)} hover:bg-gray-50`} 
-                                                                                    style={{textAlignLast:'center'}}
-                                                                                >
-                                                                                    <option value="" className="text-gray-300 font-normal">-</option>
-                                                                                    <option value="A" className="text-green-600 font-black bg-green-50">A</option>
-                                                                                    <option value="B" className="text-blue-600 font-black bg-blue-50">B</option>
-                                                                                    <option value="C" className="text-orange-600 font-black bg-orange-50">C</option>
-                                                                                    <option value="D" className="text-red-600 font-black bg-red-50">D</option>
-                                                                                    <option value="NA" className="text-gray-800 font-black bg-gray-100">NA</option>
-                                                                                </select>
-                                                                            </td>
-                                                                        );
-                                                                    })}
-                                                                    <td className="p-1 border-r border-b text-center bg-gray-50 w-14 min-w-[3.5rem] shadow-inner">
-                                                                        <div className={`w-8 h-8 mx-auto flex items-center justify-center rounded-full text-xs font-bold shadow-sm ${getGradeColor(calculateGrade(critMarks))}`}>{calculateGrade(critMarks)}</div>
-                                                                    </td>
-                                                                    {(() => { 
-                                                                        const cg = calculateGrade(critMarks);
-                                                                        if(cg) compMarks.push(cg); 
-                                                                    })()}
-                                                                </React.Fragment>
-                                                            );
-                                                        })}
-                                                        <td className="p-1 border-r border-b text-center bg-gray-100 font-bold border-l-2 border-l-gray-300 w-14 min-w-[3.5rem] shadow-inner">
-                                                            <div className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg shadow-md text-sm font-black ${getGradeColor(calculateGrade(compMarks)).replace('bg-', 'bg-gradient-to-br from-white to-')}`}>{calculateGrade(compMarks)}</div>
-                                                        </td>
-                                                    </React.Fragment>
-                                                );
-                                            })}
-                                        </tr>
-                                    ))}
-                                    {filteredStudents.length === 0 && (
-                                        <tr><td colSpan="100%" className="p-12 text-center text-gray-500 font-medium text-lg">No hi ha cap alumne en aquesta classe o filtre.</td></tr>
+                                    {filteredStudents.map((student, sIdx) => {
+                                        let diagnosticBgClass = 'bg-white';
+                                        if (student.notes && student.notes.diagnostics && student.notes.diagnostics.length > 0) {
+                                            let highestPriorityIndex = -1;
+                                            student.notes.diagnostics.forEach(dId => {
+                                                const idx = DIAGNOSTICS.findIndex(d => d.id === dId);
+                                                if (idx > highestPriorityIndex) highestPriorityIndex = idx;
+                                            });
+                                            if (highestPriorityIndex !== -1) {
+                                                const selectedColorClass = DIAGNOSTICS[highestPriorityIndex].colorClass;
+                                                const bgClassMatch = selectedColorClass.match(/bg-[a-z]+-100/);
+                                                const textClassMatch = selectedColorClass.match(/text-[a-z]+-900/);
+                                                if (bgClassMatch) diagnosticBgClass = `${bgClassMatch[0]} ${textClassMatch ? textClassMatch[0] : ''}`;
+                                            }
+                                        }
+
+                                        const hasImportantNotes = student.notes && (
+                                            (student.notes.equips && student.notes.equips.trim() !== "") ||
+                                            (student.notes.general && student.notes.general.trim() !== "") ||
+                                            (student.notes.tutoria && student.notes.tutoria.trim() !== "")
+                                        );
+
+                                        return (
+                                            <tr key={student.id} className="hover:bg-blue-50/30 group transition-colors">
+                                                <td className={`p-2 sticky-col w-64 border-r border-b font-medium z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${diagnosticBgClass !== 'bg-white' ? diagnosticBgClass : 'text-gray-800 bg-white group-hover:bg-blue-50/50'}`}>
+                                                    <div className="flex items-center gap-3 w-full pl-2">
+                                                        <span className={`text-xs font-bold w-4 text-right ${diagnosticBgClass !== 'bg-white' ? 'opacity-70' : 'text-gray-400'}`}>{sIdx + 1}.</span>
+                                                        <button onClick={() => setShowStudentNotes(student)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition shadow-sm ${hasImportantNotes ? 'bg-yellow-100 text-yellow-600 border border-yellow-200' : 'text-gray-400 bg-gray-50 border border-gray-200 hover:bg-yellow-50 hover:text-yellow-500 hover:border-yellow-200'}`} title="Notes personals"><Icon name="note-sticky"/></button>
+                                                        <div className="flex flex-col flex-1 min-w-0">
+                                                            <span className="font-bold truncate tracking-tight" title={student.name}>{student.name}</span>
+                                                            {currentClass.halfGroups && currentClass.halfGroups.length > 0 && (
+                                                                <select 
+                                                                    value={student.halfGroup || ""} 
+                                                                    onChange={(e) => updateStudentHalfGroup(student.id, e.target.value)}
+                                                                    className="text-[10px] bg-transparent outline-none text-gray-500 hover:text-gray-800 mt-0.5 truncate cursor-pointer"
+                                                                >
+                                                                    <option value="">- Cap mig grup -</option>
+                                                                    {currentClass.halfGroups.map(hg => <option key={hg.id} value={hg.id}>{hg.name}</option>)}
+                                                                </select>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                {visibleCompsList.map(comp => {
+                                                    let compMarks = [];
+                                                    return (
+                                                        <React.Fragment key={comp.id}>
+                                                            {(comp.criteria ? comp.criteria : []).map(crit => {
+                                                                let critMarks = [];
+                                                                return (
+                                                                    <React.Fragment key={crit.id}>
+                                                                        {(crit.indicators ? crit.indicators : []).map(ind => {
+                                                                            const val = (student.marks && student.marks[ind.id]) ? student.marks[ind.id] : "";
+                                                                            if(val) critMarks.push(val);
+                                                                            return (
+                                                                                <td key={ind.id} className="p-0 border-r border-b text-center w-24 min-w-[5rem]">
+                                                                                    <select 
+                                                                                        value={val} 
+                                                                                        onChange={(e) => updateMark(student.id, ind.id, e.target.value)} 
+                                                                                        className={`w-full h-11 px-1 text-center text-sm font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 bg-transparent transition-colors ${getGradeTextColor(val)} hover:bg-gray-50`} 
+                                                                                        style={{textAlignLast:'center'}}
+                                                                                    >
+                                                                                        <option value="" className="text-gray-300 font-normal">-</option>
+                                                                                        <option value="A" className="text-green-600 font-black bg-green-50">A</option>
+                                                                                        <option value="B" className="text-blue-600 font-black bg-blue-50">B</option>
+                                                                                        <option value="C" className="text-orange-600 font-black bg-orange-50">C</option>
+                                                                                        <option value="D" className="text-red-600 font-black bg-red-50">D</option>
+                                                                                        <option value="NA" className="text-gray-800 font-black bg-gray-100">NA</option>
+                                                                                    </select>
+                                                                                </td>
+                                                                            );
+                                                                        })}
+                                                                        <td className="p-1 border-r border-b text-center bg-gray-50 w-14 min-w-[3.5rem] shadow-inner">
+                                                                            <div className={`w-8 h-8 mx-auto flex items-center justify-center rounded-full text-xs font-bold shadow-sm ${getGradeColor(calculateGrade(critMarks))}`}>{calculateGrade(critMarks)}</div>
+                                                                        </td>
+                                                                        {(() => { 
+                                                                            const cg = calculateGrade(critMarks);
+                                                                            if(cg) compMarks.push(cg); 
+                                                                        })()}
+                                                                    </React.Fragment>
+                                                                );
+                                                            })}
+                                                            <td className="p-1 border-r border-b text-center bg-gray-100 font-bold border-l-2 border-l-gray-300 w-14 min-w-[3.5rem] shadow-inner">
+                                                                <div className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg shadow-md text-sm font-black ${getGradeColor(calculateGrade(compMarks)).replace('bg-', 'bg-gradient-to-br from-white to-')}`}>{calculateGrade(compMarks)}</div>
+                                                            </td>
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+                                            </tr>
+                                        );
+                                    })}
+                                    {(!filteredStudents || filteredStudents.length === 0) && (
+                                        <tr><td colSpan="100%" className="p-12 text-center text-gray-500 font-medium text-lg">No hi ha cap alumne per mostrar amb els filtres actuals. Fes clic a "Gestió d'Alumnes" per afegir-ne.</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -2297,12 +2488,13 @@
             return (
                 <div className="flex h-screen overflow-hidden text-gray-800">
                     <ErrorBoundary>
-                        {/* MODALS RENDERED */}
+                        {/* MODALS */}
                         {showWizard && <SetupWizard onComplete={handleCreateClass} />}
+                        {showHalfGroupsModal && <HalfGroupsModal isOpen={showHalfGroupsModal} onClose={() => setShowHalfGroupsModal(false)} halfGroups={currentClass && currentClass.halfGroups ? currentClass.halfGroups : []} onSave={(newList) => handleUpdateClass(activeClassId, { halfGroups: newList })} />}
                         <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
                         <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
                         <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
-                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} competencies={activeCompetencies} onSave={updateStudentNotes} currentClass={currentClass} />
+                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} competencies={activeCompetencies} onSave={updateStudentNotes} />
                         <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} competencies={activeCompetencies} />
                         <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
                         <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
@@ -2357,7 +2549,7 @@
                                             </div>
                                             <div className="h-8 w-px bg-gray-300"></div>
                                             <div className="flex items-center gap-4">
-                                                <button onClick={resetAllData} className="p-2 text-red-300 hover:text-red-600 transition" title="Reiniciar curs (Esborrar tot)"><Icon name="trash-can" className="text-lg"/></button>
+                                                <button onClick={resetAllData} className="p-2 text-red-300 hover:text-red-600 transition" title="Reiniciar curs"><Icon name="trash-can" className="text-lg"/></button>
                                                 <div className="flex bg-gray-100 rounded-lg p-1"><button onClick={undo} disabled={historyIndex <= 0} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-left"/></button><button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-right"/></button></div>
                                             </div>
                                         </div>
@@ -2365,7 +2557,7 @@
                                     <div className="flex-1 overflow-hidden relative flex flex-col bg-gray-50/50">
                                         {isGlobalView ? (
                                             <div className="flex-1 overflow-y-auto custom-scroll">
-                                                {GlobalDashboard()}
+                                                {renderGlobalDashboard()}
                                             </div>
                                         ) : (
                                             <div className="flex-1 p-6 h-full overflow-hidden flex flex-col">
@@ -2387,11 +2579,7 @@
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(
-            <ErrorBoundary>
-                <App />
-            </ErrorBoundary>
-        );
+        root.render(<App />);
     </script>
 </body>
 </html>
