@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PigeonEtics : Laboratoire Cellulaire</title>
+    
+    <!-- Librerías de React y Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; user-select: none; overflow-x: hidden; }
+        
+        /* Animaciones */
+        .chromosome-hover:hover { filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.6)); cursor: grab; }
+        .chromosome-hover:active { cursor: grabbing; }
+        
+        @keyframes slideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -20px); }
+            10% { opacity: 1; transform: translate(-50%, 0); }
+            90% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+
+        /* Zonas de arrastre/clic */
+        .drop-zone { transition: all 0.2s; cursor: pointer; }
+        .drop-zone.active { background-color: rgba(59, 130, 246, 0.1); border-color: #3b82f6; box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.2); }
+        .drop-zone.over { background-color: rgba(34, 197, 94, 0.1); border-color: #22c55e; }
+        .drop-zone:hover { background-color: rgba(250, 204, 21, 0.05); }
+
+        /* Hilos del huso acromático */
+        .spindle-fibers {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(203, 213, 225, 0.4) 40px, rgba(203, 213, 225, 0.4) 42px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- GRÁFICO DEL CICLO CELULAR ---
+        const CellCycleGraph = ({ type }) => {
+            return (
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mt-6 w-full max-w-2xl mx-auto shrink-0">
+                    <h3 className="font-bold text-slate-700 text-center mb-2">Évolution de la Quantité d'ADN (Cycle Cellulaire)</h3>
+                    <div className="relative w-full h-32">
+                        <svg viewBox="0 0 400 120" className="w-full h-full overflow-visible">
+                            {/* Ejes */}
+                            <line x1="40" y1="10" x2="40" y2="90" stroke="#94a3b8" strokeWidth="2" />
+                            <line x1="40" y1="90" x2="380" y2="90" stroke="#94a3b8" strokeWidth="2" />
+                            
+                            {/* Etiquetas Y */}
+                            <text x="30" y="25" fontSize="12" textAnchor="end" fill="#64748b" fontWeight="bold">2C</text>
+                            <text x="30" y="55" fontSize="12" textAnchor="end" fill="#64748b" fontWeight="bold">C</text>
+                            <text x="30" y="85" fontSize="12" textAnchor="end" fill="#64748b" fontWeight="bold">½C</text>
+                            
+                            {/* Etiquetas X */}
+                            <text x="80" y="110" fontSize="10" textAnchor="middle" fill="#64748b">G1</text>
+                            <text x="140" y="110" fontSize="10" textAnchor="middle" fill="#64748b">S (Duplication)</text>
+                            <text x="220" y="110" fontSize="10" textAnchor="middle" fill="#64748b">G2</text>
+                            <text x="290" y="110" fontSize="10" textAnchor="middle" fill="#64748b">{type === 'meiosis' || type === 'repte' ? 'Méiose I' : 'Mitose'}</text>
+                            {(type === 'meiosis' || type === 'repte') && <text x="360" y="110" fontSize="10" textAnchor="middle" fill="#64748b">Méiose II</text>}
+                            
+                            {/* Líneas Guía */}
+                            <line x1="40" y1="20" x2="380" y2="20" stroke="#e2e8f0" strokeDasharray="4,4" />
+                            <line x1="40" y1="50" x2="380" y2="50" stroke="#e2e8f0" strokeDasharray="4,4" />
+                            <line x1="40" y1="80" x2="380" y2="80" stroke="#e2e8f0" strokeDasharray="4,4" />
+                            
+                            {/* Trazo del gráfico */}
+                            {type === 'mitosis' ? (
+                                <path d="M 40 50 L 100 50 L 160 20 L 250 20 L 270 20 L 290 50 L 360 50" fill="none" stroke="#3b82f6" strokeWidth="3" />
+                            ) : (
+                                <path d="M 40 50 L 100 50 L 160 20 L 250 20 L 270 20 L 290 50 L 320 50 L 350 80 L 380 80" fill="none" stroke="#a855f7" strokeWidth="3" />
+                            )}
+                        </svg>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 text-center leading-relaxed">
+                        C = Quantité d'ADN initiale. Dans la phase S de l'interphase l'ADN se duplique (2C). <br/>
+                        {type === 'meiosis' || type === 'repte'
+                            ? 'Après la Méiose I, la cellule revient à C. À la fin de la Méiose II, les gamètes sont HAPLOÏDES (n) et ont la moitié du matériel d\'origine (½C).' 
+                            : 'À la fin de la Mitose, la cellule retrouve la quantité C d\'origine et est DIPLOÏDE (2n).'}
+                    </p>
+                </div>
+            );
+        };
+
+        // --- COMPONENTES VISUALES (CROMOSOMAS Y LOCUS) ---
+        const LocusMarker = ({ x, y, allele, color, side }) => {
+            if (!allele) return null;
+            const isDominant = allele === 'C';
+            const fontSize = isDominant ? "16" : "12";
+            const fontWeight = isDominant ? "900" : "normal";
+            
+            if (side === 'left') {
+                return (
+                    <g>
+                        <line x1={x-15} y1={y} x2={x} y2={y} stroke="white" strokeWidth="2.5" />
+                        <rect x={x-28} y={y-8} width="14" height="16" rx="2" fill="white" stroke={color} strokeWidth="1.5"/>
+                        <text x={x-21} y={y+4} fontSize={fontSize} fill="black" textAnchor="middle" fontWeight={fontWeight} pointerEvents="none">{allele}</text>
+                    </g>
+                );
+            } else {
+                return (
+                    <g>
+                        <line x1={x} y1={y} x2={x+15} y2={y} stroke="white" strokeWidth="2.5" />
+                        <rect x={x+14} y={y-8} width="14" height="16" rx="2" fill="white" stroke={color} strokeWidth="1.5"/>
+                        <text x={x+21} y={y+4} fontSize={fontSize} fill="black" textAnchor="middle" fontWeight={fontWeight} pointerEvents="none">{allele}</text>
+                    </g>
+                );
+            }
+        };
+
+        const ChromosomeSVG = ({ id, type, chromatids, origin, crossedOver, isSelectable, isSelected, alleles, sexLabel }) => {
+            const isLarge = type === 'lg';
+            const isSmall = type === 'sm';
+            const h = isLarge ? 80 : (isSmall ? 50 : 35);
+            const w = 40;
+            const mainColor = origin === 'mat' ? '#ef4444' : '#3b82f6'; 
+            const altColor = origin === 'mat' ? '#3b82f6' : '#ef4444'; 
+
+            const leftChromatid = crossedOver && origin === 'pat' ? (
+                <g>
+                    <path d={`M20,${h/2} Q10,${h/4} 15,5 Q25,${h/4} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
+                    <path d={`M20,${h/2} Q10,${h*0.75} 15,${h-5} Q25,${h*0.75} 20,${h/2}`} fill={altColor} stroke="black" strokeWidth="1"/>
+                </g>
+            ) : (
+                <path d={`M20,${h/2} Q10,${h/4} 15,5 Q25,${h/4} 20,${h/2} Q10,${h*0.75} 15,${h-5} Q25,${h*0.75} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
+            );
+
+            const rightChromatid = crossedOver && origin === 'mat' ? (
+                <g>
+                    <path d={`M20,${h/2} Q30,${h/4} 25,5 Q15,${h/4} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
+                    <path d={`M20,${h/2} Q30,${h*0.75} 25,${h-5} Q15,${h*0.75} 20,${h/2}`} fill={altColor} stroke="black" strokeWidth="1"/>
+                </g>
+            ) : (
+                <path d={`M20,${h/2} Q30,${h/4} 25,5 Q15,${h/4} 20,${h/2} Q30,${h*0.75} 25,${h-5} Q15,${h*0.75} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
+            );
+
+            const singleChromatid = crossedOver ? (
+                <g>
+                    <path d={`M20,${h/2} Q15,${h/4} 20,5 Q25,${h/4} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
+                    <path d={`M20,${h/2} Q15,${h*0.75} 20,${h-5} Q25,${h*0.75} 20,${h/2}`} fill={altColor} stroke="black" strokeWidth="1"/>
+                </g>
+            ) : (
+                <path d={`M20,${h/2} Q15,${h/4} 20,5 Q25,${h/4} 20,${h/2} Q15,${h*0.75} 20,${h-5} Q25,${h*0.75} 20,${h/2}`} fill={mainColor} stroke="black" strokeWidth="1"/>
+            );
+
+            const locusY = 20;
+
+            return (
+                <div className={`transition-all rounded-lg ${isSelected ? 'ring-4 ring-yellow-400 bg-yellow-100/50 scale-110 shadow-lg' : ''}`}>
+                    <svg width={w} height={h + 25} viewBox={`0 0 ${w} ${h + 25}`} className={`overflow-visible ${isSelectable ? 'chromosome-hover' : ''}`}>
+                        {chromatids === 2 ? (
+                            <g>
+                                <g transform="rotate(-15 20 40)">
+                                    {leftChromatid}
+                                    {alleles && <LocusMarker x={15} y={locusY} allele={alleles[0]} color={mainColor} side="left" />}
+                                </g>
+                                <g transform="rotate(15 20 40)">
+                                    {rightChromatid}
+                                    {alleles && <LocusMarker x={25} y={locusY} allele={alleles[1]} color={crossedOver ? altColor : mainColor} side="right" />}
+                                </g>
+                                <circle cx="20" cy={h/2} r="4" fill="#fbbf24" stroke="black" strokeWidth="1" />
+                                {sexLabel && <text x="20" y={h + 15} fontSize="14" fill="black" textAnchor="middle" fontWeight="bold" pointerEvents="none">{sexLabel}</text>}
+                            </g>
+                        ) : (
+                            <g>
+                                {singleChromatid}
+                                {alleles && <LocusMarker x={20} y={locusY} allele={alleles[0]} color={mainColor} side="left" />}
+                                <circle cx="20" cy={h/2} r="3" fill="#fbbf24" stroke="black" strokeWidth="1" />
+                                {sexLabel && <text x="20" y={h + 15} fontSize="14" fill="black" textAnchor="middle" fontWeight="bold" pointerEvents="none">{sexLabel}</text>}
+                            </g>
+                        )}
+                    </svg>
+                </div>
+            );
+        };
+
+        const FragLegSVG = ({ color, inTaller, side, isSelected, onClick }) => {
+            const dPath = side === 'left' ? "M20,0 Q0,25 10,45 Q30,25 20,0" : "M0,0 Q20,25 10,45 Q-10,25 0,0";
+            return (
+                <div 
+                    draggable 
+                    onClick={onClick}
+                    onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ source: inTaller ? 'taller' : (color === 'red' ? 'redChr' : 'blueChr'), color })); }} 
+                    className={`cursor-grab hover:scale-110 transition-all rounded-md ${inTaller ? 'relative z-10 mx-2' : 'absolute top-0'} ${isSelected ? 'ring-4 ring-yellow-400 bg-yellow-100 shadow-md' : ''}`}
+                    style={inTaller ? {} : { left: '0px' }}
+                >
+                    <svg width="20" height="45" viewBox="0 0 20 45" className="overflow-visible">
+                        <path d={dPath} fill={color === 'red' ? '#ef4444' : '#3b82f6'} stroke="black" strokeWidth="2"/>
+                    </svg>
+                </div>
+            );
+        };
+
+        // --- ESTADO INICIAL DINÁMICO ---
+        const getInitialChromosomes = (simMode = 'mitosis') => {
+            const baseChroms = [
+                { id: 'c1_mat', type: 'lg', origin: 'mat', chromatids: 2, crossedOver: false, zone: 'nucleus', alleles: ['c', 'c'] },
+                { id: 'c1_pat', type: 'lg', origin: 'pat', chromatids: 2, crossedOver: false, zone: 'nucleus', alleles: ['C', 'C'] },
+                { id: 'c2_mat', type: 'sm', origin: 'mat', chromatids: 2, crossedOver: false, zone: 'nucleus', sexLabel: 'W' },
+                { id: 'c2_pat', type: 'sm', origin: 'pat', chromatids: 2, crossedOver: false, zone: 'nucleus', sexLabel: 'Z' }
+            ];
+
+            if (simMode === 'repte') {
+                baseChroms.push({ id: 'c3_mat', type: 'xs', origin: 'mat', chromatids: 2, crossedOver: false, zone: 'nucleus' });
+                baseChroms.push({ id: 'c3_pat', type: 'xs', origin: 'pat', chromatids: 2, crossedOver: false, zone: 'nucleus' });
+            }
+
+            return baseChroms;
+        };
+
+        // --- COMPONENTE PRINCIPAL ---
+        const App = () => {
+            const getSaved = () => {
+                try { return JSON.parse(localStorage.getItem('pigeonetics_sim_data_v21')) || {}; }
+                catch(e) { return {}; }
+            };
+            const saved = getSaved();
+
+            const [appMode, setAppMode] = useState(saved.appMode || 'selection'); 
+            const [answers, setAnswers] = useState(saved.answers || {});
+            const [showFicha, setShowFicha] = useState(false);
+
+            const [mode, setMode] = useState(saved.mode || 'mitosis');
+            const [phase, setPhase] = useState(saved.phase || 'profase'); 
+            const [spindleActive, setSpindleActive] = useState(saved.spindleActive || false); 
+            const [isCondensed, setIsCondensed] = useState(saved.isCondensed || false); 
+            const [chromatinZone, setChromatinZone] = useState(saved.chromatinZone || 'toolbox'); 
+            
+            const [chromosomes, setChromosomes] = useState(saved.chromosomes || getInitialChromosomes(saved.mode || 'mitosis'));
+            const [health, setHealth] = useState(saved.health ?? 100);
+            const [feedback, setFeedback] = useState({ type: 'info', msg: 'Touchez ou faites glisser la chromatine de la boîte à outils vers le cytoplasme pour commencer.' });
+            const [cytokinesisDone, setCytokinesisDone] = useState(saved.cytokinesisDone || false);
+            
+            const [selectedItem, setSelectedItem] = useState(null); 
+            const [selectedFrag, setSelectedFrag] = useState(null); 
+            
+            const [showPunnett, setShowPunnett] = useState(false); 
+            const [showRepteFecundacion, setShowRepteFecundacion] = useState(false); // Modal Fecundación Aneuploidía
+            const [showCrossingModal, setShowCrossingModal] = useState(false); 
+            const [punnettTicks, setPunnettTicks] = useState(Array(16).fill(false)); 
+            
+            const [coFragments, setCoFragments] = useState({ redChr: 'red', blueChr: 'blue', taller: [] });
+            const [phaseToast, setPhaseToast] = useState(null);
+
+            useEffect(() => {
+                localStorage.setItem('pigeonetics_sim_data_v21', JSON.stringify({ mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone }));
+            }, [mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone]);
+            
+            useEffect(() => {
+                let text = '';
+                if(phase === 'profase') text = 'L\'ADN se condense et se prépare pour la division.';
+                if(phase === 'metafase') text = 'Le matériel génétique s\'aligne au centre (équateur).';
+                if(phase === 'anafase') text = 'Le fuseau sépare le matériel génétique vers les pôles.';
+                if(phase === 'telofase' || phase === 'telofase1') text = 'La cellule se prépare à diviser le cytoplasme.';
+
+                if (phase !== 'profase') {
+                    setPhaseToast({ phase, text });
+                    const timer = setTimeout(() => setPhaseToast(null), 4000);
+                    return () => clearTimeout(timer);
+                }
+            }, [phase]);
+
+            const phaseColors = {
+                profase: 'text-teal-600 border-teal-500', metafase: 'text-yellow-600 border-yellow-500',
+                anafase: 'text-purple-600 border-purple-500', telofase1: 'text-green-600 border-green-500', telofase: 'text-green-600 border-green-500'
+            };
+            const phaseBgColors = {
+                profase: 'bg-teal-500', metafase: 'bg-yellow-500', anafase: 'bg-purple-500', telofase1: 'bg-green-500', telofase: 'bg-green-500'
+            };
+
+            const [tutorialPopup, setTutorialPopup] = useState({
+                show: true, minimized: false,
+                title: 'Bienvenue dans PigeonEtics',
+                text: <span>Nous découvrirons comment les pigeons héritent de leurs caractéristiques.<br/><br/>Regardez la LÉGENDE :<br/>Le chromosome ROUGE vient de la MÈRE.<br/>Le chromosome BLEU vient du PÈRE.<br/><br/>Pour commencer, expérimentez avec la <strong className="text-teal-600">MITOSE</strong>. Touchez ou faites glisser la pelote de chromatine des outils vers le cytoplasme libre.</span>
+            });
+
+            const clearData = () => {
+                if(window.confirm('Êtes-vous sûr de vouloir effacer toutes les données sauvegardées et recommencer à zéro ?')) {
+                    localStorage.removeItem('pigeonetics_sim_data_v21');
+                    window.location.reload();
+                }
+            };
+
+            const handleAns = (key, val) => setAnswers(prev => ({...prev, [key]: val}));
+
+            const resetSim = (newMode) => {
+                setMode(newMode);
+                setPhase('profase');
+                setSpindleActive(false); 
+                setIsCondensed(false);
+                setChromatinZone('toolbox');
+                setShowPunnett(false);
+                setShowRepteFecundacion(false);
+                setShowCrossingModal(false);
+                setPunnettTicks(Array(16).fill(false));
+                setCoFragments({ redChr: 'red', blueChr: 'blue', taller: [] });
+                setChromosomes(getInitialChromosomes(newMode));
+                setSelectedItem(null);
+                setSelectedFrag(null);
+                setCytokinesisDone(false);
+                setHealth(100);
+                
+                if(newMode === 'mitosis') {
+                    setFeedback({ type: 'info', msg: 'MITOSE : Déplacez la chromatine des outils vers le cytoplasme.' });
+                    setTutorialPopup({ show: true, minimized: false, title: 'Mode Mitose', text: <span>La <strong className="text-teal-600">mitose</strong> est le processus par lequel une cellule se divise pour former <strong className="text-teal-600">deux cellules filles génétiquement identiques (DIPLOÏDES)</strong>.<br/><br/>Objectif : Cherchez comment réussir à diviser la cellule correctement étape par étape. Commencez par la Prophase !</span> });
+                }
+                else if(newMode === 'meiosis') {
+                    setFeedback({ type: 'info', msg: 'MÉIOSE I : Déplacez la chromatine, condensez l\'ADN et rassemblez les homologues l\'un sur l\'autre.' });
+                    setTutorialPopup({ show: true, minimized: false, title: 'Mode Méiose (Femelle ZW)', text: <span>La <strong className="text-teal-600">méiose</strong> réduit de moitié l'information génétique pour créer des <strong className="text-teal-600">ovules (HAPLOÏDES)</strong>.<br/><br/>Chez ce pigeon femelle (chromosomes ZW), un grand chromosome porte l'allèle récessif "c" (Crête) et l'autre le dominant "C" (Sans Crête).<br/><br/>OBJECTIF : Générer des gamètes pour croiser avec un mâle et obtenir un petit femelle avec crête.<br/><br/>Instruction initiale : Touchez/faites glisser la chromatine vers le cytoplasme, condensez-la et rassemblez les paires de chromosomes.</span> });
+                }
+                else {
+                    setFeedback({ type: 'warning', msg: 'DÉFI : Provoquez intentionnellement une trisomie lors de la Méiose I.' });
+                    setTutorialPopup({ show: true, minimized: false, title: 'Mode Chercheur', text: <span>Que se passe-t-il lorsque la machinerie de division échoue ?<br/><br/>Votre objectif N'EST PAS de bien faire. Vous devez provoquer intentionnellement une erreur mécanique dans l'<strong className="text-purple-600">Anaphase I de la Méiose</strong> en déplaçant deux chromosomes homologues vers le même pôle pour générer un gamète avec un excès d'ADN (Aneuploïdie).</span> });
+                }
+            };
+
+            const handleDragStart = (e, item) => { setSelectedItem(item); };
+            const handleDragOver = (e) => { e.preventDefault(); };
+            
+            const processDrop = (itemToMove, targetZone) => {
+                if (!itemToMove) return;
+
+                let isValid = true;
+                let msg = '';
+                let healthPenalty = 0;
+
+                let actualTargetZone = targetZone;
+                let targetChrom = null;
+                if (targetZone.startsWith('c_')) {
+                    const targetId = targetZone.substring(2);
+                    targetChrom = chromosomes.find(c => c.id === targetId);
+                    if (targetChrom) actualTargetZone = targetChrom.zone;
+                }
+
+                if (phase === 'profase') {
+                    if (!isCondensed) {
+                        if (actualTargetZone === 'cytoplasm' && itemToMove.type === 'chromatin') {
+                            setChromatinZone('cytoplasm');
+                            setChromosomes(prev => prev.map(c => ({...c, zone: 'cytoplasm'})));
+                            msg = 'Chromatine dans le cytoplasme. Maintenant, utilisez l\'OUTIL à droite pour CONDENSER l\'ADN.';
+                        } else {
+                            isValid = false; msg = 'Déplacez d\'abord la pelote de chromatine vers le cytoplasme.'; healthPenalty = 5;
+                        }
+                    } else if (mode === 'meiosis' || mode === 'repte') {
+                        if (actualTargetZone === 'cytoplasm') {
+                            const homolog = chromosomes.find(c => c.type === itemToMove.type && c.id !== itemToMove.id && (c.zone === 'cytoplasm' || c.zone === 'nucleus'));
+                            if (homolog) {
+                                setChromosomes(prev => prev.map(c => 
+                                    (c.id === itemToMove.id || c.id === homolog.id) ? { ...c, zone: 'bivalent_' + homolog.type } : c
+                                ));
+                                msg = 'Bivalent formé ! Utilisez les ciseaux dans la boîte à outils pour réaliser le Crossing-Over.';
+                                const bivalentsCount = chromosomes.filter(c => c.zone.includes('bivalent')).length;
+                                const expectedBiv = mode === 'repte' ? 6 : 4;
+                                if (bivalentsCount === 0) { 
+                                    setTutorialPopup({ show: true, minimized: false, title: 'Bivalents Formés', text: <span>Vous avez réuni les <strong className="text-teal-600">chromosomes homologues</strong>.<br/><br/>Pour que la Méiose génère de la variabilité, ils doivent échanger des fragments (<strong className="text-teal-600">Crossing-Over</strong>).<br/><br/>Ouvrez l'atelier de recombinaison à droite.</span> });
+                                }
+                                if(msg) setFeedback({ type: 'success', msg });
+                                return;
+                            } else {
+                                setChromosomes(prev => prev.map(c => c.id === itemToMove.id ? { ...c, zone: 'cytoplasm' } : c));
+                            }
+                        } else if (targetChrom && targetChrom.type === itemToMove.type && targetChrom.id !== itemToMove.id) {
+                            setChromosomes(prev => prev.map(c => 
+                                (c.id === itemToMove.id || c.id === targetChrom.id) ? { ...c, zone: 'bivalent_' + targetChrom.type } : c
+                            ));
+                            msg = 'Bivalent formé ! Utilisez les ciseaux dans la boîte à outils pour réaliser le Crossing-Over.';
+                        } else {
+                            isValid = false; msg = 'Erreur ! Seuls les chromosomes HOMOLOGUES (même taille) peuvent s\'apparier.'; healthPenalty = 10;
+                        }
+                    } else {
+                        if (itemToMove.id) {
+                            setChromosomes(prev => prev.map(c => c.id === itemToMove.id ? { ...c, zone: actualTargetZone } : c));
+                        }
+                    }
+                } 
+                else if (phase === 'metafase') {
+                    if (actualTargetZone === 'equator') {
+                        const item = chromosomes.find(c => c.id === itemToMove.id);
+                        if (item.zone.startsWith('bivalent')) {
+                            const newZone = item.zone.replace('bivalent', 'equator_bivalent');
+                            setChromosomes(prev => prev.map(c => c.zone === item.zone ? { ...c, zone: newZone } : c));
+                        } else {
+                            setChromosomes(prev => prev.map(c => c.id === itemToMove.id ? { ...c, zone: 'equator' } : c));
+                        }
+                    } else {
+                        isValid = false; msg = 'Pendant la Métaphase, les chromosomes doivent s\'aligner sur la PLAQUE ÉQUATORIALE.'; healthPenalty = 5;
+                    }
+                }
+                else if (phase === 'anafase') {
+                    if (!spindleActive) {
+                        isValid = false; msg = 'Vous devez activer le Fuseau Mitotique (boîte à outils) pour pouvoir déplacer les chromosomes vers les pôles !'; healthPenalty = 5;
+                    } else {
+                        const item = chromosomes.find(c => c.id === itemToMove.id);
+                        if (mode === 'mitosis') {
+                            if (item.chromatids === 2) {
+                                isValid = false; msg = 'Erreur ! Dans la Mitose, vous devez d\'abord casser le centromère (cliquez dessus) pour séparer les CHROMATIDES SŒURS.'; healthPenalty = 15;
+                            } else {
+                                setChromosomes(prev => prev.map(c => c.id === itemToMove.id ? { ...c, zone: actualTargetZone } : c));
+                            }
+                        } else if (mode === 'meiosis') { 
+                            if (item.zone.startsWith('equator_bivalent')) {
+                                isValid = false; msg = 'Erreur ! Dans la Méiose I, vous devez d\'abord séparer les homologues.'; healthPenalty = 10;
+                            } else if (item.chromatids === 1) {
+                                isValid = false; msg = 'Erreur Grave ! Dans la Méiose I, on sépare des CHROMOSOMES HOMOLOGUES entiers (2 chromatides), et non des chromatides individuelles.'; healthPenalty = 20;
+                            } else {
+                                setChromosomes(prev => prev.map(c => c.id === itemToMove.id ? { ...c, zone: actualTargetZone } : c));
+                            }
+                        } else if (mode === 'repte') {
+                            if (item.zone.startsWith('equator_bivalent')) {
+                                isValid = false; msg = 'Erreur ! Vous devez séparer le bivalent en cliquant d\'abord dessus.'; healthPenalty = 10;
+                            } else {
+                                setChromosomes(prev => prev.map(c => c.id === itemToMove.id ? { ...c, zone: actualTargetZone } : c));
+                                msg = 'Vous avez déplacé du matériel génétique vers un pôle... voyons le résultat.';
+                            }
+                        }
+                    }
+                }
+
+                if (!isValid) {
+                    setHealth(h => Math.max(0, h - healthPenalty));
+                    setFeedback({ type: 'error', msg });
+                } else {
+                    if(msg) setFeedback({ type: 'success', msg });
+                }
+            };
+
+            const handleDrop = (e, targetZone) => {
+                e.preventDefault(); e.stopPropagation();
+                processDrop(selectedItem, targetZone);
+                setSelectedItem(null);
+            };
+
+            const handleZoneClick = (targetZone, e) => {
+                if(e) { e.preventDefault(); e.stopPropagation(); }
+                if (selectedItem) {
+                    processDrop(selectedItem, targetZone);
+                    setSelectedItem(null);
+                }
+            };
+
+            const handleChromClick = (e, chrom) => {
+                e.stopPropagation(); e.preventDefault();
+                
+                if (phase === 'anafase' && spindleActive) {
+                    if ((mode === 'meiosis' || mode === 'repte') && chrom.zone.startsWith('equator_bivalent')) {
+                        setChromosomes(prev => prev.map(ch => ch.zone === chrom.zone ? { ...ch, zone: 'equator' } : ch));
+                        setFeedback({ type: 'success', msg: 'Bivalent séparé par le fuseau ! Maintenant, déplacez un homologue vers chaque pôle.' });
+                        setSelectedItem(null);
+                        return;
+                    }
+                    if (mode === 'mitosis' && chrom.chromatids === 2 && chrom.zone === 'equator') {
+                        const newChroms = chromosomes.filter(ch => ch.id !== chrom.id);
+                        const leftAllele = chrom.alleles ? chrom.alleles[0] : null;
+                        const rightAllele = chrom.alleles ? chrom.alleles[1] : null;
+                        
+                        newChroms.push({ ...chrom, id: chrom.id + '_L', chromatids: 1, alleles: leftAllele ? [leftAllele, null] : null });
+                        newChroms.push({ ...chrom, id: chrom.id + '_R', chromatids: 1, alleles: rightAllele ? [rightAllele, null] : null });
+                        setChromosomes(newChroms);
+                        setFeedback({ type: 'success', msg: 'Centromère divisé ! Maintenant, déplacez une chromatide sœur vers chaque pôle.' });
+                        setSelectedItem(null);
+                        return;
+                    }
+                } else if (phase === 'anafase' && !spindleActive && chrom.zone.includes('equator')) {
+                    setFeedback({ type: 'error', msg: 'Vous devez d\'abord activer le Fuseau Mitotique dans la boîte à outils !' });
+                    setHealth(h => Math.max(0, h - 5));
+                    return;
+                }
+
+                if (selectedItem && selectedItem.id !== chrom.id) {
+                    handleZoneClick(`c_${chrom.id}`, e); 
+                } else {
+                    setSelectedItem(selectedItem?.id === chrom.id ? null : chrom); 
+                }
+            };
+
+            useEffect(() => {
+                checkPhaseCompletion(chromosomes);
+            }, [chromosomes, isCondensed]);
+
+            const checkPhaseCompletion = (currentChroms) => {
+                if (phase === 'profase') {
+                    if (mode === 'mitosis') {
+                        const allOut = currentChroms.every(c => c.zone === 'cytoplasm' || c.zone === 'equator');
+                        if (isCondensed && allOut && currentChroms.length > 0) { 
+                            setPhase('metafase'); 
+                            setFeedback({ type: 'info', msg: 'Métaphase ! Déplacez les chromosomes vers la plaque équatoriale.' }); 
+                            setTutorialPopup({ show: true, minimized: false, title: 'Pourquoi les aligner au centre ?', text: <span>Vous venez d'entrer dans la <strong className="text-yellow-600">Métaphase</strong>.<br/><br/>Maintenant, votre objectif est de déplacer tous les chromosomes vers l'<strong className="text-yellow-600">équateur cellulaire</strong>.<br/><br/>Les organiser parfaitement au milieu garantit que, lors de la division, chaque côté recevra exactement le même matériel.</span> });
+                        }
+                    } else if (mode === 'meiosis' || mode === 'repte') {
+                        const bivalents = currentChroms.filter(c => c.zone.startsWith('bivalent'));
+                        const allCrossed = bivalents.every(c => c.crossedOver);
+                        const expectedBiv = mode === 'repte' ? 6 : 4;
+                        if (bivalents.length === expectedBiv && allCrossed) { 
+                            setPhase('metafase'); 
+                            setFeedback({ type: 'info', msg: 'Prophase I Terminée. Maintenant, déplacez les bivalents vers la plaque équatoriale.' }); 
+                            setTutorialPopup({ show: true, minimized: false, title: 'Métaphase I', text: <span>Prophase terminée.<br/><br/>Maintenant vous devez déplacer les <strong className="text-yellow-600">bivalents entiers</strong> (les paires) au centre de la cellule.<br/><br/>Contrairement à la mitose, ici les chromosomes homologues s'alignent ensemble car nous ne voulons pas les casser, mais séparer le père de la mère.</span> });
+                        }
+                    }
+                }
+                else if (phase === 'metafase') {
+                    const allEq = currentChroms.every(c => c.zone === 'equator' || c.zone.startsWith('equator_bivalent'));
+                    if (allEq && currentChroms.length > 0) {
+                        setFeedback({ type: 'info', msg: 'Alignement correct. Anaphase ! Activez le Fuseau Mitotique pour séparer le matériel.' });
+                        setPhase('anafase'); 
+                    }
+                }
+            };
+
+            const validateResult = () => {
+                const poleTop = chromosomes.filter(c => c.zone === 'poleTop');
+                const poleBottom = chromosomes.filter(c => c.zone === 'poleBottom');
+
+                if (poleTop.length + poleBottom.length !== chromosomes.length) {
+                    setFeedback({ type: 'warning', msg: 'Il reste encore des chromosomes non assignés à un pôle.' });
+                    return;
+                }
+
+                if (mode === 'mitosis') {
+                    const isValidTop = poleTop.length === chromosomes.length / 2 && poleTop.every(c => c.chromatids === 1);
+                    const isValidBottom = poleBottom.length === chromosomes.length / 2 && poleBottom.every(c => c.chromatids === 1);
+                    
+                    const topOrigins = poleTop.map(c => c.id.replace('_L', '').replace('_R', ''));
+                    const bottomOrigins = poleBottom.map(c => c.id.replace('_L', '').replace('_R', ''));
+                    const hasDuplicateOriginTop = new Set(topOrigins).size !== topOrigins.length;
+                    const hasDuplicateOriginBottom = new Set(bottomOrigins).size !== bottomOrigins.length;
+
+                    if (isValidTop && isValidBottom && !hasDuplicateOriginTop && !hasDuplicateOriginBottom && health > 0) {
+                        setPhase('telofase');
+                        setCytokinesisDone(false);
+                        setFeedback({ type: 'info', msg: 'Anaphase correcte. Activez l\'Anneau Contractile pour diviser la cellule.' });
+                        setTutorialPopup({ show: true, minimized: false, title: 'Arrivée à la Télophase', text: <span>Les chromosomes sont arrivés aux pôles et se décondensent.<br/><br/>Maintenant, vous devez diviser physiquement le cytoplasme en deux. Cherchez l'outil de l'<strong className="text-pink-600">Anneau Contractile</strong> dans le menu des outils.</span>});
+                    } else if (isValidTop && isValidBottom && (hasDuplicateOriginTop || hasDuplicateOriginBottom)) {
+                        setFeedback({ type: 'error', msg: 'Attention ! Vous avez mis deux chromatides du MÊME chromosome initial (même couleur) dans le même pôle. Les cellules auront des informations dupliquées.' });
+                    } else {
+                        setFeedback({ type: 'error', msg: 'Erreur dans la division. Les cellules résultantes présentent des anomalies chromosomiques.' });
+                    }
+                } 
+                else if (mode === 'meiosis') {
+                    const n = chromosomes.length / 2;
+                    const topTypes = new Set(poleTop.map(c => c.type));
+                    const botTypes = new Set(poleBottom.map(c => c.type));
+
+                    if (poleTop.length === n && topTypes.size === n && poleBottom.length === n && botTypes.size === n && poleTop.every(c => c.chromatids === 2)) {
+                        setPhase('telofase1');
+                        setCytokinesisDone(false);
+                        setFeedback({ type: 'info', msg: 'Anaphase I terminée. Activez l\'Anneau Contractile pour diviser la cellule.' });
+                        setTutorialPopup({ show: true, minimized: false, title: 'Méiose I Terminée !', text: <span>Excellent !<br/><br/>Vous avez séparé les <strong className="text-green-600">chromosomes homologues</strong> du père et de la mère. Vous avez maintenant 2 cellules avec la quantité d'ADN d'origine (C).<br/><br/>Pour former les gamètes définitifs, nous avons besoin d'une deuxième division rapide : la <strong className="text-green-600">MÉIOSE II</strong>, où les chromatides sœurs seront séparées.</span> });
+                    } else {
+                        setFeedback({ type: 'error', msg: 'Échec de la disjonction homologue. Cela générerait des gamètes non viables.' });
+                    }
+                }
+                else if (mode === 'repte') {
+                    const topCount = poleTop.length;
+                    const botCount = poleBottom.length;
+                    if (topCount !== botCount && (poleTop.length + poleBottom.length === chromosomes.length)) {
+                        setPhase('telofase1');
+                        setCytokinesisDone(false);
+                        setFeedback({ type: 'info', msg: 'Anaphase I terminée con error provocado. Activa el Anillo Contráctil.' });
+                        setTutorialPopup({ show: true, minimized: false, title: 'Non-disjonction détectée', text: <span>Bien joué ! Vous avez provoqué la non-séparation correcte d'une paire homologue.<br/><br/>Utilisez l'<strong className="text-pink-600">Anneau Contractile</strong> pour diviser la cellule, puis simulez la Méiose II pour voir l'état des gamètes finaux.</span>});
+                    } else {
+                        setFeedback({ type: 'error', msg: 'Division équitable détectée. Vous devez provoquer une erreur en déplaçant les deux homologues d\'une paire vers le même pôle.' });
+                    }
+                }
+            };
+
+            const triggerMeiosisII = () => {
+                setPhase('telofase');
+                setCytokinesisDone(true); 
+                if (mode === 'repte') {
+                    setFeedback({ type: 'success', msg: 'Gamètes avec Aneuploïdie générés !' });
+                    setTutorialPopup({ show: true, minimized: false, title: 'Diagnostic : Trisomie', text: <span>Regardez les gamètes générés.<br/><br/>Certains ont un chromosome supplémentaire (n+1) et d'autres en ont un en moins (n-1).<br/><br/>Ouvrez la simulation de Fécondation pour voir ce qui se passerait si l'un de ces ovules croisait un spermatozoïde normal.</span> });
+                } else {
+                    setFeedback({ type: 'success', msg: 'Méiose II terminée ! Gamètes Haploïdes générés.' });
+                    setTutorialPopup({ show: true, minimized: false, title: 'Le miracle de la Méiose', text: <span>Impressionnant ! Vous avez terminé la Méiose II.<br/><br/>Analyse et Simplification :<br/>En classe, nous simulons avec peu de paires, mais rappelez-vous que l'ADN a été dupliqué avant dans l'Interphase (C à 2C). La Méiose I a séparé les homologues. La Méiose II est similaire à une mitose, <strong className="text-green-600">mais se produit dans des cellules haploïdes</strong>, séparant les chromatides sœurs.<br/><br/>Le résultat final est <strong className="text-green-600">4 ovules HAPLOÏDES (n) génétiquement différents</strong>. Chaque "bâtonnet" est un <strong className="text-green-600">CHROMOSOME ENTIER SIMPLE (quantité ½C)</strong>. Ce ne sont pas des chromosomes cassés, ce sont des chromosomes simples matures !<br/><br/>Ouvrez la phase de fécondation pour l'étape finale.</span> });
+                }
+            };
+
+            const processDropCO = (target, fragObj) => {
+                if(!fragObj) return;
+                setCoFragments(prev => {
+                    const next = { ...prev };
+                    
+                    if (fragObj.source === 'redChr') next.redChr = null;
+                    if (fragObj.source === 'blueChr') next.blueChr = null;
+                    if (fragObj.source === 'taller') {
+                        const index = next.taller.indexOf(fragObj.color);
+                        if (index > -1) next.taller.splice(index, 1);
+                    }
+
+                    if (target === 'taller') {
+                        next.taller.push(fragObj.color);
+                    } else if (target === 'redChr') {
+                        if (next.redChr) next.taller.push(next.redChr);
+                        next.redChr = fragObj.color;
+                    } else if (target === 'blueChr') {
+                        if (next.blueChr) next.taller.push(next.blueChr);
+                        next.blueChr = fragObj.color;
+                    }
+                    return next;
+                });
+            };
+
+            const handleDropCO = (target, e) => {
+                e.preventDefault(); e.stopPropagation();
+                const dataStr = e.dataTransfer.getData('application/json');
+                if (!dataStr) return;
+                processDropCO(target, JSON.parse(dataStr));
+                setSelectedFrag(null);
+            };
+
+            const handleZoneClickCO = (target, e) => {
+                if(e) { e.preventDefault(); e.stopPropagation(); }
+                if(selectedFrag) {
+                    processDropCO(target, selectedFrag);
+                    setSelectedFrag(null);
+                }
+            };
+
+            const applyCrossingOver = () => {
+                if (coFragments.redChr === 'blue' && coFragments.blueChr === 'red') {
+                    const newChroms = chromosomes.map(c => {
+                        if (c.zone.includes('bivalent') && c.type === 'lg') {
+                            if (c.origin === 'mat') return {...c, crossedOver: true, alleles: ['c', 'C']};
+                            if (c.origin === 'pat') return {...c, crossedOver: true, alleles: ['C', 'c']};
+                        }
+                        if (c.zone.includes('bivalent') && (c.type === 'sm' || c.type === 'xs')) {
+                            return {...c, crossedOver: true}; 
+                        }
+                        return c;
+                    });
+                    setChromosomes(newChroms);
+                    setShowCrossingModal(false);
+                    setFeedback({ type: 'success', msg: 'Crossing-Over réalisé manuellement avec succès ! Vous avez échangé les fragments.' });
+                    setTutorialPopup({ show: true, minimized: false, title: 'Crossing-Over Réussi', text: <span>Vous avez agi comme l'enzyme de recombinaison !<br/><br/>En échangeant des fragments entre des <strong className="text-teal-600">chromatides non sœurs de chromosomes homologues</strong> (maternel et paternel), vous avez mélangé leur information génétique et créé de la <strong className="text-teal-600">variabilité génétique</strong>.<br/><br/>Maintenant, la chromatide droite rouge porte l'allèle "C" et la bleue porte le "c".</span> });
+                }
+            };
+
+            const togglePunnettTick = (idx) => {
+                const newTicks = [...punnettTicks];
+                newTicks[idx] = !newTicks[idx];
+                setPunnettTicks(newTicks);
+            };
+
+            // Render Poles and Equator logic (Vertical Columns & 90deg Rotation)
+            const renderEquatorGroupedForPoles = (poleName) => {
+                const chroms = chromosomes.filter(c => c.zone === poleName);
+                return chroms.map(c => (
+                    <div key={c.id} className="flex items-end transform scale-75 md:scale-100">
+                        <ChromosomeSVG {...c} chromatids={mode==='mitosis'?1:2} isSelectable={false} />
+                    </div>
+                ));
+            };
+
+            const renderEquatorGrouped = () => {
+                const eqChroms = chromosomes.filter(c => c.zone === 'equator' || c.zone.startsWith('equator_bivalent'));
+                const groups = {};
+                
+                eqChroms.forEach(c => {
+                    const key = c.zone.startsWith('equator_bivalent') ? c.zone : c.id.replace('_L', '').replace('_R', '');
+                    if(!groups[key]) groups[key] = [];
+                    groups[key].push(c);
+                });
+
+                return Object.values(groups).map((grp, i) => {
+                    return (
+                        <div key={i} className="flex flex-col items-center justify-center gap-1 md:gap-2 pointer-events-auto">
+                            {grp.map(c => {
+                                const isBivalentMember = c.zone.startsWith('equator_bivalent');
+                                return (
+                                    <div 
+                                        key={c.id} 
+                                        draggable 
+                                        onDragStart={(e) => handleDragStart(e, c)}
+                                        onClick={(e) => handleChromClick(e, isBivalentMember ? grp[0] : c)}
+                                        className={`w-[40px] h-[60px] md:w-[60px] md:h-[80px] flex items-center justify-center rotate-90 cursor-pointer chromosome-hover transition-all ${selectedItem?.id === c.id ? 'ring-4 ring-yellow-400 scale-110 shadow-lg rounded-full' : ''}`}
+                                    >
+                                        <ChromosomeSVG {...c} isSelectable={false} />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                });
+            };
+
+            const renderPole = (zoneName, label) => {
+                const chroms = chromosomes.filter(c => c.zone === zoneName);
+                return (
+                    <div 
+                        className={`w-full h-full flex flex-wrap justify-center items-center gap-2 md:gap-4 relative z-10 drop-zone`} 
+                        onDragOver={handleDragOver} 
+                        onDrop={(e) => handleDrop(e, zoneName)}
+                        onClick={(e) => handleZoneClick(zoneName, e)}
+                    >
+                        <span className="absolute inset-0 flex items-center justify-center text-xl font-black text-slate-200 uppercase tracking-widest pointer-events-none text-center opacity-70">{label}</span>
+                        <div className="w-full h-full absolute inset-0 z-0"></div>
+                        {chroms.map(c => (
+                            <div 
+                                key={c.id} 
+                                draggable 
+                                className={`w-[40px] h-[60px] md:w-[60px] md:h-[80px] flex items-center justify-center rotate-90 cursor-pointer chromosome-hover relative z-10 transition-all ${selectedItem?.id === c.id ? 'ring-4 ring-yellow-400 scale-110 shadow-lg rounded-full' : ''}`} 
+                                onDragStart={(e) => handleDragStart(e, c)}
+                                onClick={(e) => handleChromClick(e, c)}
+                            >
+                                <ChromosomeSVG {...c} isSelectable={false} />
+                            </div>
+                        ))}
+                    </div>
+                );
+            };
+
+            const generarTextoFicha = () => {
+                return `🧬 Cahier de Laboratoire : Mission PigeonEtics
+
+--- Partie 1 : Mode MITOSE (L'art du clonage cellulaire) ---
+1. Prophase : Préparation du matériel
+Q : Pourquoi l'ADN se condense-t-il avant la division ?
+R : ${answers.mit_pro_2 || ''}
+
+Q : Combien de chromosomes y a-t-il actuellement dans le noyau de la cellule ?
+R : ${answers.mit_pro_3 || ''}
+
+Q : Définissez avec vos propres mots la différence entre "Chromatine" et "Chromosome".
+R : ${answers.mit_pro_1 || ''}
+
+2. Métaphase : De l'ordre dans la salle
+Q : Pourquoi est-il si important que les chromosomes s'alignent parfaitement au centre (équateur) avant de se diviser ?
+R : ${answers.mit_met_1 || ''}
+
+3. Anaphase et Télophase : La séparation
+Q : Qu'est-ce que le fuseau mitotique et comment fonctionne-t-il comme des "câbles de remorquage" ?
+R : ${answers.mit_ana_1 || ''}
+
+Q : Les cellules résultantes sont-elles identiques ou différentes de la cellule mère d'origine ? Que signifie le fait qu'elles soient DIPLOÏDES (2n) ?
+R : ${answers.mit_tel_1 || ''}
+
+Q : Analyse du Graphique : Que se passe-t-il avec la quantité d'ADN pendant la phase S de l'interphase ? Avec quelle quantité d'ADN la cellule se retrouve-t-elle à la fin de la mitose ?
+R : ${answers.mit_tel_2 || ''}
+
+--- Partie 2 : Mode MÉIOSE (L'usine à gamètes) ---
+1. Prophase I et la Table de Recombinaison
+Q : Qu'est-ce que le Crossing-over et pourquoi est-ce un avantage évolutif si important pour les espèces ?
+R : ${answers.mei_pro_1 || ''}
+
+2. Métaphase I et Anaphase I
+Q : Contrairement à la mitose, que séparez-vous en activant le fuseau dans l'Anaphase I ?
+R : ${answers.mei_ana_1 || ''}
+
+3. Méiose II et Résultat Final
+Q : Combien de cellules finales (ovules) avez-vous obtenues ? Sont-elles identiques entre elles ? Que signifie le fait qu'elles soient HAPLOÏDES (n) ?
+R : ${answers.mei_tel_1 || ''}
+
+Q : Analyse du Graphique : À la fin de la Méiose II, quelle est la quantité d'ADN de chaque gamète (ovule) par rapport à la cellule d'origine ?
+R : ${answers.mei_tel_2 || ''}
+
+--- Partie 3 : Phase de Fécondation (Échiquier de Punnett) ---
+Q : Quelle a été la probabilité (fraction) obtenue de femelles avec crête ?
+R : ${answers.punnett_1 || ''}
+
+--- Partie 4 : Défi Chercheur (Erreurs dans la Matrice) ---
+Q : Qu'avez-vous dû faire pour forcer le problème de la trisomie et à quelle phase cela se produit-il ?
+R : ${answers.reto_1 || ''}
+`;
+            };
+
+            const topChroms = chromosomes.filter(c => c.zone === 'poleTop');
+            const botChroms = chromosomes.filter(c => c.zone === 'poleBottom');
+
+            // Gametos haploides reales (chromatids: 1) tras Meiosis II
+            const createGamete = (poleChroms, chromatidIndex) => {
+                return poleChroms.map(c => ({
+                     ...c, 
+                     chromatids: 1, 
+                     alleles: c.alleles ? [c.alleles[chromatidIndex]] : null,
+                     crossedOver: chromatidIndex === 1 ? c.crossedOver : false
+                }));
+            }
+
+            const generatedEggs = (phase === 'telofase' && (mode === 'meiosis' || mode === 'repte')) ? [
+                { id: 'egg1', chroms: createGamete(topChroms, 0) },
+                { id: 'egg2', chroms: createGamete(topChroms, 1) },
+                { id: 'egg3', chroms: createGamete(botChroms, 0) },
+                { id: 'egg4', chroms: createGamete(botChroms, 1) },
+            ] : [];
+
+            // Espermatozoides del macho homocigótico recesivo (ZZ cc) simplificados para Punnett (solo lg y sm, o xs si es el repte)
+            const maleSperms = [1, 2, 3, 4].map(i => ({
+                id: `sperm${i}`,
+                lg: { type: 'lg', chromatids: 1, origin: 'pat', alleles: ['c'], crossedOver: false },
+                sm: { type: 'sm', chromatids: 1, origin: 'pat', sexLabel: 'Z', crossedOver: false },
+                xs: mode === 'repte' ? { type: 'xs', chromatids: 1, origin: 'pat', crossedOver: false } : null
+            }));
+
+            const tickedCount = punnettTicks.filter(Boolean).length;
+
+            if (appMode === 'selection') {
+                return (
+                    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-slate-100">
+                        <h1 className="text-4xl font-black mb-8 text-center text-white flex items-center gap-3">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
+                                <path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20h3.4z"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/><path d="M7 18a6 6 0 0 0 3.84-10.61"/>
+                            </svg>
+                            PigeonEtics : Division Cellulaire
+                        </h1>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full">
+                            <div onClick={() => setAppMode('aprendizaje')} className="bg-slate-800 border-2 border-blue-500 rounded-3xl p-8 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                                <div className="bg-blue-500 text-white w-14 h-14 rounded-2xl flex items-center justify-center mb-6">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                                </div>
+                                <h2 className="text-2xl font-bold mb-3">Simulateur d'Apprentissage</h2>
+                                <p className="text-slate-400 leading-relaxed">Mode guidé étape par étape. Inclut des explications théoriques, des tutoriels interactifs et un <b>Cahier de Laboratoire</b> intégré pour noter vos réponses et générer une fiche d'étude.</p>
+                            </div>
+                            <div onClick={() => setAppMode('laboratorio')} className="bg-slate-800 border-2 border-purple-500 rounded-3xl p-8 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+                                <div className="bg-purple-500 text-white w-14 h-14 rounded-2xl flex items-center justify-center mb-6">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2v2"/><path d="M15 2v2"/><path d="M12 2v2"/><path d="M2 12h20"/><path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M9 22v-2"/><path d="M15 22v-2"/><path d="M12 22v-2"/></svg>
+                                </div>
+                                <h2 className="text-2xl font-bold mb-3">Simulateur de Laboratoire</h2>
+                                <p className="text-slate-400 leading-relaxed">Mode de simulation libre. Sans interruptions théoriques ni questions. Idéal pour répéter les expériences rapidement ou si vous maîtrisez déjà la théorie.</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="flex flex-col h-screen overflow-hidden bg-[#f8fafc] relative">
+                    
+                    {/* ENCABEZADO Y PUNTUACIÓN */}
+                    <header className="flex flex-col bg-white px-4 py-3 md:px-6 md:py-4 shadow-sm border-b border-slate-200 shrink-0 z-40 relative">
+                        <div className="flex flex-col md:flex-row justify-between items-center w-full mb-2">
+                            <div className="flex items-center justify-between w-full md:w-auto">
+                                <div>
+                                    <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+                                        <span className="bg-blue-600 text-white p-2 rounded-lg">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20h3.4z"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/><path d="M7 18a6 6 0 0 0 3.84-10.61"/>
+                                            </svg>
+                                        </span>
+                                        PigeonEtics : Laboratoire Cellulaire
+                                        <button onClick={() => setAppMode('selection')} className="ml-2 md:ml-4 text-[10px] md:text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 md:px-3 md:py-1.5 rounded hover:bg-blue-100 transition-colors shadow-sm border border-blue-200 flex items-center gap-1">
+                                            Changer de Mode
+                                        </button>
+                                    </h1>
+                                    <p className="text-slate-500 text-xs mt-1 hidden md:block">Suivez l'héritage de la Crête des parents depuis la Méiose.</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col items-end gap-2 mt-3 md:mt-0 w-full md:w-auto">
+                                <div className="flex gap-2 bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto custom-scrollbar">
+                                    <button onClick={clearData} className="px-3 py-1 md:py-2 rounded-md font-bold text-slate-400 hover:bg-red-100 hover:text-red-600 transition-all shrink-0 flex items-center gap-1" title="Effacer et Tout Recommencer">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                    </button>
+                                    <button onClick={() => resetSim(mode)} className="px-3 py-1 md:py-2 rounded-md font-bold text-slate-400 hover:bg-blue-100 hover:text-blue-600 transition-all shrink-0 flex items-center gap-1" title="Recommencer la Phase Actuelle">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                    </button>
+                                    <button onClick={() => resetSim('mitosis')} className={`px-3 py-1 md:py-2 rounded-md font-bold text-xs md:text-sm transition-all shrink-0 ${mode==='mitosis' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Mitose</button>
+                                    <button onClick={() => resetSim('meiosis')} className={`px-3 py-1 md:py-2 rounded-md font-bold text-xs md:text-sm transition-all shrink-0 ${mode==='meiosis' ? 'bg-white shadow text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}>Méiose I & II</button>
+                                    <button onClick={() => resetSim('repte')} className={`px-3 py-1 md:py-2 rounded-md font-bold text-xs md:text-sm transition-all shrink-0 ${mode==='repte' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>🕵️ Chercheur</button>
+                                </div>
+                            </div>
+                        </div>
+                        {/* BARRA DE PROGRESO DE FASES */}
+                        <div className="w-full flex justify-between items-center relative pt-2 md:pt-4 border-t border-slate-100">
+                            <div className="absolute left-0 top-[18px] md:top-[26px] w-full h-1 bg-slate-200 -z-10"></div>
+                            {['profase', 'metafase', 'anafase', 'telofase1', 'telofase'].map((step, idx) => {
+                                if (step === 'telofase1' && mode === 'mitosis') return null;
+                                
+                                const stepNamesFr = { profase: 'prophase', metafase: 'métaphase', anafase: 'anaphase', telofase: 'télophase' };
+                                const stepLabel = step === 'telofase1' ? 'Méiose I' : (step === 'telofase' && mode !== 'mitosis' ? 'Gamètes' : (stepNamesFr[step] || step));
+                                
+                                let stateIdx = ['profase', 'metafase', 'anafase'];
+                                if(mode !== 'mitosis') stateIdx.push('telofase1');
+                                stateIdx.push('telofase');
+                                
+                                const currentIndex = stateIdx.indexOf(phase);
+                                const myIndex = stateIdx.indexOf(step);
+                                
+                                const isActive = phase === step;
+                                const isPast = currentIndex > myIndex;
+                                
+                                return (
+                                    <div key={step} className={`flex flex-col items-center gap-1 bg-white px-1 md:px-3 ${isActive || isPast ? '' : 'opacity-50'}`}>
+                                        <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full ${isActive ? phaseBgColors[step] : isPast ? 'bg-slate-400' : 'bg-slate-200'} transition-colors shadow-sm`}></div>
+                                        <span className={`text-[8px] md:text-[10px] font-bold uppercase tracking-wider ${isActive ? phaseColors[step].split(' ')[0] : 'text-slate-400'}`}>{stepLabel}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </header>
+
+                    <main className="flex flex-col md:flex-row gap-4 p-4 md:p-6 flex-1 min-h-0 overflow-hidden relative">
+                        {/* PANEL LATERAL (FIJO/SCROLLABLE) */}
+                        <aside className="w-full md:w-[340px] flex flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar pb-2">
+                            
+                            {/* OVERLAY POPUP EDUCATIVO EN APRENDIZAJE */}
+                            {appMode === 'aprendizaje' && tutorialPopup.show && (
+                                <div className={`bg-white border-l-4 ${phaseColors[phase] ? phaseColors[phase].split(' ')[1] : 'border-blue-500'} rounded-xl shadow-sm p-4 animate-[slideDown_0.3s_ease-out] shrink-0`}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-yellow-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+                                        <h3 className="font-bold text-sm text-slate-800">{tutorialPopup.title}</h3>
+                                    </div>
+                                    <div className="text-slate-600 text-xs leading-relaxed mb-3">{tutorialPopup.text}</div>
+                                    <button onClick={() => setTutorialPopup({ ...tutorialPopup, show: false })} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-1.5 rounded-lg transition-colors">Compris !</button>
+                                </div>
+                            )}
+
+                            <div className={`p-3 rounded-xl border-l-4 shadow-sm bg-white shrink-0 ${feedback.type === 'error' ? 'border-red-500 bg-red-50' : feedback.type === 'success' ? 'border-green-500 bg-green-50' : feedback.type === 'warning' ? 'border-yellow-500 bg-yellow-50' : 'border-blue-500'}`}>
+                                <h3 className={`font-bold text-xs uppercase mb-1 flex items-center gap-1 ${phaseColors[phase] ? phaseColors[phase].split(' ')[0] : 'text-slate-700'}`}>
+                                    {feedback.type === 'error' ? '⚠️ Analyse d\'Erreur' : feedback.type === 'success' ? '✅ Correct' : 'ℹ️ Information'}
+                                </h3>
+                                <p className="text-xs text-slate-600 leading-relaxed">{feedback.msg}</p>
+                            </div>
+
+                            {/* BOTONES DE ACCIÓN PRINCIPALES SOBRE EL CUADERNO */}
+                            {phase === 'anafase' && (
+                                <button onClick={validateResult} className="w-full py-3 rounded-xl font-extrabold text-white text-base shadow-lg transition-transform hover:scale-105 bg-gradient-to-r from-blue-600 to-indigo-600 shrink-0">
+                                    Évaluer le Résultat
+                                </button>
+                            )}
+                            
+                            {phase === 'telofase1' && mode !== 'mitosis' && cytokinesisDone && (
+                                <button onClick={triggerMeiosisII} className="w-full py-3 rounded-xl font-extrabold text-white text-base shadow-lg transition-transform hover:scale-105 bg-gradient-to-r from-pink-500 to-rose-600 animate-pulse shrink-0">
+                                    Simuler la Méiose II
+                                </button>
+                            )}
+
+                            {phase === 'telofase' && mode === 'meiosis' && cytokinesisDone && (
+                                <button onClick={() => setShowPunnett(true)} className="w-full py-3 rounded-xl font-extrabold text-white text-md shadow-lg transition-transform hover:scale-105 bg-purple-600 animate-bounce shrink-0">
+                                    📊 Phase de Fécondation
+                                </button>
+                            )}
+                            
+                            {/* Boto Especial Fecundacio pel Repte */}
+                            {phase === 'telofase' && mode === 'repte' && cytokinesisDone && (
+                                <button onClick={() => setShowRepteFecundacion(true)} className="w-full py-3 rounded-xl font-extrabold text-white text-md shadow-lg transition-transform hover:scale-105 bg-red-600 animate-bounce shrink-0">
+                                    🧬 Simuler la Fécondation
+                                </button>
+                            )}
+
+                            {/* CONDICIONAL: Cuaderno de Laboratorio o Guía Normal */}
+                            {appMode === 'aprendizaje' ? (
+                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4 shrink-0">
+                                    <h3 className="font-bold text-slate-800 border-b pb-2 text-sm flex items-center gap-2">🧬 Cahier de Laboratoire</h3>
+                                    
+                                    {mode === 'mitosis' && (
+                                        <div className="space-y-4">
+                                            <div className={`p-3 rounded-xl border transition-opacity ${phase === 'profase' ? 'bg-teal-50 border-teal-300 opacity-100' : 'bg-white border-slate-200 opacity-60'}`}>
+                                                <h4 className="font-bold text-teal-800 text-xs mb-1">1. Prophase : Préparation du matériel</h4>
+                                                
+                                                <label className="text-[10px] font-bold text-teal-900 block mt-2">i) Pourquoi l'ADN se condense-t-il avant la division ?</label>
+                                                <input type="text" className="w-full mt-1 p-1.5 border border-teal-200 rounded text-xs outline-none focus:ring-1 focus:ring-teal-500" value={answers.mit_pro_2 || ''} onChange={e=>handleAns('mit_pro_2', e.target.value)} />
+                                                
+                                                <label className="text-[10px] font-bold text-teal-900 block mt-2">ii) Combien de chromosomes y a-t-il actuellement dans le noyau de la cellule ?</label>
+                                                <input type="text" className="w-full mt-1 p-1.5 border border-teal-200 rounded text-xs outline-none focus:ring-1 focus:ring-teal-500" value={answers.mit_pro_3 || ''} onChange={e=>handleAns('mit_pro_3', e.target.value)} />
+
+                                                <label className="text-[10px] font-bold text-teal-900 block mt-2">Notez dans votre Sites : Définissez la différence entre "Chromatine" et "Chromosome".</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-teal-200 rounded text-xs outline-none focus:ring-1 focus:ring-teal-500 resize-none h-16" value={answers.mit_pro_1 || ''} onChange={e=>handleAns('mit_pro_1', e.target.value)} />
+                                            </div>
+
+                                            <div className={`p-3 rounded-xl border transition-opacity ${phase === 'metafase' ? 'bg-yellow-50 border-yellow-300 opacity-100' : 'bg-white border-slate-200 opacity-60'}`}>
+                                                <h4 className="font-bold text-yellow-800 text-xs mb-1">2. Métaphase : De l'ordre dans la salle</h4>
+                                                <label className="text-[10px] font-bold text-yellow-900 block mt-2">Pourquoi est-il si important que les chromosomes s'alignent parfaitement au centre avant de se diviser ?</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-yellow-200 rounded text-xs outline-none focus:ring-1 focus:ring-yellow-500 resize-none h-16" value={answers.mit_met_1 || ''} onChange={e=>handleAns('mit_met_1', e.target.value)} />
+                                            </div>
+
+                                            <div className={`p-3 rounded-xl border transition-opacity ${(phase === 'anafase' || phase === 'telofase') ? 'bg-purple-50 border-purple-300 opacity-100' : 'bg-white border-slate-200 opacity-60'}`}>
+                                                <h4 className="font-bold text-purple-800 text-xs mb-1">3. Anaphase et Télophase : La séparation</h4>
+                                                <label className="text-[10px] font-bold text-purple-900 block mt-2">Qu'est-ce que le fuseau mitotique et comment fonctionne-t-il comme des "câbles de remorquage" ?</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-purple-200 rounded text-xs outline-none focus:ring-1 focus:ring-purple-500 resize-none h-12" value={answers.mit_ana_1 || ''} onChange={e=>handleAns('mit_ana_1', e.target.value)} />
+                                                
+                                                <label className="text-[10px] font-bold text-purple-900 block mt-2">Les cellules résultantes sont-elles identiques ou différentes ? Que signifie le fait qu'elles soient DIPLOÏDES (2n) ?</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-purple-200 rounded text-xs outline-none focus:ring-1 focus:ring-purple-500 resize-none h-16" value={answers.mit_tel_1 || ''} onChange={e=>handleAns('mit_tel_1', e.target.value)} />
+                                                
+                                                <label className="text-[10px] font-bold text-purple-900 block mt-2">Graphique : Que se passe-t-il dans la phase S de l'interphase ? Avec quelle quantité d'ADN la cellule se retrouve-t-elle à la fin de la mitose ?</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-purple-200 rounded text-xs outline-none focus:ring-1 focus:ring-purple-500 resize-none h-16" value={answers.mit_tel_2 || ''} onChange={e=>handleAns('mit_tel_2', e.target.value)} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {mode === 'meiosis' && (
+                                        <div className="space-y-4">
+                                            <div className={`p-3 rounded-xl border transition-opacity ${phase === 'profase' ? 'bg-teal-50 border-teal-300 opacity-100' : 'bg-white border-slate-200 opacity-60'}`}>
+                                                <h4 className="font-bold text-teal-800 text-xs mb-1">1. Prophase I et Recombinaison</h4>
+                                                <label className="text-[10px] font-bold text-teal-900 block mt-2">Qu'est-ce que le Crossing-over et pourquoi est-ce un avantage évolutif si important ?</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-teal-200 rounded text-xs outline-none focus:ring-1 focus:ring-teal-500 resize-none h-16" value={answers.mei_pro_1 || ''} onChange={e=>handleAns('mei_pro_1', e.target.value)} />
+                                            </div>
+
+                                            <div className={`p-3 rounded-xl border transition-opacity ${(phase === 'metafase' || phase === 'anafase') ? 'bg-yellow-50 border-yellow-300 opacity-100' : 'bg-white border-slate-200 opacity-60'}`}>
+                                                <h4 className="font-bold text-yellow-800 text-xs mb-1">2. Métaphase I et Anaphase I</h4>
+                                                <label className="text-[10px] font-bold text-yellow-900 block mt-2">Contrairement à la mitose, que séparez-vous en activant le fuseau dans l'Anaphase I ?</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-yellow-200 rounded text-xs outline-none focus:ring-1 focus:ring-yellow-500 resize-none h-12" value={answers.mei_ana_1 || ''} onChange={e=>handleAns('mei_ana_1', e.target.value)} />
+                                            </div>
+
+                                            <div className={`p-3 rounded-xl border transition-opacity ${(phase === 'telofase1' || phase === 'telofase') ? 'bg-green-50 border-green-300 opacity-100' : 'bg-white border-slate-200 opacity-60'}`}>
+                                                <h4 className="font-bold text-green-800 text-xs mb-1">3. Méiose II et Résultat Final</h4>
+                                                <label className="text-[10px] font-bold text-green-900 block mt-2">Combien de cellules finales (ovules) avez-vous obtenues ? Sont-elles identiques ? Que signifie HAPLOÏDES (n) ?</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-green-200 rounded text-xs outline-none focus:ring-1 focus:ring-green-500 resize-none h-16" value={answers.mei_tel_1 || ''} onChange={e=>handleAns('mei_tel_1', e.target.value)} />
+                                                
+                                                <label className="text-[10px] font-bold text-green-900 block mt-2">Graphique : À la fin de la Méiose II, quelle est la quantité d'ADN de chaque gamète par rapport à l'originale ?</label>
+                                                <input type="text" className="w-full mt-1 p-1.5 border border-green-200 rounded text-xs outline-none focus:ring-1 focus:ring-green-500" value={answers.mei_tel_2 || ''} onChange={e=>handleAns('mei_tel_2', e.target.value)} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {mode === 'repte' && (
+                                        <div className="space-y-4">
+                                            <div className="bg-red-50 border border-red-300 p-3 rounded-xl opacity-100">
+                                                <h4 className="font-bold text-red-800 text-xs mb-1">🕵️ Défi Chercheur</h4>
+                                                <label className="text-[10px] font-bold text-red-900 block mt-2">Qu'avez-vous dû faire pour forcer le problema de la trisomie et à quelle phase cela se produit-il ? (Indice : Anaphase I)</label>
+                                                <textarea className="w-full mt-1 p-1.5 border border-red-200 rounded text-xs outline-none focus:ring-1 focus:ring-red-500 resize-none h-16" value={answers.reto_1 || ''} onChange={e=>handleAns('reto_1', e.target.value)} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <button onClick={() => setShowFicha(true)} className="w-full py-3 mt-4 rounded-xl font-extrabold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 border border-indigo-300 transition-colors shadow-sm text-sm">
+                                        📄 Générer la Fiche Complète
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex-1 flex flex-col shrink-0">
+                                    <h3 className="font-bold text-slate-800 mb-3 border-b pb-2 text-sm">Guide de Laboratoire</h3>
+                                    
+                                    {mode === 'mitosis' && (
+                                        <ul className="text-xs text-slate-600 space-y-3 mb-4">
+                                            <li><strong className="text-slate-800">Objectif :</strong> 2 cellules filles DIPLOÏDES (2n) identiques.</li>
+                                            <li><strong className="text-slate-800">1. Prophase :</strong> Touchez/déplacez la chromatine et condensez-la.</li>
+                                            <li><strong className="text-slate-800">2. Métaphase :</strong> Alignez-les sur l'équateur.</li>
+                                            <li><strong className="text-slate-800">3. Anaphase :</strong> Activez le Fuseau Mitotique pour séparer les chromatides sœurs automatiquement.</li>
+                                        </ul>
+                                    )}
+
+                                    {mode === 'meiosis' && (
+                                        <ul className="text-xs text-slate-600 space-y-3 mb-4">
+                                            <li><strong className="text-slate-800">Objectif :</strong> Générer des gamètes HAPLOÏDES (n) pour obtenir un petit femelle avec crête.</li>
+                                            <li><strong className="text-slate-800">1. Prophase I :</strong> Condensez l'ADN, appariez les homologues et utilisez les ciseaux pour le <i>Crossing-over</i>.</li>
+                                            <li><strong className="text-slate-800">2. Métaphase I :</strong> Alignez les bivalents sur l'équateur.</li>
+                                            <li><strong className="text-slate-800">3. Anaphase I :</strong> Activez le fuseau, CLIQUEZ sur les bivalents pour les séparer et déplacez des chromosomes <b>entiers</b> vers les pôles.</li>
+                                        </ul>
+                                    )}
+
+                                    {mode === 'repte' && (
+                                        <div className="text-xs text-slate-600 space-y-3 mb-4">
+                                            <div className="bg-red-100 text-red-800 p-2 rounded text-[10px] font-bold uppercase tracking-wide">Cas Clinique : Trisomie 21</div>
+                                            <p>Un patient présente le Syndrome de Down (3 copies du chromosome 21 au lieu de 2).</p>
+                                            <p><b>Votre mission :</b> Modélisez comment une erreur mécanique génère un gamète avec un excès de matériel génétique.</p>
+                                        </div>
+                                    )}
+
+                                    {/* LEYENDA */}
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 shadow-sm mt-auto">
+                                        <h4 className="font-bold text-[10px] uppercase text-slate-400 mb-2">Légende des Allèles</h4>
+                                        <div className="flex flex-col gap-2 text-xs font-bold text-slate-600">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm"></div>
+                                                <span>C = Dominant (Sans crête)</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow-sm"></div>
+                                                <span>c = Récessif (Crête)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </aside>
+
+                        {/* ESCENARIO PRINCIPAL CON CONTENEDOR DE SCROLL PARA IPAD */}
+                        <div className="flex-1 flex flex-col min-h-0 relative overflow-y-auto custom-scrollbar border-4 border-slate-200 rounded-[40px] md:rounded-[80px] bg-slate-50 shadow-inner">
+                            
+                            {/* TOAST CHIVATO DE FASE FLOTANTE ARRIBA */}
+                            {phaseToast && (
+                                <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-white px-6 py-3 rounded-2xl shadow-2xl animate-[fadeInOut_4s_ease-in-out] flex flex-col items-center border-b-4 border-yellow-400 min-w-[300px] text-center pointer-events-none">
+                                    <span className="uppercase text-[10px] font-black tracking-widest text-yellow-400 mb-1">Entrée en {phaseToast.phase === 'profase' ? 'prophase' : phaseToast.phase === 'metafase' ? 'métaphase' : phaseToast.phase === 'anafase' ? 'anaphase' : phaseToast.phase === 'telofase1' ? 'télophase I' : 'télophase'}</span>
+                                    <span className="text-sm font-medium">{phaseToast.text}</span>
+                                </div>
+                            )}
+
+                            {/* CAJA DE HERRAMIENTAS FLOTANTE */}
+                            <div className="absolute top-4 right-4 z-40 flex flex-col gap-2 pointer-events-auto">
+                                {/* Bola de cromatina inicial */}
+                                {phase === 'profase' && !isCondensed && chromatinZone === 'toolbox' && (
+                                    <div className="bg-white/90 backdrop-blur p-2 rounded-xl border border-slate-300 shadow-sm flex flex-col items-center animate-[pulse_2s_infinite]">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase mb-2">Outils</span>
+                                        <div 
+                                            draggable 
+                                            onClick={(e) => { e.stopPropagation(); setSelectedItem({ type: 'chromatin', id: 'chromatin' }); }}
+                                            onDragStart={(e) => handleDragStart(e, { type: 'chromatin', id: 'chromatin' })} 
+                                            className={`relative w-12 h-12 md:w-16 md:h-16 rounded-full bg-pink-100 border-2 border-pink-300 flex items-center justify-center cursor-pointer shadow-md overflow-hidden hover:scale-105 transition-transform ${selectedItem?.type === 'chromatin' ? 'ring-4 ring-yellow-400 bg-yellow-200' : ''}`}
+                                            title="Touchez puis touchez le cytoplasme"
+                                        >
+                                            <svg width="40" height="40" viewBox="0 0 100 100">
+                                                <path d="M10,50 Q30,10 50,50 T90,50 Q70,90 50,50 T10,50 Z" fill="none" stroke="#ef4444" strokeWidth="3" strokeDasharray="4,4"/>
+                                                <path d="M20,30 Q40,70 60,30 T80,80 Q50,40 20,30 Z" fill="none" stroke="#3b82f6" strokeWidth="3" strokeDasharray="4,4"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                )}
+                                {/* Herramienta Condensar */}
+                                {phase === 'profase' && !isCondensed && chromatinZone === 'cytoplasm' && (
+                                    <div className="bg-white/90 backdrop-blur p-2 rounded-xl border border-slate-300 shadow-sm flex flex-col items-center animate-[pulse_2s_infinite]">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase mb-2">Outils</span>
+                                        <button 
+                                            onClick={() => {
+                                                setIsCondensed(true);
+                                                setFeedback({ type: 'success', msg: 'ADN condensé en chromosomes ! Vous pouvez maintenant voir les allèles.' });
+                                                setTutorialPopup({ show: true, minimized: false, title: 'ADN Condensé', text: <span>L'ADN s'est empaqueté sous forme de <strong className="text-teal-600">X (chromosomes dupliqués)</strong>.<br/><br/>Regardez les cases blanches à côté des grands chromosomes :<br/>Lettre "C" : Allèle dominant (Sans Crête).<br/>Lettre "c" : Allèle récessif (Avec Crête).</span> });
+                                                if (mode === 'mitosis' || mode === 'repte') checkPhaseCompletion(chromosomes);
+                                            }}
+                                            className="flex flex-col items-center p-2 rounded-lg transition-all border-2 bg-slate-50 border-slate-300 hover:bg-teal-50 hover:text-teal-600 hover:border-teal-400 text-slate-600"
+                                            title="Condenser la Chromatine"
+                                        >
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                            <span className="text-[10px] mt-1 font-bold">Condenser</span>
+                                        </button>
+                                    </div>
+                                )}
+                                {/* Herramienta Crossing Over (TIJERAS) */}
+                                {phase === 'profase' && mode !== 'mitosis' && isCondensed && chromosomes.some(c => c.zone.includes('bivalent') && !c.crossedOver) && (
+                                    <div className="bg-white/90 backdrop-blur p-2 rounded-xl border border-slate-300 shadow-sm flex flex-col items-center animate-[pulse_2s_infinite]">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase mb-2">Outils</span>
+                                        <button 
+                                            onClick={() => setShowCrossingModal(true)}
+                                            className="flex flex-col items-center p-2 rounded-lg transition-all border-2 bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100"
+                                        >
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
+                                            <span className="text-[10px] mt-1 font-bold">Recombiner</span>
+                                        </button>
+                                    </div>
+                                )}
+                                {/* Herramienta Huso Mitótico y Anillo contráctil */}
+                                {(phase === 'metafase' || phase === 'anafase') && (
+                                    <div className="bg-white/90 backdrop-blur p-2 rounded-xl border border-slate-300 shadow-sm flex flex-col items-center">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase mb-2">Outils</span>
+                                        <button 
+                                            onClick={() => {
+                                                setSpindleActive(true);
+                                                setFeedback({ type: 'success', msg: 'Fuseau mitotique activé ! Chromosomes séparés automatiquement.' });
+                                                
+                                                // AUTO SEPARACIÓN INFALIBLE PARA IPAD
+                                                if (phase === 'anafase') {
+                                                    if (mode === 'mitosis') {
+                                                        let newChroms = [];
+                                                        chromosomes.forEach(c => {
+                                                            if (c.chromatids === 2 && c.zone === 'equator') {
+                                                                const leftAllele = c.alleles ? c.alleles[0] : null;
+                                                                const rightAllele = c.alleles ? c.alleles[1] : null;
+                                                                newChroms.push({ ...c, id: c.id + '_L', chromatids: 1, alleles: leftAllele ? [leftAllele, null] : null });
+                                                                newChroms.push({ ...c, id: c.id + '_R', chromatids: 1, alleles: rightAllele ? [rightAllele, null] : null });
+                                                            } else {
+                                                                newChroms.push(c);
+                                                            }
+                                                        });
+                                                        setChromosomes(newChroms);
+                                                    } else if (mode === 'meiosis' || mode === 'repte') {
+                                                        let newChroms = chromosomes.map(c => {
+                                                            if (c.zone.startsWith('equator_bivalent')) return { ...c, zone: 'equator' };
+                                                            return c;
+                                                        });
+                                                        setChromosomes(newChroms);
+                                                    }
+                                                }
+
+                                                setTutorialPopup({ show: true, minimized: false, title: 'Le Fuseau Achromatique', text: <span>Vous avez activé le <strong className="text-purple-600">fuseau mitotique</strong>.<br/><br/>Ces lignes fonctionnent comme des câbles de remorquage : elles s'accrochent aux centromères et tirent mécaniquement le matériel génétique.<br/><br/>Pour faciliter la tâche sur iPad, <strong className="text-purple-600">les chromosomes se sont séparés automatiquement</strong> ! Maintenant, déplacez les parties vers les pôles opposés.</span> });
+                                            }}
+                                            className={`flex flex-col items-center p-2 rounded-lg transition-all border-2 ${spindleActive ? 'bg-blue-50 border-blue-400 text-blue-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
+                                            title="Activer le Fuseau Mitotique"
+                                        >
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M8 6l8 12M16 6l-8 12"/></svg>
+                                            <span className="text-[10px] mt-1 font-bold">Fuseau</span>
+                                        </button>
+                                    </div>
+                                )}
+                                {/* Anillo Contráctil al terminar Anafase */}
+                                {(phase === 'telofase' || phase === 'telofase1') && !cytokinesisDone && (
+                                    <div className="bg-white/90 backdrop-blur p-2 rounded-xl border border-slate-300 shadow-sm flex flex-col items-center animate-[pulse_2s_infinite]">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase mb-2">Outils</span>
+                                        <button 
+                                            onClick={() => {
+                                                setCytokinesisDone(true);
+                                                if (mode === 'mitosis') {
+                                                    setFeedback({ type: 'success', msg: 'Excellent ! Vous avez créé deux cellules filles.' });
+                                                    setTutorialPopup({ show: true, minimized: false, title: 'Cytocinèse et Mitose Terminées !', text: <span>L'<strong className="text-pink-600">anneau de protéines contractiles (actine et myosine)</strong> a étranglé le cytoplasme de la cellule mère jusqu'à la diviser physiquement (Cytocinèse).<br/><br/>Regardez le résultat : vous avez 2 cellules filles.<br/><br/>Les chromatides simples que vous avez séparées sont maintenant considérées comme de <strong className="text-green-600">NOUVEAUX CHROMOSOMES COMPLETS</strong>.<br/><br/>Ces cellules sont <strong className="text-green-600">DIPLOÏDES (2n)</strong>, conservant la totalité de l'information génétique d'origine.</span> });
+                                                } else if (mode === 'meiosis') {
+                                                    setFeedback({ type: 'success', msg: 'Méiose I réussie ! Vous avez réduit le nombre de chromosomes.' });
+                                                    setTutorialPopup({ show: true, minimized: false, title: 'Cytocinèse et Méiose I Terminées !', text: <span>L'<strong className="text-pink-600">anneau d'actine et de myosine</strong> a divisé la cellule.<br/><br/>Vous avez séparé les <strong className="text-green-600">chromosomes homologues</strong>. Vous avez maintenant 2 cellules avec la quantité d'ADN d'origine (C).<br/><br/>Pour former les gamètes définitifs, appuyez sur "Simuler la Méiose II" dans le cahier.</span> });
+                                                } else {
+                                                    setFeedback({ type: 'success', msg: 'Défi Réussi ! Vous avez modélisé une non-disjonction.' });
+                                                    setTutorialPopup({ show: true, minimized: false, title: 'Diagnostic Clinique', text: <span>Vous avez réussi à forcer une erreur de "Non-disjonction".<br/><br/>En déplaçant mal les chromosomes exprès, vous avez vu comment une cellule fille se retrouve avec du matériel en trop.<br/><br/>S'il s'agissait d'un gamète humain, cela provoquerait des syndromes génétiques, comme la Trisomie 21.</span> });
+                                                }
+                                            }}
+                                            className={`flex flex-col items-center p-2 rounded-lg transition-all border-2 bg-pink-50 border-pink-400 text-pink-600 hover:bg-pink-100 hover:text-pink-700`}
+                                            title="Activer l'Anneau Contractile"
+                                        >
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M2 12h4"/><path d="M12 2v4"/><path d="M12 22v-4"/></svg>
+                                            <span className="text-[10px] mt-1 font-bold leading-tight text-center">Anneau<br/>Contractile</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* VISUALIZACIÓN DE RESULTADOS FINALES E INTERMEDIOS */}
+                            {((phase === 'telofase' || phase === 'telofase1') && cytokinesisDone) ? (
+                                <div className="w-full flex-1 flex flex-col items-center justify-start relative z-20 min-h-[500px]">
+                                    <h2 className="text-base md:text-lg font-black text-slate-700 uppercase tracking-widest mt-4 md:mt-6 mb-2 md:mb-4">{phase === 'telofase1' ? 'Résultat Méiose I' : 'Résultat Final'}</h2>
+                                    
+                                    {(mode === 'mitosis' || mode === 'repte' || phase === 'telofase1') ? (
+                                        <div className="flex flex-col md:flex-row w-full gap-4 md:gap-8 items-center justify-center pt-2 px-2 md:px-4">
+                                            <div className="w-40 h-40 md:w-64 md:h-64 bg-blue-50/60 rounded-[30px] md:rounded-[60px] border-4 border-blue-300 shadow-xl flex flex-col items-center justify-center relative">
+                                                <span className="absolute top-2 md:top-4 text-[10px] md:text-xs font-bold text-slate-600 uppercase">Cellule 1</span>
+                                                <div className="flex gap-2 md:gap-4 mb-2 bg-white/50 p-2 md:p-3 rounded-xl border border-slate-300 mt-4">
+                                                    {renderEquatorGroupedForPoles('poleTop')}
+                                                </div>
+                                                <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
+                                                    {mode === 'mitosis' ? '2n (Diploïde)' : 'n (Haploïde dupliqué)'}
+                                                </span>
+                                            </div>
+                                            <div className="w-40 h-40 md:w-64 md:h-64 bg-blue-50/60 rounded-[30px] md:rounded-[60px] border-4 border-blue-300 shadow-xl flex flex-col items-center justify-center relative">
+                                                <span className="absolute top-2 md:top-4 text-[10px] md:text-xs font-bold text-slate-600 uppercase">Cellule 2</span>
+                                                <div className="flex gap-2 md:gap-4 mb-2 bg-white/50 p-2 md:p-3 rounded-xl border border-slate-300 mt-4">
+                                                    {renderEquatorGroupedForPoles('poleBottom')}
+                                                </div>
+                                                <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
+                                                    {mode === 'mitosis' ? '2n (Diploïde)' : 'n (Haploïde dupliqué)'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-wrap w-full gap-2 md:gap-4 items-center justify-center pt-2 px-2 md:px-4 pb-4">
+                                            {generatedEggs.map((egg, i) => (
+                                                <div key={i} className="w-28 h-32 md:w-48 md:h-52 bg-purple-50/60 rounded-[30px] md:rounded-[40px] border-4 border-purple-300 shadow-xl flex flex-col items-center justify-center relative">
+                                                    <span className="absolute top-2 md:top-3 text-[8px] md:text-[10px] font-bold text-slate-600 uppercase">Ovule {i+1}</span>
+                                                    <div className="flex gap-1 md:gap-3 transform scale-50 md:scale-100 mt-2 mb-4">
+                                                        {egg.chroms.map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
+                                                    </div>
+                                                    <div className="absolute bottom-[-16px] bg-white border border-purple-200 px-2 md:px-3 py-1 rounded-xl shadow-md flex flex-col items-center text-[8px] md:text-[10px] leading-tight z-10 w-max">
+                                                        <span className="font-black text-purple-700 text-[10px] md:text-xs">n = {egg.chroms.length} (Haploïde)</span>
+                                                        <span className="font-bold text-slate-600">ADN = ½C</span>
+                                                        <span className="text-slate-400 text-[8px] hidden md:block">(Chromosomes simples)</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {mode === 'mitosis' && (
+                                        <div className="mt-6 bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs md:text-sm text-blue-800 shadow-sm max-w-3xl text-center mx-4">
+                                            <strong className="block mb-1">Regardez les chromosomes des cellules filles !</strong>
+                                            Maintenant, chaque chromosome n'a <strong>qu'une seule chromatide</strong> (c'est un chromosome simple de quantité C). Il ne retrouvera sa forme classique en "X" que lorsque la cellule passera par la <strong>phase S</strong> de l'interphase et dupliquera son matériel génétique pour la prochaine division cellulaire.
+                                        </div>
+                                    )}
+
+                                    {/* Gráfico del Ciclo Celular al Final de la división */}
+                                    {(phase === 'telofase' && (mode === 'mitosis' || mode === 'meiosis')) && (
+                                        <div className="px-2 md:px-4 pb-8 w-full mt-4">
+                                            <CellCycleGraph type={mode} />
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                /* RENDERIZADO CÉLULA NORMAL (Fases Activas o Telofase sin dividir) */
+                                <div className="flex-1 flex flex-col relative min-h-[400px] md:min-h-[500px] shrink-0 mt-4 md:mt-6 bg-blue-50/30 rounded-[40px] md:rounded-[80px] border-4 border-blue-100 overflow-hidden">
+                                    {/* Capa oculta solo para que el huso no se salga de la célula */}
+                                    <div className="absolute inset-0 z-0 overflow-hidden rounded-[36px] md:rounded-[76px] pointer-events-none">
+                                        {(phase === 'metafase' || phase === 'anafase' || (!cytokinesisDone && (phase === 'telofase' || phase === 'telofase1'))) && <div className={`spindle-fibers ${spindleActive ? 'opacity-100' : 'opacity-30'}`}></div>}
+                                    </div>
+                                    
+                                    {/* Centríolo Norte */}
+                                    {(phase === 'metafase' || phase === 'anafase') && (
+                                        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex flex-col items-center z-0">
+                                            <div className="w-8 h-2 bg-orange-400 rounded-sm"></div>
+                                            <div className="w-2 h-8 bg-orange-400 rounded-sm absolute top-0 mt-1"></div>
+                                        </div>
+                                    )}
+
+                                    {/* Centríolo Sur */}
+                                    {(phase === 'metafase' || phase === 'anafase') && (
+                                        <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex flex-col items-center z-0 rotate-180">
+                                            <div className="w-8 h-2 bg-orange-400 rounded-sm"></div>
+                                            <div className="w-2 h-8 bg-orange-400 rounded-sm absolute top-0 mt-1"></div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex-1 p-2 md:p-4 z-10 flex flex-col justify-end min-h-[80px] md:min-h-[100px]">{renderPole('poleTop', 'Pôle Nord de la cellule')}</div>
+                                    
+                                    {/* Placa Ecuatorial */}
+                                    <div 
+                                        className="min-h-[100px] md:min-h-[140px] w-full bg-yellow-50/50 border-y-2 border-dashed border-yellow-300 z-10 relative flex flex-col justify-center items-center drop-zone" 
+                                        onDragOver={handleDragOver} 
+                                        onDrop={(e) => handleDrop(e, 'equator')}
+                                        onClick={(e) => handleZoneClick('equator', e)}
+                                    >
+                                        <div className="absolute top-1/2 left-0 w-full border-t border-red-300 border-dashed transform -translate-y-1/2 z-0 opacity-50 pointer-events-none"></div>
+                                        <div className="w-full h-full absolute inset-0 z-0"></div> {/* Capa transparente para capturar el drop */}
+                                        <div className="w-full h-full flex flex-wrap justify-center items-center gap-2 md:gap-4 relative z-10 pointer-events-none p-2 md:p-4">
+                                            {mode !== 'mitosis' && phase === 'profase' ? (
+                                                <span className="text-[10px] md:text-xs text-yellow-600 font-bold z-10 text-center opacity-50">Touchez pour former les bivalents dans le cytoplasme</span>
+                                            ) : (
+                                                renderEquatorGrouped()
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 p-2 md:p-4 z-10 flex flex-col justify-start min-h-[80px] md:min-h-[100px]">{renderPole('poleBottom', 'Pôle Sud de la cellule')}</div>
+                                </div>
+                            )}
+
+                            {/* CITOPLASMA LIBRE (Siempre visible hasta Telofase) */}
+                            {(phase !== 'telofase' && phase !== 'telofase1') && (
+                                <div 
+                                    className="mt-4 md:mt-6 min-h-[120px] md:min-h-[160px] bg-slate-100 border-2 border-slate-300 rounded-xl p-4 relative flex justify-center items-center gap-2 md:gap-4 drop-zone shrink-0 flex-wrap" 
+                                    onDragOver={handleDragOver} 
+                                    onDrop={(e) => handleDrop(e, 'cytoplasm')}
+                                    onClick={(e) => handleZoneClick('cytoplasm', e)}
+                                >
+                                    <span className="absolute inset-0 flex items-center justify-center text-sm md:text-xl font-black text-slate-200 uppercase tracking-widest pointer-events-none text-center">Cytoplasme Libre</span>
+                                    
+                                    {!isCondensed ? (
+                                        chromatinZone === 'cytoplasm' ? (
+                                            <div 
+                                                draggable 
+                                                onClick={(e) => { e.stopPropagation(); setSelectedItem({ type: 'chromatin', id: 'chromatin' }); }}
+                                                onDragStart={(e) => handleDragStart(e, { type: 'chromatin', id: 'chromatin' })} 
+                                                className={`relative z-10 w-20 h-20 md:w-24 md:h-24 rounded-full bg-pink-100 border-2 border-pink-300 flex items-center justify-center cursor-pointer shadow-md overflow-hidden hover:scale-105 transition-transform ${selectedItem?.type === 'chromatin' ? 'ring-4 ring-yellow-400 bg-yellow-200' : ''}`}
+                                            >
+                                                <svg width="60" height="60" viewBox="0 0 100 100" className="md:w-[70px] md:h-[70px]">
+                                                    <path d="M10,50 Q30,10 50,50 T90,50 Q70,90 50,50 T10,50 Z" fill="none" stroke="#ef4444" strokeWidth="4" strokeDasharray="4,4"/>
+                                                    <path d="M20,30 Q40,70 60,30 T80,80 Q50,40 20,30 Z" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray="4,4"/>
+                                                </svg>
+                                                <span className="absolute text-[8px] md:text-[10px] font-bold text-slate-700 bg-white/80 px-2 py-1 rounded">Chromatine</span>
+                                            </div>
+                                        ) : null
+                                    ) : (
+                                        <div className="flex flex-wrap justify-center items-center gap-2 md:gap-6 relative z-10 pointer-events-none p-2">
+                                            {chromosomes.filter(c => c.zone === 'nucleus' || c.zone === 'cytoplasm' || (c.zone.startsWith('bivalent') && !c.zone.startsWith('equator'))).map((c, i) => {
+                                                if(c.zone.includes('bivalent')) {
+                                                    const pair = chromosomes.filter(ch => ch.zone === c.zone);
+                                                    if(pair.length >= 2 && pair[0].id === c.id) {
+                                                        return (
+                                                            <div 
+                                                                key={c.zone} 
+                                                                draggable 
+                                                                onDragStart={(e) => handleDragStart(e, c)} 
+                                                                className={`flex items-center gap-1 chromosome-hover bg-white/80 p-1 md:p-2 rounded-lg border border-purple-300 pointer-events-auto transition-all cursor-pointer ${selectedItem?.id === c.id ? 'ring-4 ring-yellow-400 scale-110 shadow-lg' : ''}`} 
+                                                                onClick={(e) => handleChromClick(e, pair[0])}
+                                                            >
+                                                                <div className="transform scale-75 md:scale-100 flex gap-1"><ChromosomeSVG {...pair[0]} isSelectable={false} /><ChromosomeSVG {...pair[1]} isSelectable={false} /></div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }
+                                                return (
+                                                    <div 
+                                                        key={c.id} 
+                                                        draggable 
+                                                        onDragStart={(e) => handleDragStart(e, c)} 
+                                                        className="relative z-10 pointer-events-auto p-1 md:p-4 cursor-pointer transform scale-75 md:scale-100"
+                                                        onClick={(e) => handleChromClick(e, c)}
+                                                    >
+                                                        <ChromosomeSVG {...c} isSelectable={true} isSelected={selectedItem?.id === c.id} />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* MODAL TALLER CROSSING OVER (SOPORTE IPAD) */}
+                    {showCrossingModal && (
+                        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-[slideDown_0.3s_ease-out] overflow-y-auto py-12">
+                            <div className="max-w-3xl w-full flex flex-col items-center bg-white p-6 md:p-8 rounded-3xl shadow-2xl mt-auto mb-auto">
+                                <h2 className="text-2xl md:text-3xl font-black text-slate-800 mb-2">Laboratoire de Recombinaison</h2>
+                                <p className="text-slate-600 mb-4 text-center max-w-lg text-sm md:text-base">Touchez ou faites glisser les fragments inférieurs (chromatides intérieures) vers la "Table de Travail" puis échangez-les.</p>
+                                
+                                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl w-full text-xs md:text-sm text-blue-800 text-left mb-6 shadow-sm">
+                                    <strong className="block mb-1 text-blue-900">Qu'est-ce que le Crossing-over et pourquoi est-ce important ?</strong>
+                                    C'est le processus par lequel des <strong className="text-blue-900">chromatides non sœurs de chromosomes homologues</strong> échangent des fragments d'ADN de manière naturelle pendant la Prophase I. Son grand avantage évolutif est de générer une immense <b>variabilité génétique</b> dans la descendance, rendant chaque gamète unique et permettant aux espèces de mieux s'adapter aux changements de l'environnement au fil du temps.
+                                </div>
+                                
+                                <div className="flex gap-8 md:gap-16 items-start relative p-4 md:p-6 bg-slate-50 border-4 border-slate-200 rounded-3xl w-full justify-center">
+                                    {/* Cromosoma Materno (Rojo) */}
+                                    <div className="flex flex-col items-center gap-1">
+                                        <div className="text-red-600 font-bold mb-2 text-sm md:text-base">MÈRE (c)</div>
+                                        <div className="relative w-[60px] h-[75px] md:w-[80px] md:h-[100px] transform scale-75 md:scale-100 origin-top">
+                                            <svg width="80" height="100" viewBox="0 0 80 100" className="absolute top-0 left-0 overflow-visible">
+                                                <path d="M40,50 Q20,25 30,5 Q50,25 40,50" fill="#ef4444" stroke="black" strokeWidth="2"/>
+                                                <path d="M40,50 Q60,25 50,5 Q30,25 40,50" fill="#ef4444" stroke="black" strokeWidth="2"/>
+                                                <path d="M40,50 Q20,75 30,95 Q50,75 40,50" fill="#ef4444" stroke="black" strokeWidth="2"/>
+                                                <LocusMarker x={30} y={30} allele="c" color="#ef4444" side="left" />
+                                                <LocusMarker x={50} y={30} allele="c" color="#ef4444" side="right" />
+                                                <circle cx="40" cy="50" r="6" fill="#fbbf24" stroke="black" strokeWidth="2" />
+                                            </svg>
+                                            <div 
+                                                onDragOver={e=>e.preventDefault()} 
+                                                onDrop={(e) => handleDropCO('redChr', e)}
+                                                onClick={(e) => handleZoneClickCO('redChr', e)}
+                                                className={`absolute top-[50px] left-[40px] w-[20px] h-[45px] border-2 border-dashed rounded-b-full flex items-center justify-center transition-colors cursor-pointer ${coFragments.redChr ? 'border-transparent' : 'border-red-400 bg-red-50/50 hover:bg-red-100'}`}
+                                            >
+                                                {coFragments.redChr === 'red' && <FragLegSVG color="red" side="right" isSelected={selectedFrag?.color === 'red' && selectedFrag?.source === 'redChr'} onClick={(e) => { e.stopPropagation(); setSelectedFrag({source: 'redChr', color: 'red'}); }} />}
+                                                {coFragments.redChr === 'blue' && <FragLegSVG color="blue" side="right" isSelected={selectedFrag?.color === 'blue' && selectedFrag?.source === 'redChr'} onClick={(e) => { e.stopPropagation(); setSelectedFrag({source: 'redChr', color: 'blue'}); }} />}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Cromosoma Paterno (Azul) */}
+                                    <div className="flex flex-col items-center gap-1">
+                                        <div className="text-blue-600 font-bold mb-2 text-sm md:text-base">PÈRE (C)</div>
+                                        <div className="relative w-[60px] h-[75px] md:w-[80px] md:h-[100px] transform scale-75 md:scale-100 origin-top">
+                                            <svg width="80" height="100" viewBox="0 0 80 100" className="absolute top-0 left-0 overflow-visible">
+                                                <path d="M40,50 Q20,25 30,5 Q50,25 40,50" fill="#3b82f6" stroke="black" strokeWidth="2"/>
+                                                <path d="M40,50 Q60,25 50,5 Q30,25 40,50" fill="#3b82f6" stroke="black" strokeWidth="2"/>
+                                                <path d="M40,50 Q60,75 50,95 Q30,75 40,50" fill="#3b82f6" stroke="black" strokeWidth="2"/>
+                                                <LocusMarker x={30} y={30} allele="C" color="#3b82f6" side="left" />
+                                                <LocusMarker x={50} y={30} allele="C" color="#3b82f6" side="right" />
+                                                <circle cx="40" cy="50" r="6" fill="#fbbf24" stroke="black" strokeWidth="2" />
+                                            </svg>
+                                            <div 
+                                                onDragOver={e=>e.preventDefault()} 
+                                                onDrop={(e) => handleDropCO('blueChr', e)}
+                                                onClick={(e) => handleZoneClickCO('blueChr', e)}
+                                                className={`absolute top-[50px] left-[20px] w-[20px] h-[45px] border-2 border-dashed rounded-b-full flex items-center justify-center transition-colors cursor-pointer ${coFragments.blueChr ? 'border-transparent' : 'border-blue-400 bg-blue-50/50 hover:bg-blue-100'}`}
+                                            >
+                                                {coFragments.blueChr === 'red' && <FragLegSVG color="red" side="left" isSelected={selectedFrag?.color === 'red' && selectedFrag?.source === 'blueChr'} onClick={(e) => { e.stopPropagation(); setSelectedFrag({source: 'blueChr', color: 'red'}); }} />}
+                                                {coFragments.blueChr === 'blue' && <FragLegSVG color="blue" side="left" isSelected={selectedFrag?.color === 'blue' && selectedFrag?.source === 'blueChr'} onClick={(e) => { e.stopPropagation(); setSelectedFrag({source: 'blueChr', color: 'blue'}); }} />}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Mesa de Trabajo */}
+                                <div 
+                                    className="w-full mt-4 md:mt-6 bg-slate-100 border-4 border-slate-300 rounded-xl p-4 min-h-[100px] md:min-h-[120px] flex flex-col items-center justify-center gap-4 relative cursor-pointer hover:bg-slate-200 transition-colors"
+                                    onDragOver={e=>e.preventDefault()} 
+                                    onDrop={(e) => handleDropCO('taller', e)}
+                                    onClick={(e) => handleZoneClickCO('taller', e)}
+                                >
+                                    <span className="absolute text-slate-400 font-bold uppercase tracking-widest text-[10px] md:text-xs top-2 left-2 md:left-4 pointer-events-none">Table de Travail</span>
+                                    <div className="flex gap-4">
+                                        {coFragments.taller.includes('red') && <FragLegSVG color="red" inTaller side="right" isSelected={selectedFrag?.color === 'red' && selectedFrag?.source === 'taller'} onClick={(e) => { e.stopPropagation(); setSelectedFrag({source: 'taller', color: 'red'}); }} />}
+                                        {coFragments.taller.includes('blue') && <FragLegSVG color="blue" inTaller side="left" isSelected={selectedFrag?.color === 'blue' && selectedFrag?.source === 'taller'} onClick={(e) => { e.stopPropagation(); setSelectedFrag({source: 'taller', color: 'blue'}); }} />}
+                                        {coFragments.taller.length === 0 && <span className="text-slate-400 italic text-xs md:text-sm pointer-events-none mt-4">Touchez ici pour déposer un fragment</span>}
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 md:mt-8 flex gap-4 w-full max-w-md">
+                                    <button onClick={() => setShowCrossingModal(false)} className="flex-1 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300 text-sm md:text-base">Annuler</button>
+                                    <button 
+                                        onClick={applyCrossingOver} 
+                                        disabled={!(coFragments.redChr === 'blue' && coFragments.blueChr === 'red')}
+                                        className={`flex-1 py-3 font-bold rounded-xl transition shadow-md text-white text-sm md:text-base ${coFragments.redChr === 'blue' && coFragments.blueChr === 'red' ? 'bg-green-600 hover:bg-green-700 animate-pulse' : 'bg-slate-300 opacity-50 cursor-not-allowed'}`}
+                                    >
+                                        Appliquer les Changements
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL SIMULACIÓN FECUNDACIÓN PARA REPTE TRISOMÍA */}
+                    {showRepteFecundacion && (
+                        <div className="fixed inset-0 z-[140] bg-slate-900/60 backdrop-blur flex items-center justify-center p-4 overflow-y-auto py-10">
+                            <div className="bg-white p-6 md:p-8 max-w-4xl w-full text-center shadow-2xl border-t-8 border-red-500 rounded-2xl">
+                                <h2 className="text-2xl md:text-3xl font-black mb-4 text-slate-800">Fécondation avec Aneuploïdie</h2>
+                                <p className="mb-6 text-slate-600">Lors de la fécondation d'un gamète ayant un chromosome supplémentaire (n=4) avec un spermatozoïde normal (n=3), le zygote résultant hérite de 3 copies de ce chromosome (Trisomie).</p>
+                                
+                                <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-8 w-full max-w-2xl mx-auto">
+                                    {/* Óvulo Anómalo */}
+                                    <div className="bg-pink-50 p-4 rounded-xl border border-pink-200 shadow-sm flex flex-col items-center w-full">
+                                        <span className="font-bold text-pink-800 mb-2">Votre Ovule (n = {generatedEggs.find(e => e.chroms.length > 3)?.chroms.length || 4})</span>
+                                        <div className="flex gap-2 mb-2 justify-center flex-wrap">
+                                            {(generatedEggs.find(e => e.chroms.length > 3) || generatedEggs[0])?.chroms.map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
+                                        </div>
+                                        <span className="text-xs text-pink-600 font-bold bg-pink-100 px-2 py-1 rounded">Chromosome supplémentaire</span>
+                                    </div>
+
+                                    <span className="text-3xl font-black text-slate-400">+</span>
+
+                                    {/* Espermatozoide Normal */}
+                                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col items-center w-full">
+                                        <span className="font-bold text-blue-800 mb-2">Spermatozoïde (n = 3)</span>
+                                        <div className="flex gap-2 mb-2 justify-center">
+                                            <ChromosomeSVG type="lg" origin="pat" chromatids={1} alleles={['C']} isSelectable={false} />
+                                            <ChromosomeSVG type="sm" origin="pat" sexLabel="Z" chromatids={1} isSelectable={false} />
+                                            <ChromosomeSVG type="xs" origin="pat" chromatids={1} isSelectable={false} />
+                                        </div>
+                                        <span className="text-xs text-blue-600 font-bold bg-blue-100 px-2 py-1 rounded">Gamète correct</span>
+                                    </div>
+                                </div>
+
+                                {/* Cigoto Trisomía */}
+                                <div className="bg-red-50 p-6 rounded-2xl border-4 border-red-300 shadow-lg flex flex-col items-center max-w-xl mx-auto mb-8">
+                                    <span className="font-black text-red-700 mb-2 text-xl">Zygote (2n = 7)</span>
+                                    <span className="font-bold text-red-500 mb-4 text-sm uppercase tracking-widest bg-red-100 px-3 py-1 rounded-md">Trisomie 21</span>
+                                    <div className="flex flex-wrap justify-center gap-6">
+                                        {/* Par lg */}
+                                        <div className="flex gap-1 items-end">
+                                            {(generatedEggs.find(e => e.chroms.length > 3) || generatedEggs[0])?.chroms.filter(c => c.type==='lg').map(c=><ChromosomeSVG key={c.id} {...c} isSelectable={false}/>)}
+                                            <ChromosomeSVG type="lg" origin="pat" chromatids={1} alleles={['C']} isSelectable={false}/>
+                                        </div>
+                                        {/* Par sm */}
+                                        <div className="flex gap-1 items-end">
+                                            {(generatedEggs.find(e => e.chroms.length > 3) || generatedEggs[0])?.chroms.filter(c => c.type==='sm').map(c=><ChromosomeSVG key={c.id} {...c} isSelectable={false}/>)}
+                                            <ChromosomeSVG type="sm" origin="pat" sexLabel="Z" chromatids={1} isSelectable={false}/>
+                                        </div>
+                                        {/* Par xs (TRISOMIA) */}
+                                        <div className="flex gap-1 items-end bg-red-200 p-2 rounded-lg ring-2 ring-red-400">
+                                            {(generatedEggs.find(e => e.chroms.length > 3) || generatedEggs[0])?.chroms.filter(c => c.type==='xs').map(c=><ChromosomeSVG key={c.id} {...c} isSelectable={false}/>)}
+                                            <ChromosomeSVG type="xs" origin="pat" chromatids={1} isSelectable={false}/>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button onClick={() => setShowRepteFecundacion(false)} className="px-8 py-3 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-colors shadow-lg">Retour au Laboratoire</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL CUADRO DE PUNNETT FINAL (4x4 Libre) */}
+                    {showPunnett && (
+                        <div className="fixed inset-0 z-[140] bg-slate-900/60 backdrop-blur flex items-start justify-center overflow-y-auto w-full py-10">
+                            <div className="bg-white p-4 md:p-8 w-full min-h-screen md:min-h-0 md:max-w-6xl md:rounded-2xl text-center shadow-2xl border-t-8 border-purple-500 flex flex-col items-center">
+                                
+                                <h2 className="text-2xl md:text-3xl font-black mb-2 md:mb-4 text-slate-800">Échiquier de Punnett de 16 combinaisons</h2>
+                                <p className="mb-4 text-slate-600 max-w-4xl mx-auto leading-relaxed text-xs md:text-base px-2">
+                                    Calculez les probabilités de <b>toutes</b> les combinaisons possibles. Vous avez simulé la Méiose d'une <b>femelle (ZW, Cc)</b> et obtenu 4 ovules haploïdes. Maintenant, nous allons les croiser avec les 4 spermatozoïdes d'un <b>mâle récessif (ZZ, cc)</b>. Écrivez les résultats du génotype et du phénotype. Sélectionnez les cases qui remplissent l'objectif.
+                                </p>
+                                
+                                {/* Contador de Probabilidad Arriba (Fracción Fija sin recortes) */}
+                                <div className="mb-4 md:mb-6 flex flex-col items-center py-2 shrink-0">
+                                    <span className="text-slate-600 font-bold mb-2 md:mb-3 uppercase tracking-wide text-xs md:text-sm">Probabilité (Femelle avec crête) :</span>
+                                    <div className="flex items-center justify-center gap-3 text-2xl md:text-3xl font-black text-orange-600 bg-white p-2 md:p-3 rounded-2xl shadow-sm border border-slate-200">
+                                        <div className="bg-orange-100 w-12 h-12 md:w-16 md:h-14 flex items-center justify-center rounded-xl border-2 border-orange-300 shadow-inner leading-none">{tickedCount}</div>
+                                        <span className="text-slate-400 font-black text-3xl md:text-5xl leading-none block px-1">/</span>
+                                        <div className="bg-slate-100 text-slate-600 w-12 h-12 md:w-16 md:h-14 flex items-center justify-center rounded-xl border-2 border-slate-300 shadow-inner leading-none">16</div>
+                                    </div>
+                                    
+                                    {appMode === 'aprendizaje' && (
+                                        <div className="mt-4 w-full max-w-md bg-purple-50 p-3 rounded-xl border border-purple-200 text-left shadow-inner">
+                                            <label className="text-[10px] md:text-xs font-bold text-purple-800 uppercase">Écrivez la fraction finale obtenue :</label>
+                                            <input type="text" className="w-full mt-1 p-2 border border-purple-300 rounded text-sm outline-none focus:ring-2 focus:ring-purple-500" value={answers.punnett_1 || ''} onChange={e=>handleAns('punnett_1', e.target.value)} placeholder="Ex : 4/16" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Cuadro de Punnett Libre 4x4 */}
+                                <div className="flex flex-col items-center w-full overflow-x-auto pb-4 custom-scrollbar shrink-0">
+                                    <div className="grid grid-cols-5 gap-1 md:gap-2 text-center text-xs md:text-sm font-bold min-w-[360px] md:min-w-[800px] w-full">
+                                        
+                                        {/* Fila 1: Cabeceras Óvulos */}
+                                        <div className="bg-slate-100 p-1 md:p-2 rounded-xl flex items-center justify-center text-slate-500 text-[8px] md:text-[10px] uppercase shadow-inner min-w-[70px]">
+                                            ♂ Mâle ↓ <br/><br/> ♀ Femelle →
+                                        </div>
+                                        {generatedEggs.map((egg, idx) => (
+                                            <div key={idx} className="bg-pink-100 text-pink-800 p-1 rounded-xl flex flex-col items-center justify-center shadow-sm border border-pink-200 min-w-[70px]">
+                                                <span className="text-[8px] md:text-[10px] uppercase mb-1 md:mb-2">Ovule {idx+1}</span>
+                                                <div className="flex gap-1 md:gap-2 mb-1 md:mb-2 transform scale-50 md:scale-100 origin-bottom">
+                                                    <ChromosomeSVG {...egg.chroms.find(c=>c.type==='lg')} isSelectable={false} />
+                                                    <ChromosomeSVG {...egg.chroms.find(c=>c.type==='sm')} isSelectable={false} />
+                                                </div>
+                                                <span className="text-[8px] md:text-xs font-bold bg-white/50 px-1 md:px-2 rounded-md shadow-sm border border-pink-100 mt-1 md:mt-0">{egg.chroms.find(c=>c.type==='sm')?.sexLabel} {egg.chroms.find(c=>c.type==='lg')?.alleles[0]}</span>
+                                            </div>
+                                        ))}
+
+                                        {/* Filas 2 a 5: Cabecera Macho + Inputs */}
+                                        {maleSperms.map((sperm, rowIdx) => (
+                                            <React.Fragment key={rowIdx}>
+                                                <div className="bg-blue-100 text-blue-800 p-1 rounded-xl flex flex-col items-center justify-center shadow-sm border border-blue-200 min-w-[70px]">
+                                                    <span className="text-[8px] md:text-[10px] uppercase mb-1 md:mb-2">Sperm. {rowIdx+1}</span>
+                                                    <div className="flex gap-1 md:gap-2 mb-1 md:mb-2 transform scale-50 md:scale-100 origin-bottom">
+                                                        <ChromosomeSVG {...sperm.lg} isSelectable={false} />
+                                                        <ChromosomeSVG {...sperm.sm} isSelectable={false} />
+                                                    </div>
+                                                    <span className="text-[8px] md:text-xs font-bold bg-white/50 px-1 md:px-2 rounded-md shadow-sm border border-blue-100 mt-1 md:mt-0">{sperm.sm.sexLabel} {sperm.lg.alleles[0]}</span>
+                                                </div>
+                                                {[0,1,2,3].map(colIdx => {
+                                                    const cellIdx = rowIdx * 4 + colIdx;
+                                                    const isTicked = punnettTicks[cellIdx];
+                                                    return (
+                                                        <div key={cellIdx} className={`border-2 rounded-xl h-24 md:h-36 relative flex flex-col items-center justify-center p-1 md:p-2 transition-colors min-w-[70px] ${isTicked ? 'bg-orange-50 border-orange-400 shadow-md' : 'bg-slate-50 border-slate-300 hover:border-purple-400'}`}>
+                                                            <button 
+                                                                onClick={() => togglePunnettTick(cellIdx)} 
+                                                                className={`absolute top-1 right-1 md:top-2 md:right-2 p-1 md:p-1.5 rounded-full transition-colors z-10 shadow-sm ${isTicked ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-white text-slate-300 border border-slate-300 hover:bg-slate-100 hover:text-slate-500'}`} 
+                                                                title="Marquer la case"
+                                                            >
+                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="md:w-[14px] md:h-[14px]"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                            </button>
+                                                            
+                                                            <div className="flex gap-1 md:gap-2 w-full justify-center mt-2 md:mt-4">
+                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-300 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="cc" />
+                                                                <input type="text" maxLength="2" className="w-6 md:w-12 text-center border border-slate-300 rounded text-[10px] md:text-sm font-black text-slate-700 bg-white py-0.5 md:py-1 focus:border-purple-500 outline-none shadow-sm" placeholder="ZW" />
+                                                            </div>
+                                                            <div className="flex items-center justify-center w-[95%] md:w-[90%] mt-2 md:mt-3 text-[8px] md:text-xs text-slate-600 font-medium bg-white rounded border border-slate-300 focus-within:border-purple-500 shadow-sm px-0.5 md:px-1 overflow-hidden">
+                                                                <span className="text-slate-400 font-bold ml-0.5 md:ml-1">[</span>
+                                                                <input type="text" className="w-full text-center bg-transparent outline-none py-0.5 md:py-1 mx-0.5 md:mx-1 placeholder-slate-300" placeholder="Phénotype" />
+                                                                <span className="text-slate-400 font-bold mr-0.5 md:mr-1">]</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col md:flex-row items-center justify-between gap-4 max-w-4xl mx-auto w-full mt-4">
+                                    <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 md:p-4 rounded-xl font-bold flex-1 flex items-center justify-center gap-3 shadow-sm w-full text-xs md:text-base">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                        Prenez une photo de l'échiquier résolu et mettez-la sur le Google Sites !
+                                    </div>
+                                    <button onClick={() => setShowPunnett(false)} className="px-8 py-3 md:py-4 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-colors shadow-lg whitespace-nowrap w-full md:w-auto text-sm md:text-base">
+                                        Fermer le Tableau
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL FICHA DE ESTUDIO COMPLETA */}
+                    {showFicha && (
+                        <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-[slideDown_0.3s_ease-out]">
+                            <div className="bg-white rounded-3xl p-6 md:p-8 max-w-4xl w-full h-[85vh] flex flex-col shadow-2xl">
+                                <h2 className="text-2xl md:text-3xl font-black text-indigo-800 mb-2">Fiche d'Étude : PigeonEtics</h2>
+                                <p className="text-slate-500 text-sm mb-6">Voici toutes vos réponses rassemblées. Copiez-les et collez-les sur votre Google Sites.</p>
+                                
+                                <textarea 
+                                    readOnly 
+                                    className="flex-1 w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs md:text-sm font-mono text-slate-700 resize-none outline-none mb-6 custom-scrollbar" 
+                                    value={generarTextoFicha()} 
+                                />
+                                
+                                <div className="flex flex-col md:flex-row gap-4 justify-end">
+                                    <button onClick={() => { navigator.clipboard.writeText(generarTextoFicha()); alert('Fiche copiée dans le presse-papiers !'); }} className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md text-sm md:text-base flex justify-center items-center gap-2">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                        Copier le Texte
+                                    </button>
+                                    <button onClick={() => setShowFicha(false)} className="px-6 py-3 bg-slate-200 text-slate-800 font-bold rounded-xl hover:bg-slate-300 text-sm md:text-base">
+                                        Fermer
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
