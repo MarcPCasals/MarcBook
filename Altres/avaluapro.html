@@ -397,6 +397,7 @@
                     id: generateUUID(), 
                     name: className, 
                     color: classColor, 
+                    subgroups: [],
                     semesters: [
                         { id: "S1", name: "1r Semestre", isActive: true, competencies: createSemesterStructure() },
                         { id: "S2", name: "2n Semestre", isActive: false, competencies: createSemesterStructure() },
@@ -508,9 +509,11 @@
             if (!isOpen || !cls) return null;
             const [name, setName] = useState(cls.name);
             const [color, setColor] = useState(cls.color ? cls.color : 'blue');
+            const [subgroupsStr, setSubgroupsStr] = useState(cls.subgroups ? cls.subgroups.join(', ') : '');
 
             const handleSave = () => {
-                onUpdate(cls.id, {name: name, color: color});
+                const subgroupsArray = subgroupsStr.split(',').map(s => s.trim()).filter(s => s !== "");
+                onUpdate(cls.id, {name: name, color: color, subgroups: subgroupsArray});
                 onClose();
             };
 
@@ -529,7 +532,11 @@
                             <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500"/>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Color del Grup</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Mitjos Grups (separats per comes)</label>
+                            <input value={subgroupsStr} onChange={(e)=>setSubgroupsStr(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500" placeholder="Ex: Grup A, Grup B" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2 mt-2">Color del Grup</label>
                             <div className="flex gap-2">
                                 {Object.keys(CLASS_COLORS).map(c => (
                                     <button key={c} onClick={()=>setColor(c)} className={`w-8 h-8 rounded-full ${CLASS_COLORS[c].bg} ${color===c?'ring-2 ring-offset-2 ring-gray-400':''}`}/>
@@ -593,10 +600,12 @@
             );
         };
 
-        const StudentNotesModal = ({ isOpen, onClose, student, competencies, onSave }) => {
+        const StudentNotesModal = ({ isOpen, onClose, student, competencies, onSave, currentClass }) => {
             if (!isOpen || !student) return null;
-            const initialNotes = student.notes ? student.notes : { general: "", competencies: {} };
+            const initialNotes = student.notes ? student.notes : { general: "", competencies: {}, tutoria: "" };
             const [notes, setNotes] = useState(initialNotes);
+            const [subgroup, setSubgroup] = useState(student.subgroup ? student.subgroup : "");
+            const [nee, setNee] = useState(student.nee ? student.nee : "");
 
             const handleNotesChange = (key, val, isComp) => {
                 if(isComp) {
@@ -626,7 +635,7 @@
             };
 
             const handleSaveAndClose = () => {
-                onSave(student.id, notes);
+                onSave(student.id, notes, subgroup, nee);
                 onClose();
             };
 
@@ -639,6 +648,28 @@
                                 <Icon name="copy" className="mr-1"/> Copiar
                             </button>
                         </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Mig Grup</label>
+                                <select value={subgroup} onChange={e=>setSubgroup(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500 text-sm">
+                                    <option value="">-- Cap --</option>
+                                    {currentClass && currentClass.subgroups && currentClass.subgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Etiqueta NEE</label>
+                                <select value={nee} onChange={e=>setNee(e.target.value)} className="w-full p-2 border rounded outline-none focus:border-brand-500 text-sm">
+                                    <option value="">-- Cap --</option>
+                                    <option value="Dislèxia / Discalcúlia">Dislèxia / Discalcúlia</option>
+                                    <option value="TDAH">TDAH</option>
+                                    <option value="TA">TA</option>
+                                    <option value="QI limit o TDL">QI limit o TDL</option>
+                                    <option value="Alumne de progrés">Alumne de progrés</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Comentari General del Semestre</label>
                             <textarea value={notes.general ? notes.general : ""} onChange={(e) => handleNotesChange("general", e.target.value, false)} className="w-full p-3 border border-yellow-300 rounded-lg h-24 bg-yellow-50 outline-none focus:ring-2 focus:ring-yellow-400" placeholder="Anotacions generals sobre el progrés, actitud, etc."/>
@@ -654,6 +685,10 @@
                                 ))}
                             </div>
                         )}
+                        <div className="pt-4 border-t">
+                            <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide text-blue-800">6. Comentari tutoria</label>
+                            <textarea value={notes.tutoria ? notes.tutoria : ""} onChange={(e) => handleNotesChange("tutoria", e.target.value, false)} className="w-full p-3 border border-blue-300 rounded-lg h-20 bg-blue-50 outline-none focus:ring-2 focus:ring-blue-400 text-sm" placeholder="Anotacions per a tutoria..."/>
+                        </div>
                         <div className="pt-4 flex justify-end">
                             <button onClick={handleSaveAndClose} className="px-6 py-2 bg-brand-500 text-white rounded font-bold hover:bg-brand-600 shadow">Desar i Tancar</button>
                         </div>
@@ -669,15 +704,21 @@
             const cList = competencies ? competencies : [];
 
             const copyAllNotes = () => {
-                let text = `Alumne\tTipus\tCompetència\tComentari\n`;
+                let text = `Alumne\tGrup\tNEE\tTipus\tCompetència\tComentari\n`;
                 sList.forEach(s => {
+                    const grp = s.subgroup ? s.subgroup : "-";
+                    const nee = s.nee ? s.nee : "-";
+
                     if (s.notes && s.notes.general) {
-                        text += `${s.name}\tGeneral\t-\t${s.notes.general.replace(/\n/g, ' ')}\n`;
+                        text += `${s.name}\t${grp}\t${nee}\tGeneral\t-\t${s.notes.general.replace(/\n/g, ' ')}\n`;
+                    }
+                    if (s.notes && s.notes.tutoria) {
+                        text += `${s.name}\t${grp}\t${nee}\tTutoria\t-\t${s.notes.tutoria.replace(/\n/g, ' ')}\n`;
                     }
                     if (s.notes && s.notes.competencies) {
                         cList.forEach(c => { 
                             if (s.notes.competencies[c.id]) {
-                                text += `${s.name}\tCompetencial\t${c.name}\t${s.notes.competencies[c.id].replace(/\n/g, ' ')}\n`; 
+                                text += `${s.name}\t${grp}\t${nee}\tCompetencial\t${c.name}\t${s.notes.competencies[c.id].replace(/\n/g, ' ')}\n`; 
                             }
                         });
                     }
@@ -690,6 +731,9 @@
                 let hasGen = false;
                 if (s.notes && s.notes.general && s.notes.general.trim() !== "") hasGen = true;
                 
+                let hasTut = false;
+                if (s.notes && s.notes.tutoria && s.notes.tutoria.trim() !== "") hasTut = true;
+
                 let hasComp = false;
                 if (s.notes && s.notes.competencies) {
                     for (const key in s.notes.competencies) {
@@ -699,7 +743,7 @@
                         }
                     }
                 }
-                return hasGen || hasComp;
+                return hasGen || hasTut || hasComp;
             });
 
             return (
@@ -715,11 +759,21 @@
                             {studentsWithNotes.length === 0 && <p className="text-center text-gray-400 py-10 font-bold text-lg">No hi ha cap comentari registrat per a cap alumne.</p>}
                             {studentsWithNotes.map(s => (
                                 <div key={s.id} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-                                    <h4 className="font-bold text-lg mb-3 text-gray-800 border-b pb-1">{s.name}</h4>
+                                    <h4 className="font-bold text-lg mb-3 text-gray-800 border-b pb-1">
+                                        {s.name}
+                                        {s.subgroup && <span className="ml-2 text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded">{s.subgroup}</span>}
+                                        {s.nee && <span className="ml-2 text-xs font-normal text-purple-700 bg-purple-100 px-2 py-1 rounded">{s.nee}</span>}
+                                    </h4>
                                     {s.notes && s.notes.general && (
                                         <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-gray-800">
                                             <span className="font-black text-[10px] text-yellow-600 uppercase block mb-1">Anotació General</span>
                                             {s.notes.general}
+                                        </div>
+                                    )}
+                                    {s.notes && s.notes.tutoria && (
+                                        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-800">
+                                            <span className="font-black text-[10px] text-blue-600 uppercase block mb-1">Tutoria</span>
+                                            {s.notes.tutoria}
                                         </div>
                                     )}
                                     {s.notes && s.notes.competencies && Object.keys(s.notes.competencies).map(cid => {
@@ -1163,6 +1217,7 @@
             
             const [activeClassId, setActiveClassId] = useState(null);
             const [activeTab, setActiveTab] = useState('S1'); 
+            const [activeSubgroupFilter, setActiveSubgroupFilter] = useState('ALL');
             
             // Modal States
             const [isEditingStructure, setIsEditingStructure] = useState(false);
@@ -1197,6 +1252,12 @@
 
                     initialData = parsed.map(cls => {
                         let newCls = {...cls};
+                        
+                        // Migració a la nova estructura de classes amb Subgrups
+                        if (!newCls.subgroups) {
+                            newCls.subgroups = [];
+                        }
+
                         if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
                             newCls.semesters = [
                                 { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
@@ -1245,6 +1306,11 @@
                     }
                 }
             }, [classes]);
+
+            // Reset filtre de grups en canviar de classe
+            useEffect(() => {
+                setActiveSubgroupFilter('ALL');
+            }, [activeClassId]);
 
             const updateClasses = (newClasses) => {
                 let newHistory = [];
@@ -1295,8 +1361,8 @@
             const saveStudentsList = (ns) => { 
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: ns } : c)); 
             };
-            const updateStudentNotes = (sid, notes) => { 
-                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, notes: notes } : s) } : c)); 
+            const updateStudentNotes = (sid, notes, subgroup, nee) => { 
+                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, notes: notes, subgroup: subgroup, nee: nee } : s) } : c)); 
             };
             const handleUpdateClass = (id, data) => {
                 updateClasses(classes.map(c => c.id === id ? { ...c, ...data } : c));
@@ -1527,8 +1593,8 @@
 
             const handleExportExcel = () => {
                 if(!currentClass) return; 
-                const headers = ["Alumne"];
-                const subH = [""]; 
+                const headers = ["Alumne", "Grup", "NEE"];
+                const subH = ["", "", ""]; 
                 
                 visibleCompsList.forEach(c => { 
                     if(c.criteria) {
@@ -1551,7 +1617,7 @@
                 
                 if(currentClass.students) {
                     currentClass.students.forEach(s => { 
-                        const r = [s.name]; 
+                        const r = [s.name, s.subgroup ? s.subgroup : "", s.nee ? s.nee : ""]; 
                         visibleCompsList.forEach(c => { 
                             let cm = []; 
                             if(c.criteria) {
@@ -2010,13 +2076,35 @@
 
             const renderSpreadsheet = () => {
                 if (!currentClass) return <div className="p-10 text-center text-gray-500 font-bold text-xl">Selecciona o crea una classe per començar.</div>;
+                
+                const filteredStudents = (currentClass.students ? currentClass.students : []).filter(s => {
+                    if (activeSubgroupFilter === "ALL") return true;
+                    if (activeSubgroupFilter === "NONE") return !s.subgroup;
+                    return s.subgroup === activeSubgroupFilter;
+                });
+
                 return (
                     <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 flex flex-col h-full">
                         <div className="p-3 bg-gray-50 border-b flex justify-between items-center shrink-0 overflow-x-auto">
                             <div className="flex items-center space-x-2">
                                 <button onClick={() => setIsEditingStructure(!isEditingStructure)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 ${isEditingStructure ? 'bg-orange-100 text-orange-700 shadow-inner' : 'bg-white text-gray-600 border hover:bg-gray-50 shadow-sm'}`}><Icon name={isEditingStructure ? "lock" : "pen-to-square"} />{isEditingStructure ? "Bloquejar Taula" : "Editar Taula"}</button>
+                                
+                                {currentClass.subgroups && currentClass.subgroups.length > 0 && (
+                                    <div className="relative group">
+                                        <select 
+                                            value={activeSubgroupFilter} 
+                                            onChange={(e) => setActiveSubgroupFilter(e.target.value)}
+                                            className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition font-bold"
+                                        >
+                                            <option value="ALL">Tots els grups</option>
+                                            <option value="NONE">Sense grup</option>
+                                            {currentClass.subgroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <div className="relative group">
-                                    <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar</button>
+                                    <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar Comp.</button>
                                     <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-50 hidden group-hover:block w-56 text-sm">
                                         {activeCompetencies.map(c => (
                                             <div key={c.id} className="p-1.5 hover:bg-gray-50 rounded transition">
@@ -2138,13 +2226,15 @@
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-100">
-                                    {(currentClass.students ? currentClass.students : []).map((student, sIdx) => (
+                                    {filteredStudents.map((student, sIdx) => (
                                         <tr key={student.id} className="hover:bg-blue-50/30 group transition-colors">
                                             <td className="p-2 sticky-col w-64 border-r border-b font-medium text-gray-800 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] group-hover:bg-blue-50/50">
-                                                <div className="flex items-center gap-3 w-full pl-2">
-                                                    <span className="text-xs font-bold text-gray-400 w-4 text-right">{sIdx + 1}.</span>
+                                                <div className="flex items-center gap-2 w-full pl-2">
+                                                    <span className="text-xs font-bold text-gray-400 w-4 text-right shrink-0">{sIdx + 1}.</span>
                                                     <button onClick={() => setShowStudentNotes(student)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition shadow-sm ${student.notes && student.notes.general ? 'bg-yellow-100 text-yellow-600 border border-yellow-200' : 'text-gray-400 bg-gray-50 border border-gray-200 hover:bg-yellow-50 hover:text-yellow-500 hover:border-yellow-200'}`} title="Notes personals"><Icon name="note-sticky"/></button>
                                                     <span className="font-bold text-gray-700 truncate flex-1 tracking-tight" title={student.name}>{student.name}</span>
+                                                    {student.subgroup && <span className="ml-1 text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">{student.subgroup}</span>}
+                                                    {student.nee && <span className="ml-1 text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold shadow-sm whitespace-nowrap" title={student.nee}>NEE</span>}
                                                 </div>
                                             </td>
                                             {visibleCompsList.map(comp => {
@@ -2194,8 +2284,8 @@
                                             })}
                                         </tr>
                                     ))}
-                                    {(!currentClass.students || currentClass.students.length === 0) && (
-                                        <tr><td colSpan="100%" className="p-12 text-center text-gray-500 font-medium text-lg">No hi ha cap alumne en aquesta classe. Fes clic a "Gestió d'Alumnes" per afegir-ne.</td></tr>
+                                    {filteredStudents.length === 0 && (
+                                        <tr><td colSpan="100%" className="p-12 text-center text-gray-500 font-medium text-lg">No hi ha cap alumne en aquesta classe o filtre.</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -2212,7 +2302,7 @@
                         <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
                         <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
                         <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
-                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} competencies={activeCompetencies} onSave={updateStudentNotes} />
+                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} competencies={activeCompetencies} onSave={updateStudentNotes} currentClass={currentClass} />
                         <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} competencies={activeCompetencies} />
                         <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
                         <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
@@ -2297,7 +2387,11 @@
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>
+        );
     </script>
 </body>
 </html>
