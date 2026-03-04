@@ -184,6 +184,7 @@
 
         const WORK_DAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres"];
         const WEEKEND_DAYS = ["Dissabte", "Diumenge"];
+        const DAYS = [...WORK_DAYS, ...WEEKEND_DAYS];
         const MONTHS = ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"];
         
         const DEFAULT_COLORS = [
@@ -470,7 +471,7 @@
             );
         };
 
-        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders }) => {
+        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders, weeksData }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
             const [showInfoModal, setShowInfoModal] = useState(false);
@@ -554,19 +555,36 @@
             let activeReminders = [];
             
             if (currentWeekObj && reminders) {
-                const todayIndex = new Date().getDay() - 1; // Dilluns=0, Divendres=4, Diumenge=6
-                if (todayIndex >= 0 && todayIndex <= 4) {
+                let dayOfWeek = new Date().getDay(); // 0 = Diumenge, 1 = Dilluns...
+                let todayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Dilluns=0... Diumenge=6
+
+                if (todayIndex >= 0 && todayIndex <= 6) {
                     const todayKey = addDays(currentWeekObj.id, todayIndex);
                     if (reminders[todayKey]) {
                         activeReminders.push(...reminders[todayKey].map(r => ({...r, day: 'AVUI'})));
                     }
                 }
                 const tomorrowIndex = todayIndex + 1;
-                if (tomorrowIndex >= 0 && tomorrowIndex <= 4) {
+                if (tomorrowIndex >= 0 && tomorrowIndex <= 6) {
                     const tomorrowKey = addDays(currentWeekObj.id, tomorrowIndex);
                     if (reminders[tomorrowKey]) {
                         activeReminders.push(...reminders[tomorrowKey].map(r => ({...r, day: 'DEMÀ'})));
                     }
+                }
+
+                // Extreure tasques programades lliurement al Cap de Setmana (des de Dijous d'aquella setmana)
+                if (todayIndex >= 3 && weeksData && weeksData[currentWeekObj.id]) {
+                    const currentWeekData = weeksData[currentWeekObj.id];
+                    
+                    const satTasks = currentWeekData["5-weekend"]?.tasks || [];
+                    satTasks.forEach(t => {
+                        if (t.text.trim()) activeReminders.push({ text: t.text, time: t.time, day: 'DISSABTE', isTask: true });
+                    });
+                    
+                    const sunTasks = currentWeekData["6-weekend"]?.tasks || [];
+                    sunTasks.forEach(t => {
+                        if (t.text.trim()) activeReminders.push({ text: t.text, time: t.time, day: 'DIUMENGE', isTask: true });
+                    });
                 }
             }
 
@@ -591,8 +609,8 @@
                                             <div key={i} className="flex justify-between items-center bg-white/80 p-1.5 rounded border border-yellow-200 text-sm">
                                                 <span className="font-medium text-gray-700 truncate mr-2">{r.text}</span>
                                                 <div className="flex items-center gap-1 shrink-0">
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${r.day === 'AVUI' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{r.day}</span>
-                                                    <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-1 rounded">{r.time || 'Tot el dia'}</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${r.day === 'AVUI' ? 'bg-red-100 text-red-700' : (r.isTask ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700')}`}>{r.day}</span>
+                                                    {r.time && <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-1 rounded">{r.time}</span>}
                                                 </div>
                                             </div>
                                         ))}
@@ -1566,6 +1584,10 @@
                     onAddToRadar(task.text, exactDateStr);
                     alert("Afegit al Radar!");
                 } else if (action === 'alert_menu') {
+                    if (!cid) {
+                        alert("Aquesta acció només està disponible per a classes regulars.");
+                        return;
+                    }
                     const tasks = getTasks(d, s);
                     const idx = tasks.findIndex(t => t === task);
                     setPendingActionTask({ d, s, cid, idx, task });
@@ -1739,7 +1761,7 @@
             const generateHTML = (onlyRows = false) => {
                 let html = onlyRows ? '' : `<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>`;
                 
-                DAYS.forEach((day, d) => {
+                WORK_DAYS.forEach((day, d) => {
                     TIME_SLOTS.forEach((slot, s) => {
                         const cid = config.schedule[d]?.[slot.id] || planData.extraClasses?.[d]?.[slot.id];
                         if (cid && slot.type !== 'break' && (!exportClassId || cid === exportClassId)) {
@@ -1883,6 +1905,25 @@
                                     
                                     {/* Cel·les */}
                                     {viewDays.map((_, d) => {
+                                        if (d > 4) {
+                                            if (visibleIndex === 0) {
+                                                const key = `${d}-weekend`;
+                                                const data = planData[key] || {};
+                                                const tasks = getTasks(d, 'weekend');
+                                                
+                                                return (
+                                                    <div key={d} style={{ gridRow: `span ${visibleSlots.length}` }} className="border-r border-b border-gray-100 p-3 flex flex-col gap-2 relative group bg-white hover:bg-gray-50/50 transition-colors">
+                                                        <div className="text-xs font-bold text-gray-400 mb-2 mt-1 text-center italic tracking-wider uppercase">{DAYS[d]} (Tasca Lliure)</div>
+                                                        <div className="flex-1 overflow-y-auto custom-scroll">
+                                                            <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, 'weekend', t)} onAction={(task, action) => handleTaskAction(d, 'weekend', null, task, action)} disabled={false} theme={theme} />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else {
+                                                return null;
+                                            }
+                                        }
+
                                         const prevSlot = visibleSlots[visibleIndex - 1];
                                         const isSequential = prevSlot && (slot.id === prevSlot.id + 1);
                                         const prevKey = prevSlot ? `${d}-${prevSlot.id}` : null;
@@ -1901,21 +1942,6 @@
                                         const [y, m, day] = dateStr.split('-');
                                         const cellEndTime = new Date(y, m - 1, day, slot.endH, slot.endM, 0);
                                         const isPast = now > cellEndTime;
-
-                                        if (!cid && !isExtraClass && d > 4) {
-                                            // Cap de setmana sense classe extra assignada: permetre escriure text pla
-                                            const key = `${d}-${slot.id}`;
-                                            const data = planData[key] || {};
-                                            const tasks = getTasks(d, slot.id);
-                                            return (
-                                                <div key={d} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-colors ${isPast ? 'bg-gray-100 opacity-60' : 'bg-white hover:bg-gray-50/50'}`}>
-                                                    <div className="text-xs font-bold text-gray-400 mb-1 text-center italic">Temps lliure</div>
-                                                    <div className="flex-1 overflow-y-auto custom-scroll">
-                                                        <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, slot.id, t)} onAction={(task, action) => handleTaskAction(d, slot.id, cid, task, action)} disabled={false} theme={theme} />
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
 
                                         if (!cid) return <div key={d} className={`border-r border-b border-gray-100 ${isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50/30'}`}></div>;
                                         
@@ -2522,7 +2548,12 @@
                     const sessions = allClassSessions.filter(sess => sess.weekId === w.id);
                     sessions.forEach(sess => {
                         if (sess.isHoliday) return;
-                        if (sess.sessionNumber !== null && (sess.sessionNumber < minSess || sess.sessionNumber > maxSess)) return;
+
+                        if (interval.trim() !== "") {
+                            if (sess.sessionNumber === null || sess.sessionNumber < minSess || sess.sessionNumber > maxSess) return;
+                        } else {
+                            if (sess.sessionNumber !== null && (sess.sessionNumber < minSess || sess.sessionNumber > maxSess)) return;
+                        }
 
                         const data = sess.data || {};
                         const tasks = data.tasks || [];
@@ -3031,7 +3062,7 @@
             return (
                 <div className="min-h-screen">
                     {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} weeksData={weeksData} />}
                     {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                     {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                 </div>
