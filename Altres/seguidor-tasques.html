@@ -65,6 +65,8 @@
         const Settings = (p) => <Icon {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
         const Triangle = (p) => <Icon {...p}><polygon points="12 2 22 20 2 20"/></Icon>;
         const Info = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Icon>;
+        const Eye = (p) => <Icon {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></Icon>;
+        const EyeOff = (p) => <Icon {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></Icon>;
 
         // --- Config inicial ---
         const STATUS_TYPES = {
@@ -122,6 +124,7 @@
             // --- Estat UI Local ---
             const [activeUtId, setActiveUtId] = useState('ut1'); // Per defecte comencem a la UT 1
             const [utMenuOpen, setUtMenuOpen] = useState(null); // ID de la UT que té el menú obert
+            const [showPastTasks, setShowPastTasks] = useState(false); // Estat per controlar tasques passades
             
             const [isAddingTask, setIsAddingTask] = useState(false);
             const [isManagingStudents, setIsManagingStudents] = useState(false);
@@ -156,31 +159,37 @@
             const uts = currentData.uts || DEFAULT_UTS;
             const incidents = currentData.incidents || {};
             
-            // FILTRE DE TASQUES
+            // FILTRE DE TASQUES GLOBALS (Tot el que té dades base per càlculs)
             const visibleTasks = useMemo(() => {
                 const rawTasks = currentData.tasks || [];
                 const sortFn = (a, b) => a.date.localeCompare(b.date);
 
                 if (activeUtId === 'default') {
-                    // Si estem a GENERAL: Mostrem TOTES les tasques (Unificades)
                     return [...rawTasks].sort(sortFn);
                 } else {
-                    // Si estem a una UT especifica: Filtrem
-                    // Assignem 'default' a tasques velles sense UT, o busquem la UT correcta
                     const tasksWithUt = rawTasks.map(t => ({...t, utId: t.utId || 'default'}));
                     return tasksWithUt.filter(t => t.utId === activeUtId).sort(sortFn);
                 }
             }, [currentData.tasks, activeUtId]);
 
+            // TASQUES RENDERITZADES (Mostrades a la taula, segons toggle de tasques passades)
+            const todayStr = new Date().toISOString().split('T')[0];
+            const renderedTasks = useMemo(() => {
+                if (showPastTasks) return visibleTasks;
+                return visibleTasks.filter(t => t.date >= todayStr);
+            }, [visibleTasks, showPastTasks]);
+
+            const pastTasksCount = visibleTasks.length - renderedTasks.length;
+
             // CÀLCUL CAPÇALERES GRUPADES PER UT (Només per a vista General)
             const groupedUtHeaders = useMemo(() => {
-                if (activeUtId !== 'default' || visibleTasks.length === 0) return [];
+                if (activeUtId !== 'default' || renderedTasks.length === 0) return [];
                 
                 const headers = [];
                 let currentUt = null;
                 let count = 0;
 
-                visibleTasks.forEach(task => {
+                renderedTasks.forEach(task => {
                     const taskUtId = task.utId || 'default';
                     if (taskUtId !== currentUt) {
                         if (currentUt !== null) {
@@ -196,7 +205,7 @@
                     headers.push({ id: currentUt, count });
                 }
                 return headers;
-            }, [visibleTasks, activeUtId]);
+            }, [renderedTasks, activeUtId]);
 
             const allClassTasks = currentData.tasks || []; 
             const records = currentData.records || {};
@@ -482,7 +491,6 @@
             const handleAddStudents = () => { const lines = newStudentList.replace(/\r\n/g, "\n").split('\n').filter(line => line.trim() !== ''); const newStudentsObj = lines.map(line => ({ id: Date.now().toString() + Math.random().toString(36).substr(2, 9), name: line.replace(/\t+/g, ' ').trim() })); updateClassData(activeClassId, d => ({ ...d, students: [...d.students, ...newStudentsObj] })); setNewStudentList(""); setIsManagingStudents(false); };
             const deleteStudent = (id) => { if(confirm("Segur que vols eliminar aquest alumne?")) { updateClassData(activeClassId, d => ({ ...d, students: d.students.filter(s => s.id !== id) })); if (selectedStudent?.id === id) setSelectedStudent(null); } };
             const deleteTask = (id) => { if(confirm("Segur que vols eliminar aquesta tasca?")) { updateClassData(activeClassId, d => ({ ...d, tasks: d.tasks.filter(t => t.id !== id) })); } };
-            const markTaskForAll = (taskId, status) => { if(!confirm(`Vols marcar "${STATUS_TYPES[status].label}" per a tots els alumnes?`)) return; updateClassData(activeClassId, d => { const newRecords = { ...d.records }; d.students.forEach(s => { newRecords[`${s.id}_${taskId}`] = status; }); return { ...d, records: newRecords }; }); };
             
             const toggleTaskForAll = (taskId) => {
                 updateClassData(activeClassId, d => {
@@ -626,7 +634,13 @@
                                     ))}
                                 </div>
 
-                                <div className="py-2 border-l border-slate-200 pl-4">
+                                <div className="py-2 border-l border-slate-200 pl-4 flex items-center gap-2">
+                                    {pastTasksCount > 0 && (
+                                        <button onClick={() => setShowPastTasks(!showPastTasks)} className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm border border-slate-200">
+                                            {showPastTasks ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            <span className="hidden sm:inline">{showPastTasks ? 'Oculta passades' : `Mostra passades (${pastTasksCount})`}</span>
+                                        </button>
+                                    )}
                                     <button onClick={openAddTaskModal} className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm">
                                         <Plus size={16} /> Nova Tasca
                                     </button>
@@ -639,29 +653,29 @@
                     <main className="flex-1 overflow-hidden flex flex-col max-w-full mx-auto w-full p-4">
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
                             <div className="overflow-auto custom-scroll flex-1 relative">
-                                <table className="w-full border-collapse">
-                                    <thead className="bg-slate-50 sticky top-0 z-20 shadow-sm">
-                                        {activeUtId === 'default' && visibleTasks.length > 0 && (
+                                <table className="w-full border-separate" style={{ borderSpacing: 0 }}>
+                                    <thead className="bg-slate-50 sticky top-0 z-40 shadow-md ring-1 ring-slate-200">
+                                        {activeUtId === 'default' && renderedTasks.length > 0 && (
                                             <tr>
-                                                <th className="sticky left-0 z-30 bg-slate-50 border-r border-slate-200"></th>
+                                                <th className="sticky left-0 z-50 bg-slate-50 border-r border-slate-200 p-0"></th>
                                                 {groupedUtHeaders.map((header, idx) => (
-                                                    <th key={idx} colSpan={header.count} className="p-1 text-[10px] font-bold text-indigo-400 uppercase tracking-wider border-b border-r border-slate-200 bg-indigo-50/30 text-center">
+                                                    <th key={idx} colSpan={header.count} className="p-1 text-[10px] font-bold text-indigo-400 uppercase tracking-wider border-b border-r border-slate-200 bg-indigo-50/90 backdrop-blur text-center">
                                                         {uts.find(u => u.id === header.id)?.name || 'General'}
                                                     </th>
                                                 ))}
-                                                <th className="bg-slate-50"></th>
+                                                <th className="bg-slate-50 p-0 border-b border-slate-200"></th>
                                             </tr>
                                         )}
                                         <tr>
-                                            <th className="sticky left-0 z-30 bg-slate-50 p-4 text-left min-w-[220px] border-b border-r border-slate-200 w-72">
+                                            <th className="sticky left-0 z-50 bg-slate-50 p-4 text-left min-w-[220px] border-b border-r border-slate-200 w-72">
                                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Alumne</span>
                                             </th>
-                                            {visibleTasks.length === 0 ? (
+                                            {renderedTasks.length === 0 ? (
                                                 <th className="p-4 text-center text-slate-400 text-sm italic font-normal border-b border-slate-200">
-                                                    Cap tasca visible a {uts.find(u=>u.id===activeUtId)?.name}.
+                                                    {visibleTasks.length === 0 ? `Cap tasca a ${uts.find(u=>u.id===activeUtId)?.name}.` : "Totes les tasques són anteriors a avui. (Mostra passades per veure-les)"}
                                                 </th>
                                             ) : (
-                                                visibleTasks.map((task, idx) => {
+                                                renderedTasks.map((task, idx) => {
                                                     const allDone = students.length > 0 && students.every(s => records[`${s.id}_${task.id}`] === 'DONE');
                                                     const doneCount = students.filter(s => records[`${s.id}_${task.id}`] === 'DONE').length;
                                                     return (
@@ -705,7 +719,7 @@
 
                                             return (
                                                 <tr key={student.id} className={`${rowClass} hover:bg-slate-50 group`}>
-                                                    <td className={`sticky left-0 ${rowClass} group-hover:bg-slate-50 p-3 border-b border-r border-slate-200 transition-colors z-10`}>
+                                                    <td className={`sticky left-0 z-30 ${rowClass} group-hover:bg-slate-50 p-3 border-b border-r border-slate-200 transition-colors`}>
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="flex items-center gap-1">
                                                                 <button onClick={() => setSelectedStudent(student)} className="font-medium text-slate-700 hover:text-indigo-600 hover:underline text-left text-sm flex items-center gap-1.5">
@@ -730,7 +744,7 @@
                                                             <span className="text-[10px] font-bold text-slate-400 w-6 text-right">{stats.percentage}%</span>
                                                         </div>
                                                     </td>
-                                                    {visibleTasks.map((task, tIdx) => {
+                                                    {renderedTasks.map((task, tIdx) => {
                                                         const statusKey = records[`${student.id}_${task.id}`] || 'EMPTY';
                                                         const cellNoteKey = `${student.id}_${task.id}`;
                                                         const noteText = (currentData.cellNotes || {})[cellNoteKey] || "";
@@ -754,13 +768,13 @@
                                                             </td>
                                                         );
                                                     })}
-                                                    {visibleTasks.length === 0 && <td className="border-b border-slate-200"></td>}
+                                                    {renderedTasks.length === 0 && <td className="border-b border-slate-200"></td>}
                                                     <td className="border-b border-slate-100 bg-white"></td>
                                                 </tr>
                                             );
                                         })}
                                         {students.length === 0 && (
-                                            <tr><td colSpan={visibleTasks.length + 2} className="p-12 text-center text-slate-400"><div className="flex flex-col items-center gap-4"><div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center text-orange-300"><Users size={32} /></div><p>Classe buida.</p><button onClick={() => setIsManagingStudents(true)} className="text-orange-600 font-medium hover:underline">Gestionar Alumnes</button></div></td></tr>
+                                            <tr><td colSpan={renderedTasks.length + 2} className="p-12 text-center text-slate-400"><div className="flex flex-col items-center gap-4"><div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center text-orange-300"><Users size={32} /></div><p>Classe buida.</p><button onClick={() => setIsManagingStudents(true)} className="text-orange-600 font-medium hover:underline">Gestionar Alumnes</button></div></td></tr>
                                         )}
                                     </tbody>
                                 </table>
