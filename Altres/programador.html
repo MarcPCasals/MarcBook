@@ -103,16 +103,18 @@
             Object.keys(localStorage).forEach(k => {
                 if (k.startsWith('programacio-')) localStorage.removeItem(k);
             });
-            coursesToSave.forEach(curs => {
-                localStorage.setItem(`programacio-${curs.name}`, JSON.stringify(curs));
+            coursesToSave.forEach((curs, index) => {
+                const cursToSave = { ...curs, _saveOrder: index };
+                localStorage.setItem(`programacio-${curs.name}`, JSON.stringify(cursToSave));
             });
         };
 
         const llegirDades = () => {
             const keys = Object.keys(localStorage).filter(k => k.startsWith('programacio-'));
-            return keys.map(k => {
+            const loaded = keys.map(k => {
                 try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
             }).filter(Boolean);
+            return loaded.sort((a, b) => (a._saveOrder || 0) - (b._saveOrder || 0));
         };
 
         const detectarDades = () => {
@@ -240,6 +242,17 @@
                     const rows = doc.querySelectorAll('tr');
                     const newSessions = [];
 
+                    const parseActivityText = (rawText) => {
+                        let text = rawText.trim().replace(/^•\s*/, '');
+                        let time = '';
+                        const timeMatch = text.match(/\[(\d+)'\]\s*/);
+                        if (timeMatch) {
+                            time = timeMatch[1];
+                            text = text.replace(timeMatch[0], '');
+                        }
+                        return { text: text.trim(), time };
+                    };
+
                     rows.forEach(row => {
                         const cells = row.querySelectorAll('td');
                         if (cells.length >= 3) {
@@ -248,12 +261,12 @@
                             const activities = [];
                             if (actDivs.length > 0) {
                                 actDivs.forEach(div => {
-                                    let text = div.textContent.trim().replace(/^•\s*/, '');
-                                    if (text) activities.push({ id: generateId(), text: text, detail: '', time: '', challengeResponse: '', expanded: false });
+                                    const parsed = parseActivityText(div.textContent);
+                                    if (parsed.text || parsed.time) activities.push({ id: generateId(), text: parsed.text, detail: '', time: parsed.time, challengeResponse: '', expanded: false });
                                 });
                             } else {
-                                let text = cells[0].textContent.trim().replace(/^•\s*/, '');
-                                if (text) activities.push({ id: generateId(), text: text, detail: '', time: '', challengeResponse: '', expanded: false });
+                                const parsed = parseActivityText(cells[0].textContent);
+                                if (parsed.text || parsed.time) activities.push({ id: generateId(), text: parsed.text, detail: '', time: parsed.time, challengeResponse: '', expanded: false });
                             }
 
                             // Parsejar Materials i Enllaços
