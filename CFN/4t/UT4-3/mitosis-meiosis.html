@@ -237,7 +237,7 @@
         // --- COMPONENTE PRINCIPAL ---
         const App = () => {
             const getSaved = () => {
-                try { return JSON.parse(localStorage.getItem('pigeonetics_sim_data_v21')) || {}; }
+                try { return JSON.parse(localStorage.getItem('pigeonetics_sim_data_v23')) || {}; }
                 catch(e) { return {}; }
             };
             const saved = getSaved();
@@ -261,7 +261,7 @@
             const [selectedFrag, setSelectedFrag] = useState(null); 
             
             const [showPunnett, setShowPunnett] = useState(false); 
-            const [showRepteFecundacion, setShowRepteFecundacion] = useState(false); // Modal Fecundación Aneuploidía
+            const [showRepteFecundacion, setShowRepteFecundacion] = useState(false); 
             const [showCrossingModal, setShowCrossingModal] = useState(false); 
             const [punnettTicks, setPunnettTicks] = useState(Array(16).fill(false)); 
             
@@ -269,7 +269,7 @@
             const [phaseToast, setPhaseToast] = useState(null);
 
             useEffect(() => {
-                localStorage.setItem('pigeonetics_sim_data_v21', JSON.stringify({ mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone }));
+                localStorage.setItem('pigeonetics_sim_data_v23', JSON.stringify({ mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone }));
             }, [mode, phase, spindleActive, isCondensed, chromatinZone, chromosomes, health, appMode, answers, cytokinesisDone]);
             
             useEffect(() => {
@@ -302,7 +302,7 @@
 
             const clearData = () => {
                 if(window.confirm('¿Seguro que quieres borrar todos los datos guardados y empezar de cero?')) {
-                    localStorage.removeItem('pigeonetics_sim_data_v21');
+                    localStorage.removeItem('pigeonetics_sim_data_v23');
                     window.location.reload();
                 }
             };
@@ -576,15 +576,21 @@
                     }
                 }
                 else if (mode === 'repte') {
-                    const topCount = poleTop.length;
-                    const botCount = poleBottom.length;
-                    if (topCount !== botCount && (poleTop.length + poleBottom.length === chromosomes.length)) {
+                    const topLg = poleTop.filter(c => c.type === 'lg').length;
+                    const botLg = poleBottom.filter(c => c.type === 'lg').length;
+                    const topSm = poleTop.filter(c => c.type === 'sm').length;
+                    const botSm = poleBottom.filter(c => c.type === 'sm').length;
+                    const topXs = poleTop.filter(c => c.type === 'xs').length;
+                    const botXs = poleBottom.filter(c => c.type === 'xs').length;
+
+                    // Exigimos que la no-disyunción se haga EXCLUSIVAMENTE en el par pequeño (xs, trisomía 21)
+                    if (topLg === 1 && botLg === 1 && topSm === 1 && botSm === 1 && (topXs === 2 || botXs === 2)) {
                         setPhase('telofase1');
                         setCytokinesisDone(false);
-                        setFeedback({ type: 'info', msg: 'Anafase I completada con error provocado. Activa el Anillo Contráctil.' });
-                        setTutorialPopup({ show: true, minimized: false, title: 'No-disyunción detectada', text: <span>¡Bien hecho! Has provocado que un par homólogo no se separe correctamente.<br/><br/>Usa el <strong className="text-pink-600">Anillo Contráctil</strong> para dividir la célula y luego simula la Meiosis II para ver cómo quedan los gametos finales.</span>});
+                        setFeedback({ type: 'info', msg: 'Anafase I completada con error provocado en el par 21. Activa el Anillo Contráctil.' });
+                        setTutorialPopup({ show: true, minimized: false, title: 'No-disyunción detectada', text: <span>¡Bien hecho! Has provocado que el par 21 no se separe correctamente.<br/><br/>Usa el <strong className="text-pink-600">Anillo Contráctil</strong> para dividir la célula y luego simula la Meiosis II para ver cómo quedan los gametos finales.</span>});
                     } else {
-                        setFeedback({ type: 'error', msg: 'División equitativa detectada. Debes provocar un error moviendo los dos homólogos de un par al mismo polo.' });
+                        setFeedback({ type: 'error', msg: 'Para la Trisomía 21, debes separar correctamente los cromosomas grandes y medianos, y llevar LOS DOS pequeños (par 21) al mismo polo.' });
                     }
                 }
             };
@@ -698,9 +704,11 @@
                                         draggable 
                                         onDragStart={(e) => handleDragStart(e, c)}
                                         onClick={(e) => handleChromClick(e, isBivalentMember ? grp[0] : c)}
-                                        className={`w-[40px] h-[60px] md:w-[60px] md:h-[80px] flex items-center justify-center rotate-90 cursor-pointer chromosome-hover transition-all ${selectedItem?.id === c.id ? 'ring-4 ring-yellow-400 scale-110 shadow-lg rounded-full' : ''}`}
+                                        className={`flex items-center justify-center cursor-pointer transition-all ${selectedItem?.id === c.id ? 'ring-4 ring-yellow-400 scale-110 shadow-lg rounded-full' : ''}`}
                                     >
-                                        <ChromosomeSVG {...c} isSelectable={false} />
+                                        <div className="rotate-90 w-[40px] h-[60px] md:w-[60px] md:h-[80px] flex justify-center items-center">
+                                            <ChromosomeSVG {...c} isSelectable={false} />
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -724,11 +732,13 @@
                             <div 
                                 key={c.id} 
                                 draggable 
-                                className={`w-[40px] h-[60px] md:w-[60px] md:h-[80px] flex items-center justify-center rotate-90 cursor-pointer chromosome-hover relative z-10 transition-all ${selectedItem?.id === c.id ? 'ring-4 ring-yellow-400 scale-110 shadow-lg rounded-full' : ''}`} 
+                                className={`flex items-center justify-center cursor-pointer relative z-10 transition-all ${selectedItem?.id === c.id ? 'ring-4 ring-yellow-400 scale-110 shadow-lg rounded-full' : ''}`} 
                                 onDragStart={(e) => handleDragStart(e, c)}
                                 onClick={(e) => handleChromClick(e, c)}
                             >
-                                <ChromosomeSVG {...c} isSelectable={false} />
+                                <div className="rotate-90 w-[40px] h-[60px] md:w-[60px] md:h-[80px] flex justify-center items-center">
+                                    <ChromosomeSVG {...c} isSelectable={false} />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -784,7 +794,7 @@ P: ¿Cuál ha sido la probabilidad (fracción) obtenida de hembras con cresta?
 R: ${answers.punnett_1 || ''}
 
 --- Parte 4: Reto Investigador (Errores en la Matrix) ---
-P: ¿Qué has tenido que hacer para forzar el problema de la trisomía y en qué fase ocurre?
+P: ¿Qué has tenido que hacer para forzar el problema de la trisomía y en qué fase ocurre? (Pista: Anafase I)
 R: ${answers.reto_1 || ''}
 `;
             };
@@ -792,7 +802,7 @@ R: ${answers.reto_1 || ''}
             const topChroms = chromosomes.filter(c => c.zone === 'poleTop');
             const botChroms = chromosomes.filter(c => c.zone === 'poleBottom');
 
-            // Gametos haploides reales (chromatids: 1) tras Meiosis II
+            // Gametos haploides dinámicos leyendo lo que haya llegado al polo
             const createGamete = (poleChroms, chromatidIndex) => {
                 return poleChroms.map(c => ({
                      ...c, 
@@ -809,13 +819,16 @@ R: ${answers.reto_1 || ''}
                 { id: 'egg4', chroms: createGamete(botChroms, 1) },
             ] : [];
 
-            // Espermatozoides del macho homocigótico recesivo (ZZ cc) simplificados para Punnett (solo lg y sm, o xs si es el repte)
-            const maleSperms = [1, 2, 3, 4].map(i => ({
-                id: `sperm${i}`,
-                lg: { type: 'lg', chromatids: 1, origin: 'pat', alleles: ['c'], crossedOver: false },
-                sm: { type: 'sm', chromatids: 1, origin: 'pat', sexLabel: 'Z', crossedOver: false },
-                xs: mode === 'repte' ? { type: 'xs', chromatids: 1, origin: 'pat', crossedOver: false } : null
-            }));
+            // Espermatozoides del macho homocigótico recesivo (ZZ cc) 
+            const maleSperms = [1, 2, 3, 4].map(i => {
+                const s = {
+                    id: `sperm${i}`,
+                    lg: { type: 'lg', chromatids: 1, origin: 'pat', alleles: ['c'], crossedOver: false },
+                    sm: { type: 'sm', chromatids: 1, origin: 'pat', sexLabel: 'Z', crossedOver: false }
+                };
+                if(mode === 'repte') s.xs = { type: 'xs', chromatids: 1, origin: 'pat', crossedOver: false };
+                return s;
+            });
 
             const tickedCount = punnettTicks.filter(Boolean).length;
 
@@ -1228,7 +1241,7 @@ R: ${answers.reto_1 || ''}
                                 <div className="w-full flex-1 flex flex-col items-center justify-start relative z-20 min-h-[500px]">
                                     <h2 className="text-base md:text-lg font-black text-slate-700 uppercase tracking-widest mt-4 md:mt-6 mb-2 md:mb-4">{phase === 'telofase1' ? 'Resultado Meiosis I' : 'Resultado Final'}</h2>
                                     
-                                    {(mode === 'mitosis' || mode === 'repte' || phase === 'telofase1') ? (
+                                    {(mode === 'mitosis' || phase === 'telofase1') ? (
                                         <div className="flex flex-col md:flex-row w-full gap-4 md:gap-8 items-center justify-center pt-2 px-2 md:px-4">
                                             <div className="w-40 h-40 md:w-64 md:h-64 bg-blue-50/60 rounded-[30px] md:rounded-[60px] border-4 border-blue-300 shadow-xl flex flex-col items-center justify-center relative">
                                                 <span className="absolute top-2 md:top-4 text-[10px] md:text-xs font-bold text-slate-600 uppercase">Célula 1</span>
@@ -1236,7 +1249,7 @@ R: ${answers.reto_1 || ''}
                                                     {renderEquatorGroupedForPoles('poleTop')}
                                                 </div>
                                                 <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
-                                                    {mode === 'mitosis' ? '2n (Diploide)' : 'n (Haploide duplicado)'}
+                                                    {mode === 'mitosis' ? '2n (Diploide)' : (mode === 'repte' ? 'Aneuploide (cromosomas duplicados)' : 'n (Haploide duplicado)')}
                                                 </span>
                                             </div>
                                             <div className="w-40 h-40 md:w-64 md:h-64 bg-blue-50/60 rounded-[30px] md:rounded-[60px] border-4 border-blue-300 shadow-xl flex flex-col items-center justify-center relative">
@@ -1245,7 +1258,7 @@ R: ${answers.reto_1 || ''}
                                                     {renderEquatorGroupedForPoles('poleBottom')}
                                                 </div>
                                                 <span className="text-[8px] md:text-[10px] font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md text-center shadow-sm">
-                                                    {mode === 'mitosis' ? '2n (Diploide)' : 'n (Haploide duplicado)'}
+                                                    {mode === 'mitosis' ? '2n (Diploide)' : (mode === 'repte' ? 'Aneuploide (cromosomas duplicados)' : 'n (Haploide duplicado)')}
                                                 </span>
                                             </div>
                                         </div>
@@ -1258,7 +1271,11 @@ R: ${answers.reto_1 || ''}
                                                         {egg.chroms.map(c => <ChromosomeSVG key={c.id} {...c} isSelectable={false} />)}
                                                     </div>
                                                     <div className="absolute bottom-[-16px] bg-white border border-purple-200 px-2 md:px-3 py-1 rounded-xl shadow-md flex flex-col items-center text-[8px] md:text-[10px] leading-tight z-10 w-max">
-                                                        <span className="font-black text-purple-700 text-[10px] md:text-xs">n = {egg.chroms.length} (Haploide)</span>
+                                                        <span className="font-black text-purple-700 text-[10px] md:text-xs">
+                                                            {mode === 'repte' 
+                                                                ? (egg.chroms.length > 3 ? `n+1 = ${egg.chroms.length} (Aneuploide)` : (egg.chroms.length < 3 ? `n-1 = ${egg.chroms.length} (Aneuploide)` : `n = 3 (Haploide)`))
+                                                                : `n = ${egg.chroms.length} (Haploide)`}
+                                                        </span>
                                                         <span className="font-bold text-slate-600">ADN = ½C</span>
                                                         <span className="text-slate-400 text-[8px] hidden md:block">(Cromosomas simples)</span>
                                                     </div>
@@ -1486,9 +1503,9 @@ R: ${answers.reto_1 || ''}
                     {/* MODAL SIMULACIÓN FECUNDACIÓN PARA REPTE TRISOMÍA */}
                     {showRepteFecundacion && (
                         <div className="fixed inset-0 z-[140] bg-slate-900/60 backdrop-blur flex items-center justify-center p-4 overflow-y-auto py-10">
-                            <div className="bg-white p-6 md:p-8 max-w-4xl w-full text-center shadow-2xl border-t-8 border-red-500 rounded-2xl">
+                            <div className="bg-white p-6 md:p-8 max-w-4xl w-full text-center shadow-2xl border-t-8 border-red-500 rounded-2xl mt-auto mb-auto">
                                 <h2 className="text-2xl md:text-3xl font-black mb-4 text-slate-800">Fecundación con Aneuploidía</h2>
-                                <p className="mb-6 text-slate-600">Al fecundar un gameto que tiene un cromosoma extra (n=4) con un espermatozoide normal (n=3), el cigoto resultante hereda 3 copias de ese cromosoma (Trisomía).</p>
+                                <p className="mb-6 text-slate-600">Al fecundar un gameto que tiene un cromosoma extra con un espermatozoide normal, el cigoto resultante hereda 3 copias de ese cromosoma (Trisomía).</p>
                                 
                                 <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-8 w-full max-w-2xl mx-auto">
                                     {/* Óvulo Anómalo */}
@@ -1545,7 +1562,7 @@ R: ${answers.reto_1 || ''}
                     {/* MODAL CUADRO DE PUNNETT FINAL (4x4 Libre) */}
                     {showPunnett && (
                         <div className="fixed inset-0 z-[140] bg-slate-900/60 backdrop-blur flex items-start justify-center overflow-y-auto w-full py-10">
-                            <div className="bg-white p-4 md:p-8 w-full min-h-screen md:min-h-0 md:max-w-6xl md:rounded-2xl text-center shadow-2xl border-t-8 border-purple-500 flex flex-col items-center">
+                            <div className="bg-white p-4 md:p-8 w-full min-h-screen md:min-h-0 md:max-w-6xl md:rounded-2xl text-center shadow-2xl border-t-8 border-purple-500 flex flex-col items-center mt-auto mb-auto">
                                 
                                 <h2 className="text-2xl md:text-3xl font-black mb-2 md:mb-4 text-slate-800">Cuadro de Punnett de 16 combinaciones</h2>
                                 <p className="mb-4 text-slate-600 max-w-4xl mx-auto leading-relaxed text-xs md:text-base px-2">
