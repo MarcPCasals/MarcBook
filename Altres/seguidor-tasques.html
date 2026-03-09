@@ -67,6 +67,10 @@
         const Info = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Icon>;
         const Eye = (p) => <Icon {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></Icon>;
         const EyeOff = (p) => <Icon {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></Icon>;
+        const Bell = (p) => <Icon {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Icon>;
+        const LinkIcon = (p) => <Icon {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></Icon>;
+        const ClipboardList = (p) => <Icon {...p}><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></Icon>;
+        const CopyIcon = (p) => <Icon {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Icon>;
 
         // --- Config inicial ---
         const STATUS_TYPES = {
@@ -118,7 +122,7 @@
             const [classes, setClasses] = useState([{ id: 'default', name: 'Classe Principal' }]);
             const [activeClassId, setActiveClassId] = useState('default');
             const [allData, setAllData] = useState({ 
-                'default': { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: DEFAULT_UTS } 
+                'default': { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, cellNotes: {}, reminders: [], studentLinks: {}, uts: DEFAULT_UTS } 
             });
 
             // --- Estat UI Local ---
@@ -132,11 +136,13 @@
             const [isEditingClass, setIsEditingClass] = useState(false);
             const [isAddingUt, setIsAddingUt] = useState(false);
             const [isEditingUt, setIsEditingUt] = useState(false); 
+            const [isShowingNegatives, setIsShowingNegatives] = useState(false);
             
             const [editingTaskDate, setEditingTaskDate] = useState(null); 
             const [selectedStudent, setSelectedStudent] = useState(null); 
             const [penaltyAlert, setPenaltyAlert] = useState(null);
             const [editingCellNote, setEditingCellNote] = useState(null); 
+            const [editingReminder, setEditingReminder] = useState(null);
             
             const [isAddingIncident, setIsAddingIncident] = useState(null); // student Object
             const [incidentText, setIncidentText] = useState("");
@@ -154,10 +160,11 @@
             const [editUtName, setEditUtName] = useState(""); 
 
             // --- Derivats ---
-            const currentData = allData[activeClassId] || { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: [] };
+            const currentData = allData[activeClassId] || { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, cellNotes: {}, reminders: [], studentLinks: {}, uts: [] };
             const students = currentData.students || [];
             const uts = currentData.uts || DEFAULT_UTS;
             const incidents = currentData.incidents || {};
+            const penalties = currentData.penalties || {};
             
             // FILTRE DE TASQUES GLOBALS (Tot el que té dades base per càlculs)
             const visibleTasks = useMemo(() => {
@@ -212,7 +219,13 @@
 
             const allClassTasks = currentData.tasks || []; 
             const records = currentData.records || {};
-            const penalties = currentData.penalties || {};
+
+            // Recordatoris actius (que coincideixen amb avui i no han passat de l'hora)
+            const activeReminders = (currentData.reminders || []).filter(rem => {
+                const remDate = new Date(rem.datetime);
+                const now = new Date();
+                return remDate.toDateString() === now.toDateString() && now <= remDate;
+            });
 
             // Update Active UT when class changes
             useEffect(() => {
@@ -247,6 +260,8 @@
                                 if (!migratedData[clsId].uts) migratedData[clsId].uts = DEFAULT_UTS;
                                 if (!migratedData[clsId].incidents) migratedData[clsId].incidents = {};
                                 if (!migratedData[clsId].cellNotes) migratedData[clsId].cellNotes = {};
+                                if (!migratedData[clsId].reminders) migratedData[clsId].reminders = [];
+                                if (!migratedData[clsId].studentLinks) migratedData[clsId].studentLinks = {};
                                 migratedData[clsId].tasks = migratedData[clsId].tasks.map(t => ({
                                     ...t,
                                     utId: t.utId || 'default'
@@ -266,6 +281,8 @@
                             penalties: {},
                             incidents: {},
                             cellNotes: {},
+                            reminders: [],
+                            studentLinks: {},
                             uts: DEFAULT_UTS
                         }
                     };
@@ -286,7 +303,7 @@
             const updateClassData = (classId, updater) => {
                 setAllData(prev => ({
                     ...prev,
-                    [classId]: updater(prev[classId] || { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: [] })
+                    [classId]: updater(prev[classId] || { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, cellNotes: {}, reminders: [], studentLinks: {}, uts: [] })
                 }));
             };
 
@@ -315,7 +332,10 @@
                         setTimeout(() => setPenaltyAlert({ 
                             studentId, 
                             name: d.students.find(s=>s.id===studentId)?.name,
-                            missingTasks: d.tasks.filter(t => newRecords[`${studentId}_${t.id}`] === 'MISSING'),
+                            missingTasks: d.tasks.filter(t => newRecords[`${studentId}_${t.id}`] === 'MISSING').map(t => ({
+                                ...t,
+                                note: (d.cellNotes || {})[`${studentId}_${t.id}`] || null
+                            })),
                             incidents: d.incidents?.[studentId] || []
                         }), 0);
                     }
@@ -345,7 +365,10 @@
                         setTimeout(() => setPenaltyAlert({
                             studentId,
                             name: isAddingIncident.name,
-                            missingTasks: d.tasks.filter(t => (d.records || {})[`${studentId}_${t.id}`] === 'MISSING'),
+                            missingTasks: d.tasks.filter(t => (d.records || {})[`${studentId}_${t.id}`] === 'MISSING').map(t => ({
+                                ...t,
+                                note: (d.cellNotes || {})[`${studentId}_${t.id}`] || null
+                            })),
                             incidents: studentIncList
                         }), 0);
                     }
@@ -386,6 +409,37 @@
                     return { ...d, cellNotes: newNotes };
                 });
                 setEditingCellNote(null);
+            };
+
+            const handleSaveReminder = () => {
+                if (!editingReminder.datetime || !editingReminder.text.trim()) return;
+                updateClassData(activeClassId, d => {
+                    const newReminders = [...(d.reminders || [])];
+                    const existingIdx = newReminders.findIndex(r => r.taskId === editingReminder.taskId && r.studentId === editingReminder.studentId);
+                    
+                    const remData = {
+                        id: editingReminder.id || Date.now().toString(),
+                        taskId: editingReminder.taskId,
+                        studentId: editingReminder.studentId,
+                        datetime: editingReminder.datetime,
+                        text: editingReminder.text
+                    };
+
+                    if (existingIdx >= 0) newReminders[existingIdx] = remData;
+                    else newReminders.push(remData);
+                    
+                    return { ...d, reminders: newReminders };
+                });
+                setEditingReminder(null);
+            };
+
+            const deleteReminder = (id) => {
+                updateClassData(activeClassId, d => ({ ...d, reminders: d.reminders.filter(r => r.id !== id) }));
+            };
+
+            const handleSaveStudentLink = (val) => {
+                if (!selectedStudent) return;
+                updateClassData(activeClassId, d => ({ ...d, studentLinks: { ...(d.studentLinks || {}), [selectedStudent.id]: val } }));
             };
 
             const handleDeleteAllStudents = () => {
@@ -432,7 +486,7 @@
                 setClasses([...classes, { id: newId, name: newClassName }]);
                 setAllData(prev => ({ 
                     ...prev, 
-                    [newId]: { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, uts: DEFAULT_UTS } 
+                    [newId]: { students: [], tasks: [], records: {}, penalties: {}, incidents: {}, cellNotes: {}, reminders: [], studentLinks: {}, uts: DEFAULT_UTS } 
                 }));
                 setActiveClassId(newId);
                 setNewClassName("");
@@ -522,6 +576,15 @@
                 });
             };
 
+            const openReminderModal = (taskId, studentId) => {
+                const existing = (currentData.reminders || []).find(r => r.taskId === taskId && r.studentId === studentId);
+                if (existing) {
+                    setEditingReminder({ ...existing });
+                } else {
+                    setEditingReminder({ id: null, taskId, studentId, datetime: '', text: '' });
+                }
+            };
+
             const handleExport = () => { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ version: 5, classes, currentId: activeClassId, data: allData })); const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", `seguidor_tasques_${new Date().toLocaleDateString()}.json`); document.body.appendChild(a); a.click(); a.remove(); };
             const handleImport = (e) => { const fr = new FileReader(); fr.readAsText(e.target.files[0], "UTF-8"); fr.onload = ev => { const parsed = JSON.parse(ev.target.result); if(confirm("Substituir totes les dades?")) { if (parsed.version >= 2) { setClasses(parsed.classes); setAllData(parsed.data); setActiveClassId(parsed.currentId); } } }; };
 
@@ -574,6 +637,7 @@
                                     </div>
                                     <div className="h-6 w-px bg-slate-200 mx-1"></div>
                                     <div className="flex gap-1">
+                                        <button onClick={() => setIsShowingNegatives(true)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-orange-600" title="Llista Negatius"><ClipboardList size={18} /></button>
                                         <button onClick={() => setIsManagingStudents(true)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-orange-600" title="Alumnes"><Users size={18} /></button>
                                         <div className="relative group">
                                             <button className="p-2 text-slate-500 hover:text-orange-600 rounded-lg hover:bg-slate-100"><MoreHorizontal size={18} /></button>
@@ -653,14 +717,35 @@
                     </header>
 
                     {/* Main Content */}
-                    <main className="flex-1 overflow-hidden flex flex-col max-w-full mx-auto w-full p-4">
+                    <main className="flex-1 overflow-hidden flex flex-col max-w-full mx-auto w-full p-4 relative">
+                        {/* Alertes de Recordatoris Actius */}
+                        {activeReminders.length > 0 && (
+                            <div className="mb-4 flex flex-col gap-2 shrink-0">
+                                {activeReminders.map(rem => {
+                                    const student = students.find(s => s.id === rem.studentId);
+                                    const task = visibleTasks.find(t => t.id === rem.taskId) || allClassTasks.find(t => t.id === rem.taskId);
+                                    return (
+                                        <div key={rem.id} className="bg-indigo-100 border border-indigo-200 text-indigo-800 p-3 rounded-lg flex items-center gap-3 shadow-sm">
+                                            <Bell size={20} className="text-indigo-600 animate-pulse shrink-0" />
+                                            <div>
+                                                <span className="font-bold text-sm">Recordatori {student ? `- ${student.name}` : `- Classe sencera`} ({task?.title || ''}):</span>
+                                                <span className="text-sm ml-2">{rem.text}</span>
+                                                <span className="text-xs ml-2 font-mono bg-indigo-200 px-1.5 py-0.5 rounded text-indigo-700 font-bold whitespace-nowrap">Fins les {new Date(rem.datetime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                            </div>
+                                            <button onClick={() => deleteReminder(rem.id)} className="ml-auto text-indigo-400 hover:text-indigo-600 p-1"><XCircle size={16} /></button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
                             <div className="overflow-auto custom-scroll flex-1 relative">
                                 <table className="w-full border-separate" style={{ borderSpacing: 0 }}>
-                                    <thead className="bg-slate-50 sticky top-0 z-40 shadow-sm ring-1 ring-slate-200">
+                                    <thead className="bg-slate-50 relative">
                                         {activeUtId === 'default' && renderedTasks.length > 0 && (
                                             <tr>
-                                                <th className="sticky left-0 z-50 bg-slate-50 border-r border-slate-200 p-0"></th>
+                                                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-200 p-0"></th>
                                                 {groupedUtHeaders.map((header, idx) => (
                                                     <th key={idx} colSpan={header.count} className="p-1 text-[10px] font-bold text-indigo-400 uppercase tracking-wider border-b border-r border-slate-200 bg-indigo-50/90 backdrop-blur text-center">
                                                         {uts.find(u => u.id === header.id)?.name || 'General'}
@@ -670,19 +755,20 @@
                                             </tr>
                                         )}
                                         <tr>
-                                            <th className="sticky left-0 z-50 bg-slate-50 p-4 text-left min-w-[220px] border-b border-r border-slate-200 w-72 shadow-sm">
+                                            <th className="sticky left-0 top-0 z-40 bg-slate-50 p-4 text-left min-w-[220px] border-b border-r border-slate-200 w-72 shadow-sm">
                                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Alumne</span>
                                             </th>
                                             {renderedTasks.length === 0 ? (
-                                                <th className="p-4 text-center text-slate-400 text-sm italic font-normal border-b border-slate-200">
+                                                <th className="sticky top-0 z-30 p-4 text-center text-slate-400 text-sm italic font-normal border-b border-slate-200 bg-white shadow-sm">
                                                     {visibleTasks.length === 0 ? `Cap tasca a ${uts.find(u=>u.id===activeUtId)?.name}.` : "Totes les tasques són anteriors a avui. (Mostra passades per veure-les)"}
                                                 </th>
                                             ) : (
                                                 renderedTasks.map((task, idx) => {
-                                                    const allDone = students.length > 0 && students.every(s => records[`${s.id}_${task.id}`] === 'DONE');
-                                                    const doneCount = students.filter(s => records[`${s.id}_${task.id}`] === 'DONE').length;
+                                                    const validStudents = students.filter(s => records[`${s.id}_${task.id}`] !== 'EXEMPT');
+                                                    const allDone = validStudents.length > 0 && validStudents.every(s => records[`${s.id}_${task.id}`] === 'DONE');
+                                                    const doneCount = validStudents.filter(s => records[`${s.id}_${task.id}`] === 'DONE').length;
                                                     return (
-                                                    <th key={task.id} className={`min-w-[140px] p-2 border-b border-slate-200 group relative text-center ${idx % 2 !== 0 ? 'bg-slate-50' : 'bg-white'}`}>
+                                                    <th key={task.id} className={`sticky top-0 z-30 min-w-[140px] p-2 border-b border-slate-200 group relative text-center shadow-sm ${idx % 2 !== 0 ? 'bg-slate-50' : 'bg-white'}`}>
                                                         <div className="flex flex-col items-center justify-center">
                                                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                                                 <span className="font-semibold text-slate-700 text-sm truncate max-w-[100px]" title={task.title}>{task.title}</span>
@@ -700,17 +786,18 @@
                                                                     {new Date(task.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
                                                                 </button>
                                                                 <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded" title="Alumnes que han acabat la tasca">
-                                                                    {doneCount}/{students.length}
+                                                                    {doneCount}/{validStudents.length}
                                                                 </span>
                                                             </div>
                                                             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white/90 backdrop-blur rounded shadow-sm border border-slate-100 p-0.5">
-                                                                <button onClick={() => deleteTask(task.id)} className="p-1 text-rose-400 hover:bg-rose-50 rounded"><Trash2 size={12}/></button>
+                                                                <button onClick={() => openReminderModal(task.id, null)} className="p-1 text-indigo-400 hover:bg-indigo-50 rounded" title="Recordatori general d'aquesta tasca"><Bell size={12}/></button>
+                                                                <button onClick={() => deleteTask(task.id)} className="p-1 text-rose-400 hover:bg-rose-50 rounded" title="Eliminar tasca"><Trash2 size={12}/></button>
                                                             </div>
                                                         </div>
                                                     </th>
                                                 )})
                                             )}
-                                            <th className="min-w-[50px] border-b border-slate-200 p-2 bg-slate-50"></th> 
+                                            <th className="sticky top-0 z-30 min-w-[50px] border-b border-slate-200 p-2 bg-slate-50 shadow-sm"></th> 
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -718,11 +805,12 @@
                                             const stats = getStudentStats(student.id, visibleTasks);
                                             const penaltyCount = penalties[student.id] || 0;
                                             const studentIncidents = incidents[student.id] || [];
+                                            const studentLink = (currentData.studentLinks || {})[student.id];
                                             const rowClass = idx % 2 === 0 ? 'row-even' : 'row-odd';
 
                                             return (
                                                 <tr key={student.id} className={`${rowClass} hover:bg-slate-50 group`}>
-                                                    <td className={`sticky left-0 z-30 ${rowClass} group-hover:bg-slate-50 p-3 border-b border-r border-slate-200 transition-colors`}>
+                                                    <td className={`sticky left-0 z-20 ${rowClass} group-hover:bg-slate-50 p-3 border-b border-r border-slate-200 transition-colors`}>
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="flex items-center gap-1">
                                                                 <button onClick={() => setSelectedStudent(student)} className="font-medium text-slate-700 hover:text-indigo-600 hover:underline text-left text-sm flex items-center gap-1.5">
@@ -739,6 +827,15 @@
                                                                 >
                                                                     <AlertTriangle size={14} />
                                                                 </button>
+                                                                {studentLink && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); window.open(studentLink, '_blank'); }} 
+                                                                        className="p-0.5 ml-1 rounded transition-colors text-blue-500 hover:bg-blue-50" 
+                                                                        title="Obrir enllaç personal"
+                                                                    >
+                                                                        <LinkIcon size={14} />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                             <div className="text-base">{getMedal(stats.percentage)}</div>
                                                         </div>
@@ -752,16 +849,27 @@
                                                         const cellNoteKey = `${student.id}_${task.id}`;
                                                         const noteText = (currentData.cellNotes || {})[cellNoteKey] || "";
                                                         const hasNote = noteText.trim().length > 0;
+                                                        const hasReminder = (currentData.reminders || []).some(r => r.taskId === task.id && r.studentId === student.id);
                                                         const colClass = tIdx % 2 !== 0 ? 'col-highlight' : '';
                                                         return (
                                                             <td key={task.id} className={`p-2 border-b border-slate-100 text-center align-middle relative ${colClass}`}>
-                                                                <button 
-                                                                    onClick={() => setEditingCellNote({ studentId: student.id, taskId: task.id, text: noteText })}
-                                                                    className={`absolute top-0.5 right-0.5 p-0.5 rounded hover:bg-slate-200 transition-colors ${hasNote ? 'text-amber-500' : 'text-slate-300'}`}
-                                                                    title={hasNote ? "Veure/Editar informació" : "Afegir informació de la tasca"}
-                                                                >
-                                                                    <Info size={12} />
-                                                                </button>
+                                                                <div className="absolute top-0.5 right-0.5 flex flex-col gap-0.5">
+                                                                    <button 
+                                                                        onClick={() => setEditingCellNote({ studentId: student.id, taskId: task.id, text: noteText })}
+                                                                        className={`p-0.5 rounded hover:bg-slate-200 transition-colors ${hasNote ? 'text-amber-500' : 'text-slate-300'}`}
+                                                                        title={hasNote ? "Veure/Editar informació" : "Afegir informació de la tasca"}
+                                                                    >
+                                                                        <Info size={12} />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => openReminderModal(task.id, student.id)}
+                                                                        className={`p-0.5 rounded hover:bg-slate-200 transition-colors ${hasReminder ? 'text-indigo-500' : 'text-slate-300'}`}
+                                                                        title="Recordatori"
+                                                                    >
+                                                                        <Bell size={12} />
+                                                                    </button>
+                                                                </div>
+                                                                
                                                                 <div className="flex items-center justify-center gap-1 mt-2">
                                                                     <button onClick={() => toggleStatus(student.id, task.id, 'DONE')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'DONE' ? 'bg-emerald-100 text-emerald-600 ring-2 ring-emerald-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-emerald-300 hover:text-emerald-400 shadow-sm'}`} title="Fet"><CheckCircle size={14} /></button>
                                                                     <button onClick={() => toggleStatus(student.id, task.id, 'LATE')} className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${statusKey === 'LATE' ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-500 ring-offset-1 scale-110' : 'bg-white border border-slate-200 text-slate-300 hover:border-amber-300 hover:text-amber-400 shadow-sm'}`} title="Mig / Tard"><Clock size={14} /></button>
@@ -786,6 +894,69 @@
                     </main>
 
                     {/* Modals */}
+                    {isShowingNegatives && (() => {
+                        const studentsWithNegatives = students.map(s => {
+                            const red = penalties[s.id] || 0;
+                            const black = (incidents[s.id] || []).length;
+                            return { ...s, red, black };
+                        }).filter(s => s.red > 0 || s.black > 0);
+
+                        const copyText = studentsWithNegatives.map(s => `- ${s.name}: ${s.red} no entregades, ${s.black} comportament.`).join('\n');
+
+                        const handleCopyNegatives = () => {
+                            navigator.clipboard.writeText(`Alumnes amb negatius pendents (${classes.find(c=>c.id===activeClassId)?.name}):\n${copyText}`);
+                            alert("Llista copiada al porta-retalls!");
+                        };
+
+                        return (
+                            <Modal title="Llista de Negatius" onClose={() => setIsShowingNegatives(false)}>
+                                <div className="space-y-4">
+                                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 max-h-64 overflow-y-auto custom-scroll text-sm">
+                                        {studentsWithNegatives.length === 0 ? (
+                                            <p className="text-slate-500 italic">No hi ha cap alumne amb negatius en aquesta classe.</p>
+                                        ) : (
+                                            <ul className="space-y-2">
+                                                {studentsWithNegatives.map(s => (
+                                                    <li key={s.id} className="text-slate-700">
+                                                        <span className="font-bold">{s.name}</span>: 
+                                                        <span className={s.red > 0 ? 'text-rose-600 font-medium ml-1' : 'ml-1 text-slate-400'}>{s.red} treball</span>, 
+                                                        <span className={s.black > 0 ? 'text-slate-800 font-medium ml-1' : 'ml-1 text-slate-400'}>{s.black} comportament</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                    {studentsWithNegatives.length > 0 && (
+                                        <button onClick={handleCopyNegatives} className="w-full flex items-center justify-center gap-2 bg-orange-600 text-white py-3 rounded-lg font-bold hover:bg-orange-700 transition-colors">
+                                            <CopyIcon size={18} /> Copiar Llista
+                                        </button>
+                                    )}
+                                </div>
+                            </Modal>
+                        );
+                    })()}
+
+                    {editingReminder && (
+                        <Modal title="Programar Recordatori" onClose={() => setEditingReminder(null)}>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Data i Hora límit</label>
+                                    <input type="datetime-local" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" value={editingReminder.datetime} onChange={e => setEditingReminder({...editingReminder, datetime: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Missatge del recordatori</label>
+                                    <textarea autoFocus className="w-full p-3 border border-slate-300 rounded-lg h-24 focus:ring-2 focus:ring-orange-500 outline-none text-sm" placeholder="Ex: Entregar informe de laboratori..." value={editingReminder.text} onChange={e => setEditingReminder({...editingReminder, text: e.target.value})}></textarea>
+                                </div>
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={handleSaveReminder} className="flex-1 bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors">Guardar Recordatori</button>
+                                    {editingReminder.id && (
+                                        <button onClick={() => deleteReminder(editingReminder.id)} className="bg-rose-100 text-rose-600 px-4 rounded-lg font-bold hover:bg-rose-200 transition-colors">Eliminar</button>
+                                    )}
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+
                     {editingCellNote && (() => {
                         const student = students.find(s => s.id === editingCellNote.studentId);
                         const task = visibleTasks.find(t => t.id === editingCellNote.taskId) || allClassTasks.find(t => t.id === editingCellNote.taskId);
@@ -838,8 +1009,15 @@
                                 {penaltyAlert.missingTasks.length > 0 && (
                                     <div className="mb-4">
                                         <h5 className="text-xs font-bold text-rose-800 uppercase text-left mb-1">Tasques no entregades ({penaltyAlert.missingTasks.length})</h5>
-                                        <ul className="bg-white border border-rose-200 rounded-lg p-3 text-left space-y-1">
-                                            {penaltyAlert.missingTasks.map(t => <li key={t.id} className="flex items-center gap-2 text-rose-700 font-medium text-sm"><XCircle size={14} /> {t.title} ({new Date(t.date).toLocaleDateString()})</li>)}
+                                        <ul className="bg-white border border-rose-200 rounded-lg p-3 text-left space-y-2">
+                                            {penaltyAlert.missingTasks.map(t => (
+                                                <li key={t.id} className="flex flex-col gap-0.5 text-rose-700 font-medium text-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <XCircle size={14} /> {t.title} ({new Date(t.date).toLocaleDateString()})
+                                                    </div>
+                                                    {t.note && <span className="text-xs text-rose-500 ml-6 italic bg-rose-50 px-2 py-1 rounded inline-block w-fit">Nota: {t.note}</span>}
+                                                </li>
+                                            ))}
                                         </ul>
                                     </div>
                                 )}
@@ -906,6 +1084,7 @@
                                 const stats = getStudentStats(selectedStudent.id, allClassTasks); 
                                 const currentPenalties = penalties[selectedStudent.id] || 0; 
                                 const studentIncidents = incidents[selectedStudent.id] || [];
+                                const currentLink = (currentData.studentLinks || {})[selectedStudent.id] || "";
                                 return (
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-2 gap-4">
@@ -917,6 +1096,23 @@
                                             <div className="text-3xl mb-1">{getMedal(stats.percentage) || '🌱'}</div>
                                             <div className="text-xs text-slate-400 uppercase font-bold">Nivell</div>
                                         </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Enllaç personal de l'alumne</label>
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative flex-1">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><LinkIcon size={14} /></div>
+                                                <input 
+                                                    type="url" 
+                                                    className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-slate-50" 
+                                                    placeholder="https://..." 
+                                                    defaultValue={currentLink} 
+                                                    onBlur={e => handleSaveStudentLink(e.target.value)} 
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-1">S'obre directament clicant la icona de la taula. (Es guarda sol en sortir de la casella).</p>
                                     </div>
                                     
                                     <div className="space-y-3">
