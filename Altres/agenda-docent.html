@@ -114,6 +114,38 @@
                 document.getElementById('loader-content').innerHTML = '<h3 class="text-red-600 font-bold">Error de càrrega. Revisa la connexió.</h3>';
             }
         }, 8000);
+        
+        // --- FUNCIONS GLOBALS DE BACKUP ---
+        window.restoreAgendaBackup = () => {
+            const backup = localStorage.getItem('agendaBackup');
+            if (backup) {
+                if (confirm("⚠️ ATENCIÓ: Segur que vols restaurar les dades des del backup 'agendaBackup'? Es perdrà l'estat actual de l'agenda.")) {
+                    localStorage.setItem('cfnPlannerData_v23', backup);
+                    window.location.reload();
+                }
+            } else {
+                alert("❌ No s'ha trobat cap backup a 'agendaBackup'.");
+            }
+        };
+
+        window.createAgendaBackup = (silent = false) => {
+            const currentData = localStorage.getItem('cfnPlannerData_v23');
+            if (!currentData) {
+                if (!silent) alert("No hi ha dades actuals per guardar al backup.");
+                return;
+            }
+            
+            const existing = localStorage.getItem('agendaBackup');
+            if (existing && !silent) {
+                if (confirm("ℹ️ Ja existeix un backup previ. Vols sobreescriure'l amb les dades actuals de l'Agenda?")) {
+                    localStorage.setItem('agendaBackup', currentData);
+                    alert("✅ Backup actualitzat correctament.");
+                }
+            } else {
+                localStorage.setItem('agendaBackup', currentData);
+                if (!silent) alert("✅ Backup creat correctament a 'agendaBackup'.");
+            }
+        };
     </script>
 
     <script type="text/babel">
@@ -156,7 +188,8 @@
             Redo: () => <Icon><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 7"/></Icon>,
             Lightbulb: () => <Icon><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v1"/><path d="M12 14v-2"/><path d="M2 12h1"/><path d="M21 12h1"/><path d="M4.22 19.78l.71-.71"/><path d="M19.07 4.93l.71.71"/><path d="M4.22 4.22l.71.71"/><path d="M19.07 19.07l.71.71"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 10.38 5 9a7 7 0 0 1 7-7z"/></Icon>,
             Paste: () => <Icon><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>,
-            Menu: () => <Icon><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></Icon>
+            Menu: () => <Icon><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></Icon>,
+            Shield: () => <Icon><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Icon>
         };
 
         // --- CONSTANTS & THEMES ---
@@ -476,6 +509,7 @@
             const [showResetModal, setShowResetModal] = useState(false);
             const [showInfoModal, setShowInfoModal] = useState(false);
             const [showImportModal, setShowImportModal] = useState(false);
+            const [showBackupModal, setShowBackupModal] = useState(false);
             const [editingLink, setEditingLink] = useState(false);
             const [tempLink, setTempLink] = useState(config.googleSheetUrl || "");
             const [editingTaskLink, setEditingTaskLink] = useState(false);
@@ -620,6 +654,7 @@
                         )}
 
                         <div className="flex gap-2 items-center">
+                             <button onClick={() => setShowBackupModal(true)} className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg flex items-center gap-1 transition-colors mr-2" title="Protecció de Dades"><Icons.Shield size={18}/></button>
                              <button onClick={() => setShowResetModal(true)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 transition-colors mr-4" title="Reiniciar"><Icons.Trash size={18}/></button>
                              <button onClick={() => setShowInfoModal(true)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium"><Icons.FileJson /> Guardar</button>
                              <button onClick={handleImportClick} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium cursor-pointer"><Icons.ArrowRight /> Carregar</button>
@@ -804,6 +839,28 @@
                             </div>
                         </div>
                     </div>
+
+                    {showBackupModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
+                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.Shield /> Protecció de Dades</h3>
+                                <p className="text-gray-600 mb-4 text-sm">L'agenda realitza una còpia de seguretat interna (<code>agendaBackup</code>) de forma autòmatica per protegir-te de pèrdues de dades accidentals.</p>
+                                
+                                <div className="flex flex-col gap-3 mb-6">
+                                    <button onClick={() => { window.createAgendaBackup(); setShowBackupModal(false); }} className="w-full px-4 py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
+                                        <Icons.Save size={18}/> Crear / Actualitzar Backup Ara
+                                    </button>
+                                    <button onClick={() => { window.restoreAgendaBackup(); setShowBackupModal(false); }} className="w-full px-4 py-3 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg font-bold hover:bg-orange-100 transition-colors flex items-center justify-center gap-2">
+                                        <Icons.Undo size={18}/> Restaurar des del Backup
+                                    </button>
+                                </div>
+
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowBackupModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-medium">Tancar</button>
+                                </div>
+                            </div>
+                        </div>, document.body
+                    )}
 
                     {showResetModal && ReactDOM.createPortal(
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
@@ -2942,7 +2999,7 @@
                 }
             }, [config.theme]);
 
-            // CARREGADOR I AUTO-RESCAT DE DADES (AMB MIGRACIÓ)
+            // CARREGADOR I AUTO-RESCAT DE DADES (AMB MIGRACIÓ I BACKUP AUTOMÀTIC)
             useEffect(() => {
                 const loader = document.getElementById('app-loader');
                 if (loader) loader.style.display = 'none';
@@ -2954,6 +3011,13 @@
 
                 if (saved) {
                     try {
+                        // Creació del Backup Inicial si no existeix (per protecció)
+                        const existingBackup = localStorage.getItem('agendaBackup');
+                        if (!existingBackup && saved.length > 50) {
+                            localStorage.setItem('agendaBackup', saved);
+                            console.log("Backup automàtic inicial creat a 'agendaBackup'");
+                        }
+
                         const data = JSON.parse(saved);
                         let needsSave = false;
 
@@ -3040,7 +3104,18 @@
                 }
             }, []);
 
-            useEffect(() => { localStorage.setItem('cfnPlannerData_v23', JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
+            // Guardat normal a localStorage
+            useEffect(() => { 
+                const currentDataStr = JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders });
+                
+                // Ens assegurem de crear el backup de seguretat si l'aplicació guarda però encara no en tenia cap
+                const existingBackup = localStorage.getItem('agendaBackup');
+                if (!existingBackup && currentDataStr && currentDataStr.length > 50) {
+                    localStorage.setItem('agendaBackup', currentDataStr);
+                }
+
+                localStorage.setItem('cfnPlannerData_v23', currentDataStr); 
+            }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
 
             const handleUpdateWeekData = (weekId, data) => {
                 setWeeksData(prev => ({ ...prev, [weekId]: data }));
@@ -3101,9 +3176,61 @@
                 setView('class_planner');
             };
 
-            const handleReset = () => { localStorage.removeItem('cfnPlannerData_v23'); setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); setRadar([]); setWeeksData({}); setCompletedWeeks([]); setHolidayWeeks([]); setReminders({}); setView('config'); };
+            // MODIFICAT: Gestió de Reset amb Backup Automàtic segur
+            const handleReset = () => { 
+                const existingBackup = localStorage.getItem('agendaBackup');
+                const currentData = localStorage.getItem('cfnPlannerData_v23');
+                
+                if (currentData) {
+                    if (existingBackup) {
+                        if (confirm("ℹ️ Ja existeix un backup de seguretat.\n\nVols actualitzar aquest backup amb les teves dades actuals ABANS d'esborrar tota l'agenda?")) {
+                            localStorage.setItem('agendaBackup', currentData);
+                        }
+                    } else {
+                        localStorage.setItem('agendaBackup', currentData);
+                    }
+                }
+                
+                localStorage.removeItem('cfnPlannerData_v23'); 
+                setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); 
+                setRadar([]); 
+                setWeeksData({}); 
+                setCompletedWeeks([]); 
+                setHolidayWeeks([]); 
+                setReminders({}); 
+                setView('config'); 
+            };
+
             const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
-            const handleImport = (e) => { const fr = new FileReader(); fr.onload = ev => { const d = JSON.parse(ev.target.result); setConfig(d.config || config); setRadar(Array.isArray(d.radar) ? d.radar : []); setWeeksData(d.weeksData || {}); setCompletedWeeks(d.completedWeeks || []); setHolidayWeeks(d.holidayWeeks || []); setReminders(d.reminders || {}); setView('dashboard'); }; fr.readAsText(e.target.files[0]); };
+            
+            // MODIFICAT: Gestió d'Importació amb Backup Automàtic segur
+            const handleImport = (e) => { 
+                const fr = new FileReader(); 
+                fr.onload = ev => { 
+                    const existingBackup = localStorage.getItem('agendaBackup');
+                    const currentData = localStorage.getItem('cfnPlannerData_v23');
+                    
+                    if (currentData) {
+                        if (existingBackup) {
+                            if (confirm("ℹ️ Estàs a punt de sobreescriure l'agenda amb el fitxer que acabes d'importar.\n\nVols actualitzar el backup intern amb les dades de la sessió actual per si a cas?")) {
+                                localStorage.setItem('agendaBackup', currentData);
+                            }
+                        } else {
+                            localStorage.setItem('agendaBackup', currentData);
+                        }
+                    }
+
+                    const d = JSON.parse(ev.target.result); 
+                    setConfig(d.config || config); 
+                    setRadar(Array.isArray(d.radar) ? d.radar : []); 
+                    setWeeksData(d.weeksData || {}); 
+                    setCompletedWeeks(d.completedWeeks || []); 
+                    setHolidayWeeks(d.holidayWeeks || []); 
+                    setReminders(d.reminders || {}); 
+                    setView('dashboard'); 
+                }; 
+                fr.readAsText(e.target.files[0]); 
+            };
 
             return (
                 <div className="min-h-screen">
