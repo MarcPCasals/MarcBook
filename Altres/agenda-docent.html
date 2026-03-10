@@ -116,6 +116,29 @@
         }, 8000);
         
         // --- FUNCIONS GLOBALS DE BACKUP ---
+        window.getLocalYYYYMMDD = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        window.downloadBackupJSON = (dataStr, filename) => {
+            if (!dataStr) return;
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        };
+
         window.restoreAgendaBackup = (backupId) => {
             let history = [];
             try {
@@ -142,7 +165,7 @@
             }
         };
 
-        window.createAgendaBackup = (silent = false, customLabel = null) => {
+        window.createAgendaBackup = (silent = false, customLabel = null, triggerDownload = false) => {
             const currentData = localStorage.getItem('cfnPlannerData_v23');
             if (!currentData) {
                 if (!silent) alert("No hi ha dades actuals per guardar al backup.");
@@ -164,6 +187,7 @@
             
             const now = new Date();
             const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
+            const dateStrForFile = window.getLocalYYYYMMDD(now);
             
             history.unshift({ 
                 id: Date.now(), 
@@ -178,7 +202,12 @@
             localStorage.setItem('agendaBackupHistory', JSON.stringify(history));
             localStorage.setItem('agendaBackup', currentData); // Manté l'arxiu anterior per compatibilitat
             
-            if (!silent) alert("✅ Backup creat correctament.");
+            if (triggerDownload) {
+                const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(':', '');
+                window.downloadBackupJSON(currentData, `AgendaBackup_${dateStrForFile}_${safeTime}.json`);
+            }
+            
+            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament.");
             window.dispatchEvent(new Event('backupHistoryUpdated')); // Avisa a la UI per refrescar el modal
         };
     </script>
@@ -224,7 +253,8 @@
             Lightbulb: () => <Icon><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v1"/><path d="M12 14v-2"/><path d="M2 12h1"/><path d="M21 12h1"/><path d="M4.22 19.78l.71-.71"/><path d="M19.07 4.93l.71.71"/><path d="M4.22 4.22l.71.71"/><path d="M19.07 19.07l.71.71"/><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 10.38 5 9a7 7 0 0 1 7-7z"/></Icon>,
             Paste: () => <Icon><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>,
             Menu: () => <Icon><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></Icon>,
-            Shield: () => <Icon><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Icon>
+            Shield: () => <Icon><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Icon>,
+            Download: () => <Icon><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Icon>
         };
 
         // --- CONSTANTS & THEMES ---
@@ -539,7 +569,7 @@
             );
         };
 
-        const DashboardScreen = ({ config, radar, setRadar, completedWeeks, onToggleWeekComplete, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders, weeksData }) => {
+        const DashboardScreen = ({ config, radar, setRadar, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders, weeksData }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
             const [showInfoModal, setShowInfoModal] = useState(false);
@@ -912,8 +942,8 @@
                                 </div>
                                 
                                 <div className="flex flex-col gap-3 mb-4 shrink-0">
-                                    <button onClick={() => window.createAgendaBackup(false)} className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-sm">
-                                        <Icons.Save size={18}/> Crear Nou Backup Ara
+                                    <button onClick={() => window.createAgendaBackup(false, 'Còpia manual', true)} className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                        <Icons.Save size={18}/> Crear i Descarregar Nou Backup Ara
                                     </button>
                                 </div>
 
@@ -928,9 +958,14 @@
                                                     <p className="font-bold text-gray-700 text-sm">{b.timestamp}</p>
                                                     <p className="text-xs text-gray-500">{b.label}</p>
                                                 </div>
-                                                <button onClick={() => window.restoreAgendaBackup(b.id)} className="px-3 py-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold rounded text-xs transition-colors flex items-center gap-1">
-                                                    <Icons.Undo size={14}/> Restaurar
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => window.downloadBackupJSON(b.data, `AgendaBackup_${b.id}.json`)} className="p-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded transition-colors" title="Descarregar aquest backup">
+                                                        <Icons.Download size={14}/>
+                                                    </button>
+                                                    <button onClick={() => window.restoreAgendaBackup(b.id)} className="px-3 py-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold rounded text-xs transition-colors flex items-center gap-1">
+                                                        <Icons.Undo size={14}/> Restaurar
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))
                                     )}
@@ -3214,33 +3249,23 @@
                             try {
                                 const data = JSON.parse(currentDataStr);
                                 if (data.config && data.config.teacherName) { // Verifiquem que l'agenda no estigui buida
-                                    const blob = new Blob([currentDataStr], { type: 'application/json' });
-                                    const url = window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.style.display = 'none';
-                                    a.href = url;
-                                    a.download = `AgendaBackup_${todayStr}.json`;
-                                    document.body.appendChild(a);
-                                    a.click();
+                                    // S'eliminen els listeners ABANS de provocar la descarrega per evitar bucles infinits
+                                    document.removeEventListener('click', handleUserInteractionForBackup);
+                                    document.removeEventListener('keydown', handleUserInteractionForBackup);
+                                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
                                     
-                                    setTimeout(() => {
-                                        document.body.removeChild(a);
-                                        window.URL.revokeObjectURL(url);
-                                    }, 100);
-                                    
+                                    // Guardem que ja s'ha fet avui ABANS per evitar execucions simultànies
                                     localStorage.setItem('lastAutoBackupDownloadDate', todayStr);
-                                    console.log(`Backup automàtic diari descarregat: AgendaBackup_${todayStr}.json`);
+                                    
+                                    // Es crea el backup i es descarrega UN únic cop
+                                    window.createAgendaBackup(true, 'Còpia automàtica diària', true);
+                                    console.log(`Backup automàtic diari processat i descarregat.`);
                                 }
                             } catch (err) {
                                 console.error("Error processant el backup diari:", err);
                             }
                         }
                     }
-                    
-                    // Eliminar els listeners per no saturar el navegador després de la comprovació
-                    document.removeEventListener('click', handleUserInteractionForBackup);
-                    document.removeEventListener('keydown', handleUserInteractionForBackup);
-                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
                 };
 
                 document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
