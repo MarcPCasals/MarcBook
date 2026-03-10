@@ -158,6 +158,19 @@
             }));
         };
 
+        const getLocalYYYYMMDD = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        const getLocalHHMM = (d) => {
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${hours}${minutes}`;
+        };
+
         // --- COMPONENTS ---
 
         const AutoTextarea = ({ value, onChange, placeholder, className, onFocus }) => {
@@ -370,6 +383,57 @@
 
                 // Neteja
                 return () => window.removeEventListener("message", handleMessage);
+            }, []);
+
+            // --- BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
+            useEffect(() => {
+                const handleUserInteractionForBackup = () => {
+                    const now = new Date();
+                    const todayStr = getLocalYYYYMMDD(now);
+                    const lastDownload = localStorage.getItem('lastAutoBackupDownloadDate_prog');
+                    
+                    if (lastDownload !== todayStr) {
+                        const currentData = llegirDades();
+                        if (currentData && currentData.length > 0) {
+                            try {
+                                document.removeEventListener('click', handleUserInteractionForBackup);
+                                document.removeEventListener('keydown', handleUserInteractionForBackup);
+                                document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                                
+                                localStorage.setItem('lastAutoBackupDownloadDate_prog', todayStr);
+                                
+                                const timeStr = getLocalHHMM(now);
+                                const dataStr = JSON.stringify(currentData);
+                                const blob = new Blob([dataStr], { type: 'application/json' });
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.style.display = 'none';
+                                a.href = url;
+                                a.download = `ProgramadorBackup_${todayStr}_${timeStr}.json`;
+                                document.body.appendChild(a);
+                                a.click();
+                                setTimeout(() => {
+                                    document.body.removeChild(a);
+                                    window.URL.revokeObjectURL(url);
+                                }, 100);
+                                
+                                console.log(`Backup automàtic diari processat i descarregat.`);
+                            } catch (err) {
+                                console.error("Error processant el backup diari:", err);
+                            }
+                        }
+                    }
+                };
+
+                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
+
+                return () => {
+                    document.removeEventListener('click', handleUserInteractionForBackup);
+                    document.removeEventListener('keydown', handleUserInteractionForBackup);
+                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                };
             }, []);
 
             useEffect(() => {
