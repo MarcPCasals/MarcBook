@@ -116,35 +116,70 @@
         }, 8000);
         
         // --- FUNCIONS GLOBALS DE BACKUP ---
-        window.restoreAgendaBackup = () => {
-            const backup = localStorage.getItem('agendaBackup');
-            if (backup) {
-                if (confirm("⚠️ ATENCIÓ: Segur que vols restaurar les dades des del backup 'agendaBackup'? Es perdrà l'estat actual de l'agenda.")) {
-                    localStorage.setItem('cfnPlannerData_v23', backup);
+        window.restoreAgendaBackup = (backupId) => {
+            let history = [];
+            try {
+                history = JSON.parse(localStorage.getItem('agendaBackupHistory')) || [];
+            } catch(e) {}
+            
+            let targetData = null;
+            if (backupId) {
+                const found = history.find(b => b.id === backupId);
+                if (found) targetData = found.data;
+            } else if (history.length > 0) {
+                targetData = history[0].data;
+            } else {
+                targetData = localStorage.getItem('agendaBackup'); // Fallback versió anterior
+            }
+            
+            if (targetData) {
+                if (confirm("⚠️ ATENCIÓ: Segur que vols restaurar aquest backup? Es perdrà l'estat actual de l'agenda.")) {
+                    localStorage.setItem('cfnPlannerData_v23', targetData);
                     window.location.reload();
                 }
             } else {
-                alert("❌ No s'ha trobat cap backup a 'agendaBackup'.");
+                alert("❌ No s'ha trobat cap backup a restaurar.");
             }
         };
 
-        window.createAgendaBackup = (silent = false) => {
+        window.createAgendaBackup = (silent = false, customLabel = null) => {
             const currentData = localStorage.getItem('cfnPlannerData_v23');
             if (!currentData) {
                 if (!silent) alert("No hi ha dades actuals per guardar al backup.");
                 return;
             }
             
-            const existing = localStorage.getItem('agendaBackup');
-            if (existing && !silent) {
-                if (confirm("ℹ️ Ja existeix un backup previ. Vols sobreescriure'l amb les dades actuals de l'Agenda?")) {
-                    localStorage.setItem('agendaBackup', currentData);
-                    alert("✅ Backup actualitzat correctament.");
-                }
-            } else {
-                localStorage.setItem('agendaBackup', currentData);
-                if (!silent) alert("✅ Backup creat correctament a 'agendaBackup'.");
+            let history = [];
+            try {
+                history = JSON.parse(localStorage.getItem('agendaBackupHistory')) || [];
+                if (!Array.isArray(history)) history = [];
+            } catch(e) { history = []; }
+            
+            // Evitar duplicats exactes en desats automàtics
+            if (history.length > 0 && history[0].data === currentData && silent) {
+                return; 
+            } else if (history.length > 0 && history[0].data === currentData && !silent) {
+                if(!confirm("⚠️ Les dades actuals són idèntiques a l'últim backup. Vols crear una entrada duplicada de tota manera?")) return;
             }
+            
+            const now = new Date();
+            const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
+            
+            history.unshift({ 
+                id: Date.now(), 
+                timestamp: timestamp, 
+                label: customLabel || (silent ? 'Còpia automàtica' : 'Còpia manual'), 
+                data: currentData 
+            });
+            
+            // Mantenim només els darrers 10 backups
+            if (history.length > 10) history = history.slice(0, 10);
+            
+            localStorage.setItem('agendaBackupHistory', JSON.stringify(history));
+            localStorage.setItem('agendaBackup', currentData); // Manté l'arxiu anterior per compatibilitat
+            
+            if (!silent) alert("✅ Backup creat correctament.");
+            window.dispatchEvent(new Event('backupHistoryUpdated')); // Avisa a la UI per refrescar el modal
         };
     </script>
 
@@ -510,6 +545,7 @@
             const [showInfoModal, setShowInfoModal] = useState(false);
             const [showImportModal, setShowImportModal] = useState(false);
             const [showBackupModal, setShowBackupModal] = useState(false);
+            const [backupHistory, setBackupHistory] = useState([]);
             const [editingLink, setEditingLink] = useState(false);
             const [tempLink, setTempLink] = useState(config.googleSheetUrl || "");
             const [editingTaskLink, setEditingTaskLink] = useState(false);
@@ -524,9 +560,30 @@
             const allWeeks = useMemo(() => generateAllWeeks(config.schoolYear), [config.schoolYear]);
             const currentMonthWeeks = allWeeks.filter(w => w.month === currentViewDate.getMonth() && w.year === currentViewDate.getFullYear());
 
+            useEffect(() => {
+                if (showBackupModal) {
+                    const loadHistory = () => {
+                        try {
+                            const hist = JSON.parse(localStorage.getItem('agendaBackupHistory')) || [];
+                            setBackupHistory(hist);
+                        } catch(e) { setBackupHistory([]); }
+                    };
+                    loadHistory();
+                    window.addEventListener('backupHistoryUpdated', loadHistory);
+                    return () => window.removeEventListener('backupHistoryUpdated', loadHistory);
+                }
+            }, [showBackupModal]);
+
             const calculateProgress = () => {
                 if (allWeeks.length === 0) return 0;
-                return ((completedWeeks.length / allWeeks.length) * 100).toFixed(1);
+                const now = new Date();
+                let pastWeeks = 0;
+                allWeeks.forEach(w => {
+                    const end = new Date(w.endDate);
+                    end.setHours(23, 59, 59, 999);
+                    if (now > end) pastWeeks++;
+                });
+                return ((pastWeeks / allWeeks.length) * 100).toFixed(1);
             };
 
             const changeMonth = (delta) => {
@@ -678,7 +735,6 @@
                             
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {currentMonthWeeks.map(week => {
-                                    const isCompleted = completedWeeks.includes(week.id);
                                     const isHoliday = holidayWeeks?.includes(week.id);
                                     const isCurrent = isCurrentWeek(week);
                                     const utEnding = getUTForWeek(week);
@@ -693,8 +749,8 @@
 
                                     return (
                                         <div key={week.id} className={cardClasses}>
-                                            <div onClick={() => onSelectWeek(week.id)} className="cursor-pointer h-full">
-                                                <h3 className={`font-bold text-lg pr-12 ${isCurrent ? `text-${theme}-900` : 'text-gray-800'}`}>{week.label}</h3>
+                                            <div onClick={() => onSelectWeek(week.id)} className="cursor-pointer h-full pr-12">
+                                                <h3 className={`font-bold text-lg ${isCurrent ? `text-${theme}-900` : 'text-gray-800'}`}>{week.label}</h3>
                                                 <p className={`text-sm mb-2 ${isCurrent ? `text-${theme}-800` : 'text-gray-500'}`}>{week.startDate.toLocaleDateString()} - {week.endDate.toLocaleDateString()}</p>
                                                 {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm inline-block mr-1`}>Actual</span>}
                                             </div>
@@ -702,8 +758,7 @@
                                             {/* Etiqueta final UT inferior dreta */}
                                             {utEnding && <div className="absolute bottom-3 right-3 bg-red-600 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold uppercase">Final {utEnding.name}</div>}
 
-                                            <button onClick={(e) => { e.stopPropagation(); onToggleWeekComplete(week.id); }} className={`absolute top-4 right-4 p-2 rounded-full transition-all ${isCompleted ? 'bg-green-100 text-green-600 shadow-inner' : (isCurrent ? 'bg-white/50 text-orange-700 hover:bg-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200')}`}>{isCompleted ? <Icons.CheckCircle /> : <Icons.Check />}</button>
-                                            <button onClick={(e) => { e.stopPropagation(); onToggleHoliday(week.id); }} className={`absolute top-4 right-16 w-9 h-9 flex items-center justify-center rounded-full transition-all ${isHoliday ? 'bg-purple-100 text-purple-600 shadow-inner' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`} title="Marcar com Vacances">🎉</button>
+                                            <button onClick={(e) => { e.stopPropagation(); onToggleHoliday(week.id); }} className={`absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full transition-all ${isHoliday ? 'bg-purple-100 text-purple-600 shadow-inner' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`} title="Marcar com Vacances">🎉</button>
                                         </div>
                                     );
                                 })}
@@ -841,22 +896,48 @@
                     </div>
 
                     {showBackupModal && ReactDOM.createPortal(
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
-                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
-                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.Shield /> Protecció de Dades</h3>
-                                <p className="text-gray-600 mb-4 text-sm">L'agenda realitza una còpia de seguretat interna (<code>agendaBackup</code>) de forma autòmatica per protegir-te de pèrdues de dades accidentals.</p>
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in p-4">
+                            <div className="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl border-t-4 border-blue-500 max-h-[90vh] flex flex-col">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Icons.Shield /> Protecció de Dades</h3>
+                                    <button onClick={() => setShowBackupModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </div>
                                 
-                                <div className="flex flex-col gap-3 mb-6">
-                                    <button onClick={() => { window.createAgendaBackup(); setShowBackupModal(false); }} className="w-full px-4 py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
-                                        <Icons.Save size={18}/> Crear / Actualitzar Backup Ara
-                                    </button>
-                                    <button onClick={() => { window.restoreAgendaBackup(); setShowBackupModal(false); }} className="w-full px-4 py-3 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg font-bold hover:bg-orange-100 transition-colors flex items-center justify-center gap-2">
-                                        <Icons.Undo size={18}/> Restaurar des del Backup
+                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4 text-sm text-blue-800 space-y-2 shrink-0">
+                                    <p><strong>Còpia externa (Arxiu JSON):</strong> Es descarrega automàticament al teu dispositiu un cop al dia (a la primera interacció).</p>
+                                    <p><strong>Còpies internes:</strong> Es guarden les últimes 10 versions a la memòria del navegador just abans d'accions importants o quan ho fas manualment.</p>
+                                    <p className="pt-2 border-t border-blue-200 text-xs">
+                                        Última còpia: <span className="font-bold">{backupHistory.length > 0 ? backupHistory[0].timestamp : "Mai"}</span>
+                                    </p>
+                                </div>
+                                
+                                <div className="flex flex-col gap-3 mb-4 shrink-0">
+                                    <button onClick={() => window.createAgendaBackup(false)} className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                        <Icons.Save size={18}/> Crear Nou Backup Ara
                                     </button>
                                 </div>
 
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setShowBackupModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-medium">Tancar</button>
+                                <h4 className="font-bold text-gray-700 mb-2 text-sm border-b pb-1 shrink-0">Restaurar des de les darreres 10 còpies:</h4>
+                                <div className="flex-1 overflow-y-auto custom-scroll pr-2 space-y-2">
+                                    {backupHistory.length === 0 ? (
+                                        <p className="text-sm text-gray-500 italic">No hi ha cap còpia guardada encara.</p>
+                                    ) : (
+                                        backupHistory.map((b, idx) => (
+                                            <div key={b.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                <div>
+                                                    <p className="font-bold text-gray-700 text-sm">{b.timestamp}</p>
+                                                    <p className="text-xs text-gray-500">{b.label}</p>
+                                                </div>
+                                                <button onClick={() => window.restoreAgendaBackup(b.id)} className="px-3 py-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold rounded text-xs transition-colors flex items-center gap-1">
+                                                    <Icons.Undo size={14}/> Restaurar
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                <div className="flex justify-end mt-4 pt-4 border-t border-gray-100 shrink-0">
+                                    <button onClick={() => setShowBackupModal(false)} className="px-5 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors">Tancar</button>
                                 </div>
                             </div>
                         </div>, document.body
@@ -3012,11 +3093,15 @@
                 if (saved) {
                     try {
                         // Creació del Backup Inicial si no existeix (per protecció)
-                        const existingBackup = localStorage.getItem('agendaBackup');
-                        if (!existingBackup && saved.length > 50) {
-                            localStorage.setItem('agendaBackup', saved);
-                            console.log("Backup automàtic inicial creat a 'agendaBackup'");
-                        }
+                        try {
+                            const histStr = localStorage.getItem('agendaBackupHistory');
+                            let hist = [];
+                            if(histStr) hist = JSON.parse(histStr);
+                            if ((!hist || hist.length === 0) && saved.length > 50) {
+                                window.createAgendaBackup(true, "Backup inicial");
+                                console.log("Backup automàtic inicial creat a 'agendaBackupHistory'");
+                            }
+                        } catch(e) {}
 
                         const data = JSON.parse(saved);
                         let needsSave = false;
@@ -3231,17 +3316,10 @@
 
             // MODIFICAT: Gestió de Reset amb Backup Automàtic segur
             const handleReset = () => { 
-                const existingBackup = localStorage.getItem('agendaBackup');
                 const currentData = localStorage.getItem('cfnPlannerData_v23');
                 
                 if (currentData) {
-                    if (existingBackup) {
-                        if (confirm("ℹ️ Ja existeix un backup de seguretat.\n\nVols actualitzar aquest backup amb les teves dades actuals ABANS d'esborrar tota l'agenda?")) {
-                            localStorage.setItem('agendaBackup', currentData);
-                        }
-                    } else {
-                        localStorage.setItem('agendaBackup', currentData);
-                    }
+                    window.createAgendaBackup(true, "Abans de Reiniciar");
                 }
                 
                 localStorage.removeItem('cfnPlannerData_v23'); 
@@ -3260,17 +3338,10 @@
             const handleImport = (e) => { 
                 const fr = new FileReader(); 
                 fr.onload = ev => { 
-                    const existingBackup = localStorage.getItem('agendaBackup');
                     const currentData = localStorage.getItem('cfnPlannerData_v23');
                     
                     if (currentData) {
-                        if (existingBackup) {
-                            if (confirm("ℹ️ Estàs a punt de sobreescriure l'agenda amb el fitxer que acabes d'importar.\n\nVols actualitzar el backup intern amb les dades de la sessió actual per si a cas?")) {
-                                localStorage.setItem('agendaBackup', currentData);
-                            }
-                        } else {
-                            localStorage.setItem('agendaBackup', currentData);
-                        }
+                        window.createAgendaBackup(true, "Abans d'Importar");
                     }
 
                     const d = JSON.parse(ev.target.result); 
