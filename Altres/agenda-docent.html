@@ -3117,6 +3117,59 @@
                 localStorage.setItem('cfnPlannerData_v23', currentDataStr); 
             }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
 
+            // --- NOU: BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
+            useEffect(() => {
+                const handleUserInteractionForBackup = () => {
+                    const todayStr = getLocalISODate(new Date());
+                    const lastDownload = localStorage.getItem('lastAutoBackupDownloadDate');
+                    
+                    if (lastDownload !== todayStr) {
+                        const currentDataStr = localStorage.getItem('cfnPlannerData_v23');
+                        if (currentDataStr && currentDataStr.length > 50) {
+                            try {
+                                const data = JSON.parse(currentDataStr);
+                                if (data.config && data.config.teacherName) { // Verifiquem que l'agenda no estigui buida
+                                    const blob = new Blob([currentDataStr], { type: 'application/json' });
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.style.display = 'none';
+                                    a.href = url;
+                                    a.download = `AgendaBackup_${todayStr}.json`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    
+                                    setTimeout(() => {
+                                        document.body.removeChild(a);
+                                        window.URL.revokeObjectURL(url);
+                                    }, 100);
+                                    
+                                    localStorage.setItem('lastAutoBackupDownloadDate', todayStr);
+                                    console.log(`Backup automàtic diari descarregat: AgendaBackup_${todayStr}.json`);
+                                }
+                            } catch (err) {
+                                console.error("Error processant el backup diari:", err);
+                            }
+                        }
+                    }
+                    
+                    // Eliminar els listeners per no saturar el navegador després de la comprovació
+                    document.removeEventListener('click', handleUserInteractionForBackup);
+                    document.removeEventListener('keydown', handleUserInteractionForBackup);
+                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                };
+
+                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
+
+                return () => {
+                    document.removeEventListener('click', handleUserInteractionForBackup);
+                    document.removeEventListener('keydown', handleUserInteractionForBackup);
+                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                };
+            }, []);
+            // --------------------------------------------------------------
+
             const handleUpdateWeekData = (weekId, data) => {
                 setWeeksData(prev => ({ ...prev, [weekId]: data }));
             };
