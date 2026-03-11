@@ -74,6 +74,75 @@
 <body>
     <div id="root"></div>
 
+    <!-- --- FUNCIONS GLOBALS DE BACKUP --- -->
+    <script>
+        window.getLocalYYYYMMDD = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        window.downloadBackupJSON = (dataStr, filename) => {
+            if (!dataStr) return;
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        };
+
+        window.createAvaluaproBackup = (silent = false, customLabel = null, triggerDownload = false) => {
+            const currentData = localStorage.getItem('evalApp_data_v2');
+            if (!currentData || currentData === '[]') {
+                if (!silent) alert("No hi ha dades actuals per guardar al backup.");
+                return;
+            }
+            
+            let history = [];
+            try {
+                history = JSON.parse(localStorage.getItem('avaluaproBackupHistory')) || [];
+                if (!Array.isArray(history)) history = [];
+            } catch(e) { history = []; }
+            
+            if (history.length > 0 && history[0].data === currentData && silent) {
+                return; 
+            } else if (history.length > 0 && history[0].data === currentData && !silent) {
+                if(!confirm("⚠️ Les dades actuals són idèntiques a l'últim backup. Vols crear una entrada duplicada de tota manera?")) return;
+            }
+            
+            const now = new Date();
+            const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
+            const dateStrForFile = window.getLocalYYYYMMDD(now);
+            
+            history.unshift({ 
+                id: Date.now(), 
+                timestamp: timestamp, 
+                label: customLabel || (silent ? 'Còpia automàtica' : 'Còpia manual'), 
+                data: currentData 
+            });
+            
+            if (history.length > 10) history = history.slice(0, 10);
+            
+            localStorage.setItem('avaluaproBackupHistory', JSON.stringify(history));
+            
+            if (triggerDownload) {
+                const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
+                window.downloadBackupJSON(currentData, `AvaluaproBackup_${dateStrForFile}_${safeTime}.json`);
+            }
+            
+            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament.");
+            window.dispatchEvent(new Event('backupHistoryUpdated'));
+        };
+    </script>
+
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, Component } = React;
 
@@ -1498,6 +1567,45 @@
                     setActiveClassId(initialData[0].id);
                 }
             }, []);
+
+            // --- NOU: BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
+            useEffect(() => {
+                const handleUserInteractionForBackup = () => {
+                    const todayStr = window.getLocalYYYYMMDD ? window.getLocalYYYYMMDD(new Date()) : new Date().toISOString().split('T')[0];
+                    const lastDownload = localStorage.getItem('lastAvaluaproAutoBackupDate');
+                    
+                    if (lastDownload !== todayStr) {
+                        const currentDataStr = localStorage.getItem('evalApp_data_v2');
+                        if (currentDataStr && currentDataStr.length > 10 && currentDataStr !== '[]') {
+                            try {
+                                document.removeEventListener('click', handleUserInteractionForBackup);
+                                document.removeEventListener('keydown', handleUserInteractionForBackup);
+                                document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                                
+                                localStorage.setItem('lastAvaluaproAutoBackupDate', todayStr);
+                                
+                                if (window.createAvaluaproBackup) {
+                                    window.createAvaluaproBackup(true, 'Còpia automàtica diària', true);
+                                }
+                                console.log(`Backup automàtic diari processat i descarregat.`);
+                            } catch (err) {
+                                console.error("Error processant el backup diari:", err);
+                            }
+                        }
+                    }
+                };
+
+                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
+
+                return () => {
+                    document.removeEventListener('click', handleUserInteractionForBackup);
+                    document.removeEventListener('keydown', handleUserInteractionForBackup);
+                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                };
+            }, []);
+            // --------------------------------------------------------------
 
             useEffect(() => { 
                 if (classes && classes.length > 0) {
