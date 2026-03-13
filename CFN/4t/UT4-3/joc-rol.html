@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Dilema del Valle de la Vida - Juego de Rol</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome para los iconos -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;600;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['"Chakra Petch"', 'monospace'],
+                        sans: ['Inter', 'sans-serif']
+                    },
+                    colors: {
+                        cyber: {
+                            dark: '#050b14',
+                            card: '#0a192f',
+                            cyan: '#00f0ff',
+                            green: '#00ff66',
+                            red: '#ff003c',
+                            yellow: '#fae62d',
+                            orange: '#ff7300'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050b14;
+            color: #e2e8f0;
+        }
+
+        /* Scanline effect para la presentación */
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 50;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        .cyber-border {
+            position: relative;
+            border: 1px solid #00f0ff;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2) inset;
+        }
+        
+        .cyber-border::after, .cyber-border::before {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #00f0ff;
+            transition: all 0.3s;
+        }
+        .cyber-border::before { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        .cyber-border::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+        /* Animación Flip Card */
+        .flip-card {
+            perspective: 1000px;
+            height: 100%;
+        }
+        .flip-card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.8s;
+            transform-style: preserve-3d;
+            cursor: pointer;
+        }
+        .flip-card.flipped .flip-card-inner {
+            transform: rotateY(180deg);
+        }
+        .flip-card-front, .flip-card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .flip-card-back {
+            transform: rotateY(180deg);
+        }
+
+        /* Estilos de Impresión */
+        @media print {
+            body {
+                background: white;
+                color: black;
+                font-family: Arial, sans-serif;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-break-inside-avoid {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            .print-card {
+                border: 1px dashed #000;
+                margin-bottom: 8px;
+                padding: 10px;
+            }
+            .print-icon {
+                border: 2px solid black;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body class="font-sans antialiased overflow-x-hidden selection:bg-cyber-cyan selection:text-black min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <!-- Librerías React y Babel (Funcionan perfecto en GitHub Pages) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Base de datos del juego y Lógica React -->
+    <script type="text/babel">
+        // --- DATOS DEL JUEGO (Fácilmente editables) ---
+        const DATA = {
+            roles: [
+                { title: "Científico/a Genetista", subtitle: "La voz de la ciencia y el progreso", obj: "Convencer de los beneficios de la terapia génica (CFN1). Usa tus conocimientos sobre herencia (CFN6).", desc: "Eres el/la investigador/a principal de un nuevo laboratorio. Crees que la edición genética es la medicina del futuro. Conoces cómo cambiar un genotipo salva vidas.", icon: "fa-flask" },
+                { title: "Rep. Asociación de Pacientes", subtitle: "La voz humana y social", obj: "Defender la aprobación de las terapias (CFN1) exigiendo acceso para todos. Aportar el impacto social (CFN5).", desc: "Padre/madre de un niño con Síndrome de Sanfilippo. Para ti es vida o muerte. Llevas años esperando una cura que solo la genética puede ofrecer.", icon: "fa-users" },
+                { title: "Experto/a en Ecología", subtitle: "La voz de la precaución ambiental", obj: "Exponer impactos ecológicos (CFN5). Argumentar contra la liberación de organismos modificados (CFN2).", desc: "Biólogo/a de conservación del Pirineo. Temes 'jugar a ser Dios'. Te preocupa la interacción de organismos modificados con especies autóctonas de Andorra.", icon: "fa-leaf" },
+                { title: "Filósofo/a en Bioética", subtitle: "La voz de la moral y los límites", obj: "Frenar el entusiasmo y proponer regulaciones éticas estrictas (CFN3). Argumentar contra usos no médicos (CFN2).", desc: "Académico/a que vela por el Convenio de Oviedo. No estás en contra de curar, pero te aterroriza la eugenesia y el 'diseño de bebés'.", icon: "fa-scale-balanced" },
+                { title: "Rep. del Govern d'Andorra", subtitle: "La voz de la ley y el equilibrio", obj: "Formular preguntas incómodas (CFN4). Buscar un consenso en la ley final equilibrando beneficios y riesgos (CFN5).", desc: "Legislador/a con la última palabra. Quieres inversión científica moderna, pero debes proteger a los ciudadanos y el entorno de Andorra.", icon: "fa-landmark" }
+            ],
+            info_health: [
+                { title: "La revolución de la Insulina", text: "Desde 1982, la insulina se produce introduciendo el gen humano en bacterias (E. coli). Antes se extraía de cerdos, causando alergias.", icon: "fa-syringe" },
+                { title: "Las 'Niñas CRISPR' (2018)", text: "He Jiankui modificó embriones (Lulu y Nana) para hacerlas resistentes al VIH. Fue condenado a prisión por saltarse las normas éticas mundiales.", icon: "fa-dna" },
+                { title: "El primer tratamiento (2023)", text: "Se aprobó Casgevy (terapia CRISPR) para curar la anemia falciforme. ¿El problema? Su coste ronda los 2 millones de dólares por paciente.", icon: "fa-file-invoice-dollar" },
+                { title: "Terapia Somática vs Germinal", text: "Curar células de órganos (somática) muere con el paciente. Modificar espermatozoides/óvulos (germinal) altera el genoma de futuras generaciones.", icon: "fa-sitemap" },
+                { title: "Corazones de cerdo (2022)", text: "Se trasplantó el corazón de un cerdo modificado genéticamente (10 cambios para evitar rechazo) a un paciente humano que sobrevivió dos meses.", icon: "fa-heart-pulse" },
+                { title: "Esperanza para Sanfilippo", text: "Ensayos clínicos buscan frenar este 'Alzheimer infantil' introduciendo un gen funcional en el cerebro usando un virus inofensivo como vehículo.", icon: "fa-brain" }
+            ],
+            info_agri: [
+                { title: "El Arroz Dorado", text: "Arroz modificado para producir betacaroteno y combatir la ceguera infantil. Ha enfrentado décadas de bloqueos por grupos anti-transgénicos.", icon: "fa-wheat-awn" },
+                { title: "Patentes y Monopolios", text: "Las semillas transgénicas están patentadas por megacorporaciones. Los agricultores no pueden guardarlas y deben comprar nuevas cada año.", icon: "fa-copyright" },
+                { title: "Cultivos Bt", text: "El maíz 'Bt' tiene un gen de bacteria letal para orugas. Esto ha reducido drásticamente el uso de pesticidas químicos tóxicos en los campos.", icon: "fa-bug-slash" },
+                { title: "Súper-malezas", text: "El uso masivo de transgénicos resistentes a herbicidas ha provocado por selección natural malezas resistentes, obligando a usar químicos más fuertes.", icon: "fa-seedling" },
+                { title: "Salmón AquaAdvantage", text: "Primer animal transgénico para consumo (2015). Crece hasta su tamaño comercial en la mitad de tiempo gastando menos recursos.", icon: "fa-fish" }
+            ],
+            info_eco: [
+                { title: "Gene Drive en mosquitos", text: "Mosquitos modificados para ser estériles. Al liberarlos, colapsan poblaciones enteras y frenan la malaria, pero alteran la red trófica.", icon: "fa-mosquito" },
+                { title: "La Oveja Dolly (1996)", text: "Primer mamífero clonado. Demostró que era posible, pero Dolly envejeció prematuramente y murió a los 6 años (la mitad de lo normal).", icon: "fa-sheep" },
+                { title: "Retorno del Mamut", text: "Colossal Biosciences usa CRISPR para insertar genes de mamut en elefantes. Argumentan que restaurará la tundra ártica.", icon: "fa-icicles" },
+                { title: "El Bucardo (2003)", text: "Cabra extinta en 2000. En 2003 lograron clonarla, siendo el primer animal des-extinguido. Murió a los 10 minutos por un defecto pulmonar.", icon: "fa-mountain" },
+                { title: "Flujo genético", text: "El polen de plantas transgénicas viaja por el viento y fecunda plantas silvestres, alterando ecosistemas de forma irreversible.", icon: "fa-wind" }
+            ],
+            info_ethic: [
+                { title: "Convenio de Oviedo (1997)", text: "El Art. 13 prohíbe expresamente cualquier intervención para modificar el genoma de la descendencia (prohíbe 'bebés a la carta').", icon: "fa-book-bookmark" },
+                { title: "Efectos Off-Target", text: "Aunque CRISPR es preciso, a veces corta el ADN en lugares equivocados. Estos errores pueden apagar genes clave o causar cáncer.", icon: "fa-bullseye" },
+                { title: "Comité de Andorra", text: "Andorra tiene un Comité de Bioética, pero históricamente ha habido falta de regulación estricta en biotecnología a nivel nacional.", icon: "fa-flag" },
+                { title: "Premio Nobel (2020)", text: "Charpentier y Doudna ganaron el Nobel por CRISPR. Es tan barato y fácil de usar que ha 'democratizado' la edición genética mundialmente.", icon: "fa-award" }
+            ],
+            gasoline: [
+                { title: "El Hermano Salvador", subtitle: "Selección Embrionaria", bomb: "En varios países es legal crear un 'bebé medicamento'. Se fecundan embriones, se desechan los que no sirven y se implanta uno seleccionado genéticamente para que, al nacer, done médula a un hermano enfermo.", question: "¿Es ético fabricar una vida como 'pieza de repuesto'? Si aprobamos la clínica, ¿damos luz verde a crear y descartar embriones humanos sanos solo porque 'no son compatibles' con lo que los padres buscan?" },
+                { title: "La Élite Mutante", subtitle: "Clases Sociales", bomb: "Curar una enfermedad genética hoy es posible, pero el medicamento Hemgenix cuesta 3,5 millones de euros por dosis. La ingeniería genética no es para todos.", question: "Si logramos hacernos inmunes al cáncer, pero cuesta 5 millones... ¿Vamos a crear una sociedad donde los ricos sean genéticamente superiores y vivan el doble? ¿Debe prohibirse si no es gratis para todos?" },
+                { title: "Parque Jurásico", subtitle: "De-extinción", bomb: "Colossal Biosciences ya tiene millones para resucitar al Mamut Lanudo con CRISPR. Prometen que el primer mamut nacerá para 2027.", question: "Si resucitamos especies, ¿dónde las metemos si su ecosistema ya no existe? Y ya puestos... si tenemos el ADN Neandertal, ¿cuál es la excusa ética para no crear un bebé Neandertal a ver qué pasa?" },
+                { title: "Bebés a la carta", subtitle: "Líneas Rojas", bomb: "He Jiankui fue a prisión por modificar embriones (Lulu y Nana) para hacerlas inmunes al VIH. Cruzó la línea roja de editar gametos humanos.", question: "Fue ilegal, pero... esas niñas son inmunes al SIDA. Si podéis editar embriones para garantizar que vuestros hijos jamás tendrán Alzheimer, ¿quién diría 'no, prefiero que enfermen de forma natural'? ¿Dónde está la línea?" }
+            ]
+        };
+
+        const App = () => {
+            const [mode, setMode] = React.useState('presentation');
+
+            return (
+                <div className="flex-grow flex flex-col h-full relative">
+                    {/* NAVBAR */}
+                    <nav className="bg-cyber-dark border-b border-cyber-cyan/30 p-4 flex justify-between items-center no-print z-50 shadow-[0_4px_20px_rgba(0,240,255,0.1)] relative">
+                        <div className="flex items-center gap-3">
+                            <i className="fa-solid fa-microchip text-cyber-cyan text-2xl"></i>
+                            <h1 className="text-xl font-mono font-bold tracking-widest text-white">PROYECTO <span className="text-cyber-cyan">CRISPR-AND</span></h1>
+                        </div>
+                        <div className="flex bg-cyber-card border border-cyber-cyan/50 rounded overflow-hidden">
+                            <button 
+                                onClick={() => setMode('presentation')} 
+                                className={`px-4 py-2 font-mono text-sm transition-colors ${mode === 'presentation' ? 'bg-cyber-cyan text-black font-bold' : 'text-slate-400 hover:text-white'}`}>
+                                <i className="fa-solid fa-projector mr-2"></i> PANTALLA
+                            </button>
+                            <button 
+                                onClick={() => setMode('print')} 
+                                className={`px-4 py-2 font-mono text-sm transition-colors ${mode === 'print' ? 'bg-white text-black font-bold' : 'text-slate-400 hover:text-white'}`}>
+                                <i className="fa-solid fa-print mr-2"></i> MATERIAL IMPRIMIBLE
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* DYNAMIC CONTENT */}
+                    <div className="flex-grow overflow-auto relative">
+                        {mode === 'presentation' ? <PresentationView /> : <PrintView />}
+                    </div>
+                    
+                    {/* FOOTER */}
+                    <footer className="bg-cyber-dark text-slate-500 text-center py-3 text-xs font-mono border-t border-slate-800 no-print relative z-50">
+                        MATERIAL EXCLUSIVO PARA 4t DE SECUNDÀRIA - CIÈNCIES FÍSIQUES I DE LA NATURA
+                    </footer>
+                </div>
+            );
+        };
+
+        /* =========================================
+           PRESENTATION VIEW (PROJECTOR MODE)
+           ========================================= */
+        const PresentationView = () => {
+            return (
+                <div className="relative min-h-full scanlines pb-20">
+                    <div className="max-w-6xl mx-auto p-8 relative z-10 space-y-16">
+                        
+                        {/* HEADER HERO */}
+                        <header className="text-center pt-10">
+                            <div className="inline-block border border-cyber-red text-cyber-red px-3 py-1 font-mono text-xs font-bold tracking-widest mb-6 animate-pulse">
+                                ACCESO CLASIFICADO // COMITÉ DE BIOÉTICA
+                            </div>
+                            <h1 className="text-5xl md:text-7xl font-mono font-bold text-white mb-4 drop-shadow-[0_0_15px_rgba(0,240,255,0.5)] uppercase">
+                                El Dilema del <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyber-cyan to-cyber-green">Valle de la Vida</span>
+                            </h1>
+                            <p className="text-slate-400 text-xl font-light max-w-2xl mx-auto">
+                                Gobern d'Andorra. Sesión Extraordinaria. Expediente CRISPR-01.
+                            </p>
+                        </header>
+
+                        {/* CONTEXTO */}
+                        <section className="bg-cyber-card/80 backdrop-blur border-l-4 border-cyber-cyan p-8 rounded-r">
+                            <h2 className="font-mono text-2xl text-cyber-cyan mb-4 flex items-center"><i className="fa-solid fa-folder-open mr-3"></i> BRIEFING OFICIAL</h2>
+                            <div className="text-slate-300 space-y-4 text-lg leading-relaxed">
+                                <p>Una poderosa empresa multinacional de biotecnología ha solicitado formalmente al Govern d'Andorra los permisos para abrir la primera y más avanzada <strong>clínica de Fertilidad y Edición Genética CRISPR</strong> de toda Europa.</p>
+                                <p>Prometen erradicar enfermedades hereditarias mortales editando el ADN de los embriones antes de nacer. Sin embargo, rumores apuntan a turismo sanitario de lujo para <em>"bebés a la carta"</em>.</p>
+                                <p className="text-cyber-yellow">Francia y España exigen que Andorra cumpla el Convenio de Oviedo. Vosotros sois el Comité de Bioética. Vuestra misión es debatir y emitir un dictamen: <strong>¿Se aprueba la clínica? ¿Dónde ponemos los límites?</strong></p>
+                            </div>
+                        </section>
+
+                        {/* INSTRUCCIONES */}
+                        <section>
+                            <h2 className="font-mono text-3xl text-white mb-8 text-center border-b border-slate-700 pb-4">PROTOCOLO DE LA SESIÓN</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div className="cyber-border bg-cyber-dark p-6 rounded">
+                                    <div className="text-cyber-cyan text-3xl mb-3"><i className="fa-solid fa-stopwatch"></i></div>
+                                    <h3 className="font-mono font-bold text-white mb-2">Fase 1: Preparación</h3>
+                                    <p className="text-slate-400 text-sm">Leed vuestro Rol en secreto. Analizad la información científica en silencio. Robad 2 cartas de datos para defender vuestra postura.</p>
+                                </div>
+                                <div className="cyber-border bg-cyber-dark p-6 rounded">
+                                    <div className="text-cyber-green text-3xl mb-3"><i className="fa-solid fa-comments"></i></div>
+                                    <h3 className="font-mono font-bold text-white mb-2">Fase 2: El Debate</h3>
+                                    <p className="text-slate-400 text-sm">Se evalúa la Competencia C3 (Argumentación). Usad datos reales. Prohibido inventar ciencia. No gana el que más grite.</p>
+                                </div>
+                                <div className="cyber-border bg-cyber-dark p-6 rounded border-cyber-orange">
+                                    <div className="text-cyber-orange text-3xl mb-3"><i className="fa-solid fa-fire"></i></div>
+                                    <h3 className="font-mono font-bold text-white mb-2">Fase 3: Sucesos</h3>
+                                    <p className="text-slate-400 text-sm">El director de la sesión lanzará "Cartas Gasolina" (Noticias de última hora). Adaptad vuestros argumentos al giro de guion.</p>
+                                </div>
+                                <div className="cyber-border bg-cyber-dark p-6 rounded">
+                                    <div className="text-cyber-red text-3xl mb-3"><i className="fa-solid fa-gavel"></i></div>
+                                    <h3 className="font-mono font-bold text-white mb-2">Fase 4: Veredicto</h3>
+                                    <p className="text-slate-400 text-sm">Votad y elegid SOLO UNO de los 4 Escenarios de Futuro. Firmad el acuerdo (incluso si vuestro personaje debe ceder).</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* ESCENARIOS DE FUTURO */}
+                        <section>
+                            <h2 className="font-mono text-3xl text-white mb-8 text-center border-b border-slate-700 pb-4">ESCENARIOS DE FUTURO (Votación Final)</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-red-950/40 border border-red-500 p-6 rounded relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-2 h-full bg-red-600"></div>
+                                    <h3 className="font-mono font-bold text-xl text-red-400 mb-2">🔴 1. Naturaleza Intacta</h3>
+                                    <p className="text-slate-300 text-sm mb-2 italic">"Prohibición total. Precaución Absoluta."</p>
+                                    <p className="text-slate-400 text-sm">La genética es intocable. Se prohíbe alterar ADN en embriones y adultos por miedo a mutaciones (off-target) y eugenesia. La medicina se queda en lo tradicional.</p>
+                                </div>
+                                <div className="bg-green-950/40 border border-green-500 p-6 rounded relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-2 h-full bg-green-600"></div>
+                                    <h3 className="font-mono font-bold text-xl text-green-400 mb-2">🟢 2. Evolución Dirigida</h3>
+                                    <p className="text-slate-300 text-sm mb-2 italic">"Vía libre a la mejora humana (Transhumanismo)."</p>
+                                    <p className="text-slate-400 text-sm">Sin barreras. Se editan embriones para curar y para MEJORAR (fuerza, inteligencia, virus). La ciencia asume el control total de nuestra evolución.</p>
+                                </div>
+                                <div className="bg-yellow-950/40 border border-yellow-500 p-6 rounded relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-2 h-full bg-yellow-600"></div>
+                                    <h3 className="font-mono font-bold text-xl text-yellow-400 mb-2">🟡 3. La Línea Roja Somática</h3>
+                                    <p className="text-slate-300 text-sm mb-2 italic">"Curar sí, heredar no. (Modelo Oviedo)."</p>
+                                    <p className="text-slate-400 text-sm">Terapia permitida en órganos de personas vivas (células somáticas). Estrictamente PROHIBIDO tocar embriones/gametos. Los cambios genéticos mueren con el paciente.</p>
+                                </div>
+                                <div className="bg-orange-950/40 border border-orange-500 p-6 rounded relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-2 h-full bg-orange-600"></div>
+                                    <h3 className="font-mono font-bold text-xl text-orange-400 mb-2">🟠 4. Edición Germinal Controlada</h3>
+                                    <p className="text-slate-300 text-sm mb-2 italic">"Solo para casos letales vía Sanidad Pública."</p>
+                                    <p className="text-slate-400 text-sm">Se pueden editar embriones única y exclusivamente para borrar enfermedades letales. Cero estética. Solo bajo control estricto público para evitar clases sociales genéticas.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* CARTAS GASOLINA (INTERACTIVAS) */}
+                        <section className="pt-10">
+                            <h2 className="font-mono text-3xl text-cyber-orange mb-2 text-center flex justify-center items-center gap-3">
+                                <i className="fa-solid fa-triangle-exclamation"></i> SUCESOS INESPERADOS (GASOLINA)
+                            </h2>
+                            <p className="text-center text-slate-400 mb-8 font-mono text-sm">Docente: Haz clic en una tarjeta para revelar el giro de guion durante el debate.</p>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[30rem]">
+                                {DATA.gasoline.map((card, idx) => (
+                                    <FlipCard key={idx} card={card} idx={idx} />
+                                ))}
+                            </div>
+                        </section>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const FlipCard = ({ card, idx }) => {
+            const [flipped, setFlipped] = React.useState(false);
+            
+            return (
+                <div className={`flip-card ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}>
+                    <div className="flip-card-inner shadow-2xl">
+                        
+                        {/* FRONT */}
+                        <div className="flip-card-front bg-cyber-dark cyber-border border-cyber-orange flex flex-col items-center justify-center p-6 rounded">
+                            <i className="fa-solid fa-radiation text-5xl text-cyber-orange mb-4 animate-pulse"></i>
+                            <h3 className="font-mono text-xl text-white font-bold mb-1">EVENTO 0{idx+1}</h3>
+                            <p className="text-cyber-orange font-mono text-xs tracking-widest uppercase text-center">{card.subtitle}</p>
+                            <p className="text-slate-500 text-xs mt-6 border-t border-slate-700 pt-2 w-full text-center">CLICK PARA REVELAR</p>
+                        </div>
+                        
+                        {/* BACK */}
+                        <div className="flip-card-back bg-orange-950/90 border border-orange-500 rounded p-5 flex flex-col justify-start text-left overflow-y-auto">
+                            <h3 className="font-mono font-bold text-orange-400 text-lg border-b border-orange-500/50 pb-2 mb-3 leading-tight uppercase">{card.title}</h3>
+                            <p className="text-white text-sm mb-4"><strong>LA BOMBA:</strong> {card.bomb}</p>
+                            <div className="bg-black/50 p-3 rounded border-l-2 border-yellow-500">
+                                <p className="text-yellow-400 text-xs font-mono font-bold mb-1">NUEVO DEBATE:</p>
+                                <p className="text-slate-300 text-sm italic">{card.question}</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        /* =========================================
+           PRINT VIEW (PDF MODE)
+           ========================================= */
+        const PrintView = () => {
+            
+            const handlePrint = () => {
+                window.print();
+            };
+
+            return (
+                <div className="bg-white text-black min-h-screen font-sans p-4 md:p-8">
+                    
+                    <div className="max-w-5xl mx-auto">
+                        <div className="flex justify-between items-center mb-6 no-print border-b pb-4">
+                            <div>
+                                <h2 className="text-2xl font-bold">Material Imprimible</h2>
+                                <p className="text-gray-600">Este formato está diseñado en blanco y negro para ahorrar tinta. Recorta por las líneas punteadas.</p>
+                            </div>
+                            <button onClick={handlePrint} className="bg-blue-600 text-white px-6 py-2 rounded shadow hover:bg-blue-700 font-bold flex items-center gap-2">
+                                <i className="fa-solid fa-print"></i> Imprimir PDF
+                            </button>
+                        </div>
+
+                        {/* ROLES */}
+                        <h2 className="text-xl font-bold border-b-2 border-black pb-2 mb-4 uppercase">Tarjetas de Rol (Secreto)</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-2 gap-4 mb-8">
+                            {DATA.roles.map((rol, i) => (
+                                <div key={i} className="print-card print-break-inside-avoid relative">
+                                    <div className="absolute top-4 left-4 print-icon"><i className={`fa-solid fa-user text-sm`}></i></div>
+                                    <div className="pl-10 text-center mb-2">
+                                        <p className="text-xs uppercase font-bold text-gray-500">Identidad Secreta</p>
+                                        <h3 className="text-lg font-bold uppercase leading-tight">{rol.title}</h3>
+                                        <p className="text-sm italic">{rol.subtitle}</p>
+                                    </div>
+                                    <hr className="border-black mb-2"/>
+                                    <p className="text-sm mb-2"><strong>Quién eres:</strong> {rol.desc}</p>
+                                    <div className="bg-gray-100 p-2 border border-black text-sm">
+                                        <strong>Tu Objetivo:</strong> {rol.obj}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* INFO CARDS */}
+                        <div className="print-break-inside-avoid">
+                            <h2 className="text-xl font-bold border-b-2 border-black pb-2 mb-4 uppercase">Cartas de Información (Arsenal)</h2>
+                            <p className="mb-4 text-sm">Categorías: 🫀 Salud, 🌾 Agricultura, 🐾 Ecosistemas, ⚖️ Ética.</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+                                
+                                {/* Render all info cards */}
+                                {[...DATA.info_health].map((info, i) => (
+                                    <div key={'h'+i} className="print-card print-break-inside-avoid relative pb-2 pt-4 px-4">
+                                        <div className="absolute top-2 left-2 text-lg"><i className="fa-solid fa-heart-pulse"></i></div>
+                                        <h3 className="font-bold text-base leading-tight mb-2 pl-6">{info.title}</h3>
+                                        <p className="text-xs text-justify">{info.text}</p>
+                                    </div>
+                                ))}
+                                {[...DATA.info_agri].map((info, i) => (
+                                    <div key={'a'+i} className="print-card print-break-inside-avoid relative pb-2 pt-4 px-4">
+                                        <div className="absolute top-2 left-2 text-lg"><i className="fa-solid fa-wheat-awn"></i></div>
+                                        <h3 className="font-bold text-base leading-tight mb-2 pl-6">{info.title}</h3>
+                                        <p className="text-xs text-justify">{info.text}</p>
+                                    </div>
+                                ))}
+                                {[...DATA.info_eco].map((info, i) => (
+                                    <div key={'e'+i} className="print-card print-break-inside-avoid relative pb-2 pt-4 px-4">
+                                        <div className="absolute top-2 left-2 text-lg"><i className="fa-solid fa-leaf"></i></div>
+                                        <h3 className="font-bold text-base leading-tight mb-2 pl-6">{info.title}</h3>
+                                        <p className="text-xs text-justify">{info.text}</p>
+                                    </div>
+                                ))}
+                                {[...DATA.info_ethic].map((info, i) => (
+                                    <div key={'et'+i} className="print-card print-break-inside-avoid relative pb-2 pt-4 px-4">
+                                        <div className="absolute top-2 left-2 text-lg"><i className="fa-solid fa-scale-balanced"></i></div>
+                                        <h3 className="font-bold text-base leading-tight mb-2 pl-6">{info.title}</h3>
+                                        <p className="text-xs text-justify">{info.text}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* GASOLINE CARDS (Por si el profesor las quiere en físico) */}
+                        <div className="print-break-inside-avoid">
+                            <h2 className="text-xl font-bold border-b-2 border-black pb-2 mb-4 uppercase">Sucesos (Gasolina) - Docente</h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                {DATA.gasoline.map((gas, i) => (
+                                    <div key={i} className="print-card print-break-inside-avoid border-4 border-black relative">
+                                        <div className="absolute top-3 left-3 print-icon bg-black text-white"><i className="fa-solid fa-fire"></i></div>
+                                        <div className="pl-10 text-center mb-2">
+                                            <p className="text-xs uppercase font-bold text-gray-500">Última Hora</p>
+                                            <h3 className="text-lg font-bold uppercase leading-tight">{gas.title}</h3>
+                                        </div>
+                                        <hr className="border-black mb-2"/>
+                                        <p className="text-sm mb-2 text-justify"><strong>DATO SALSEANTE:</strong> {gas.bomb}</p>
+                                        <div className="bg-gray-200 p-2 border border-black text-sm text-justify">
+                                            <strong>PREGUNTA AL COMITÉ:</strong> {gas.question}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+```
