@@ -111,6 +111,8 @@
                 background: white;
                 color: black;
                 font-family: Arial, sans-serif;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
             .no-print {
                 display: none !important;
@@ -132,6 +134,11 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
+            }
+            textarea {
+                resize: none;
+                border: 1px solid #cbd5e1;
+                overflow: visible;
             }
         }
     </style>
@@ -194,6 +201,13 @@
 
         const App = () => {
             const [mode, setMode] = React.useState('presentation');
+            // Estado para mantener los argumentos de los alumnos sin que se borren al cambiar de pestaña
+            const [reflectionData, setReflectionData] = React.useState({
+                g1: { pro: '', con: '' },
+                g2: { pro: '', con: '' },
+                g3: { pro: '', con: '' },
+                g4: { pro: '', con: '' }
+            });
 
             return (
                 <div className="flex-grow flex flex-col h-full relative">
@@ -212,14 +226,21 @@
                             <button 
                                 onClick={() => setMode('print')} 
                                 className={`px-4 py-2 font-mono text-sm transition-colors ${mode === 'print' ? 'bg-white text-black font-bold' : 'text-slate-400 hover:text-white'}`}>
-                                <i className="fa-solid fa-print mr-2"></i> MATERIAL IMPRIMIBLE
+                                <i className="fa-solid fa-print mr-2"></i> CARTAS
+                            </button>
+                            <button 
+                                onClick={() => setMode('reflection')} 
+                                className={`px-4 py-2 font-mono text-sm transition-colors ${mode === 'reflection' ? 'bg-green-400 text-black font-bold' : 'text-slate-400 hover:text-white'}`}>
+                                <i className="fa-solid fa-chalkboard-user mr-2"></i> REFLEXIÓN
                             </button>
                         </div>
                     </nav>
 
                     {/* DYNAMIC CONTENT */}
                     <div className="flex-grow overflow-auto relative">
-                        {mode === 'presentation' ? <PresentationView /> : <PrintView />}
+                        {mode === 'presentation' && <PresentationView />}
+                        {mode === 'print' && <PrintView />}
+                        {mode === 'reflection' && <ReflectionView data={reflectionData} setData={setReflectionData} />}
                     </div>
                     
                     {/* FOOTER */}
@@ -475,9 +496,152 @@
             );
         };
 
+        /* =========================================
+           REFLECTION VIEW (NEW MODE)
+           ========================================= */
+        const ReflectionView = ({ data, setData }) => {
+            const handlePrint = () => window.print();
+
+            const handleChange = (groupId, field, value) => {
+                setData(prev => ({
+                    ...prev,
+                    [groupId]: {
+                        ...prev[groupId],
+                        [field]: value
+                    }
+                }));
+            };
+
+            const scenarios = [
+                { id: 'g1', title: 'Grupo 1: La Clínica CRISPR en Andorra', desc: 'Enfoque: Turismo sanitario, falta de regulación local vs. internacional, edición de embriones.' },
+                { id: 'g2', title: 'Grupo 2: Bebés a la carta por "error"', desc: 'Enfoque: El caso real de He Jiankui, edición de la línea germinal, eugenesia, inmunidad al VIH vs. riesgos.' },
+                { id: 'g3', title: 'Grupo 3: Parque Jurásico en el patio de casa', desc: 'Enfoque: De-extinción del Mamut con CRISPR, impacto en ecosistemas actuales, límites de la ciencia.' },
+                { id: 'g4', title: 'Grupo 4: Terapia génica exclusiva vs. Pastillas', desc: 'Enfoque: Patentes farmacéuticas, desigualdad social, curas definitivas vs. tratamientos crónicos.' }
+            ];
+
+            return (
+                <div className="bg-slate-50 text-slate-900 min-h-full p-4 md:p-8 font-sans">
+                    <div className="max-w-6xl mx-auto space-y-8">
+                        
+                        {/* Encabezado */}
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b-2 border-slate-300 pb-4 gap-4 print:hidden">
+                            <div>
+                                <h2 className="text-3xl font-bold text-slate-800">Debate Bioético: El Valle de la Vida</h2>
+                                <p className="text-slate-600 text-lg">Análisis de escenarios de futuro mediante la argumentación científica (C3)</p>
+                            </div>
+                            <button onClick={handlePrint} className="no-print bg-cyber-cyan text-black px-6 py-2 rounded shadow hover:bg-cyan-400 font-bold flex items-center gap-2 whitespace-nowrap">
+                                <i className="fa-solid fa-file-pdf"></i> Guardar PDF
+                            </button>
+                        </div>
+
+                        {/* Las 4 Lentes */}
+                        <section className="print-break-inside-avoid print:hidden">
+                            <h3 className="text-xl font-bold text-slate-800 mb-4 border-l-4 border-cyber-cyan pl-3">Las 4 Lentes de Análisis</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="bg-blue-100 p-4 rounded border-t-4 border-blue-500 shadow-sm">
+                                    <h4 className="font-bold text-blue-800 mb-2"><i className="fa-solid fa-stethoscope"></i> Médica/Científica</h4>
+                                    <p className="text-sm text-slate-700">¿Qué implicaciones tiene para la salud, la cura de enfermedades o la alteración del genoma?</p>
+                                </div>
+                                <div className="bg-purple-100 p-4 rounded border-t-4 border-purple-500 shadow-sm">
+                                    <h4 className="font-bold text-purple-800 mb-2"><i className="fa-solid fa-scale-balanced"></i> Ética/Moral</h4>
+                                    <p className="text-sm text-slate-700">¿Es correcto hacerlo? ¿Qué derechos se vulneran o protegen? ¿Afecta a futuras generaciones?</p>
+                                </div>
+                                <div className="bg-orange-100 p-4 rounded border-t-4 border-orange-500 shadow-sm">
+                                    <h4 className="font-bold text-orange-800 mb-2"><i className="fa-solid fa-landmark"></i> Legal/Social</h4>
+                                    <p className="text-sm text-slate-700">¿Qué dice la ley (ej. Convenio de Oviedo)? ¿Genera desigualdad económica o exclusión?</p>
+                                </div>
+                                <div className="bg-green-100 p-4 rounded border-t-4 border-green-500 shadow-sm">
+                                    <h4 className="font-bold text-green-800 mb-2"><i className="fa-solid fa-leaf"></i> Ecológica</h4>
+                                    <p className="text-sm text-slate-700">¿Cómo afecta a los ecosistemas, la biodiversidad o la evolución natural?</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Recordatorio de Escenarios */}
+                        <section className="print-break-inside-avoid print:hidden">
+                            <h3 className="text-xl font-bold text-slate-800 mb-4 border-l-4 border-cyber-orange pl-3">Recordatorio: Escenarios de Futuro</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="bg-red-50 border border-red-300 p-4 rounded shadow-sm">
+                                    <h4 className="font-bold text-red-700 mb-1 text-sm">🔴 1. Naturaleza Intacta</h4>
+                                    <p className="text-xs text-slate-700">Prohibición total de alteración genética (embriones o adultos) por precaución extrema.</p>
+                                </div>
+                                <div className="bg-green-50 border border-green-300 p-4 rounded shadow-sm">
+                                    <h4 className="font-bold text-green-700 mb-1 text-sm">🟢 2. Evolución Dirigida</h4>
+                                    <p className="text-xs text-slate-700">Vía libre al transhumanismo. Permite editar para curar y mejorar capacidades.</p>
+                                </div>
+                                <div className="bg-yellow-50 border border-yellow-300 p-4 rounded shadow-sm">
+                                    <h4 className="font-bold text-yellow-700 mb-1 text-sm">🟡 3. Línea Roja Somática</h4>
+                                    <p className="text-xs text-slate-700">Terapia en órganos permitida. Alterar embriones/gametos estrictamente prohibido.</p>
+                                </div>
+                                <div className="bg-orange-50 border border-orange-300 p-4 rounded shadow-sm">
+                                    <h4 className="font-bold text-orange-700 mb-1 text-sm">🟠 4. Edición Germinal</h4>
+                                    <p className="text-xs text-slate-700">Permitido en embriones SÓLO para letales y vía sanidad pública. Cero estética.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Estructura C3 e Instrucciones */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print-break-inside-avoid print:block">
+                            <section className="bg-slate-800 text-white p-6 rounded shadow-lg print:mb-6">
+                                <h3 className="text-xl font-bold text-cyber-cyan mb-4"><i className="fa-solid fa-pen-nib"></i> Estructura de un Argumento (C3)</h3>
+                                <ul className="space-y-3 text-sm">
+                                    <li><strong className="text-yellow-400">Afirmación:</strong> La idea principal que defienden.</li>
+                                    <li><strong className="text-green-400">Evidencia Científica:</strong> El dato, concepto biológico o hecho objetivo que respalda la idea.</li>
+                                    <li><strong className="text-pink-400">Justificación:</strong> El razonamiento que conecta la evidencia con la afirmación desde una de las "Lentes".</li>
+                                </ul>
+                            </section>
+                            
+                            <section className="bg-white border-2 border-slate-200 p-6 rounded shadow-sm print:hidden">
+                                <h3 className="text-xl font-bold text-slate-800 mb-4"><i className="fa-solid fa-list-check"></i> Instrucciones para la Puesta en Común</h3>
+                                <ol className="list-decimal pl-5 space-y-2 text-sm text-slate-700">
+                                    <li><strong>Paso 1 (30 seg):</strong> El portavoz lee su escenario al resto de la clase para dar contexto.</li>
+                                    <li><strong>Paso 2:</strong> El grupo dicta a la pizarra 1 Argumento <strong>A Favor</strong> (usando la estructura C3 y basándose en una Lente).</li>
+                                    <li><strong>Paso 3:</strong> El grupo dicta a la pizarra 1 Argumento <strong>En Contra</strong> (usando la estructura C3 y basándose en una <em>Lente diferente</em>).</li>
+                                </ol>
+                            </section>
+                        </div>
+
+                        {/* Tabla de Argumentación por Grupos */}
+                        <section className="space-y-6">
+                            <h3 className="text-2xl font-bold text-slate-800 border-b-2 border-slate-300 pb-2">Tabla de Análisis por Grupos</h3>
+                            
+                            {scenarios.map((group) => (
+                                <div key={group.id} className="bg-white border border-slate-300 rounded overflow-hidden shadow-sm print-break-inside-avoid">
+                                    <div className="bg-slate-200 p-3 border-b border-slate-300">
+                                        <h4 className="font-bold text-lg text-slate-800">{group.title}</h4>
+                                        <p className="text-sm text-slate-600">{group.desc}</p>
+                                    </div>
+                                    <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-300">
+                                        <div className="flex-1 p-4 bg-green-50/30">
+                                            <label className="block text-sm font-bold text-green-700 mb-2"><i className="fa-solid fa-thumbs-up"></i> Argumento A Favor</label>
+                                            <textarea 
+                                                className="w-full h-24 p-2 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-green-400 text-sm bg-white"
+                                                placeholder="Escribe aquí la Afirmación + Evidencia + Justificación..."
+                                                value={data[group.id].pro}
+                                                onChange={(e) => handleChange(group.id, 'pro', e.target.value)}
+                                            ></textarea>
+                                        </div>
+                                        <div className="flex-1 p-4 bg-red-50/30">
+                                            <label className="block text-sm font-bold text-red-700 mb-2"><i className="fa-solid fa-thumbs-down"></i> Argumento En Contra</label>
+                                            <textarea 
+                                                className="w-full h-24 p-2 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-red-400 text-sm bg-white"
+                                                placeholder="Escribe aquí la Afirmación + Evidencia + Justificación..."
+                                                value={data[group.id].con}
+                                                onChange={(e) => handleChange(group.id, 'con', e.target.value)}
+                                            ></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </section>
+
+                    </div>
+                </div>
+            );
+        };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
 </html>
-```
