@@ -254,7 +254,9 @@
             Paste: () => <Icon><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></Icon>,
             Menu: () => <Icon><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></Icon>,
             Shield: () => <Icon><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Icon>,
-            Download: () => <Icon><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Icon>
+            Download: () => <Icon><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Icon>,
+            Bell: () => <Icon><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Icon>,
+            Hourglass: () => <Icon><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></Icon>
         };
 
         // --- CONSTANTS & THEMES ---
@@ -373,6 +375,13 @@
             const result = new Date(y, m - 1, d, 12, 0, 0); 
             result.setDate(result.getDate() + days);
             return getLocalISODate(result);
+        };
+
+        const stripClassLetter = (name) => {
+            if (!name) return "";
+            const match = name.match(/(1r|2n|3r|4t|1R|2N|3R|4T)/i);
+            if (match) return match[0].toLowerCase();
+            return name.replace(/\s+[A-E]$/i, '').trim();
         };
 
         // --- COMPONENTS ---
@@ -569,12 +578,14 @@
             );
         };
 
-        const DashboardScreen = ({ config, radar, setRadar, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders, weeksData }) => {
+        const DashboardScreen = ({ config, radar, setRadar, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders, onSaveReminder, weeksData }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
             const [showInfoModal, setShowInfoModal] = useState(false);
             const [showImportModal, setShowImportModal] = useState(false);
             const [showBackupModal, setShowBackupModal] = useState(false);
+            const [showGlobalRemindersModal, setShowGlobalRemindersModal] = useState(false);
+            const [showRadarHistory, setShowRadarHistory] = useState(false);
             const [backupHistory, setBackupHistory] = useState([]);
             const [editingLink, setEditingLink] = useState(false);
             const [tempLink, setTempLink] = useState(config.googleSheetUrl || "");
@@ -603,6 +614,26 @@
                     return () => window.removeEventListener('backupHistoryUpdated', loadHistory);
                 }
             }, [showBackupModal]);
+
+            useEffect(() => {
+                const todayStr = getLocalISODate(new Date());
+                const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+                let changed = false;
+                const newRadar = radar.filter(item => {
+                    if (item.completedAt && item.completedAt < oneWeekAgo) {
+                        changed = true;
+                        return false;
+                    }
+                    return true;
+                }).map(item => {
+                    if (!item.completedAt && item.date && item.date < todayStr) {
+                        changed = true;
+                        return { ...item, completedAt: Date.now() };
+                    }
+                    return item;
+                });
+                if (changed) setRadar(newRadar);
+            }, [radar, setRadar]);
 
             const calculateProgress = () => {
                 if (allWeeks.length === 0) return 0;
@@ -660,7 +691,8 @@
                     id: Date.now(),
                     text: newRadarText.trim(),
                     date: newRadarDate || null,
-                    fromTask: false
+                    fromTask: false,
+                    completedAt: null
                 };
                 setRadar([...radar, newEntry]);
                 setNewRadarText("");
@@ -668,7 +700,7 @@
             };
 
             const handleRemoveRadar = (id) => {
-                setRadar(radar.filter(item => item.id !== id));
+                setRadar(radar.map(item => item.id === id ? { ...item, completedAt: Date.now() } : item));
             };
 
             // Lògica per trobar la setmana actual i calcular les claus de data correctes
@@ -709,6 +741,24 @@
                 }
             }
 
+            const nowForUI = new Date();
+            const isWeekendNow = nowForUI.getDay() === 0 || nowForUI.getDay() === 6;
+            const weekBadgeText = isWeekendNow ? "SEGÜENT SETMANA" : "Actual";
+            
+            const isHighlightedWeek = (w) => {
+                const targetDate = new Date(nowForUI);
+                if (isWeekendNow) {
+                    const daysToNextMonday = nowForUI.getDay() === 0 ? 1 : 2;
+                    targetDate.setDate(targetDate.getDate() + daysToNextMonday);
+                }
+                const start = new Date(w.startDate);
+                start.setHours(0, 0, 0, 0);
+                const end = new Date(w.startDate);
+                end.setDate(end.getDate() + 6);
+                end.setHours(23, 59, 59, 999);
+                return targetDate >= start && targetDate <= end;
+            };
+
             return (
                 <div className="max-w-7xl mx-auto p-6 fade-in pb-20">
                     <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -741,6 +791,7 @@
                         )}
 
                         <div className="flex gap-2 items-center">
+                             <button onClick={() => setShowGlobalRemindersModal(true)} className="p-2 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg flex items-center gap-1 transition-colors mr-2" title="Tots els Recordatoris"><Icons.Bell size={18}/></button>
                              <button onClick={() => setShowBackupModal(true)} className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg flex items-center gap-1 transition-colors mr-2" title="Protecció de Dades"><Icons.Shield size={18}/></button>
                              <button onClick={() => setShowResetModal(true)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 transition-colors mr-4" title="Reiniciar"><Icons.Trash size={18}/></button>
                              <button onClick={() => setShowInfoModal(true)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium"><Icons.FileJson /> Guardar</button>
@@ -766,7 +817,7 @@
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {currentMonthWeeks.map(week => {
                                     const isHoliday = holidayWeeks?.includes(week.id);
-                                    const isCurrent = isCurrentWeek(week);
+                                    const isCurrent = isHighlightedWeek(week);
                                     const utEnding = getUTForWeek(week);
                                     
                                     // Afegim classes de color segons si és final de UT
@@ -782,7 +833,7 @@
                                             <div onClick={() => onSelectWeek(week.id)} className="cursor-pointer h-full pr-12">
                                                 <h3 className={`font-bold text-lg ${isCurrent ? `text-${theme}-900` : 'text-gray-800'}`}>{week.label}</h3>
                                                 <p className={`text-sm mb-2 ${isCurrent ? `text-${theme}-800` : 'text-gray-500'}`}>{week.startDate.toLocaleDateString()} - {week.endDate.toLocaleDateString()}</p>
-                                                {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm inline-block mr-1`}>Actual</span>}
+                                                {isCurrent && <span className={`bg-${theme}-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase shadow-sm inline-block mr-1`}>{weekBadgeText}</span>}
                                             </div>
                                             
                                             {/* Etiqueta final UT inferior dreta */}
@@ -818,45 +869,63 @@
                             {/* RADAR NOU FORMAT LLISTA */}
                             <div className="bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden h-[350px]">
                                 <div className="bg-gray-800 text-white p-4 flex justify-between items-center shrink-0">
-                                    <h2 className="font-bold flex items-center gap-2"><Icons.AlertCircle /> RADAR</h2>
+                                    <h2 className="font-bold flex items-center gap-2"><Icons.AlertCircle /> RADAR {showRadarHistory && "(Historial)"}</h2>
+                                    <button onClick={() => setShowRadarHistory(!showRadarHistory)} className={`text-gray-300 hover:text-white transition-colors ${showRadarHistory ? 'text-yellow-400' : ''}`} title="Veure historial">
+                                        <Icons.Hourglass size={18} />
+                                    </button>
                                 </div>
                                 <div className="flex-1 bg-yellow-50/30 p-4 overflow-y-auto custom-scroll space-y-3">
-                                    {radar.length === 0 && <p className="text-gray-400 italic text-sm text-center mt-4">Cap entrada pendent.</p>}
-                                    {radar.map(item => (
-                                        <div key={item.id} className="relative group bg-white border border-gray-200 rounded p-2 shadow-sm flex gap-2">
-                                            {item.date && (
-                                                <div className="absolute -top-2 right-2 bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-red-200">
-                                                    {new Date(item.date).toLocaleDateString()}
-                                                </div>
-                                            )}
-                                            <button onClick={() => handleRemoveRadar(item.id)} className="shrink-0 mt-0.5 text-gray-300 hover:text-green-500 transition-colors" title="Marcar com a fet">
-                                                <Icons.CheckCircle size={18} />
-                                            </button>
-                                            <p className={`text-sm text-gray-700 pt-0.5 ${item.date ? 'mt-1' : ''}`}>{item.text}</p>
-                                        </div>
-                                    ))}
+                                    {(() => {
+                                        const visibleRadar = showRadarHistory 
+                                            ? radar.filter(item => item.completedAt).sort((a,b) => b.completedAt - a.completedAt)
+                                            : radar.filter(item => !item.completedAt);
+                                        return (
+                                            <>
+                                                {visibleRadar.length === 0 && <p className="text-gray-400 italic text-sm text-center mt-4">Cap entrada {showRadarHistory ? "a l'historial" : "pendent"}.</p>}
+                                                {visibleRadar.map(item => (
+                                                    <div key={item.id} className={`relative group bg-white border border-gray-200 rounded p-2 shadow-sm flex gap-2 ${item.completedAt ? 'opacity-60' : ''}`}>
+                                                        {item.date && (
+                                                            <div className="absolute -top-2 right-2 bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-red-200">
+                                                                {new Date(item.date).toLocaleDateString()}
+                                                            </div>
+                                                        )}
+                                                        {!item.completedAt ? (
+                                                            <button onClick={() => handleRemoveRadar(item.id)} className="shrink-0 mt-0.5 text-gray-300 hover:text-green-500 transition-colors" title="Marcar com a fet">
+                                                                <Icons.CheckCircle size={18} />
+                                                            </button>
+                                                        ) : (
+                                                            <span className="shrink-0 mt-0.5 text-green-500"><Icons.CheckCircle size={18} /></span>
+                                                        )}
+                                                        <p className={`text-sm text-gray-700 pt-0.5 ${item.date ? 'mt-1' : ''} ${item.completedAt ? 'line-through' : ''}`}>{item.text}</p>
+                                                    </div>
+                                                ))}
+                                            </>
+                                        );
+                                    })()}
                                     
                                     {/* Entrada buida al final per afegir */}
-                                    <div className="border-t border-gray-200 pt-3 mt-4">
-                                        <div className="bg-white border-2 border-dashed border-gray-200 rounded p-2 flex flex-col gap-2">
-                                            <textarea 
-                                                className="w-full text-sm resize-none outline-none focus:bg-gray-50"
-                                                placeholder="Nova nota o tasca al radar..."
-                                                value={newRadarText}
-                                                onChange={(e) => setNewRadarText(e.target.value)}
-                                                onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddRadar(); }}}
-                                            />
-                                            <div className="flex justify-between items-center">
-                                                <input 
-                                                    type="date" 
-                                                    className="text-[10px] text-gray-500 border rounded p-1 outline-none"
-                                                    value={newRadarDate}
-                                                    onChange={(e) => setNewRadarDate(e.target.value)}
+                                    {!showRadarHistory && (
+                                        <div className="border-t border-gray-200 pt-3 mt-4">
+                                            <div className="bg-white border-2 border-dashed border-gray-200 rounded p-2 flex flex-col gap-2">
+                                                <textarea 
+                                                    className="w-full text-sm resize-none outline-none focus:bg-gray-50"
+                                                    placeholder="Nova nota o tasca al radar..."
+                                                    value={newRadarText}
+                                                    onChange={(e) => setNewRadarText(e.target.value)}
+                                                    onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddRadar(); }}}
                                                 />
-                                                <button onClick={handleAddRadar} disabled={!newRadarText.trim()} className="bg-gray-800 text-white text-xs px-3 py-1 rounded font-bold disabled:opacity-50">Afegir</button>
+                                                <div className="flex justify-between items-center">
+                                                    <input 
+                                                        type="date" 
+                                                        className="text-[10px] text-gray-500 border rounded p-1 outline-none"
+                                                        value={newRadarDate}
+                                                        onChange={(e) => setNewRadarDate(e.target.value)}
+                                                    />
+                                                    <button onClick={handleAddRadar} disabled={!newRadarText.trim()} className="bg-gray-800 text-white text-xs px-3 py-1 rounded font-bold disabled:opacity-50">Afegir</button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -924,6 +993,14 @@
                             </div>
                         </div>
                     </div>
+
+                    {showGlobalRemindersModal && ReactDOM.createPortal(
+                        <GlobalRemindersModal 
+                            reminders={reminders} 
+                            onSaveReminder={onSaveReminder}
+                            onClose={() => setShowGlobalRemindersModal(false)}
+                        />, document.body
+                    )}
 
                     {showBackupModal && ReactDOM.createPortal(
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in p-4">
@@ -1593,6 +1670,84 @@
             );
         };
 
+        const GlobalRemindersModal = ({ reminders, onSaveReminder, onClose }) => {
+            const [newDate, setNewDate] = useState("");
+            const [newText, setNewText] = useState("");
+            const [newTime, setNewTime] = useState("");
+
+            const allRems = [];
+            Object.entries(reminders || {}).forEach(([dateStr, rems]) => {
+                rems.forEach(r => allRems.push({ ...r, dateStr }));
+            });
+            allRems.sort((a, b) => new Date(a.dateStr) - new Date(b.dateStr));
+
+            const handleAdd = () => {
+                if (newDate && newText.trim()) {
+                    const existing = reminders[newDate] || [];
+                    onSaveReminder(newDate, [...existing, { text: newText.trim(), time: newTime }]);
+                    setNewText("");
+                    setNewTime("");
+                }
+            };
+
+            const handleRemove = (dateStr, text, time) => {
+                const existing = reminders[dateStr] || [];
+                onSaveReminder(dateStr, existing.filter(item => !(item.text === text && item.time === time)));
+            };
+
+            return (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative animate-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2 shrink-0">
+                            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <Icons.Bell className="text-yellow-500"/> Tots els Recordatoris
+                            </h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        
+                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-4 shrink-0 flex flex-col gap-2">
+                            <h4 className="text-sm font-bold text-yellow-800">Afegir Nou Recordatori</h4>
+                            <div className="flex gap-2 items-end">
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Data</label>
+                                    <input type="date" className="w-full border p-1.5 rounded text-sm outline-none" value={newDate} onChange={e => setNewDate(e.target.value)} />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Text</label>
+                                    <input type="text" className="w-full border p-1.5 rounded text-sm outline-none" placeholder="Què vols recordar?" value={newText} onChange={e => setNewText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+                                </div>
+                                <div className="w-20">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Hora</label>
+                                    <input type="time" className="w-full border p-1.5 rounded text-sm outline-none" value={newTime} onChange={e => setNewTime(e.target.value)} />
+                                </div>
+                                <button onClick={handleAdd} disabled={!newDate || !newText.trim()} className="bg-yellow-500 text-white px-3 py-1.5 rounded font-bold hover:bg-yellow-600 disabled:opacity-50 h-[34px]">+</button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scroll pr-2 space-y-2">
+                            {allRems.length === 0 ? (
+                                <p className="text-center text-gray-400 italic text-sm mt-4">No hi ha cap recordatori actiu.</p>
+                            ) : (
+                                allRems.map((r, i) => (
+                                    <div key={i} className="flex justify-between items-center bg-white p-2 rounded shadow-sm border border-gray-100">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="bg-yellow-100 text-yellow-800 text-[10px] px-1.5 py-0.5 rounded font-bold">{new Date(r.dateStr).toLocaleDateString('ca-ES', {day: '2-digit', month: 'short', year: 'numeric'})}</span>
+                                                {r.time && <span className="text-[10px] text-gray-500 font-mono bg-gray-100 px-1 rounded">{r.time}</span>}
+                                            </div>
+                                            <p className="text-sm font-medium text-gray-800 mt-1">{r.text}</p>
+                                        </div>
+                                        <button onClick={() => handleRemove(r.dateStr, r.text, r.time)} className="text-red-400 hover:text-red-600 font-bold px-2 text-lg">×</button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onSaveWeek, onBack, onAddToRadar, allWeeks, holidayWeeks, reminders, onSaveReminder }) => {
             const [planData, setPlanData] = useState(weeksData[weekId] || {});
             const [history, setHistory] = useState([]);
@@ -1987,7 +2142,7 @@
                 const htmlRows = generateHTML(true); 
                 const payload = {
                     action: 'SYNC_TABLE',
-                    curs: exportConfig.curs.trim(),
+                    curs: window.stripClassLetter(exportConfig.curs),
                     ut: exportConfig.ut.trim(),
                     fase: exportConfig.fase,
                     html: htmlRows,
@@ -2247,7 +2402,13 @@
                                 
                                 <div className="mb-4">
                                     <label className="block text-sm font-bold text-gray-700 mb-2">1. Selecciona la classe per filtrar les dades:</label>
-                                    <select className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={exportClassId} onChange={(e) => setExportClassId(e.target.value)}>
+                                    <select className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={exportClassId} onChange={(e) => {
+                                        setExportClassId(e.target.value);
+                                        const selectedC = config.classes.find(c => c.id === e.target.value);
+                                        if (selectedC) {
+                                            setExportConfig({...exportConfig, curs: window.stripClassLetter(selectedC.name)});
+                                        }
+                                    }}>
                                         <option value="">-- Totes les classes --</option>
                                         {config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
@@ -2348,7 +2509,7 @@
             );
         };
 
-        const ClassPlannerScreen = ({ classId, config, weeksData, allWeeks, holidayWeeks, onUpdateWeekData, onConfigChange, onBack, onAddToRadar }) => {
+        const ClassPlannerScreen = ({ classId, config, weeksData, allWeeks, holidayWeeks, onUpdateWeekData, onConfigChange, onBack, onAddToRadar, reminders, onSaveReminder }) => {
             const classInfo = config.classes.find(c => c.id === classId);
             const theme = config.theme || 'orange';
 
@@ -2356,7 +2517,7 @@
             const [future, setFuture] = useState([]);
             const [reviewMode, setReviewMode] = useState(false);
             const [showExportModal, setShowExportModal] = useState(false);
-            const [exportConfig, setExportConfig] = useState({ curs: classInfo ? classInfo.name.split(' ')[0] : "", ut: "", fase: "FASE DE PREPARACIÓ" });
+            const [exportConfig, setExportConfig] = useState({ curs: classInfo ? window.stripClassLetter(classInfo.name) : "", ut: "", fase: "FASE DE PREPARACIÓ" });
             const [exportInterval, setExportInterval] = useState("");
             const [selectedUTId, setSelectedUTId] = useState("");
 
@@ -2766,7 +2927,7 @@
                 
                 const payload = {
                     action: 'SYNC_TABLE',
-                    curs: exportConfig.curs.trim(),
+                    curs: window.stripClassLetter(exportConfig.curs),
                     ut: exportConfig.ut.trim(),
                     fase: exportConfig.fase,
                     html: strippedRows,
@@ -2890,30 +3051,23 @@
                                                             <div className="flex items-center gap-2">
                                                                 <button onClick={() => setActiveSmartPaste({wId: sess.weekId, day: sess.dayIndex, slot: sess.slot.id})} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Enganxar des de text"><Icons.Paste size={14}/></button>
                                                                 <button onClick={() => openCopyModal(sess.weekId, sess.dayIndex, sess.slot.id, classId)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14}/></button>
-                                                                <button onClick={() => { if(isZzz || isHoliday) { handleStatusChange(sess.weekId, sess.dayIndex, sess.slot.id, null); } else { handleZzzAction(sess.weekId, sess.dayIndex, sess.slot.id, classId); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors reactivate-btn ${isZzz || isHoliday ? 'text-gray-800' : ''}`} title={isZzz || isHoliday ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
+                                                                <button onClick={() => { if(isZzz) { handleStatusChange(sess.weekId, sess.dayIndex, sess.slot.id, null); } else { handleZzzAction(sess.weekId, sess.dayIndex, sess.slot.id); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors reactivate-btn ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14}/></button>
                                                                 <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
                                                             </div>
                                                         </div>
-                                                        
                                                         <div className={`flex-1 overflow-y-auto custom-scroll ${reviewMode ? 'opacity-50 pointer-events-none' : ''}`}>
-                                                            {isZzz || isHoliday ? (
+                                                            {isZzz ? (
                                                                 <div className="flex-1 flex items-center justify-center p-2 h-full">
                                                                     <textarea
-                                                                        className="w-full h-full min-h-[60px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-600 focus:ring-0 focus:outline-none placeholder-gray-500"
+                                                                        className="w-full h-full min-h-[80px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-600 focus:ring-0 focus:outline-none placeholder-gray-500"
                                                                         style={{ pointerEvents: 'auto' }}
-                                                                        placeholder={isHoliday ? "Festiu" : "Motiu (ex: Excursió)"}
-                                                                        value={sess.data.zzzReason || (isHoliday ? 'Festiu 🎉' : '')}
+                                                                        placeholder="Motiu (ex: Excursió)"
+                                                                        value={sess.data.zzzReason || ""}
                                                                         onChange={(e) => {
                                                                             const wData = { ...(weeksData[sess.weekId] || {}) };
                                                                             wData[`${sess.dayIndex}-${sess.slot.id}`] = { ...wData[`${sess.dayIndex}-${sess.slot.id}`], zzzReason: e.target.value };
-                                                                            setWeeksData(prev => ({...prev, [sess.weekId]: wData}));
+                                                                            onUpdateWeekData(sess.weekId, wData);
                                                                         }}
-                                                                        onBlur={(e) => {
-                                                                            const wData = { ...(weeksData[sess.weekId] || {}) };
-                                                                            wData[`${sess.dayIndex}-${sess.slot.id}`] = { ...wData[`${sess.dayIndex}-${sess.slot.id}`], zzzReason: e.target.value };
-                                                                            updatePlanData(sess.weekId, wData, true);
-                                                                        }}
-                                                                        disabled={isHoliday}
                                                                     />
                                                                 </div>
                                                             ) : (
@@ -2921,7 +3075,7 @@
                                                             )}
                                                         </div>
                                                         {(reviewMode || sess.data.review) && (
-                                                            <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={sess.data.review||""} onChange={(e)=>handleReviewChange(sess.weekId, sess.dayIndex, sess.slot.id, e.target.value)}></textarea>
+                                                            <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={sess.data.review||""} onChange={(e)=>handleReviewChange(sess.weekId,sess.dayIndex,sess.slot.id,e.target.value)}></textarea>
                                                         )}
                                                     </div>
                                                 </div>
@@ -2932,39 +3086,13 @@
                             );
                         })}
                         {visibleWeeks.filter(w => allClassSessions.some(s => s.weekId === w.id)).length === 0 && (
-                            <div className="text-center p-12 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500">
-                                No hi ha sessions programades per aquesta classe en la UT seleccionada.
+                            <div className="text-center p-10 bg-white border border-gray-200 rounded-xl">
+                                <p className="text-gray-500 text-lg">No hi ha sessions programades per a aquesta classe en la UT seleccionada.</p>
                             </div>
                         )}
                     </div>
 
-                    {/* PANELL FLOTANT DE MATERIALS */}
-                    <div className="fixed right-4 top-24 w-64 bg-white/95 backdrop-blur shadow-xl rounded-xl border border-gray-200 flex flex-col z-30 max-h-[calc(100vh-120px)] animate-in slide-in-right duration-300">
-                        <div className="bg-gray-100 p-3 rounded-t-xl border-b border-gray-200 flex items-center justify-between">
-                            <h3 className="font-bold text-gray-700 text-sm flex items-center gap-2"><Icons.Link size={14} className="text-blue-500"/> Materials Fixats</h3>
-                        </div>
-                        <div className="p-3 flex-1 overflow-y-auto custom-scroll space-y-2">
-                            {classMaterials.length === 0 && <p className="text-xs text-gray-400 italic text-center py-2">Cap material afegit.</p>}
-                            {classMaterials.map(m => (
-                                <div key={m.id} className="bg-white border border-gray-200 rounded p-2 relative group hover:border-blue-300 shadow-sm transition-colors">
-                                    <a href={m.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline block pr-10 truncate" title={m.url}>{m.title || "Enllaç sense títol"}</a>
-                                    <div className="absolute right-1 top-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-1">
-                                        <button onClick={() => handleCopyMaterial(m.url)} className="text-gray-400 hover:text-blue-600 p-0.5" title="Copiar enllaç"><Icons.Copy size={12}/></button>
-                                        <button onClick={() => removeMaterial(m.id)} className="text-gray-400 hover:text-red-600 p-0.5" title="Eliminar"><Icons.Trash size={12}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="p-3 border-t border-gray-200 bg-gray-50 rounded-b-xl flex flex-col gap-2 shrink-0">
-                            <input type="text" placeholder="Títol de l'enllaç..." className="w-full text-xs p-1.5 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={newMatTitle} onChange={e=>setNewMatTitle(e.target.value)} />
-                            <div className="flex gap-1">
-                                <input type="text" placeholder="https://..." className="flex-1 text-xs p-1.5 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={newMatUrl} onChange={e=>setNewMatUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMaterial()} />
-                                <button onClick={addMaterial} disabled={!newMatUrl.trim()} className="bg-blue-600 text-white px-2.5 rounded text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors">+</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* MODALS REUTILITZATS */}
+                    {/* Modals compartits per ClassPlannerScreen */}
                     {activeSessionNotepad && ReactDOM.createPortal(
                         <SessionNotepadModal 
                             dayIndex={activeSessionNotepad.dayIndex}
@@ -2989,11 +3117,28 @@
                     {showExportModal && ReactDOM.createPortal(
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
                             <div className={`bg-white p-6 rounded-xl max-w-2xl w-full m-4 shadow-2xl border-t-4 border-${theme}-500`}>
-                                <h3 className="text-xl font-bold mb-6 flex gap-2 text-gray-800"><Icons.Table /> Exportar Programació: {classInfo?.name}</h3>
+                                <h3 className="text-xl font-bold mb-4 flex gap-2 text-gray-800"><Icons.Table /> Exportar Dades ({classInfo?.name})</h3>
                                 
+                                <div className="mb-4 bg-gray-50 p-4 rounded border border-gray-200">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Filtrar per Sessions (Opcional):</label>
+                                    <p className="text-xs text-gray-500 mb-2">Deixa-ho en blanc per exportar-ho tot, o escriu un rang (ex: 1-5) o una sessió sola (ex: 3).</p>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Ex: 1-5" 
+                                        className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={exportInterval}
+                                        onChange={(e) => setExportInterval(e.target.value)}
+                                    />
+                                </div>
+                                
+                                <div className="flex justify-end mb-6">
+                                    <button onClick={() => { const el = document.createElement('div'); el.innerHTML = generateHTML(false, exportInterval); document.body.appendChild(el); window.getSelection().selectAllChildren(el); document.execCommand('copy'); document.body.removeChild(el); alert("Taula copiada al portapapers!"); }} className={`px-4 py-2 bg-gray-100 text-gray-700 rounded font-bold hover:bg-gray-200 shadow-sm border border-gray-300`}>Copiar només al portapapers</button>
+                                </div>
+
+                                <hr className="border-gray-200 mb-6"/>
+
                                 <div className="p-5 bg-blue-50 border border-blue-200 rounded-xl mb-4">
                                     <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icons.Link size={18} /> Sincronitzar amb Programació Docent</h4>
-                                    <p className="text-xs text-blue-600 mb-4">L'artefacte de programació s'obrirà i la taula d'aquesta UT s'enganxarà automàticament on indiquis.</p>
                                     
                                     <div className="flex gap-4 mb-4">
                                         <div className="flex-1">
@@ -3013,20 +3158,13 @@
                                             </select>
                                         </div>
                                     </div>
-                                    
-                                    <div className="mb-4 pt-2 border-t border-blue-200">
-                                        <label className="block text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Sessions a exportar (opcional)</label>
-                                        <input type="text" placeholder="Ex: 2-6 (deixa en blanc per exportar-les totes)" className="w-full p-2 border border-blue-300 rounded shadow-inner text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={exportInterval} onChange={e=>setExportInterval(e.target.value)} />
-                                        <p className="text-[10px] text-blue-600 mt-1">S'exportaran les sessions incloses dins d'aquest interval.</p>
-                                    </div>
-                                    
-                                    <button onClick={handleExportToProgramacio} disabled={!exportConfig.curs || !exportConfig.ut || !exportConfig.fase} className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md flex items-center justify-center gap-2 mt-2">
+                                    <button onClick={handleExportToProgramacio} disabled={!exportConfig.curs || !exportConfig.ut || !exportConfig.fase} className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md flex items-center justify-center gap-2">
                                         Exportar a la meva Programació <Icons.ArrowRight size={20}/>
                                     </button>
                                 </div>
 
                                 <div className="flex justify-end gap-2 mt-2">
-                                    <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar i Tancar</button>
                                 </div>
                             </div>
                         </div>,
@@ -3034,17 +3172,19 @@
                     )}
 
                     {pendingActionTask && ReactDOM.createPortal(
-                        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999] fade-in">
+                        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 fade-in">
                             <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
                                 <h3 className="text-lg font-bold mb-4">Què ha passat amb l'activitat?</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <button onClick={() => executePendingAction('skipped')} className="p-4 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 font-bold flex flex-col items-center">
                                         <span className="text-2xl mb-2">❌</span>
                                         No feta
+                                        <span className="text-xs font-normal mt-1 text-center">(Es tatxa i es mou a la propera amb icona 🔴)</span>
                                     </button>
                                     <button onClick={() => executePendingAction('unfinished')} className="p-4 bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 font-bold flex flex-col items-center">
                                         <span className="text-2xl mb-2">🚧</span>
                                         Inacabada
+                                        <span className="text-xs font-normal mt-1 text-center">(Es subratlla i es mou a la propera amb icona ⚠️)</span>
                                     </button>
                                 </div>
                                 <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
@@ -3080,311 +3220,228 @@
                         </div>,
                         document.body
                     )}
+
+                    {/* Plafó lateral dret (Materials Fixats) */}
+                    <div className="fixed top-0 right-0 w-64 h-full bg-white border-l border-gray-200 shadow-xl z-30 flex flex-col slide-in-right">
+                        <div className={`p-4 bg-${theme}-600 text-white font-bold flex items-center gap-2 shadow-md`}>
+                            <Icons.Link size={18}/> Tauler de {classInfo?.name}
+                        </div>
+                        <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto custom-scroll bg-gray-50/50">
+                            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-2">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1"><Icons.Plus size={14}/> Nou Recurs Fix</h4>
+                                <input type="text" className="w-full text-sm border p-1.5 rounded outline-none focus:ring-1 focus:ring-blue-500 bg-gray-50" placeholder="Títol del recurs..." value={newMatTitle} onChange={e=>setNewMatTitle(e.target.value)} />
+                                <input type="text" className="w-full text-sm border p-1.5 rounded outline-none focus:ring-1 focus:ring-blue-500 bg-gray-50" placeholder="Enllaç URL..." value={newMatUrl} onChange={e=>setNewMatUrl(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addMaterial()} />
+                                <button onClick={addMaterial} disabled={!newMatUrl.trim()} className="w-full bg-blue-600 text-white text-xs py-1.5 rounded font-bold hover:bg-blue-700 disabled:opacity-50 mt-1">Afegir</button>
+                            </div>
+                            
+                            <div className="flex-1 space-y-2">
+                                {classMaterials.length === 0 ? (
+                                    <p className="text-center text-xs text-gray-400 italic mt-4">No hi ha recursos fixats.</p>
+                                ) : (
+                                    classMaterials.map(m => (
+                                        <div key={m.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-1 relative group hover:border-blue-300 transition-colors">
+                                            <a href={m.url} target="_blank" className="text-sm font-semibold text-blue-700 hover:text-blue-900 leading-tight pr-6 truncate" title={m.title || m.url}>{m.title || "Enllaç"}</a>
+                                            <div className="flex items-center justify-between mt-1">
+                                                <button onClick={() => handleCopyMaterial(m.url)} className="text-[10px] bg-gray-100 text-gray-600 hover:bg-gray-200 px-2 py-0.5 rounded font-medium flex items-center gap-1"><Icons.Copy size={10}/> Copiar</button>
+                                                <button onClick={() => removeMaterial(m.id)} className="text-gray-300 hover:text-red-500 transition-colors"><Icons.Trash size={12}/></button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             );
         };
 
         const App = () => {
-            const [view, setView] = useState('config'); // 'config', 'dashboard', 'planner', 'class_planner'
-            const [config, setConfig] = useState({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] });
-            const [radar, setRadar] = useState([]);
-            const [weeksData, setWeeksData] = useState({});
-            const [currentWeekId, setCurrentWeekId] = useState(null);
+            const [view, setView] = useState('dashboard');
+            const [currentWeekId, setCurrentWeekId] = useState(() => {
+                const now = new Date();
+                const year = now.getFullYear();
+                const schoolYearStart = new Date(now.getMonth() < 7 ? year - 1 : year, 8, 1);
+                const day = schoolYearStart.getDay();
+                const diff = schoolYearStart.getDate() - day + (day === 0 ? -6 : 1);
+                schoolYearStart.setDate(diff);
+                const msInWeek = 7 * 24 * 60 * 60 * 1000;
+                const weeksSinceStart = Math.floor((now - schoolYearStart) / msInWeek);
+                const currentWeekStart = new Date(schoolYearStart.getTime() + weeksSinceStart * msInWeek);
+                return window.getLocalYYYYMMDD(currentWeekStart);
+            });
             const [selectedClassId, setSelectedClassId] = useState(null);
-            const [completedWeeks, setCompletedWeeks] = useState([]);
-            const [holidayWeeks, setHolidayWeeks] = useState([]);
-            const [reminders, setReminders] = useState({});
 
-            // Efecte per actualitzar el fons i scrollbar segons el tema
-            useEffect(() => {
-                const themeData = APP_THEMES[config.theme || 'orange'];
-                if (themeData) {
-                    document.body.style.backgroundColor = themeData.bg;
-                    
-                    let styleTag = document.getElementById('dynamic-theme-styles');
-                    if (!styleTag) {
-                        styleTag = document.createElement('style');
-                        styleTag.id = 'dynamic-theme-styles';
-                        document.head.appendChild(styleTag);
+            // DATA STATES
+            const [config, setConfig] = useState(() => {
+                try {
+                    const localData = localStorage.getItem('cfnPlannerData_v23');
+                    if (localData) {
+                        const parsed = JSON.parse(localData);
+                        if (parsed.config) return parsed.config;
                     }
-                    styleTag.innerHTML = `
-                        .custom-scroll::-webkit-scrollbar-thumb { background-color: ${themeData.thumb}; }
-                        .custom-scroll::-webkit-scrollbar-thumb:hover { background-color: ${themeData.hover}; }
-                        .loader-spinner { border-top-color: ${themeData.hover}; }
-                    `;
-                }
-            }, [config.theme]);
+                } catch(e) { console.error(e); }
+                return { teacherName: "", schoolYear: new Date().getFullYear().toString(), theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], classMaterials: {}, googleSheetUrl: "", taskTrackingUrl: "" };
+            });
 
-            // CARREGADOR I AUTO-RESCAT DE DADES (AMB MIGRACIÓ I BACKUP AUTOMÀTIC)
+            const [weeksData, setWeeksData] = useState(() => {
+                try {
+                    const localData = localStorage.getItem('cfnPlannerData_v23');
+                    if (localData) {
+                        const parsed = JSON.parse(localData);
+                        if (parsed.weeksData) return parsed.weeksData;
+                    }
+                } catch(e) { console.error(e); }
+                return {};
+            });
+
+            const [radar, setRadar] = useState(() => {
+                try {
+                    const localData = localStorage.getItem('cfnPlannerData_v23');
+                    if (localData) {
+                        const parsed = JSON.parse(localData);
+                        if (parsed.radar) return parsed.radar;
+                    }
+                } catch(e) { console.error(e); }
+                return [];
+            });
+
+            const [holidayWeeks, setHolidayWeeks] = useState(() => {
+                 try {
+                    const localData = localStorage.getItem('cfnPlannerData_v23');
+                    if (localData) {
+                        const parsed = JSON.parse(localData);
+                        if (parsed.holidayWeeks) return parsed.holidayWeeks;
+                    }
+                } catch(e) { console.error(e); }
+                return [];
+            });
+
+            const [reminders, setReminders] = useState(() => {
+                 try {
+                    const localData = localStorage.getItem('cfnPlannerData_v23');
+                    if (localData) {
+                        const parsed = JSON.parse(localData);
+                        if (parsed.reminders) return parsed.reminders;
+                    }
+                } catch(e) { console.error(e); }
+                return {};
+            });
+
+            const hasInitializedBackup = useRef(false);
+
+            useEffect(() => {
+                const dataToSave = { config, weeksData, radar, holidayWeeks, reminders };
+                localStorage.setItem('cfnPlannerData_v23', JSON.stringify(dataToSave));
+                
+                document.body.className = '';
+                document.body.style.backgroundColor = APP_THEMES[config.theme || 'orange'].bg;
+                
+                const styleId = 'dynamic-scrollbar-style';
+                let styleEl = document.getElementById(styleId);
+                if (!styleEl) {
+                    styleEl = document.createElement('style');
+                    styleEl.id = styleId;
+                    document.head.appendChild(styleEl);
+                }
+                styleEl.innerHTML = `
+                    .custom-scroll::-webkit-scrollbar-thumb { background: ${APP_THEMES[config.theme || 'orange'].thumb}; }
+                    .custom-scroll::-webkit-scrollbar-thumb:hover { background: ${APP_THEMES[config.theme || 'orange'].hover}; }
+                `;
+
+            }, [config, weeksData, radar, holidayWeeks, reminders]);
+
+            useEffect(() => {
+                if (!hasInitializedBackup.current) {
+                    hasInitializedBackup.current = true;
+                    
+                    const lastAutoBackup = localStorage.getItem('lastAutoBackupDate');
+                    const todayStr = window.getLocalYYYYMMDD(new Date());
+                    
+                    if (lastAutoBackup !== todayStr) {
+                        setTimeout(() => {
+                            window.createAgendaBackup(true, 'Còpia diària automàtica', true); 
+                            localStorage.setItem('lastAutoBackupDate', todayStr);
+                        }, 3000); 
+                    } else {
+                        setTimeout(() => {
+                            window.createAgendaBackup(true, 'Desat automàtic silenciós', false); 
+                        }, 5000);
+                    }
+                }
+                
+                const autoSaveInterval = setInterval(() => {
+                    window.createAgendaBackup(true, 'Desat automàtic silenciós', false); 
+                }, 10 * 60 * 1000); 
+                
+                return () => clearInterval(autoSaveInterval);
+            }, []);
+
+            const handleUpdateWeekData = (weekId, newData) => { setWeeksData(prev => ({ ...prev, [weekId]: newData })); };
+            const handleToggleHoliday = (weekId) => { setHolidayWeeks(prev => prev.includes(weekId) ? prev.filter(id => id !== weekId) : [...prev, weekId]); };
+            const handleSaveReminder = (dateStr, rems) => { setReminders(prev => ({ ...prev, [dateStr]: rems })); };
+            const handleAddToRadar = (text, dateStr) => { 
+                const newEntry = { id: Date.now(), text, date: dateStr || null, fromTask: true, completedAt: null };
+                setRadar(prev => [...prev, newEntry]); 
+            };
+            const handleSelectClassView = (cId) => { setSelectedClassId(cId); setView('class_planner'); };
+            
+            const handleReset = () => {
+                if(confirm("Estàs COMPLETAMENT SEGUR que vols esborrar-ho tot? Crea una còpia de seguretat abans!")) {
+                    window.createAgendaBackup(true, 'Backup Pre-Reset', true);
+                    localStorage.removeItem('cfnPlannerData_v23');
+                    window.location.reload();
+                }
+            };
+            
+            const handleExport = () => {
+                window.createAgendaBackup(false, 'Exportació Manual', true);
+            };
+            
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        if (data.config && data.weeksData) {
+                            window.createAgendaBackup(true, 'Backup Pre-Importació', false);
+                            
+                            setConfig(data.config);
+                            setWeeksData(data.weeksData);
+                            setRadar(data.radar || []);
+                            setHolidayWeeks(data.holidayWeeks || []);
+                            setReminders(data.reminders || {});
+                            alert("✅ Dades importades correctament!");
+                            window.location.reload();
+                        } else {
+                            alert("❌ Format d'arxiu incorrecte.");
+                        }
+                    } catch(err) {
+                        alert("❌ Error llegint l'arxiu.");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            // Loading screen removal
             useEffect(() => {
                 const loader = document.getElementById('app-loader');
-                if (loader) loader.style.display = 'none';
-                
-                let saved = localStorage.getItem('cfnPlannerData_v23'); 
-                if (!saved) {
-                    saved = localStorage.getItem('cfnPlannerData_v22') || localStorage.getItem('cfnPlannerData_v21') || localStorage.getItem('cfnPlannerData');
-                }
-
-                if (saved) {
-                    try {
-                        // Creació del Backup Inicial si no existeix (per protecció)
-                        try {
-                            const histStr = localStorage.getItem('agendaBackupHistory');
-                            let hist = [];
-                            if(histStr) hist = JSON.parse(histStr);
-                            if ((!hist || hist.length === 0) && saved.length > 50) {
-                                window.createAgendaBackup(true, "Backup inicial");
-                                console.log("Backup automàtic inicial creat a 'agendaBackupHistory'");
-                            }
-                        } catch(e) {}
-
-                        const data = JSON.parse(saved);
-                        let needsSave = false;
-
-                        // Migració UT (de utEnds a utDates)
-                        if (data.config && data.config.utEnds && (!data.config.utDates || data.config.utDates.length === 0)) {
-                            data.config.utDates = Object.entries(data.config.utEnds).map(([date, name], idx) => ({
-                                id: 'migrated_' + idx,
-                                name: name,
-                                date: date
-                            }));
-                            delete data.config.utEnds;
-                            needsSave = true;
-                        }
-
-                        // Migració Radar (Text a Array) + Neteja de dates passades
-                        let parsedRadar = [];
-                        if (typeof data.radar === 'string') {
-                            if (data.radar.trim() !== '') {
-                                parsedRadar = [{ id: Date.now(), text: data.radar, date: null, fromTask: false }];
-                            }
-                            needsSave = true;
-                        } else if (Array.isArray(data.radar)) {
-                            const today = new Date();
-                            today.setHours(0,0,0,0);
-                            parsedRadar = data.radar.filter(item => {
-                                if (!item.date) return true;
-                                const itemDate = new Date(item.date);
-                                return itemDate >= today;
-                            });
-                            if (parsedRadar.length !== data.radar.length) needsSave = true;
-                        }
-
-                        // Migració Dates (Moure els diumenges a dilluns)
-                        const shiftDate = (dateStr) => {
-                            if (!dateStr || typeof dateStr !== 'string') return dateStr;
-                            const parts = dateStr.split('-');
-                            if (parts.length !== 3) return dateStr;
-                            const dObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-                            if (dObj.getDay() === 0) {
-                                dObj.setDate(dObj.getDate() + 1);
-                                return `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
-                            }
-                            return dateStr;
-                        };
-
-                        if (data.weeksData) {
-                            const newWeeksData = {};
-                            for (const [key, val] of Object.entries(data.weeksData)) {
-                                const newKey = shiftDate(key);
-                                newWeeksData[newKey] = val;
-                                if (newKey !== key) needsSave = true;
-                            }
-                            data.weeksData = newWeeksData;
-                        }
-
-                        if (data.completedWeeks) {
-                            const newComp = data.completedWeeks.map(shiftDate);
-                            if (newComp.join(',') !== data.completedWeeks.join(',')) {
-                                data.completedWeeks = newComp;
-                                needsSave = true;
-                            }
-                        }
-                        
-                        if (data.holidayWeeks) {
-                            const newHol = data.holidayWeeks.map(shiftDate);
-                            if (newHol.join(',') !== data.holidayWeeks.join(',')) {
-                                data.holidayWeeks = newHol;
-                                needsSave = true;
-                            }
-                        }
-
-                        if(data.config) setConfig(data.config);
-                        setRadar(parsedRadar);
-                        if(data.weeksData) setWeeksData(data.weeksData);
-                        if(data.completedWeeks) setCompletedWeeks(data.completedWeeks);
-                        if(data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
-                        if(data.reminders) setReminders(data.reminders);
-                        if(data.config?.teacherName) setView('dashboard');
-
-                        if (needsSave) {
-                             localStorage.setItem('cfnPlannerData_v23', JSON.stringify({...data, radar: parsedRadar}));
-                        }
-                    } catch(e) { console.error("Error carregant les dades", e); }
+                if (loader) {
+                    setTimeout(() => {
+                        loader.style.opacity = '0';
+                        setTimeout(() => loader.remove(), 500);
+                    }, 500);
                 }
             }, []);
 
-            // Guardat normal a localStorage
-            useEffect(() => { 
-                const currentDataStr = JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders });
-                
-                // Ens assegurem de crear el backup de seguretat si l'aplicació guarda però encara no en tenia cap
-                const existingBackup = localStorage.getItem('agendaBackup');
-                if (!existingBackup && currentDataStr && currentDataStr.length > 50) {
-                    localStorage.setItem('agendaBackup', currentDataStr);
-                }
-
-                localStorage.setItem('cfnPlannerData_v23', currentDataStr); 
-            }, [config, radar, weeksData, completedWeeks, holidayWeeks, reminders]);
-
-            // --- NOU: BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
-            useEffect(() => {
-                const handleUserInteractionForBackup = () => {
-                    const todayStr = getLocalISODate(new Date());
-                    const lastDownload = localStorage.getItem('lastAutoBackupDownloadDate');
-                    
-                    if (lastDownload !== todayStr) {
-                        const currentDataStr = localStorage.getItem('cfnPlannerData_v23');
-                        if (currentDataStr && currentDataStr.length > 50) {
-                            try {
-                                const data = JSON.parse(currentDataStr);
-                                if (data.config && data.config.teacherName) { // Verifiquem que l'agenda no estigui buida
-                                    // S'eliminen els listeners ABANS de provocar la descarrega per evitar bucles infinits
-                                    document.removeEventListener('click', handleUserInteractionForBackup);
-                                    document.removeEventListener('keydown', handleUserInteractionForBackup);
-                                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                                    
-                                    // Guardem que ja s'ha fet avui ABANS per evitar execucions simultànies
-                                    localStorage.setItem('lastAutoBackupDownloadDate', todayStr);
-                                    
-                                    // Es crea el backup i es descarrega UN únic cop
-                                    window.createAgendaBackup(true, 'Còpia automàtica diària', true);
-                                    console.log(`Backup automàtic diari processat i descarregat.`);
-                                }
-                            } catch (err) {
-                                console.error("Error processant el backup diari:", err);
-                            }
-                        }
-                    }
-                };
-
-                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
-
-                return () => {
-                    document.removeEventListener('click', handleUserInteractionForBackup);
-                    document.removeEventListener('keydown', handleUserInteractionForBackup);
-                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                };
-            }, []);
-            // --------------------------------------------------------------
-
-            const handleUpdateWeekData = (weekId, data) => {
-                setWeeksData(prev => ({ ...prev, [weekId]: data }));
-            };
-
-            const handleToggleComplete = (wid) => { setCompletedWeeks(prev => prev.includes(wid) ? prev.filter(id => id !== wid) : [...prev, wid]); };
-            
-            const handleToggleHoliday = (wid) => {
-                const isBecomingHoliday = !holidayWeeks.includes(wid);
-                setHolidayWeeks(prev => isBecomingHoliday ? [...prev, wid] : prev.filter(id => id !== wid));
-
-                if (isBecomingHoliday) {
-                    setWeeksData(prev => {
-                        const currentWeekData = prev[wid] || {};
-                        const updatedWeekData = { ...currentWeekData };
-                        
-                        for (let d = 0; d < 5; d++) {
-                            for (let s = 0; s < TIME_SLOTS.length; s++) {
-                                const slot = TIME_SLOTS[s];
-                                if (slot.type === 'class') { 
-                                     if (config.schedule[d]?.[slot.id]) {
-                                         const key = `${d}-${slot.id}`;
-                                         updatedWeekData[key] = { 
-                                             ...(updatedWeekData[key] || {}), 
-                                             status: 'zzz',
-                                             zzzReason: 'Vacances 🎉',
-                                             tasks: updatedWeekData[key]?.tasks || [{text: "", time: "", status: null}, {text: "", time: "", status: null}, {text: "", time: "", status: null}]
-                                         };
-                                     }
-                                }
-                            }
-                        }
-                        return { ...prev, [wid]: updatedWeekData };
-                    });
-                }
-            };
-
-            const handleSaveReminder = (dateStr, newReminders) => {
-                setReminders(prev => ({
-                    ...prev,
-                    [dateStr]: newReminders
-                }));
-            };
-
-            const handleAddToRadar = (text, dayIndex) => {
-                const dateStr = dayIndex !== undefined && currentWeekId ? addDays(currentWeekId, dayIndex) : getLocalISODate(new Date());
-                const newEntry = {
-                    id: Date.now(),
-                    text: text,
-                    date: dateStr,
-                    fromTask: true
-                };
-                setRadar(prev => [...prev, newEntry]);
-            };
-
-            const handleSelectClassView = (cId) => {
-                setSelectedClassId(cId);
-                setView('class_planner');
-            };
-
-            // MODIFICAT: Gestió de Reset amb Backup Automàtic segur
-            const handleReset = () => { 
-                const currentData = localStorage.getItem('cfnPlannerData_v23');
-                
-                if (currentData) {
-                    window.createAgendaBackup(true, "Abans de Reiniciar");
-                }
-                
-                localStorage.removeItem('cfnPlannerData_v23'); 
-                setConfig({ teacherName: "", schoolYear: "2025", classes: [], schedule: {}, googleSheetUrl: "", taskTrackingUrl: "", theme: "orange", utDates: [] }); 
-                setRadar([]); 
-                setWeeksData({}); 
-                setCompletedWeeks([]); 
-                setHolidayWeeks([]); 
-                setReminders({}); 
-                setView('config'); 
-            };
-
-            const handleExport = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ config, radar, weeksData, completedWeeks, holidayWeeks, reminders })); a.download = `planificador_cfn_${config.schoolYear}.json`; a.click(); };
-            
-            // MODIFICAT: Gestió d'Importació amb Backup Automàtic segur
-            const handleImport = (e) => { 
-                const fr = new FileReader(); 
-                fr.onload = ev => { 
-                    const currentData = localStorage.getItem('cfnPlannerData_v23');
-                    
-                    if (currentData) {
-                        window.createAgendaBackup(true, "Abans d'Importar");
-                    }
-
-                    const d = JSON.parse(ev.target.result); 
-                    setConfig(d.config || config); 
-                    setRadar(Array.isArray(d.radar) ? d.radar : []); 
-                    setWeeksData(d.weeksData || {}); 
-                    setCompletedWeeks(d.completedWeeks || []); 
-                    setHolidayWeeks(d.holidayWeeks || []); 
-                    setReminders(d.reminders || {}); 
-                    setView('dashboard'); 
-                }; 
-                fr.readAsText(e.target.files[0]); 
-            };
+            if (!config.teacherName && view !== 'config') { setView('config'); }
 
             return (
-                <div className="min-h-screen">
+                <div className="min-h-screen text-gray-800 relative">
                     {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} completedWeeks={completedWeeks} onToggleWeekComplete={handleToggleComplete} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} weeksData={weeksData} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} onSaveReminder={handleSaveReminder} weeksData={weeksData} />}
                     {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                     {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={setConfig} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                 </div>
