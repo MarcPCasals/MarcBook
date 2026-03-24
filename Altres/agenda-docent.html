@@ -637,14 +637,16 @@
 
             const calculateProgress = () => {
                 if (allWeeks.length === 0) return 0;
+                const activeWeeks = allWeeks.filter(w => !(holidayWeeks || []).includes(w.id));
+                if (activeWeeks.length === 0) return 0;
                 const now = new Date();
                 let pastWeeks = 0;
-                allWeeks.forEach(w => {
+                activeWeeks.forEach(w => {
                     const end = new Date(w.endDate);
                     end.setHours(23, 59, 59, 999);
                     if (now > end) pastWeeks++;
                 });
-                return ((pastWeeks / allWeeks.length) * 100).toFixed(1);
+                return ((pastWeeks / activeWeeks.length) * 100).toFixed(1);
             };
 
             const changeMonth = (delta) => {
@@ -2478,6 +2480,47 @@
                         document.body
                     )}
 
+                    {/* AFEGIR CLASSE EXTRA MODAL (PORTAL) */}
+                    {showAddClassModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddClassModal(false)}></div>
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative animate-in zoom-in duration-200">
+                                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                        <Icons.Plus className="text-blue-500"/> Afegir Classe Extra
+                                    </h3>
+                                    <button onClick={() => setShowAddClassModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </div>
+                                <div className="space-y-4 mb-6">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dia</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.day} onChange={e => setNewExtra({...newExtra, day: parseInt(e.target.value)})}>
+                                            {WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hora</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.slot} onChange={e => setNewExtra({...newExtra, slot: parseInt(e.target.value)})}>
+                                            {TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Grup / Classe</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.classId} onChange={e => setNewExtra({...newExtra, classId: e.target.value})}>
+                                            <option value="">Selecciona grup...</option>
+                                            {config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowAddClassModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={handleAddExtraClass} disabled={!newExtra.classId} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 disabled:opacity-50">Afegir</button>
+                                </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
                     {showCopyModal && copySource && ReactDOM.createPortal(
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
                             <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
@@ -3374,6 +3417,23 @@
                 }, 10 * 60 * 1000); 
                 
                 return () => clearInterval(autoSaveInterval);
+            }, []);
+
+            useEffect(() => {
+                const todayStr = window.getLocalYYYYMMDD(new Date());
+                setReminders(prev => {
+                    if (!prev) return prev;
+                    let changed = false;
+                    const cleaned = {};
+                    Object.keys(prev).forEach(dateStr => {
+                        if (dateStr >= todayStr) {
+                            cleaned[dateStr] = prev[dateStr];
+                        } else {
+                            changed = true;
+                        }
+                    });
+                    return changed ? cleaned : prev;
+                });
             }, []);
 
             const handleUpdateWeekData = (weekId, newData) => { setWeeksData(prev => ({ ...prev, [weekId]: newData })); };
