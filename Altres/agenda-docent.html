@@ -107,6 +107,82 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- FIREBASE -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+      import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+      import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyAoUM58SRUMEFlCFm56jzI7eTU9QB-JxBE",
+        authDomain: "eines-docents.firebaseapp.com",
+        projectId: "eines-docents",
+        storageBucket: "eines-docents.firebasestorage.app",
+        messagingSenderId: "80852705741",
+        appId: "1:80852705741:web:375c1a3dfd2ae2466c6484",
+        measurementId: "G-JJ73JJ3DQX"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const analytics = getAnalytics(app);
+      const db = getFirestore(app);
+
+      window.firebaseDb = db;
+      window.setDoc = setDoc;
+      window.getDoc = getDoc;
+      window.doc = doc;
+
+      window.saveAgendaToCloud = async (dataStr) => {
+          try {
+              const dataObj = JSON.parse(dataStr);
+              await setDoc(doc(db, "agenda_docent", "principal"), dataObj);
+          } catch(e) { console.error("Firebase save error", e); }
+      };
+
+      window.loadAgendaFromCloud = async () => {
+          try {
+              const snap = await getDoc(doc(db, "agenda_docent", "principal"));
+              if (snap.exists()) {
+                  return JSON.stringify(snap.data());
+              }
+          } catch(e) { console.error("Firebase load error", e); }
+          return null;
+      };
+
+      window.saveBackupToCloud = async (history) => {
+          try {
+              await setDoc(doc(db, "agenda_docent", "backups"), { history });
+          } catch(e) { console.error("Firebase backup save error", e); }
+      };
+
+      window.loadBackupsFromCloud = async () => {
+          try {
+              const snap = await getDoc(doc(db, "agenda_docent", "backups"));
+              if (snap.exists() && snap.data().history) {
+                  return snap.data().history;
+              }
+          } catch(e) { console.error("Firebase backup load error", e); }
+          return [];
+      };
+      
+      window.getAutoBackupDate = async () => {
+          try {
+              const snap = await getDoc(doc(db, "agenda_docent", "metadata"));
+              if (snap.exists()) return snap.data().lastAutoBackupDate;
+          } catch(e) {}
+          return null;
+      };
+
+      window.setAutoBackupDate = async (dateStr) => {
+          try {
+              await setDoc(doc(db, "agenda_docent", "metadata"), { lastAutoBackupDate: dateStr }, { merge: true });
+          } catch(e) {}
+      };
+
+      window.firebaseInitialized = true;
+      window.dispatchEvent(new Event('firebaseReady'));
+    </script>
+
     <script>
         setTimeout(function() {
             var loader = document.getElementById('app-loader');
@@ -139,11 +215,8 @@
             }, 100);
         };
 
-        window.restoreAgendaBackup = (backupId) => {
-            let history = [];
-            try {
-                history = JSON.parse(localStorage.getItem('agendaBackupHistory')) || [];
-            } catch(e) {}
+        window.restoreAgendaBackup = async (backupId) => {
+            let history = await window.loadBackupsFromCloud();
             
             let targetData = null;
             if (backupId) {
@@ -151,13 +224,11 @@
                 if (found) targetData = found.data;
             } else if (history.length > 0) {
                 targetData = history[0].data;
-            } else {
-                targetData = localStorage.getItem('agendaBackup'); // Fallback versió anterior
             }
             
             if (targetData) {
                 if (confirm("⚠️ ATENCIÓ: Segur que vols restaurar aquest backup? Es perdrà l'estat actual de l'agenda.")) {
-                    localStorage.setItem('cfnPlannerData_v23', targetData);
+                    await window.saveAgendaToCloud(targetData);
                     window.location.reload();
                 }
             } else {
@@ -165,18 +236,15 @@
             }
         };
 
-        window.createAgendaBackup = (silent = false, customLabel = null, triggerDownload = false) => {
-            const currentData = localStorage.getItem('cfnPlannerData_v23');
+        window.createAgendaBackup = async (silent = false, customLabel = null, triggerDownload = false) => {
+            const currentData = window.currentAgendaData;
             if (!currentData) {
                 if (!silent) alert("No hi ha dades actuals per guardar al backup.");
                 return;
             }
             
-            let history = [];
-            try {
-                history = JSON.parse(localStorage.getItem('agendaBackupHistory')) || [];
-                if (!Array.isArray(history)) history = [];
-            } catch(e) { history = []; }
+            let history = await window.loadBackupsFromCloud();
+            if (!Array.isArray(history)) history = [];
             
             // Evitar duplicats exactes en desats automàtics
             if (history.length > 0 && history[0].data === currentData && silent) {
@@ -199,15 +267,14 @@
             // Mantenim només els darrers 10 backups
             if (history.length > 10) history = history.slice(0, 10);
             
-            localStorage.setItem('agendaBackupHistory', JSON.stringify(history));
-            localStorage.setItem('agendaBackup', currentData); // Manté l'arxiu anterior per compatibilitat
+            await window.saveBackupToCloud(history);
             
             if (triggerDownload) {
                 const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(':', '');
                 window.downloadBackupJSON(currentData, `AgendaBackup_${dateStrForFile}_${safeTime}.json`);
             }
             
-            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament.");
+            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament al núvol.");
             window.dispatchEvent(new Event('backupHistoryUpdated')); // Avisa a la UI per refrescar el modal
         };
     </script>
@@ -603,9 +670,9 @@
 
             useEffect(() => {
                 if (showBackupModal) {
-                    const loadHistory = () => {
+                    const loadHistory = async () => {
                         try {
-                            const hist = JSON.parse(localStorage.getItem('agendaBackupHistory')) || [];
+                            const hist = await window.loadBackupsFromCloud();
                             setBackupHistory(hist);
                         } catch(e) { setBackupHistory([]); }
                     };
@@ -1252,7 +1319,7 @@
                                         
                                         <button 
                                             onMouseDown={(e) => { e.preventDefault(); onAction(task, 'save'); }}
-                                            className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded hover:bg-yellow-100 transition-colors"
+                                            className="flex items-center gap-1 text-[10px] bg-yellow-50 text-yellow-700 border border-orange-200 px-2 py-0.5 rounded hover:bg-yellow-100 transition-colors"
                                             title="Guardar al Radar"
                                         >
                                             <Icons.Save size={12}/> Guardar
@@ -3078,7 +3145,7 @@
                                                         </span>
                                                     </div>
 
-                                                    {/* Contingut Estandard Cel·la */}
+                                                   {/* Contingut Estandard Cel·la */}
                                                     <div className="p-2 flex-1 flex flex-col">
                                                         <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-2 shadow-sm ${classInfo?.color || 'bg-gray-100'} ${isZzz || isHoliday ? 'opacity-50 grayscale' : ''}`}>
                                                             <div className="flex items-center gap-1 overflow-hidden">
