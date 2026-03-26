@@ -88,9 +88,27 @@
 </head>
 <body>
 
+    <!-- BARRA D'AUTENTICACIÓ GOOGLE -->
+    <div id="authBar" class="bg-gray-800 text-white p-3 flex justify-between items-center shadow-md relative z-[10000]">
+        <div class="flex items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-400"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="font-bold hidden sm:inline">Agenda Docent - Espai Segur</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <p id="userInfo" class="text-sm font-medium text-gray-300"></p>
+            <button id="loginBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-bold text-sm transition-colors flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                Inicia sessió amb Google
+            </button>
+            <button id="logoutBtn" style="display:none;" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-bold text-sm transition-colors flex items-center gap-2">
+                Tanca sessió
+            </button>
+        </div>
+    </div>
+
     <!-- PANTALLA DE CÀRREGA -->
     <div id="app-loader">
-        <div id="loader-content">
+        <div id="loader-content" class="text-center flex flex-col items-center">
             <div class="loader-spinner" style="margin-bottom: 20px;"></div>
             <h2 class="text-xl font-bold text-gray-700">Carregant Planificador...</h2>
         </div>
@@ -112,6 +130,7 @@
       import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
       import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
       import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
+      import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 
       const firebaseConfig = {
         apiKey: "AIzaSyAoUM58SRUMEFlCFm56jzI7eTU9QB-JxBE",
@@ -123,68 +142,145 @@
         measurementId: "G-JJ73JJ3DQX"
       };
 
+      // Inicialitzar Firebase
       const app = initializeApp(firebaseConfig);
       const analytics = getAnalytics(app);
       const db = getFirestore(app);
+      const auth = getAuth(app);
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
 
       window.firebaseDb = db;
       window.setDoc = setDoc;
       window.getDoc = getDoc;
       window.doc = doc;
+      window.currentUser = null;
 
+      // FUNCIONS D'AUTENTICACIÓ
+      window.login = async () => {
+          try { 
+              const provider = new GoogleAuthProvider();
+              provider.setCustomParameters({ prompt: 'select_account' });
+              await signInWithPopup(auth, provider); 
+          } catch(e) { 
+              console.error("Error de login:", e);
+              if (window.location.protocol === 'file:' || e.code === 'auth/unauthorized-domain') {
+                  alert("⚠️ GOOGLE NO PERMET INICIAR SESSIÓ DES D'UN ARXIU LOCAL (file://)\n\nEl botó falla i desapareix a l'instant perquè has obert l'arxiu fent-hi doble clic. Per seguretat, Google bloqueja l'inici de sessió des de rutes locals.\n\n✅ COM SOLUCIONAR-HO (Tens 2 opcions):\n1. Fer servir un servidor local: Obre l'arxiu amb l'extensió 'Live Server' a VSCode o similar.\n2. Pujar-ho a internet: Allotja l'arxiu a un hosting gratuït (com GitHub Pages, Vercel o Netlify).");
+              } else if (e.code === 'auth/popup-blocked') {
+                  alert("⚠️ El navegador ha bloquejat la finestra emergent. Si us plau, permet els popups a la barra d'adreces per poder iniciar sessió.");
+              } else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+                  alert("❌ S'ha produït un error al iniciar sessió: " + e.message);
+              }
+          }
+      };
+
+      window.logout = async () => {
+          try { await signOut(auth); window.location.reload(); } 
+          catch(e) { console.error("Error de logout", e); }
+      };
+
+      // Assignació d'esdeveniments
+      const loginBtn = document.getElementById("loginBtn");
+      if (loginBtn) loginBtn.onclick = window.login;
+      
+      const logoutBtn = document.getElementById("logoutBtn");
+      if (logoutBtn) logoutBtn.onclick = window.logout;
+
+      // GESTIÓ DE SESSIÓ I INICIALITZACIÓ
+      onAuthStateChanged(auth, async (user) => {
+          if (user) {
+              window.currentUser = user;
+              await inicialitzarApp(user);
+          } else {
+              window.currentUser = null;
+              mostrarLogin();
+          }
+      });
+
+      function mostrarLogin() {
+          if (window.loadingTimeout) clearTimeout(window.loadingTimeout);
+          document.getElementById("userInfo").textContent = "";
+          document.getElementById("loginBtn").style.display = "flex";
+          document.getElementById("logoutBtn").style.display = "none";
+          
+          const loaderContent = document.getElementById('loader-content');
+          if (loaderContent) {
+              loaderContent.innerHTML = '<h3 class="text-blue-600 font-bold mb-4 text-xl">Inicia sessió amb Google per accedir a la teva agenda.</h3>';
+          }
+      }
+
+      async function inicialitzarApp(user) {
+          document.getElementById("userInfo").textContent = user.email;
+          document.getElementById("loginBtn").style.display = "none";
+          document.getElementById("logoutBtn").style.display = "flex";
+
+          // Carregar dades pròpies de l'usuari des de Firestore
+          window.cloudAgendaData = null;
+          try {
+              const snap = await getDoc(doc(db, "agenda_docent", user.uid));
+              if (snap.exists()) {
+                  window.cloudAgendaData = snap.data();
+              }
+          } catch(e) { console.error("Firebase load error", e); }
+
+          window.firebaseInitialized = true;
+          window.dispatchEvent(new Event('firebaseReady')); // Avisem al React que ja pot carregar
+      }
+
+      // FUNCIONS CLOUD ADAPTADES A CADA USUARI
       window.saveAgendaToCloud = async (dataStr) => {
+          if (!window.currentUser) return;
           try {
               const dataObj = JSON.parse(dataStr);
-              await setDoc(doc(db, "agenda_docent", "principal"), dataObj);
+              await setDoc(doc(db, "agenda_docent", window.currentUser.uid), dataObj);
           } catch(e) { console.error("Firebase save error", e); }
       };
 
       window.loadAgendaFromCloud = async () => {
+          if (!window.currentUser) return null;
           try {
-              const snap = await getDoc(doc(db, "agenda_docent", "principal"));
-              if (snap.exists()) {
-                  return JSON.stringify(snap.data());
-              }
+              const snap = await getDoc(doc(db, "agenda_docent", window.currentUser.uid));
+              if (snap.exists()) return JSON.stringify(snap.data());
           } catch(e) { console.error("Firebase load error", e); }
           return null;
       };
 
       window.saveBackupToCloud = async (history) => {
+          if (!window.currentUser) return;
           try {
-              await setDoc(doc(db, "agenda_docent", "backups"), { history });
+              await setDoc(doc(db, "agenda_docent_backups", window.currentUser.uid), { history });
           } catch(e) { console.error("Firebase backup save error", e); }
       };
 
       window.loadBackupsFromCloud = async () => {
+          if (!window.currentUser) return [];
           try {
-              const snap = await getDoc(doc(db, "agenda_docent", "backups"));
-              if (snap.exists() && snap.data().history) {
-                  return snap.data().history;
-              }
+              const snap = await getDoc(doc(db, "agenda_docent_backups", window.currentUser.uid));
+              if (snap.exists() && snap.data().history) return snap.data().history;
           } catch(e) { console.error("Firebase backup load error", e); }
           return [];
       };
       
       window.getAutoBackupDate = async () => {
+          if (!window.currentUser) return null;
           try {
-              const snap = await getDoc(doc(db, "agenda_docent", "metadata"));
+              const snap = await getDoc(doc(db, "agenda_docent_metadata", window.currentUser.uid));
               if (snap.exists()) return snap.data().lastAutoBackupDate;
           } catch(e) {}
           return null;
       };
 
       window.setAutoBackupDate = async (dateStr) => {
+          if (!window.currentUser) return;
           try {
-              await setDoc(doc(db, "agenda_docent", "metadata"), { lastAutoBackupDate: dateStr }, { merge: true });
+              await setDoc(doc(db, "agenda_docent_metadata", window.currentUser.uid), { lastAutoBackupDate: dateStr }, { merge: true });
           } catch(e) {}
       };
-
-      window.firebaseInitialized = true;
-      window.dispatchEvent(new Event('firebaseReady'));
     </script>
 
     <script>
-        setTimeout(function() {
+        // Timeout controlat perquè no mostri l'error si estem a la pantalla de login
+        window.loadingTimeout = setTimeout(function() {
             var loader = document.getElementById('app-loader');
             if (loader && loader.style.display !== 'none' && !document.getElementById('root').hasChildNodes()) {
                 document.getElementById('loader-content').innerHTML = '<h3 class="text-red-600 font-bold">Error de càrrega. Revisa la connexió.</h3>';
@@ -2103,7 +2199,7 @@
                             }
                         }
                     } else {
-                        alert("Zzz marcat (sense moure, no hi ha propera sessió).");
+                        alert("Zzz marcat (sense moure, no hi propera sessió).");
                     }
                 }
                 
@@ -3286,18 +3382,16 @@
                             <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
                                 <h3 className="text-lg font-bold mb-4">Què ha passat amb l'activitat?</h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <button onClick={() => executePendingAction('skipped')} className="p-4 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 font-bold flex flex-col items-center">
+                                    <button onClick={() => executePendingAction('skipped')} className="p-4 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 font-bold flex flex-col items-center transition-colors">
                                         <span className="text-2xl mb-2">❌</span>
                                         No feta
-                                        <span className="text-xs font-normal mt-1 text-center">(Es tatxa i es mou a la propera amb icona 🔴)</span>
                                     </button>
-                                    <button onClick={() => executePendingAction('unfinished')} className="p-4 bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 font-bold flex flex-col items-center">
+                                    <button onClick={() => executePendingAction('unfinished')} className="p-4 bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 font-bold flex flex-col items-center transition-colors">
                                         <span className="text-2xl mb-2">🚧</span>
                                         Inacabada
-                                        <span className="text-xs font-normal mt-1 text-center">(Es subratlla i es mou a la propera amb icona ⚠️)</span>
                                     </button>
                                 </div>
-                                <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded font-medium">Cancel·lar</button>
                             </div>
                         </div>,
                         document.body
@@ -3366,6 +3460,7 @@
         };
 
         const App = () => {
+            const [isReady, setIsReady] = useState(false);
             const [view, setView] = useState('dashboard');
             const [currentWeekId, setCurrentWeekId] = useState(() => {
                 const now = new Date();
@@ -3381,196 +3476,131 @@
             });
             const [selectedClassId, setSelectedClassId] = useState(null);
 
-            // DATA STATES
-            const [config, setConfig] = useState(() => {
-                try {
-                    const localData = localStorage.getItem('cfnPlannerData_v23');
-                    if (localData) {
-                        const parsed = JSON.parse(localData);
-                        if (parsed.config) return parsed.config;
-                    }
-                } catch(e) { console.error(e); }
-                return { teacherName: "", schoolYear: new Date().getFullYear().toString(), theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], classMaterials: {}, googleSheetUrl: "", taskTrackingUrl: "" };
-            });
+            // DATA STATES - Iniciat buit. S'emplenarà a l'useEffect quan Firestore estigui llest
+            const [config, setConfig] = useState({ classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" });
+            const [weeksData, setWeeksData] = useState({});
+            const [radar, setRadar] = useState([]);
+            const [holidayWeeks, setHolidayWeeks] = useState([]);
+            const [reminders, setReminders] = useState({});
 
-            const [weeksData, setWeeksData] = useState(() => {
-                try {
-                    const localData = localStorage.getItem('cfnPlannerData_v23');
-                    if (localData) {
-                        const parsed = JSON.parse(localData);
-                        if (parsed.weeksData) return parsed.weeksData;
-                    }
-                } catch(e) { console.error(e); }
-                return {};
-            });
-
-            const [radar, setRadar] = useState(() => {
-                try {
-                    const localData = localStorage.getItem('cfnPlannerData_v23');
-                    if (localData) {
-                        const parsed = JSON.parse(localData);
-                        if (parsed.radar) return parsed.radar;
-                    }
-                } catch(e) { console.error(e); }
-                return [];
-            });
-
-            const [holidayWeeks, setHolidayWeeks] = useState(() => {
-                 try {
-                    const localData = localStorage.getItem('cfnPlannerData_v23');
-                    if (localData) {
-                        const parsed = JSON.parse(localData);
-                        if (parsed.holidayWeeks) return parsed.holidayWeeks;
-                    }
-                } catch(e) { console.error(e); }
-                return [];
-            });
-
-            const [reminders, setReminders] = useState(() => {
-                 try {
-                    const localData = localStorage.getItem('cfnPlannerData_v23');
-                    if (localData) {
-                        const parsed = JSON.parse(localData);
-                        if (parsed.reminders) return parsed.reminders;
-                    }
-                } catch(e) { console.error(e); }
-                return {};
-            });
-
-            const hasInitializedBackup = useRef(false);
-
+            // 1. Inicialització des del núvol al carregar
             useEffect(() => {
-                const dataToSave = { config, weeksData, radar, holidayWeeks, reminders };
-                localStorage.setItem('cfnPlannerData_v23', JSON.stringify(dataToSave));
-                
-                document.body.className = '';
-                document.body.style.backgroundColor = APP_THEMES[config.theme || 'orange'].bg;
-                
-                const styleId = 'dynamic-scrollbar-style';
-                let styleEl = document.getElementById(styleId);
-                if (!styleEl) {
-                    styleEl = document.createElement('style');
-                    styleEl.id = styleId;
-                    document.head.appendChild(styleEl);
-                }
-                styleEl.innerHTML = `
-                    .custom-scroll::-webkit-scrollbar-thumb { background: ${APP_THEMES[config.theme || 'orange'].thumb}; }
-                    .custom-scroll::-webkit-scrollbar-thumb:hover { background: ${APP_THEMES[config.theme || 'orange'].hover}; }
-                `;
-
-            }, [config, weeksData, radar, holidayWeeks, reminders]);
-
-            useEffect(() => {
-                if (!hasInitializedBackup.current) {
-                    hasInitializedBackup.current = true;
-                    
-                    const lastAutoBackup = localStorage.getItem('lastAutoBackupDate');
-                    const todayStr = window.getLocalYYYYMMDD(new Date());
-                    
-                    if (lastAutoBackup !== todayStr) {
-                        setTimeout(() => {
-                            window.createAgendaBackup(true, 'Còpia diària automàtica', true); 
-                            localStorage.setItem('lastAutoBackupDate', todayStr);
-                        }, 3000); 
+                const initData = () => {
+                    if (window.cloudAgendaData) {
+                        const d = window.cloudAgendaData;
+                        setConfig(d.config || { classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" });
+                        setWeeksData(d.weeksData || {});
+                        setRadar(d.radar || []);
+                        setHolidayWeeks(d.holidayWeeks || []);
+                        setReminders(d.reminders || {});
+                        setView('dashboard');
                     } else {
-                        setTimeout(() => {
-                            window.createAgendaBackup(true, 'Desat automàtic silenciós', false); 
-                        }, 5000);
+                         // Si no hi ha dades al núvol per aquest usuari, forcem la pantalla de config inicial
+                         setView('config');
                     }
-                }
-                
-                const autoSaveInterval = setInterval(() => {
-                    window.createAgendaBackup(true, 'Desat automàtic silenciós', false); 
-                }, 10 * 60 * 1000); 
-                
-                return () => clearInterval(autoSaveInterval);
-            }, []);
-
-            useEffect(() => {
-                const todayStr = window.getLocalYYYYMMDD(new Date());
-                setReminders(prev => {
-                    if (!prev) return prev;
-                    let changed = false;
-                    const cleaned = {};
-                    Object.keys(prev).forEach(dateStr => {
-                        if (dateStr >= todayStr) {
-                            cleaned[dateStr] = prev[dateStr];
-                        } else {
-                            changed = true;
-                        }
-                    });
-                    return changed ? cleaned : prev;
-                });
-            }, []);
-
-            const handleUpdateWeekData = (weekId, newData) => { setWeeksData(prev => ({ ...prev, [weekId]: newData })); };
-            const handleToggleHoliday = (weekId) => { setHolidayWeeks(prev => prev.includes(weekId) ? prev.filter(id => id !== weekId) : [...prev, weekId]); };
-            const handleSaveReminder = (dateStr, rems) => { setReminders(prev => ({ ...prev, [dateStr]: rems })); };
-            const handleAddToRadar = (text, dateStr) => { 
-                const newEntry = { id: Date.now(), text, date: dateStr || null, fromTask: true, completedAt: null };
-                setRadar(prev => [...prev, newEntry]); 
-            };
-            const handleSelectClassView = (cId) => { setSelectedClassId(cId); setView('class_planner'); };
-            
-            const handleReset = () => {
-                if(confirm("Estàs COMPLETAMENT SEGUR que vols esborrar-ho tot? Crea una còpia de seguretat abans!")) {
-                    window.createAgendaBackup(true, 'Backup Pre-Reset', true);
-                    localStorage.removeItem('cfnPlannerData_v23');
-                    window.location.reload();
-                }
-            };
-            
-            const handleExport = () => {
-                window.createAgendaBackup(false, 'Exportació Manual', true);
-            };
-            
-            const handleImport = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    try {
-                        const data = JSON.parse(ev.target.result);
-                        if (data.config && data.weeksData) {
-                            window.createAgendaBackup(true, 'Backup Pre-Importació', false);
-                            
-                            setConfig(data.config);
-                            setWeeksData(data.weeksData);
-                            setRadar(data.radar || []);
-                            setHolidayWeeks(data.holidayWeeks || []);
-                            setReminders(data.reminders || {});
-                            alert("✅ Dades importades correctament!");
-                            window.location.reload();
-                        } else {
-                            alert("❌ Format d'arxiu incorrecte.");
-                        }
-                    } catch(err) {
-                        alert("❌ Error llegint l'arxiu.");
+                    
+                    setIsReady(true);
+                    
+                    // Amagar la pantalla de càrrega
+                    const loader = document.getElementById('app-loader');
+                    if (loader) {
+                        loader.style.opacity = '0';
+                        setTimeout(() => loader.style.display = 'none', 500);
                     }
                 };
-                reader.readAsText(file);
-            };
 
-            // Loading screen removal
-            useEffect(() => {
-                const loader = document.getElementById('app-loader');
-                if (loader) {
-                    setTimeout(() => {
-                        loader.style.opacity = '0';
-                        setTimeout(() => loader.remove(), 500);
-                    }, 500);
+                // Esperem a que Firebase estigui llest i hagi comprovat l'usuari
+                if (window.firebaseInitialized) {
+                    initData();
+                } else {
+                    window.addEventListener('firebaseReady', initData);
                 }
+                
+                return () => window.removeEventListener('firebaseReady', initData);
             }, []);
 
-            if (!config.teacherName && view !== 'config') { setView('config'); }
+            // 2. Guardat automàtic al núvol (amb debounce d'1 segon per no saturar Firestore)
+            useEffect(() => {
+                if (!isReady) return;
+                
+                const timer = setTimeout(() => {
+                    const dataObj = { config, weeksData, radar, holidayWeeks, reminders };
+                    window.currentAgendaData = JSON.stringify(dataObj);
+                    
+                    // Guardar al núvol (funcions definides al script de dalt)
+                    window.saveAgendaToCloud(window.currentAgendaData);
+                    
+                }, 1000); // Guardar un segon després de deixar de teclejar
+                
+                return () => clearTimeout(timer);
+            }, [config, weeksData, radar, holidayWeeks, reminders, isReady]);
+
+            // Handlers principals
+            const handleUpdateWeekData = (wId, data) => setWeeksData(prev => ({ ...prev, [wId]: data }));
+            
+            const handleSelectClassView = (classId) => {
+                setSelectedClassId(classId);
+                setView('class_planner');
+            };
+
+            const handleExport = () => {
+                const dataObj = { config, weeksData, radar, holidayWeeks, reminders };
+                window.downloadBackupJSON(JSON.stringify(dataObj), `Agenda_Docent_Backup_${config.schoolYear}.json`);
+            };
+
+            const handleImport = (e) => { 
+                const fr = new FileReader(); 
+                fr.onload = ev => { 
+                    try {
+                        const d = JSON.parse(ev.target.result); 
+                        setConfig(d.config || { classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" }); 
+                        setRadar(d.radar || []); 
+                        setWeeksData(d.weeksData || {}); 
+                        setHolidayWeeks(d.holidayWeeks || []);
+                        setReminders(d.reminders || {});
+                        setView('dashboard'); 
+                        alert("Còpia de seguretat carregada correctament.");
+                    } catch(err) {
+                        alert("Error al carregar l'arxiu. Comprova que l'arxiu .json estigui intacte.");
+                    }
+                }; 
+                if (e.target.files[0]) fr.readAsText(e.target.files[0]); 
+            };
+
+            const handleReset = () => {
+                setConfig({ classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" });
+                setWeeksData({});
+                setRadar([]);
+                setHolidayWeeks([]);
+                setReminders({});
+                setView('config');
+            };
+
+            const handleToggleHoliday = (wId) => {
+                setHolidayWeeks(prev => prev.includes(wId) ? prev.filter(id => id !== wId) : [...prev, wId]);
+            };
+
+            const handleSaveReminder = (dateStr, rems) => {
+                setReminders(prev => {
+                    const next = { ...prev };
+                    if (rems.length === 0) delete next[dateStr];
+                    else next[dateStr] = rems;
+                    return next;
+                });
+            };
+
+            // No renderitzem l'App fins que el procés de Google SignIn / Firestore no ha acabat
+            if (!isReady) return null;
 
             return (
-                <div className="min-h-screen text-gray-800 relative">
+                <div className="min-h-screen">
                     {view === 'config' && <ConfigScreen config={config} onSave={c => { setConfig(c); setView('dashboard'); }} />}
+                    
                     {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} onSelectWeek={w => { setCurrentWeekId(w); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} onSaveReminder={handleSaveReminder} weeksData={weeksData} />}
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
-                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={setConfig} onBack={() => setView('dashboard')} onAddToRadar={handleAddToRadar} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    
+                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={setConfig} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                 </div>
             );
         };
