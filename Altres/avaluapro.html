@@ -21,7 +21,7 @@
     <!-- SheetJS (Excel Export) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     
-    <!-- HTML2PDF per exportar perfil d'alumne -->
+    <!-- html2pdf per exportar perfil de l'alumne -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <!-- FontAwesome -->
@@ -75,76 +75,108 @@
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <!-- INTERFÍCIE D'AUTENTICACIÓ FIREBASE -->
+    <div id="firebaseAuthContainer" class="fixed top-4 right-4 z-[100] flex items-center gap-3 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg border border-gray-200">
+        <p id="userInfo" class="text-sm font-bold text-gray-700 hidden px-3"></p>
+        <button id="loginBtn" class="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-blue-700 transition shadow-sm flex items-center gap-2">
+            <i class="fa-brands fa-google"></i> Inicia sessió
+        </button>
+        <button id="logoutBtn" style="display:none;" class="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-red-600 transition shadow-sm flex items-center gap-2">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> Tanca sessió
+        </button>
+    </div>
 
-    <!-- --- FUNCIONS GLOBALS DE BACKUP --- -->
+    <!-- LOGICA FIREBASE: EVENT GLOBALS I MODULE -->
     <script>
-        window.getLocalYYYYMMDD = (d) => {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
-        window.downloadBackupJSON = (dataStr, filename) => {
-            if (!dataStr) return;
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }, 100);
-        };
-
-        window.createAvaluaproBackup = (silent = false, customLabel = null, triggerDownload = false) => {
-            const currentData = localStorage.getItem('evalApp_data_v2');
-            if (!currentData || currentData === '[]') {
-                if (!silent) alert("No hi ha dades actuals per guardar al backup.");
-                return;
-            }
-            
-            let history = [];
-            try {
-                history = JSON.parse(localStorage.getItem('avaluaproBackupHistory')) || [];
-                if (!Array.isArray(history)) history = [];
-            } catch(e) { history = []; }
-            
-            if (history.length > 0 && history[0].data === currentData && silent) {
-                return; 
-            } else if (history.length > 0 && history[0].data === currentData && !silent) {
-                if(!confirm("⚠️ Les dades actuals són idèntiques a l'últim backup. Vols crear una entrada duplicada de tota manera?")) return;
-            }
-            
-            const now = new Date();
-            const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
-            const dateStrForFile = window.getLocalYYYYMMDD(now);
-            
-            history.unshift({ 
-                id: Date.now(), 
-                timestamp: timestamp, 
-                label: customLabel || (silent ? 'Còpia automàtica' : 'Còpia manual'), 
-                data: currentData 
-            });
-            
-            if (history.length > 10) history = history.slice(0, 10);
-            
-            localStorage.setItem('avaluaproBackupHistory', JSON.stringify(history));
-            
-            if (triggerDownload) {
-                const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
-                window.downloadBackupJSON(currentData, `AvaluaproBackup_${dateStrForFile}_${safeTime}.json`);
-            }
-            
-            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament.");
-            window.dispatchEvent(new Event('backupHistoryUpdated'));
+        // Sistema de pont entre Firebase i React
+        window.loadedDades = null;
+        window.isDataLoaded = false;
+        window.inicialitzarDades = function(dades) {
+            window.loadedDades = dades;
+            window.isDataLoaded = true;
+            window.dispatchEvent(new CustomEvent('dadesCarregades'));
         };
     </script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyAoUM58SRUMEFlCFm56jzI7eTU9QB-JxBE",
+          authDomain: "eines-docents.firebaseapp.com",
+          projectId: "eines-docents",
+          storageBucket: "eines-docents.firebasestorage.app",
+          messagingSenderId: "80852705741",
+          appId: "1:80852705741:web:375c1a3dfd2ae2466c6484",
+          measurementId: "G-JJ73JJ3DQX"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        let currentUser = null;
+
+        // LOGIN
+        window.login = async function() {
+          await signInWithPopup(auth, provider);
+        };
+
+        // LOGOUT
+        window.logout = async function() {
+          await signOut(auth);
+        };
+
+        // CONTROL DE SESSIÓ
+        onAuthStateChanged(auth, (user) => {
+          if (user) {
+            currentUser = user;
+            document.getElementById("userInfo").textContent = user.email;
+            document.getElementById("userInfo").style.display = "block";
+            document.getElementById("loginBtn").style.display = "none";
+            document.getElementById("logoutBtn").style.display = "flex";
+
+            carregarDades();
+          } else {
+            currentUser = null;
+            document.getElementById("userInfo").textContent = "";
+            document.getElementById("userInfo").style.display = "none";
+            document.getElementById("loginBtn").style.display = "flex";
+            document.getElementById("logoutBtn").style.display = "none";
+            
+            // Buidem la memòria en tancar sessió
+            window.inicialitzarDades([]);
+          }
+        });
+
+        // GUARDAR
+        window.guardarDades = async function(dades) {
+          if (!currentUser) return;
+          // Embolcallem l'array en un objecte per complir amb el requeriment de Firestore de guardar documents com a objectes
+          await setDoc(doc(db, "avaluapro", currentUser.uid), { dades: dades });
+        };
+
+        // CARREGAR
+        async function carregarDades() {
+          if (!currentUser) return;
+
+          const snap = await getDoc(doc(db, "avaluapro", currentUser.uid));
+
+          if (snap.exists() && snap.data().dades) {
+            window.inicialitzarDades(snap.data().dades);
+          } else {
+            window.inicialitzarDades([]);
+          }
+        }
+
+        document.getElementById("loginBtn").onclick = window.login;
+        document.getElementById("logoutBtn").onclick = window.logout;
+    </script>
+
+    <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, Component } = React;
@@ -170,15 +202,15 @@
                     return (
                         <div className="flex flex-col items-center justify-center h-screen bg-red-50 text-red-800 p-8 text-center">
                             <h1 className="text-3xl font-bold mb-4">Ups! L'aplicació ha fallat.</h1>
-                            <p className="mb-4 text-gray-700">Això passa perquè les teves dades antigues desades al navegador no coincideixen amb el nou disseny.</p>
+                            <p className="mb-4 text-gray-700">Això passa perquè les teves dades antigues no coincideixen amb el nou disseny.</p>
                             <div className="bg-white p-4 rounded border border-red-200 w-full max-w-2xl overflow-auto mb-6 text-left shadow-sm">
                                 <p className="font-bold text-red-600 mb-2">Codi de l'error:</p>
                                 <pre className="text-xs text-gray-600">{this.state.error ? this.state.error.toString() : "Error desconegut"}</pre>
                             </div>
                             <button 
                                 onClick={() => { 
-                                    if(confirm("Atenció! Si continues, s'esborraran totes les dades emmagatzemades d'aquesta pàgina i l'eina es reiniciarà de fàbrica. Vols continuar?")) {
-                                        localStorage.removeItem('evalApp_data_v2'); 
+                                    if(confirm("Atenció! Si continues, s'esborraran totes les dades emmagatzemades al núvol per aquest compte i l'eina es reiniciarà de fàbrica. Vols continuar?")) {
+                                        if(window.guardarDades) window.guardarDades([]);
                                         window.location.reload(); 
                                     }
                                 }} 
@@ -201,7 +233,7 @@
             });
         };
         
-        // Utilitat per comprimir imatges i no trencar el localStorage
+        // Utilitat per comprimir imatges i no trencar el guardat
         const compressImage = (file, maxWidth, callback) => {
             if (!file) return;
             const reader = new FileReader();
@@ -261,33 +293,9 @@
             
             const avg = sum / total;
             if (avg >= 3.5) return 'A';
-            if (avg > 2.5) return 'B'; // Modificat: >2.5 en comptes de >=2.5
+            if (avg > 2.5) return 'B';
             if (avg > 1.5) return 'C';
             return 'D';
-        };
-
-        // Helpers globals per notes sobreescrites manuals
-        const getStudentCritGrade = (student, crit) => {
-            if (student.overrides && student.overrides[crit.id]) return student.overrides[crit.id];
-            let critMarks = [];
-            if(crit.indicators) {
-                crit.indicators.forEach(i => { 
-                    if(student.marks && student.marks[i.id]) critMarks.push(student.marks[i.id]); 
-                }); 
-            }
-            return calculateGrade(critMarks);
-        };
-
-        const getStudentCompGrade = (student, comp) => {
-            if (student.overrides && student.overrides[comp.id]) return student.overrides[comp.id];
-            let compMarks = [];
-            if(comp.criteria) {
-                comp.criteria.forEach(c => {
-                    const cg = getStudentCritGrade(student, c);
-                    if (cg) compMarks.push(cg);
-                });
-            }
-            return calculateGrade(compMarks);
         };
 
         const calculateNumericAverage = (marks) => {
@@ -331,7 +339,7 @@
         const getGradeFromNumeric = (avg) => {
             if (!avg) return '-';
             if (avg >= 3.5) return 'A';
-            if (avg > 2.5) return 'B'; // Modificat: >2.5
+            if (avg >= 2.5) return 'B';
             if (avg > 1.5) return 'C';
             return 'D';
         };
@@ -862,7 +870,7 @@
                 } else {
                     newStudents = names.map(name => {
                         const existing = sList.find(s => s.name === name);
-                        return existing ? existing : { id: generateUUID(), name: name, marks: {}, overrides: {}, profileSubjects: [], profileComment: "", notes: { photo: "", diagnostics: [], diagnosticText: "", personal: "", equips: "", tutoria: "" }, halfGroup: "" };
+                        return existing ? existing : { id: generateUUID(), name: name, marks: {}, notes: { photo: "", diagnostics: [], diagnosticText: "", personal: "", equips: "", tutoria: "" }, halfGroup: "" };
                     });
                 }
 
@@ -880,276 +888,6 @@
                         <textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} className="w-full h-64 p-3 border rounded-xl font-mono text-sm border-gray-300 outline-none focus:border-brand-500 focus:ring-1" placeholder="Cognom Nom 1&#10;Cognom Nom 2&#10;..." />
                         <div className="flex justify-end">
                             <button onClick={handleSave} className="px-6 py-2 bg-brand-500 text-white rounded-lg font-bold hover:bg-brand-600 shadow">Desar Llistat</button>
-                        </div>
-                    </div>
-                </Modal>
-            );
-        };
-
-        const StudentProfileModal = ({ isOpen, onClose, student, classData, onSave }) => {
-            if (!isOpen || !student) return null;
-            
-            const [subjects, setSubjects] = useState(student.profileSubjects || []);
-            const [profileComment, setProfileComment] = useState(student.profileComment !== undefined ? student.profileComment : "");
-
-            useEffect(() => {
-                if (isOpen && student) {
-                    setSubjects(student.profileSubjects || []);
-                    if (student.profileComment === undefined || student.profileComment === "") {
-                        setProfileComment(generateAutoComment());
-                    } else {
-                        setProfileComment(student.profileComment);
-                    }
-                }
-            }, [isOpen, student]);
-
-            const generateAutoComment = () => {
-                if (!classData || !classData.semesters) return "";
-                let as = [], bs = [], cs = [], ds = [];
-                classData.semesters.forEach(sem => {
-                    if (sem.id !== 'S1' && sem.id !== 'S2') return;
-                    if (sem.competencies) {
-                        sem.competencies.forEach(comp => {
-                            const grade = getStudentCompGrade(student, comp);
-                            if (grade === 'A') as.push(comp.name);
-                            else if (grade === 'B') bs.push(comp.name);
-                            else if (grade === 'C') cs.push(comp.name);
-                            else if (grade === 'D' || grade === 'NA') ds.push(comp.name);
-                        });
-                    }
-                });
-                
-                let text = `${student.name} presenta un perfil competencial `;
-                if (as.length > bs.length + cs.length + ds.length) text += "molt destacat.";
-                else if (as.length + bs.length > cs.length + ds.length) text += "adequat.";
-                else text += "que requereix atenció.";
-                
-                if (as.length > 0) text += `\n\nHa assolit amb nivell d'excel·lència (A) les competències següents: ${as.join(', ')}.`;
-                if (ds.length > 0) text += `\n\nMostra dificultats importants i cal reforçar de forma prioritària (D/NA): ${ds.join(', ')}.`;
-                else if (cs.length > 0) text += `\n\nTé marge de millora i està en procés d'assoliment en (C): ${cs.join(', ')}.`;
-                
-                return text;
-            };
-
-            const handleAddSubject = () => {
-                setSubjects([...subjects, { id: generateUUID(), name: "Nova Assignatura", competencies: [] }]);
-            };
-
-            const handleUpdateSubjectName = (id, name) => {
-                setSubjects(subjects.map(s => s.id === id ? { ...s, name } : s));
-            };
-
-            const handleRemoveSubject = (id) => {
-                setSubjects(subjects.filter(s => s.id !== id));
-            };
-
-            const handleAddCompetency = (subId) => {
-                setSubjects(subjects.map(s => {
-                    if (s.id !== subId) return s;
-                    return { ...s, competencies: [...s.competencies, { id: generateUUID(), name: "", grade: "" }] };
-                }));
-            };
-
-            const handleUpdateCompetency = (subId, compId, field, value) => {
-                setSubjects(subjects.map(s => {
-                    if (s.id !== subId) return s;
-                    return {
-                        ...s,
-                        competencies: s.competencies.map(c => c.id === compId ? { ...c, [field]: value } : c)
-                    };
-                }));
-            };
-
-            const handleRemoveCompetency = (subId, compId) => {
-                setSubjects(subjects.map(s => {
-                    if (s.id !== subId) return s;
-                    return { ...s, competencies: s.competencies.filter(c => c.id !== compId) };
-                }));
-            };
-
-            const handleSaveAndClose = () => {
-                onSave(student.id, { profileSubjects: subjects, profileComment });
-                onClose();
-            };
-
-            const exportPDF = () => {
-                const element = document.getElementById('student-profile-print');
-                const opt = {
-                    margin: 10,
-                    filename: `Perfil_${student.name.replace(/\s+/g, '_')}.pdf`,
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                };
-                html2pdf().set(opt).from(element).save();
-            };
-
-            // Calculate current class stats for the profile
-            let mainClassComps = [];
-            if (classData && classData.semesters) {
-                classData.semesters.forEach(sem => {
-                    if (sem.id === 'S1' || sem.id === 'S2') {
-                        if (sem.competencies) {
-                            sem.competencies.forEach(comp => {
-                                const grade = getStudentCompGrade(student, comp);
-                                mainClassComps.push({ name: comp.name, grade: grade || '-', color: comp.color });
-                            });
-                        }
-                    }
-                });
-            }
-
-            return (
-                <Modal isOpen={isOpen} onClose={handleSaveAndClose} title={`Perfil de l'alumne: ${student.name}`} size="xl">
-                    <div className="flex flex-col h-full bg-gray-50 rounded-xl overflow-hidden relative">
-                        <div className="absolute top-4 right-4 z-10 flex gap-2">
-                            <button onClick={exportPDF} className="bg-red-600 text-white px-4 py-2 rounded shadow font-bold hover:bg-red-700 flex items-center gap-2"><Icon name="file-pdf"/> Exportar PDF</button>
-                        </div>
-                        
-                        <div className="flex-1 overflow-y-auto p-4 custom-scroll">
-                            {/* Editor View (Not in PDF directly, but syncs to it) */}
-                            <div className="mb-8 bg-white p-6 rounded-xl border shadow-sm">
-                                <h3 className="font-bold text-lg mb-4 text-indigo-800 border-b pb-2"><Icon name="pen-to-square" className="mr-2"/> Editor de Dades (Això no sortirà al PDF)</h3>
-                                
-                                <div className="mb-6">
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Valoració Qualitativa (Comentari Genèric)</label>
-                                    <textarea 
-                                        value={profileComment} 
-                                        onChange={(e) => setProfileComment(e.target.value)} 
-                                        className="w-full p-3 border rounded-lg h-32 outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
-                                        placeholder="Escriu la valoració global de l'alumne aquí..."
-                                    />
-                                    <button onClick={() => setProfileComment(generateAutoComment())} className="mt-2 text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-100 transition"><Icon name="wand-magic-sparkles"/> Regenerar comentari automàtic</button>
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <label className="block text-sm font-bold text-gray-700">Altres Assignatures</label>
-                                        <button onClick={handleAddSubject} className="text-xs bg-green-500 text-white px-3 py-1.5 rounded font-bold hover:bg-green-600 transition">+ Afegir Assignatura</button>
-                                    </div>
-                                    
-                                    <div className="space-y-4">
-                                        {subjects.length === 0 && <p className="text-sm text-gray-400 italic">No s'han afegit altres assignatures.</p>}
-                                        {subjects.map((sub, sIdx) => (
-                                            <div key={sub.id} className="border border-gray-200 p-4 rounded-xl bg-gray-50/50 relative group">
-                                                <button onClick={() => handleRemoveSubject(sub.id)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"><Icon name="trash"/></button>
-                                                <input 
-                                                    value={sub.name} 
-                                                    onChange={(e) => handleUpdateSubjectName(sub.id, e.target.value)} 
-                                                    className="font-black text-gray-700 bg-transparent border-b border-gray-300 outline-none focus:border-indigo-500 mb-3 w-1/2"
-                                                    placeholder="Nom de l'assignatura..."
-                                                />
-                                                <div className="space-y-2 mb-3">
-                                                    {sub.competencies.map(comp => (
-                                                        <div key={comp.id} className="flex items-center gap-2">
-                                                            <input 
-                                                                value={comp.name} 
-                                                                onChange={(e) => handleUpdateCompetency(sub.id, comp.id, 'name', e.target.value)} 
-                                                                className="flex-1 text-sm p-1.5 border rounded outline-none focus:ring-1 focus:ring-indigo-400"
-                                                                placeholder="Nom competència (ex: C1. Emprenedoria)"
-                                                            />
-                                                            <select 
-                                                                value={comp.grade} 
-                                                                onChange={(e) => handleUpdateCompetency(sub.id, comp.id, 'grade', e.target.value)}
-                                                                className={`w-16 p-1.5 border rounded outline-none font-bold text-center ${getGradeTextColor(comp.grade)}`}
-                                                            >
-                                                                <option value="">-</option>
-                                                                <option value="A">A</option>
-                                                                <option value="B">B</option>
-                                                                <option value="C">C</option>
-                                                                <option value="D">D</option>
-                                                                <option value="NA">NA</option>
-                                                            </select>
-                                                            <button onClick={() => handleRemoveCompetency(sub.id, comp.id)} className="text-gray-400 hover:text-red-500"><Icon name="xmark"/></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <button onClick={() => handleAddCompetency(sub.id)} className="text-xs text-indigo-600 font-bold">+ Afegir Competència</button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* PREVIEW PER PDF */}
-                            <div className="bg-white p-8 rounded border shadow-lg mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
-                                <div id="student-profile-print" className="p-8 bg-white">
-                                    {/* Header */}
-                                    <div className="flex items-center gap-4 border-b-2 border-indigo-900 pb-4 mb-6">
-                                        <div className="w-16 h-16 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-black text-2xl">
-                                            {student.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Perfil Competencial</h1>
-                                            <p className="text-lg text-gray-600">{student.name}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Valoració Qualitativa */}
-                                    <div className="mb-8">
-                                        <h2 className="text-xl font-bold text-indigo-900 mb-3 uppercase tracking-wider text-sm">Valoració Qualitativa Global</h2>
-                                        <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
-                                            {profileComment || <span className="italic text-gray-400">Sense valoració introduïda.</span>}
-                                        </div>
-                                    </div>
-
-                                    {/* Taula Principal */}
-                                    <div className="mb-8">
-                                        <h2 className="text-xl font-bold text-indigo-900 mb-3 uppercase tracking-wider text-sm">{classData ? classData.name : 'Assignatura Principal'}</h2>
-                                        <div className="border rounded-lg overflow-hidden">
-                                            <table className="w-full text-sm">
-                                                <thead className="bg-gray-100 border-b">
-                                                    <tr>
-                                                        <th className="p-3 text-left font-bold text-gray-700">Competència Treballada</th>
-                                                        <th className="p-3 text-center font-bold text-gray-700 w-24 border-l">Avaluació</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {mainClassComps.length > 0 ? mainClassComps.map((comp, idx) => (
-                                                        <tr key={idx}>
-                                                            <td className="p-3 text-gray-800 font-medium">{comp.name}</td>
-                                                            <td className="p-3 text-center border-l bg-gray-50/30">
-                                                                <span className={`px-2 py-1 rounded font-bold shadow-sm ${getGradeColor(comp.grade)}`}>{comp.grade}</span>
-                                                            </td>
-                                                        </tr>
-                                                    )) : <tr><td colSpan="2" className="p-4 text-center text-gray-400 italic">Sense competències avaluades.</td></tr>}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    {/* Altres Assignatures */}
-                                    {subjects.length > 0 && (
-                                        <div>
-                                            <h2 className="text-xl font-bold text-indigo-900 mb-3 uppercase tracking-wider text-sm">Avaluació Transversal / Altres Àmbits</h2>
-                                            <div className="space-y-6">
-                                                {subjects.map((sub, sIdx) => (
-                                                    <div key={sIdx} className="border rounded-lg overflow-hidden page-break-inside-avoid">
-                                                        <div className="bg-gray-100 border-b p-3 font-bold text-gray-800">{sub.name || 'Assignatura sense nom'}</div>
-                                                        <table className="w-full text-sm">
-                                                            <tbody className="divide-y divide-gray-100">
-                                                                {sub.competencies.length > 0 ? sub.competencies.map((comp, cIdx) => (
-                                                                    <tr key={cIdx}>
-                                                                        <td className="p-3 text-gray-700 w-3/4">{comp.name || <span className="italic text-gray-400">Competència...</span>}</td>
-                                                                        <td className="p-3 text-center border-l bg-gray-50/30 w-1/4">
-                                                                            {comp.grade ? <span className={`px-2 py-1 rounded font-bold shadow-sm ${getGradeColor(comp.grade)}`}>{comp.grade}</span> : <span className="text-gray-300">-</span>}
-                                                                        </td>
-                                                                    </tr>
-                                                                )) : <tr><td colSpan="2" className="p-3 text-center text-gray-400 italic text-xs">Sense competències definides.</td></tr>}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end p-4 border-t bg-white">
-                            <button onClick={handleSaveAndClose} className="px-8 py-3 bg-brand-500 text-white rounded-xl font-bold hover:bg-brand-600 shadow-lg">Desar i Tancar</button>
                         </div>
                     </div>
                 </Modal>
@@ -1212,16 +950,19 @@
                 onClose();
             };
 
+            const handleOpenProfile = () => {
+                onSave(student.id, notes);
+                onOpenProfile(student);
+            };
+
             return (
                 <Modal isOpen={isOpen} onClose={handleSaveAndClose} title={`Anotacions Personals: ${student.name}`} size="lg">
                     <div className="space-y-4">
                         
-                        {/* Cabçalera: Foto i Botons extra */}
-                        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-                            <div className="flex-1"></div>
-                            
+                        {/* Cabçalera: Foto */}
+                        <div className="flex justify-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                             {/* Fotografia */}
-                            <div className="w-24 h-24 shrink-0 bg-gray-50 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden relative group transition-colors hover:border-brand-400 z-10">
+                            <div className="w-24 h-24 shrink-0 bg-gray-50 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden relative group transition-colors hover:border-brand-400">
                                 {notes.photo ? (
                                     <img src={notes.photo} alt="Alumne" className="w-full h-full object-cover" />
                                 ) : (
@@ -1232,19 +973,18 @@
                                     <input type="file" accept="image/*" className="hidden" onChange={(e) => compressImage(e.target.files[0], 200, (res) => handleNotesChange('photo', res))} />
                                 </label>
                             </div>
-
-                            <div className="flex-1 flex justify-end">
-                                <button onClick={() => { handleSaveAndClose(); onOpenProfile(student); }} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition shadow-sm flex items-center gap-2 border border-indigo-200">
-                                    <Icon name="id-card" /> Perfil de l'alumne
-                                </button>
-                            </div>
                         </div>
 
                         <div className="flex justify-between items-center bg-gray-50 p-2 rounded border">
                             <p className="text-xs text-gray-500 font-medium">L'historial de comentaris es desa i es pot exportar a Excel.</p>
-                            <button onClick={copyNotes} className="text-xs bg-white border border-gray-300 shadow-sm px-3 py-1.5 rounded hover:bg-gray-100 font-bold text-gray-700">
-                                <Icon name="copy" className="mr-1"/> Copiar text
-                            </button>
+                            <div className="flex">
+                                <button onClick={copyNotes} className="text-xs bg-white border border-gray-300 shadow-sm px-3 py-1.5 rounded hover:bg-gray-100 font-bold text-gray-700">
+                                    <Icon name="copy" className="mr-1"/> Copiar text
+                                </button>
+                                <button onClick={handleOpenProfile} className="text-xs bg-indigo-100 border border-indigo-200 shadow-sm px-3 py-1.5 rounded hover:bg-indigo-200 font-bold text-indigo-800 ml-2">
+                                    <Icon name="user-tie" className="mr-1"/> Perfil d'Alumne
+                                </button>
+                            </div>
                         </div>
                         
                         {/* 1. Diagnòstics */}
@@ -1579,8 +1319,20 @@
                             let sum = 0; let count = 0;
                             
                             sList.forEach(s => {
-                                const g = getStudentCompGrade(s, comp);
-                                if(g && g !== '-') { sum += getNumericFromGrade(g); count++; }
+                                let marks = [];
+                                if(comp.criteria) {
+                                    comp.criteria.forEach(crit => {
+                                        if(crit.indicators) {
+                                            crit.indicators.forEach(i => { 
+                                                if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); 
+                                            });
+                                        }
+                                    });
+                                }
+                                const autoG = calculateGrade(marks);
+                                const overG = s.marks && s.marks[`override_${comp.id}`];
+                                const g = overG || autoG;
+                                if(g) { sum += getNumericFromGrade(g); count++; }
                             });
                             
                             const avgNum = count > 0 ? sum/count : 0;
@@ -1660,9 +1412,28 @@
                                     if (!compSummary[comp.name]) {
                                         compSummary[comp.name] = { S1: '-', S2: '-' };
                                     }
-                                    const g = getStudentCompGrade(student, comp);
-                                    if (sem.id === 'S1') compSummary[comp.name].S1 = g ? g : '-';
-                                    if (sem.id === 'S2') compSummary[comp.name].S2 = g ? g : '-';
+                                    
+                                    let compMarks = [];
+                                    if (comp.criteria) {
+                                        comp.criteria.forEach(c => {
+                                            let critMarks = [];
+                                            if(c.indicators) {
+                                                c.indicators.forEach(i => { 
+                                                    if(student.marks && student.marks[i.id]) critMarks.push(student.marks[i.id]); 
+                                                });
+                                            }
+                                            const autoCg = calculateGrade(critMarks);
+                                            const overCg = student.marks && student.marks[`override_${c.id}`];
+                                            const cg = overCg || autoCg;
+                                            if (cg) compMarks.push(cg);
+                                        });
+                                    }
+                                    const autoFg = calculateGrade(compMarks);
+                                    const overFg = student.marks && student.marks[`override_${comp.id}`];
+                                    const fg = overFg || autoFg;
+                                    
+                                    if (sem.id === 'S1') compSummary[comp.name].S1 = fg ? fg : '-';
+                                    if (sem.id === 'S2') compSummary[comp.name].S2 = fg ? fg : '-';
                                 });
                             }
                         }
@@ -1755,11 +1526,272 @@
             );
         };
 
+        const StudentProfileModal = ({ isOpen, onClose, studentData, classData, onSaveNotes }) => {
+            if (!isOpen || !studentData) return null;
+            
+            const [subjects, setSubjects] = useState(studentData.notes?.subjects || []);
+            const [profileComment, setProfileComment] = useState(studentData.notes?.profileComment || "");
+
+            // Calculem la gràfica i el resum de competències pròpies per aquest estudiant
+            const compSummary = {}; 
+            const labels = [];
+            const radarData = [];
+            let globalAvgNum = 0;
+            let globalAvgCount = 0;
+            
+            if (classData && classData.semesters) {
+                classData.semesters.forEach(sem => {
+                    if (sem.id === 'S1' || sem.id === 'S2') {
+                        if (sem.competencies) {
+                            sem.competencies.forEach(comp => {
+                                if (!compSummary[comp.name]) {
+                                    compSummary[comp.name] = { S1: '-', S2: '-', finalNum: 0 };
+                                    if (labels.indexOf(comp.name) === -1) labels.push(comp.name);
+                                }
+                                
+                                let compMarks = [];
+                                if (comp.criteria) {
+                                    comp.criteria.forEach(c => {
+                                        let critMarks = [];
+                                        if(c.indicators) {
+                                            c.indicators.forEach(i => { 
+                                                if(studentData.marks && studentData.marks[i.id]) critMarks.push(studentData.marks[i.id]); 
+                                            });
+                                        }
+                                        const autoCg = calculateGrade(critMarks);
+                                        const overCg = studentData.marks && studentData.marks[`override_${c.id}`];
+                                        const cg = overCg || autoCg;
+                                        if (cg) compMarks.push(cg);
+                                    });
+                                }
+                                const autoFg = calculateGrade(compMarks);
+                                const overFg = studentData.marks && studentData.marks[`override_${comp.id}`];
+                                const fg = overFg || autoFg;
+                                
+                                if (sem.id === 'S1') compSummary[comp.name].S1 = fg ? fg : '-';
+                                if (sem.id === 'S2') compSummary[comp.name].S2 = fg ? fg : '-';
+                                if (fg) {
+                                    compSummary[comp.name].finalNum = getNumericFromGrade(fg);
+                                    globalAvgNum += getNumericFromGrade(fg);
+                                    globalAvgCount++;
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+
+            labels.forEach(l => radarData.push(compSummary[l].finalNum || 0));
+            const totalAvg = globalAvgCount > 0 ? getGradeFromNumeric(globalAvgNum/globalAvgCount) : '-';
+
+            const handleDownloadPDF = () => {
+                const element = document.getElementById('profile-pdf-content');
+                const opt = {
+                    margin:       10,
+                    filename:     `Perfil_Alumne_${studentData.name}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                window.html2pdf().set(opt).from(element).save();
+            };
+
+            const addSubject = () => {
+                setSubjects([...subjects, { id: generateUUID(), name: "Nova Assignatura", competencies: [] }]);
+            };
+            const updateSubjectName = (subId, val) => {
+                setSubjects(subjects.map(s => s.id === subId ? {...s, name: val} : s));
+            };
+            const removeSubject = (subId) => {
+                if(confirm("Eliminar aquesta assignatura del perfil?")) {
+                    setSubjects(subjects.filter(s => s.id !== subId));
+                }
+            };
+            const addSubComp = (subId) => {
+                setSubjects(subjects.map(s => s.id === subId ? { ...s, competencies: [...s.competencies, { id: generateUUID(), name: "Nova Competència", grade: "" }] } : s));
+            };
+            const updateSubComp = (subId, compId, key, val) => {
+                setSubjects(subjects.map(s => s.id === subId ? {
+                    ...s, 
+                    competencies: s.competencies.map(c => c.id === compId ? {...c, [key]: val} : c)
+                } : s));
+            };
+            const removeSubComp = (subId, compId) => {
+                setSubjects(subjects.map(s => s.id === subId ? {
+                    ...s, 
+                    competencies: s.competencies.filter(c => c.id !== compId)
+                } : s));
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={() => { onSaveNotes(studentData.id, {...studentData.notes, subjects, profileComment}); onClose(); }} title={`Perfil Global del Tutor/a`} size="lg">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <p className="text-sm text-gray-500">Aquest document és útil per a tutories, claustres o famílies.</p>
+                            <button onClick={handleDownloadPDF} className="bg-brand-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-600 transition shadow-sm flex items-center gap-2">
+                                <Icon name="file-pdf"/> Descarregar PDF
+                            </button>
+                        </div>
+                        
+                        {/* CONTINGUT A EXPORTAR A PDF */}
+                        <div id="profile-pdf-content" className="bg-white p-8 rounded border border-gray-200 text-gray-800 space-y-8" style={{minHeight: "297mm"}}>
+                            {/* Header PDF */}
+                            <div className="border-b-4 border-indigo-600 pb-6 mb-6 flex justify-between items-end">
+                                <div>
+                                    <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-1">{studentData.name}</h1>
+                                    <p className="text-lg text-gray-500 font-medium">Informe de Seguiment Competencial i d'Aprenentatge</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-indigo-600 font-bold">{classData.name}</p>
+                                    <p className="text-sm text-gray-400">Generat el: {new Date().toLocaleDateString('ca-ES')}</p>
+                                </div>
+                            </div>
+
+                            {/* Dades inicials i Diagnòstics */}
+                            <div className="grid grid-cols-3 gap-6" style={{pageBreakInside: 'avoid'}}>
+                                <div className="col-span-2 space-y-4">
+                                    <div>
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Diagnòstics i Necessitats</h3>
+                                        <div className="flex flex-wrap gap-2">
+                                            {studentData.notes?.diagnostics?.length > 0 ? (
+                                                studentData.notes.diagnostics.map(dId => {
+                                                    const d = DIAGNOSTICS.find(x => x.id === dId);
+                                                    return d ? <span key={d.id} className={`px-2 py-1 rounded text-xs font-bold border ${d.colorClass}`}>{d.label}</span> : null;
+                                                })
+                                            ) : <span className="text-sm text-gray-500 italic">Sense diagnòstics actius.</span>}
+                                        </div>
+                                    </div>
+                                    {(studentData.notes?.personal || studentData.notes?.diagnosticText) && (
+                                        <div>
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Anotacions rellevants</h3>
+                                            <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded border border-gray-100">{studentData.notes?.diagnosticText} {studentData.notes?.personal}</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-col justify-center items-center text-center">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2">Nota Global Classe</span>
+                                    <span className={`text-4xl font-black ${getGradeTextColor(totalAvg)}`}>{totalAvg}</span>
+                                </div>
+                            </div>
+
+                            {/* Estat de la Matèria Actual */}
+                            <div style={{pageBreakInside: 'avoid'}}>
+                                <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
+                                    <Icon name="microscope" className="text-indigo-500"/> Desenvolupament de {classData.name}
+                                </h3>
+                                <div className="grid grid-cols-2 gap-6 items-center">
+                                    <div>
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-gray-100 text-gray-600">
+                                                <tr>
+                                                    <th className="p-2 text-left">Competència</th>
+                                                    <th className="p-2 text-center w-16">Nota Final</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {labels.map(cName => {
+                                                    const fNum = compSummary[cName].finalNum;
+                                                    const grade = fNum > 0 ? getGradeFromNumeric(fNum) : '-';
+                                                    return (
+                                                        <tr key={cName}>
+                                                            <td className="p-2 font-medium text-gray-700">{cName}</td>
+                                                            <td className="p-2 text-center"><span className={`px-2 py-0.5 rounded font-bold text-xs shadow-sm border ${getGradeColor(grade)}`}>{grade}</span></td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="h-64 p-4">
+                                        <ChartComponent 
+                                            type="radar" 
+                                            data={{
+                                                labels: labels, 
+                                                datasets:[{label:'Assoliment Actual', data:radarData, borderColor:'#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.2)'}]
+                                            }} 
+                                            options={{scales:{r:{min:0, max:4, ticks: { display: false }}}, plugins:{legend:{display:false}}, animation:false}}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Altres Assignatures */}
+                            <div style={{pageBreakInside: 'avoid'}}>
+                                <div className="flex justify-between items-center border-b pb-2 mb-4">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <Icon name="layer-group" className="text-indigo-500"/> Altres Assignatures (Visió Global)
+                                    </h3>
+                                    <button data-html2canvas-ignore onClick={addSubject} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold transition"><Icon name="plus"/> Afegir Assignatura</button>
+                                </div>
+                                
+                                {subjects.length === 0 && <p className="text-sm text-gray-400 italic">No hi ha altres assignatures registrades.</p>}
+                                
+                                <div className="space-y-4">
+                                    {subjects.map(sub => (
+                                        <div key={sub.id} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative group/sub">
+                                            <button data-html2canvas-ignore onClick={() => removeSubject(sub.id)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 opacity-0 group-hover/sub:opacity-100 transition"><Icon name="trash"/></button>
+                                            
+                                            <input 
+                                                value={sub.name} 
+                                                onChange={(e) => updateSubjectName(sub.id, e.target.value)} 
+                                                className="font-bold text-gray-800 bg-transparent border border-transparent hover:border-gray-300 focus:border-indigo-500 rounded px-1 w-2/3 outline-none mb-3"
+                                            />
+                                            
+                                            <div className="space-y-2 pl-2 border-l-2 border-indigo-200">
+                                                {sub.competencies.map(comp => (
+                                                    <div key={comp.id} className="flex items-center gap-3 group/comp">
+                                                        <button data-html2canvas-ignore onClick={() => removeSubComp(sub.id, comp.id)} className="text-red-300 hover:text-red-500 opacity-0 group-hover/comp:opacity-100 transition"><Icon name="xmark"/></button>
+                                                        <input 
+                                                            value={comp.name} 
+                                                            onChange={(e) => updateSubComp(sub.id, comp.id, 'name', e.target.value)} 
+                                                            className="flex-1 text-sm bg-transparent border border-transparent hover:border-gray-300 focus:border-indigo-500 rounded px-1 outline-none text-gray-700"
+                                                            placeholder="Nom de la competència..."
+                                                        />
+                                                        <select 
+                                                            value={comp.grade} 
+                                                            onChange={(e) => updateSubComp(sub.id, comp.id, 'grade', e.target.value)}
+                                                            className={`w-14 text-center text-xs font-bold rounded outline-none p-1 border hover:border-gray-300 focus:border-indigo-500 appearance-none bg-transparent ${getGradeTextColor(comp.grade)}`}
+                                                        >
+                                                            <option value="" className="text-gray-400">-</option>
+                                                            <option value="A" className="text-green-600">A</option>
+                                                            <option value="B" className="text-blue-600">B</option>
+                                                            <option value="C" className="text-orange-600">C</option>
+                                                            <option value="D" className="text-red-600">D</option>
+                                                            <option value="NA" className="text-gray-800">NA</option>
+                                                        </select>
+                                                    </div>
+                                                ))}
+                                                <button data-html2canvas-ignore onClick={() => addSubComp(sub.id)} className="text-xs text-indigo-500 hover:text-indigo-700 font-bold mt-2"><Icon name="plus"/> Afegir competència</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Comentari Global Tutor */}
+                            <div style={{pageBreakInside: 'avoid'}}>
+                                <h3 className="text-lg font-bold text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
+                                    <Icon name="comment-dots" className="text-indigo-500"/> Comentari Genèric (Tutor/a)
+                                </h3>
+                                <textarea 
+                                    value={profileComment}
+                                    onChange={(e) => setProfileComment(e.target.value)}
+                                    className="w-full h-32 p-3 bg-indigo-50/30 border border-indigo-100 rounded-lg text-sm text-gray-700 outline-none hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition resize-none"
+                                    placeholder="Anotacions generals sobre el progrés competencial, actitud, objectius propers de l'alumne..."
+                                ></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
         // --- APP PRINCIPAL ---
 
         const App = () => {
             const [history, setHistory] = useState([]);
             const [historyIndex, setHistoryIndex] = useState(-1);
+            const [isReady, setIsReady] = useState(false);
             
             let classes = [];
             if (historyIndex >= 0 && historyIndex < history.length) {
@@ -1781,126 +1813,99 @@
             const [showHalfGroupsModal, setShowHalfGroupsModal] = useState(false);
             const [showSeatingChartsModal, setShowSeatingChartsModal] = useState(false);
             const [showStudentNotes, setShowStudentNotes] = useState(null); 
+            const [showStudentProfile, setShowStudentProfile] = useState(null); 
             const [showGlobalNotes, setShowGlobalNotes] = useState(false);
             const [showCopyTable, setShowCopyTable] = useState(false);
             const [showSemesterStats, setShowSemesterStats] = useState(false);
             const [showBulkImport, setShowBulkImport] = useState(false);
             const [showStudentEvoModal, setShowStudentEvoModal] = useState(null);
             const [editingIndicatorDesc, setEditingIndicatorDesc] = useState(null); 
-            const [showStudentProfile, setShowStudentProfile] = useState(null); // Nou Estat per Perfil Alumne
 
             const [visibleCompetencies, setVisibleCompetencies] = useState({});
             const [expandedComps, setExpandedComps] = useState({});
 
-            // 1. CARREGA I MIGRACIÓ DE DADES 
+            // 1. CARREGA I MIGRACIÓ DE DADES DES DEL NÚVOL (FIREBASE)
             useEffect(() => {
-                let initialData = [];
-                try { 
-                    const saved = localStorage.getItem('evalApp_data_v2'); 
-                    let parsed = [];
-                    if (saved) {
-                        parsed = JSON.parse(saved);
-                    }
-                    
-                    if (!Array.isArray(parsed)) {
-                        parsed = [];
-                    }
+                const initData = () => {
+                    if (!window.isDataLoaded) return;
+                    let parsed = window.loadedDades || [];
+                    let initialData = [];
 
-                    initialData = parsed.map(cls => {
-                        let newCls = {...cls};
-                        if (newCls.seatingChartMain === undefined) {
-                            newCls.seatingChartMain = "";
-                        }
-                        if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
-                            newCls.semesters = [
-                                { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
-                                { id: 'S2', name: '2n Semestre', isActive: false, competencies: [] },
-                                { id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() },
-                                { id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() }
-                            ];
-                        } else {
-                            let hasT1 = false;
-                            let hasT2 = false;
-                            newCls.semesters.forEach(s => {
-                                if (s.id === 'T1') hasT1 = true;
-                                if (s.id === 'T2') hasT2 = true;
-                            });
-
-                            if (!hasT1) newCls.semesters.push({ id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() });
-                            if (!hasT2) newCls.semesters.push({ id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() });
-                        }
-                        if (!newCls.students) {
-                            newCls.students = [];
-                        }
-                        if (!newCls.halfGroups) {
-                            newCls.halfGroups = [];
-                        }
-                        return newCls;
-                    });
-
-                } catch(e) { 
-                    console.error("Error loading data from localStorage", e);
-                    initialData = []; 
-                }
-                
-                if (initialData.length === 0) {
-                    setShowWizard(true);
-                }
-                setHistory([initialData]); 
-                setHistoryIndex(0);
-                if (initialData.length > 0) {
-                    setActiveClassId(initialData[0].id);
-                }
-            }, []);
-
-            // --- BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
-            useEffect(() => {
-                const handleUserInteractionForBackup = () => {
-                    const todayStr = window.getLocalYYYYMMDD ? window.getLocalYYYYMMDD(new Date()) : new Date().toISOString().split('T')[0];
-                    const lastDownload = localStorage.getItem('lastAvaluaproAutoBackupDate');
-                    
-                    if (lastDownload !== todayStr) {
-                        const currentDataStr = localStorage.getItem('evalApp_data_v2');
-                        if (currentDataStr && currentDataStr.length > 10 && currentDataStr !== '[]') {
-                            try {
-                                document.removeEventListener('click', handleUserInteractionForBackup);
-                                document.removeEventListener('keydown', handleUserInteractionForBackup);
-                                document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                                
-                                localStorage.setItem('lastAvaluaproAutoBackupDate', todayStr);
-                                
-                                if (window.createAvaluaproBackup) {
-                                    window.createAvaluaproBackup(true, 'Còpia automàtica diària', true);
-                                }
-                                console.log(`Backup automàtic diari processat i descarregat.`);
-                            } catch (err) {
-                                console.error("Error processant el backup diari:", err);
-                            }
-                        }
-                    }
-                };
-
-                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
-
-                return () => {
-                    document.removeEventListener('click', handleUserInteractionForBackup);
-                    document.removeEventListener('keydown', handleUserInteractionForBackup);
-                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                };
-            }, []);
-            // --------------------------------------------------------------
-
-            useEffect(() => { 
-                if (classes && classes.length > 0) {
                     try { 
-                        localStorage.setItem('evalApp_data_v2', JSON.stringify(classes)); 
+                        if (!Array.isArray(parsed)) {
+                            parsed = [];
+                        }
+
+                        initialData = parsed.map(cls => {
+                            let newCls = {...cls};
+                            if (newCls.seatingChartMain === undefined) {
+                                newCls.seatingChartMain = "";
+                            }
+                            if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
+                                newCls.semesters = [
+                                    { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
+                                    { id: 'S2', name: '2n Semestre', isActive: false, competencies: [] },
+                                    { id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() },
+                                    { id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() }
+                                ];
+                            } else {
+                                let hasT1 = false;
+                                let hasT2 = false;
+                                newCls.semesters.forEach(s => {
+                                    if (s.id === 'T1') hasT1 = true;
+                                    if (s.id === 'T2') hasT2 = true;
+                                });
+
+                                if (!hasT1) newCls.semesters.push({ id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() });
+                                if (!hasT2) newCls.semesters.push({ id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() });
+                            }
+                            if (!newCls.students) {
+                                newCls.students = [];
+                            }
+                            if (!newCls.halfGroups) {
+                                newCls.halfGroups = [];
+                            }
+                            return newCls;
+                        });
+
+                    } catch(e) { 
+                        console.error("Error loading data from Firebase", e);
+                        initialData = []; 
+                    }
+                    
+                    if (initialData.length === 0) {
+                        setShowWizard(true);
+                    } else {
+                        setShowWizard(false);
+                    }
+                    setHistory([initialData]); 
+                    setHistoryIndex(0);
+                    if (initialData.length > 0) {
+                        setActiveClassId(initialData[0].id);
+                    } else {
+                        setActiveClassId(null);
+                    }
+                    setIsReady(true);
+                };
+
+                window.addEventListener('dadesCarregades', initData);
+                if (window.isDataLoaded) {
+                    initData();
+                }
+
+                return () => window.removeEventListener('dadesCarregades', initData);
+            }, []);
+
+            // 2. DESAR DADES AL NÚVOL (FIREBASE)
+            useEffect(() => { 
+                if (isReady && classes) {
+                    try { 
+                        if(window.guardarDades) window.guardarDades(classes); 
                     } catch(e) {
-                        console.error("Failed to save to localStorage", e);
+                        console.error("Failed to save to Firebase", e);
                     }
                 }
-            }, [classes]);
+            }, [classes, isReady]);
 
             useEffect(() => { 
                 setActiveHalfGroupFilter(""); 
@@ -1924,41 +1929,9 @@
             
             const resetAllData = () => { 
                 if(confirm("ATENCIÓ: Esborraràs TOTES les dades i reiniciaràs l'aplicació.\nEstàs segur?")) { 
-                    try { localStorage.removeItem('evalApp_data_v2'); } catch(e) {}
+                    try { if(window.guardarDades) window.guardarDades([]); } catch(e) {}
                     window.location.reload(); 
                 } 
-            };
-
-            const handleDownloadManualBackup = () => {
-                const data = localStorage.getItem('evalApp_data_v2');
-                if (!data || data === '[]') return alert('No hi ha dades per descarregar.');
-                const dateStr = window.getLocalYYYYMMDD ? window.getLocalYYYYMMDD(new Date()) : new Date().toISOString().split('T')[0];
-                window.downloadBackupJSON(data, `Avaluapro_${dateStr}_Manual.json`);
-            };
-
-            const handleLoadManualBackup = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                if (!confirm("Atenció: carregar un fitxer sobreescriurà TOTES les dades actuals per les del fitxer. N'estàs segur?")) {
-                    e.target.value = null; // Reset
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const json = JSON.parse(event.target.result);
-                        if (Array.isArray(json)) {
-                            localStorage.setItem('evalApp_data_v2', event.target.result);
-                            alert('Dades carregades correctament! L\'aplicació es reiniciarà.');
-                            window.location.reload();
-                        } else {
-                            alert('El format del fitxer no és vàlid per Avaluapro.');
-                        }
-                    } catch (err) {
-                        alert('Error en llegir el fitxer JSON.');
-                    }
-                };
-                reader.readAsText(file);
             };
 
             let currentClass = null;
@@ -1990,9 +1963,6 @@
             const updateStudentNotes = (sid, notes) => { 
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, notes: notes } : s) } : c)); 
             };
-            const updateStudentProfile = (sid, profileData) => {
-                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, profileSubjects: profileData.profileSubjects, profileComment: profileData.profileComment } : s) } : c));
-            };
             const updateStudentHalfGroup = (sid, hgId) => {
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, halfGroup: hgId } : s) } : c));
             };
@@ -2016,21 +1986,6 @@
             };
             const updateMark = (sid, iid, val) => {
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, marks: { ...(s.marks ? s.marks : {}), [iid]: val } } : s) } : c));
-            };
-            const updateOverride = (sid, targetId, val) => {
-                updateClasses(classes.map(c => c.id === activeClassId ? {
-                    ...c,
-                    students: c.students.map(s => {
-                        if (s.id !== sid) return s;
-                        const newOverrides = { ...(s.overrides || {}) };
-                        if (val === "") {
-                            delete newOverrides[targetId];
-                        } else {
-                            newOverrides[targetId] = val;
-                        }
-                        return { ...s, overrides: newOverrides };
-                    })
-                } : c));
             };
             
             const renameItem = (type, itemId, parentId, grandParentId) => {
@@ -2281,19 +2236,27 @@
                     studentsToExport.forEach(s => { 
                         const r = [s.name]; 
                         visibleCompsList.forEach(c => { 
+                            let cm = []; 
                             if(c.criteria) {
                                 c.criteria.forEach(k => { 
+                                    let km = []; 
                                     if(k.indicators) {
                                         k.indicators.forEach(i => { 
                                             const v = (s.marks && s.marks[i.id]) ? s.marks[i.id] : ""; 
                                             r.push(v); 
+                                            if(v) km.push(v); 
                                         }); 
                                     }
-                                    const g = getStudentCritGrade(s, k); 
-                                    r.push(g || ""); 
+                                    const autoCg = calculateGrade(km);
+                                    const overCg = s.marks && s.marks[`override_${k.id}`];
+                                    const g = overCg || autoCg;
+                                    r.push(g); 
+                                    if(g) cm.push(g); 
                                 }); 
                             }
-                            r.push(getStudentCompGrade(s, c) || ""); 
+                            const autoCompG = calculateGrade(cm);
+                            const overCompG = s.marks && s.marks[`override_${c.id}`];
+                            r.push(overCompG || autoCompG); 
                         }); 
                         d.push(r); 
                     }); 
@@ -2301,6 +2264,40 @@
                 const wb = window.XLSX.utils.book_new(); 
                 window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(d), currentClass.name.substring(0,31)); 
                 window.XLSX.writeFile(wb, `avaluacio_${currentClass.name}.xlsx`); 
+            };
+
+            const handleExportJSON = () => {
+                const dataStr = JSON.stringify(classes);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = `avaluapro_backup_${new Date().toISOString().slice(0,10)}.json`;
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+            };
+
+            const handleImportJSON = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!confirm("Atenció: En carregar aquest arxiu se sobreescriurà l'estat actual i es guardarà al núvol. Estàs segur?")) {
+                    e.target.value = null;
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const parsed = JSON.parse(ev.target.result);
+                        if (Array.isArray(parsed)) {
+                            window.inicialitzarDades(parsed);
+                        } else {
+                            alert("L'arxiu no té un format vàlid per a AvaluaPro.");
+                        }
+                    } catch (err) {
+                        alert("Error llegint l'arxiu JSON.");
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = null; // reset input
             };
 
             const renderGlobalDashboard = () => { 
@@ -2351,8 +2348,16 @@
                                     let studentsArray = currentClass.students ? currentClass.students : [];
                                     
                                     studentsArray.forEach(s => {
-                                        const g = getStudentCritGrade(s, crit); 
-                                        if(g && g !== 'NA' && g !== '-') { 
+                                        let marks = []; 
+                                        if(crit.indicators) {
+                                            crit.indicators.forEach(i => { 
+                                                if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); 
+                                            });
+                                        }
+                                        const autoCg = calculateGrade(marks);
+                                        const overCg = s.marks && s.marks[`override_${crit.id}`];
+                                        const g = overCg || autoCg;
+                                        if(g && g !== 'NA') { 
                                             cStats.counts[g]++;
                                         }
                                     });
@@ -2376,8 +2381,27 @@
 
                             if (sem.competencies) {
                                 sem.competencies.forEach(comp => {
-                                    const finalCompGrade = getStudentCompGrade(s, comp);
-                                    if(finalCompGrade && finalCompGrade !== '-') { 
+                                    let compMarks = []; 
+                                    if(comp.criteria) {
+                                        comp.criteria.forEach(c => {
+                                            let critMarks = [];
+                                            if(c.indicators) {
+                                                c.indicators.forEach(i => { 
+                                                    if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); 
+                                                }); 
+                                            }
+                                            const autoCg = calculateGrade(critMarks);
+                                            const overCg = s.marks && s.marks[`override_${c.id}`];
+                                            const cg = overCg || autoCg;
+                                            if (cg) compMarks.push(cg);
+                                        });
+                                    }
+                                    
+                                    const autoCompGrade = calculateGrade(compMarks);
+                                    const overCompGrade = s.marks && s.marks[`override_${comp.id}`];
+                                    const finalCompGrade = overCompGrade || autoCompGrade;
+                                    
+                                    if(finalCompGrade) { 
                                         const n = getNumericFromGrade(finalCompGrade); 
                                         allG.push(n); 
                                         semG.push(n); 
@@ -2407,7 +2431,7 @@
                         studentStats[s.id].finalAvg = finalAvg;
 
                         if (finalAvg >= 2.5) assolit++;
-                        else if (finalAvg >= 1.5) proces++;
+                        else if (finalAvg > 1.5) proces++;
                         else if (finalAvg > 0) noAssolit++;
                     });
 
@@ -2418,8 +2442,25 @@
                         if (sem.competencies) {
                             sem.competencies.forEach(comp => {
                                 studentsArray.forEach(s => {
-                                    const fg = getStudentCompGrade(s, comp);
-                                    if (fg && fg !== '-') {
+                                    let compMarks = []; 
+                                    if(comp.criteria) {
+                                        comp.criteria.forEach(c => {
+                                            let critMarks = [];
+                                            if(c.indicators) {
+                                                c.indicators.forEach(i => { 
+                                                    if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); 
+                                                }); 
+                                            }
+                                            const autoCg = calculateGrade(critMarks);
+                                            const overCg = s.marks && s.marks[`override_${c.id}`];
+                                            const cg = overCg || autoCg;
+                                            if (cg) compMarks.push(cg);
+                                        });
+                                    }
+                                    const autoFg = calculateGrade(compMarks);
+                                    const overFg = s.marks && s.marks[`override_${comp.id}`];
+                                    const fg = overFg || autoFg;
+                                    if (fg) {
                                         semSum += getNumericFromGrade(fg);
                                         semCount++;
                                     }
@@ -2482,7 +2523,7 @@
                         iecg: { range: range, level: iecgLevel }, 
                         iecgExplanation: iecgExplanation,
                         progressMap: progressMap, 
-                        achievement: { assolit: proces, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit },
+                        achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit },
                         allCompNames: compNamesSet
                     };
 
@@ -2721,12 +2762,12 @@
 
                 return (
                     <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 flex flex-col h-full">
-                        <div className="p-3 bg-gray-50 border-b flex flex-wrap justify-between items-center shrink-0 z-50 relative gap-2">
+                        <div className="p-3 bg-gray-50 border-b flex flex-wrap justify-between items-center shrink-0 z-[60] relative gap-2">
                             <div className="flex items-center space-x-2">
                                 <button onClick={() => setIsEditingStructure(!isEditingStructure)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 ${isEditingStructure ? 'bg-orange-100 text-orange-700 shadow-inner' : 'bg-white text-gray-600 border hover:bg-gray-50 shadow-sm'}`}><Icon name={isEditingStructure ? "lock" : "pen-to-square"} />{isEditingStructure ? "Bloquejar Taula" : "Editar Taula"}</button>
                                 <div className="relative group">
                                     <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar</button>
-                                    <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-[100] hidden group-hover:block w-56 text-sm">
+                                    <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-50 hidden group-hover:block w-56 text-sm">
                                         {activeCompetencies.map(c => (
                                             <div key={c.id} className="p-1.5 hover:bg-gray-50 rounded transition">
                                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -2853,7 +2894,7 @@
                                                                 )}
                                                             </th>
                                                         ))}
-                                                        <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner" title="Càlcul / Sobreescriptura Manual">CA</th>
+                                                        <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner">CA</th>
                                                     </React.Fragment>
                                                 ))}
                                                 <th className="p-2 border-b border-r bg-gray-200 w-14 text-center min-w-[3.5rem] shadow-inner"></th>
@@ -2929,7 +2970,7 @@
                                                                                     <select 
                                                                                         value={val} 
                                                                                         onChange={(e) => updateMark(student.id, ind.id, e.target.value)} 
-                                                                                        className={`w-full h-11 px-1 text-center text-sm font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500 bg-transparent transition-colors ${getGradeTextColor(val)} hover:bg-gray-50`} 
+                                                                                        className={`w-full h-11 px-1 text-center text-sm font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 bg-transparent transition-colors ${getGradeTextColor(val)} hover:bg-gray-50`} 
                                                                                         style={{textAlignLast:'center'}}
                                                                                     >
                                                                                         <option value="" className="text-gray-300 font-normal">-</option>
@@ -2942,45 +2983,62 @@
                                                                                 </td>
                                                                             );
                                                                         })}
-                                                                        <td className="p-1 border-r border-b text-center bg-gray-50 w-14 min-w-[3.5rem] shadow-inner">
-                                                                            <select 
-                                                                                value={(student.overrides && student.overrides[crit.id]) ? student.overrides[crit.id] : (calculateGrade(critMarks) || "")} 
-                                                                                onChange={(e) => updateOverride(student.id, crit.id, e.target.value)} 
-                                                                                className={`w-8 h-8 mx-auto block rounded-full text-xs font-bold shadow-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500 ${getGradeColor((student.overrides && student.overrides[crit.id]) ? student.overrides[crit.id] : calculateGrade(critMarks))}`}
-                                                                                style={{textAlignLast:'center', padding: 0}}
-                                                                            >
-                                                                                <option value={calculateGrade(critMarks) || ""} className="hidden">{calculateGrade(critMarks) || "-"}</option>
-                                                                                <option value="" className="text-gray-500 bg-white">Auto ({calculateGrade(critMarks) || "-"})</option>
-                                                                                <option value="A" className="text-green-600 bg-green-50">A</option>
-                                                                                <option value="B" className="text-blue-600 bg-blue-50">B</option>
-                                                                                <option value="C" className="text-orange-600 bg-orange-50">C</option>
-                                                                                <option value="D" className="text-red-600 bg-red-50">D</option>
-                                                                                <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
-                                                                            </select>
-                                                                        </td>
+                                                                        
                                                                         {(() => { 
-                                                                            const cg = getStudentCritGrade(student, crit);
-                                                                            if(cg) compMarks.push(cg); 
+                                                                            const autoCg = calculateGrade(critMarks);
+                                                                            const overCg = student.marks && student.marks[`override_${crit.id}`];
+                                                                            const finalCg = overCg || autoCg;
+                                                                            if(finalCg) compMarks.push(finalCg); 
+                                                                            
+                                                                            return (
+                                                                                <td className="p-1 border-r border-b text-center bg-gray-50 w-14 min-w-[3.5rem] shadow-inner">
+                                                                                    <select
+                                                                                        value={overCg || ""}
+                                                                                        onChange={(e) => updateMark(student.id, `override_${crit.id}`, e.target.value)}
+                                                                                        className={`w-10 h-8 mx-auto appearance-none block text-center rounded-full text-xs font-bold shadow-sm outline-none cursor-pointer hover:ring-2 focus:ring-2 ring-brand-400 ${getGradeColor(finalCg)}`}
+                                                                                        style={{textAlignLast:'center'}}
+                                                                                        title="Pots sobreescriure la nota manualment"
+                                                                                    >
+                                                                                        <option value="" className="text-gray-500 bg-white">Auto ({autoCg || '-'})</option>
+                                                                                        <option value="A" className="text-green-600 bg-green-50">A</option>
+                                                                                        <option value="B" className="text-blue-600 bg-blue-50">B</option>
+                                                                                        <option value="C" className="text-orange-600 bg-orange-50">C</option>
+                                                                                        <option value="D" className="text-red-600 bg-red-50">D</option>
+                                                                                        <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
+                                                                                    </select>
+                                                                                </td>
+                                                                            );
                                                                         })()}
+
                                                                     </React.Fragment>
                                                                 );
                                                             })}
-                                                            <td className="p-1 border-r border-b text-center bg-gray-100 font-bold border-l-2 border-l-gray-300 w-14 min-w-[3.5rem] shadow-inner">
-                                                                <select 
-                                                                    value={(student.overrides && student.overrides[comp.id]) ? student.overrides[comp.id] : (calculateGrade(compMarks) || "")} 
-                                                                    onChange={(e) => updateOverride(student.id, comp.id, e.target.value)} 
-                                                                    className={`w-10 h-10 mx-auto block rounded-lg shadow-md text-sm font-black appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500 ${getGradeColor((student.overrides && student.overrides[comp.id]) ? student.overrides[comp.id] : calculateGrade(compMarks)).replace('bg-', 'bg-gradient-to-br from-white to-')}`}
-                                                                    style={{textAlignLast:'center', padding: 0}}
-                                                                >
-                                                                    <option value={calculateGrade(compMarks) || ""} className="hidden">{calculateGrade(compMarks) || "-"}</option>
-                                                                    <option value="" className="text-gray-500 bg-white">Auto ({calculateGrade(compMarks) || "-"})</option>
-                                                                    <option value="A" className="text-green-600 bg-green-50">A</option>
-                                                                    <option value="B" className="text-blue-600 bg-blue-50">B</option>
-                                                                    <option value="C" className="text-orange-600 bg-orange-50">C</option>
-                                                                    <option value="D" className="text-red-600 bg-red-50">D</option>
-                                                                    <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
-                                                                </select>
-                                                            </td>
+                                                            
+                                                            {(() => {
+                                                                const autoCompG = calculateGrade(compMarks);
+                                                                const overCompG = student.marks && student.marks[`override_${comp.id}`];
+                                                                const finalCompG = overCompG || autoCompG;
+                                                                
+                                                                return (
+                                                                    <td className="p-1 border-r border-b text-center bg-gray-100 font-bold border-l-2 border-l-gray-300 w-14 min-w-[3.5rem] shadow-inner">
+                                                                        <select
+                                                                            value={overCompG || ""}
+                                                                            onChange={(e) => updateMark(student.id, `override_${comp.id}`, e.target.value)}
+                                                                            className={`w-11 h-10 mx-auto appearance-none block rounded-lg shadow-md text-sm font-black outline-none cursor-pointer hover:ring-2 focus:ring-2 ring-brand-400 ${getGradeColor(finalCompG).replace('bg-', 'bg-gradient-to-br from-white to-')}`}
+                                                                            style={{textAlignLast:'center'}}
+                                                                            title="Pots sobreescriure la nota manualment"
+                                                                        >
+                                                                            <option value="" className="text-gray-500 bg-white">Auto ({autoCompG || '-'})</option>
+                                                                            <option value="A" className="text-green-600 bg-green-50">A</option>
+                                                                            <option value="B" className="text-blue-600 bg-blue-50">B</option>
+                                                                            <option value="C" className="text-orange-600 bg-orange-50">C</option>
+                                                                            <option value="D" className="text-red-600 bg-red-50">D</option>
+                                                                            <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
+                                                                        </select>
+                                                                    </td>
+                                                                )
+                                                            })()}
+                                                            
                                                         </React.Fragment>
                                                     );
                                                 })}
@@ -3007,13 +3065,13 @@
                         <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
                         <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
                         <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
-                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} onSave={updateStudentNotes} onOpenProfile={(s) => setShowStudentProfile(s)} />
-                        <StudentProfileModal isOpen={!!showStudentProfile} onClose={() => setShowStudentProfile(null)} student={showStudentProfile} classData={currentClass} onSave={updateStudentProfile} />
+                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} onSave={updateStudentNotes} onOpenProfile={setShowStudentProfile} />
                         <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} />
                         <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
                         <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
                         {showBulkImport && <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass && currentClass.students ? currentClass.students : []} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />}
                         <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
+                        <StudentProfileModal isOpen={!!showStudentProfile} onClose={() => setShowStudentProfile(null)} studentData={showStudentProfile} classData={currentClass} onSaveNotes={updateStudentNotes} />
 
                         {/* SIDEBAR */}
                         <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
@@ -3038,16 +3096,16 @@
                                 })}
                                 <button onClick={() => setShowNewClassModal(true)} className="w-full mt-4 border-2 border-dashed border-slate-700 text-slate-400 p-3 rounded-xl hover:border-brand-500 hover:text-brand-500 transition flex items-center justify-center text-sm font-bold"><Icon name="plus" className="mr-2"/> Nova Classe</button>
                             </div>
-                             <div className="p-4 border-t border-slate-800 bg-slate-950 space-y-2">
-                                 <button onClick={handleExportExcel} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
+                             <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-2">
+                                 <button onClick={handleExportExcel} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-2.5 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
                                      <Icon name="file-excel" className="mr-2 text-lg"/> Exportar a Excel
                                  </button>
-                                 <button onClick={handleDownloadManualBackup} className="w-full bg-blue-700 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
-                                     <Icon name="download" className="mr-2 text-lg"/> Descarregar Backup
+                                 <button onClick={handleExportJSON} className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold py-2.5 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
+                                     <Icon name="download" className="mr-2 text-lg"/> Backup JSON
                                  </button>
-                                 <label className="w-full bg-purple-700 hover:bg-purple-600 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center cursor-pointer">
-                                     <Icon name="upload" className="mr-2 text-lg"/> Carregar Backup
-                                     <input type="file" accept=".json" className="hidden" onChange={handleLoadManualBackup} />
+                                 <label className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold py-2.5 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center cursor-pointer">
+                                     <Icon name="upload" className="mr-2 text-lg"/> Carregar JSON
+                                     <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
                                  </label>
                             </div>
                         </aside>
