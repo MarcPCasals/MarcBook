@@ -244,6 +244,7 @@
             const [data, setData] = useState(() => migrateData(initialData));
             const [user, setUser] = useState(null);
             const hasLoadedRef = useRef(false);
+            const fileInputRef = useRef(null);
 
             const [activeCourseId, setActiveCourseId] = useState(data[0]?.id);
             const [activeUnitId, setActiveUnitId] = useState(data[0]?.units[0]?.id);
@@ -947,6 +948,36 @@
                 showToast("Dades importades a la taula correctament.");
             };
 
+            const handleImportJSON = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        let coursesToImport = importedData.courses || importedData;
+                        if (Array.isArray(coursesToImport)) {
+                            const migrated = migrateData(coursesToImport);
+                            setData(migrated);
+                            if (migrated.length > 0) {
+                                setActiveCourseId(migrated[0].id);
+                                if (migrated[0].units && migrated[0].units.length > 0) {
+                                    setActiveUnitId(migrated[0].units[0].id);
+                                }
+                            }
+                            showToast("Dades JSON carregades correctament.");
+                        } else {
+                            alert("Format de fitxer invàlid. Assegura't que conté un array de cursos.");
+                        }
+                    } catch (error) {
+                        alert("Error en llegir el fitxer JSON.");
+                        console.error(error);
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = null;
+            };
+
             // Pre-càlcul absolutament robust de tots els números de sessió per la vista actual
             const sessionNumbers = {};
             if (activeUnit) {
@@ -1005,6 +1036,20 @@
                                          <button onClick={undo} disabled={historyIndex <= 0} className="p-1 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 rounded hover:bg-white transition-all" title="Desfer"> <IconUndo /> </button>
                                          <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-1 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 rounded hover:bg-white transition-all" title="Refer"> <IconRedo /> </button>
                                     </div>
+
+                                    <input 
+                                        type="file" 
+                                        accept=".json" 
+                                        style={{ display: 'none' }} 
+                                        ref={fileInputRef} 
+                                        onChange={handleImportJSON} 
+                                    />
+                                    <button 
+                                        onClick={() => fileInputRef.current && fileInputRef.current.click()} 
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Carregar JSON"
+                                    >
+                                        <IconUpload /> <span className="ml-2 hidden lg:inline">Carregar JSON</span>
+                                    </button>
 
                                     <button 
                                         onClick={() => {
