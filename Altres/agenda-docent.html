@@ -128,7 +128,7 @@
     <!-- FIREBASE -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-      import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+      import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
       import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
       import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 
@@ -154,6 +154,7 @@
       window.setDoc = setDoc;
       window.getDoc = getDoc;
       window.doc = doc;
+      window.deleteDoc = deleteDoc;
       window.currentUser = null;
 
       // FUNCIONS D'AUTENTICACIÓ
@@ -746,8 +747,6 @@
         const DashboardScreen = ({ config, radar, setRadar, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders, onSaveReminder, weeksData }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
-            const [showInfoModal, setShowInfoModal] = useState(false);
-            const [showImportModal, setShowImportModal] = useState(false);
             const [showBackupModal, setShowBackupModal] = useState(false);
             const [showGlobalRemindersModal, setShowGlobalRemindersModal] = useState(false);
             const [showRadarHistory, setShowRadarHistory] = useState(false);
@@ -830,8 +829,7 @@
                 return now >= start && now <= end;
             };
 
-            const handleImportClick = () => setShowImportModal(true);
-            const confirmImport = () => { setShowImportModal(false); if(fileInputRef.current) fileInputRef.current.click(); };
+            const handleImportClick = () => { if(fileInputRef.current) fileInputRef.current.click(); };
 
             const handleSaveLink = () => {
                 onSaveConfig({ ...config, googleSheetUrl: tempLink });
@@ -961,7 +959,6 @@
                              <button onClick={() => setShowGlobalRemindersModal(true)} className="p-2 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg flex items-center gap-1 transition-colors mr-2" title="Tots els Recordatoris"><Icons.Bell size={18}/></button>
                              <button onClick={() => setShowBackupModal(true)} className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg flex items-center gap-1 transition-colors mr-2" title="Protecció de Dades"><Icons.Shield size={18}/></button>
                              <button onClick={() => setShowResetModal(true)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 transition-colors mr-4" title="Reiniciar"><Icons.Trash size={18}/></button>
-                             <button onClick={() => setShowInfoModal(true)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium"><Icons.FileJson /> Guardar</button>
                              <button onClick={handleImportClick} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium cursor-pointer"><Icons.ArrowRight /> Carregar</button>
                              <input type="file" className="hidden" ref={fileInputRef} onChange={onImport} accept=".json"/>
                             <button onClick={goToConfig} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><Icons.Settings /></button>
@@ -1223,41 +1220,22 @@
                     )}
 
                     {showResetModal && ReactDOM.createPortal(
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
-                            <div className="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl border-t-4 border-red-500">
-                                <h3 className="text-lg font-bold text-red-600 mb-2">Atenció! Zona de perill</h3>
-                                <p className="text-gray-600 mb-6 text-sm">Segur que vols eliminar tota la informació? Aquest botó està pensat per reiniciar l'agenda per al proper curs.</p>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setShowResetModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
-                                    <button onClick={() => { onReset(); setShowResetModal(false); }} className="px-4 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700">Sí, eliminar tot</button>
-                                </div>
-                            </div>
-                        </div>, document.body
-                    )}
-
-                    {showInfoModal && ReactDOM.createPortal(
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
-                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
-                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.FileJson /> Còpia de Seguretat</h3>
-                                <p className="text-gray-600 mb-4 text-sm">Aquest botó descarregarà un arxiu <b>.json</b> al teu ordinador.</p>
-                                <ul className="list-disc list-inside text-xs text-gray-500 mb-6 space-y-1"><li>L'aplicació ja guarda automàticament les dades al navegador.</li><li>Fes servir aquesta opció per moure les dades a un altre dispositiu.</li><li>O per guardar una còpia de seguretat externa.</li></ul>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setShowInfoModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
-                                    <button onClick={() => { setShowInfoModal(false); onExport(); }} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Entesos, descarregar</button>
-                                </div>
-                            </div>
-                        </div>, document.body
-                    )}
-
-                    {showImportModal && ReactDOM.createPortal(
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
-                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-green-500">
-                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.ArrowRight /> Carregar Còpia</h3>
-                                <p className="text-gray-600 mb-4 text-sm">Aquesta opció serveix per <b>restaurar</b> una còpia de seguretat que tinguis guardada al teu ordinador (arxiu .json).</p>
-                                <p className="text-gray-600 text-sm mb-6">Això substituirà les dades actuals per les de l'arxiu.</p>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
-                                    <button onClick={confirmImport} className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700">Seleccionar Arxiu</button>
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in p-4">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-red-500">
+                                <h3 className="text-xl font-bold text-red-600 mb-2 flex items-center gap-2"><Icons.AlertTriangle /> Eliminar Agenda</h3>
+                                <p className="text-gray-700 mb-6 text-sm font-medium">Estàs a punt d'eliminar totes les dades de l'agenda docent. Aquesta acció no es pot desfer.</p>
+                                
+                                <div className="flex flex-col gap-3">
+                                    <button onClick={() => { onExport(); }} className="w-full px-4 py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold hover:bg-blue-100 flex items-center justify-center gap-2 transition-colors shadow-sm">
+                                        <Icons.Download size={18} /> Descarregar backup
+                                    </button>
+                                    
+                                    <div className="flex justify-end gap-2 mt-3 pt-4 border-t border-gray-100">
+                                        <button onClick={() => setShowResetModal(false)} className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel·lar</button>
+                                        <button onClick={() => { onReset(); setShowResetModal(false); }} className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 flex items-center gap-2 transition-colors shadow-sm">
+                                            <Icons.Trash size={16} /> Eliminar tot
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>, document.body
@@ -1838,7 +1816,7 @@
         };
 
         const GlobalRemindersModal = ({ reminders, onSaveReminder, onClose }) => {
-            const [newDate, setNewDate] = useState("");
+            const [newDate, useState] = React.useState("");
             const [newText, setNewText] = useState("");
             const [newTime, setNewTime] = useState("");
 
@@ -3442,15 +3420,18 @@
                             
                             <div className="flex-1 space-y-2">
                                 {classMaterials.length === 0 ? (
-                                    <p className="text-center text-xs text-gray-400 italic mt-4">No hi ha recursos fixats.</p>
+                                    <p className="text-center text-xs text-gray-400 italic mt-4">No hi ha recursos fixats encara.</p>
                                 ) : (
                                     classMaterials.map(m => (
-                                        <div key={m.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-1 relative group hover:border-blue-300 transition-colors">
-                                            <a href={m.url} target="_blank" className="text-sm font-semibold text-blue-700 hover:text-blue-900 leading-tight pr-6 truncate" title={m.title || m.url}>{m.title || "Enllaç"}</a>
-                                            <div className="flex items-center justify-between mt-1">
-                                                <button onClick={() => handleCopyMaterial(m.url)} className="text-[10px] bg-gray-100 text-gray-600 hover:bg-gray-200 px-2 py-0.5 rounded font-medium flex items-center gap-1"><Icons.Copy size={10}/> Copiar</button>
-                                                <button onClick={() => removeMaterial(m.id)} className="text-gray-300 hover:text-red-500 transition-colors"><Icons.Trash size={12}/></button>
+                                        <div key={m.id} className="bg-white p-2 rounded border border-gray-200 shadow-sm flex flex-col gap-1 relative group">
+                                            <div className="flex justify-between items-start">
+                                                <a href={m.url} target="_blank" className="text-sm font-bold text-blue-700 hover:underline pr-6 leading-tight block">{m.title}</a>
+                                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => handleCopyMaterial(m.url)} className="text-gray-400 hover:text-blue-600 bg-white rounded shadow-sm p-0.5"><Icons.Copy size={12}/></button>
+                                                    <button onClick={() => removeMaterial(m.id)} className="text-gray-400 hover:text-red-600 bg-white rounded shadow-sm p-0.5"><Icons.Trash size={12}/></button>
+                                                </div>
                                             </div>
+                                            <span className="text-[10px] text-gray-400 truncate">{m.url}</span>
                                         </div>
                                     ))
                                 )}
@@ -3462,137 +3443,184 @@
         };
 
         const App = () => {
-            const [isReady, setIsReady] = useState(false);
             const [view, setView] = useState('dashboard');
-            const [currentWeekId, setCurrentWeekId] = useState(() => {
-                const now = new Date();
-                const year = now.getFullYear();
-                const schoolYearStart = new Date(now.getMonth() < 7 ? year - 1 : year, 8, 1);
-                const day = schoolYearStart.getDay();
-                const diff = schoolYearStart.getDate() - day + (day === 0 ? -6 : 1);
-                schoolYearStart.setDate(diff);
-                const msInWeek = 7 * 24 * 60 * 60 * 1000;
-                const weeksSinceStart = Math.floor((now - schoolYearStart) / msInWeek);
-                const currentWeekStart = new Date(schoolYearStart.getTime() + weeksSinceStart * msInWeek);
-                return window.getLocalYYYYMMDD(currentWeekStart);
-            });
+            const [currentWeekId, setCurrentWeekId] = useState(null);
             const [selectedClassId, setSelectedClassId] = useState(null);
+            const [config, setConfig] = useState(() => {
+                const saved = localStorage.getItem('agenda_config');
+                return saved ? JSON.parse(saved) : { 
+                    teacherName: "", 
+                    schoolYear: new Date().getFullYear(), 
+                    theme: 'orange', 
+                    classes: [], 
+                    schedule: {}, 
+                    durations: {},
+                    utDates: [],
+                    classMaterials: {} 
+                };
+            });
+            const [radar, setRadar] = useState(() => {
+                const saved = localStorage.getItem('agenda_radar');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [weeksData, setWeeksData] = useState(() => {
+                const saved = localStorage.getItem('agenda_weeks');
+                return saved ? JSON.parse(saved) : {};
+            });
+            const [holidayWeeks, setHolidayWeeks] = useState(() => {
+                const saved = localStorage.getItem('agenda_holidays');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [reminders, setReminders] = useState(() => {
+                const saved = localStorage.getItem('agenda_reminders');
+                return saved ? JSON.parse(saved) : {};
+            });
 
-            // DATA STATES - Iniciat buit. S'emplenarà a l'useEffect quan Firestore estigui llest
-            const [config, setConfig] = useState({ classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" });
-            const [weeksData, setWeeksData] = useState({});
-            const [radar, setRadar] = useState([]);
-            const [holidayWeeks, setHolidayWeeks] = useState([]);
-            const [reminders, setReminders] = useState({});
-
-            // 1. Inicialització des del núvol al carregar
+            // Firebase Cloud Sync Effect
             useEffect(() => {
-                const initData = () => {
+                const handleFirebaseReady = async () => {
                     if (window.cloudAgendaData) {
                         const d = window.cloudAgendaData;
-                        setConfig(d.config || { classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" });
-                        setWeeksData(d.weeksData || {});
-                        setRadar(d.radar || []);
-                        setHolidayWeeks(d.holidayWeeks || []);
-                        setReminders(d.reminders || {});
-                        setView('dashboard');
-                    } else {
-                         // Si no hi ha dades al núvol per aquest usuari, forcem la pantalla de config inicial
-                         setView('config');
-                    }
-                    
-                    setIsReady(true);
-                    
-                    // Amagar la pantalla de càrrega
-                    const loader = document.getElementById('app-loader');
-                    if (loader) {
-                        loader.style.opacity = '0';
-                        setTimeout(() => loader.style.display = 'none', 500);
+                        if (d.config) setConfig(d.config);
+                        if (d.radar) setRadar(d.radar);
+                        if (d.weeksData) setWeeksData(d.weeksData);
+                        if (d.holidayWeeks) setHolidayWeeks(d.holidayWeeks);
+                        if (d.reminders) setReminders(d.reminders);
+                        window.currentAgendaData = JSON.stringify(d); // Per al backup
+                        
+                        // AUTO-BACKUP DIARI
+                        const lastAutoBackup = await window.getAutoBackupDate();
+                        const todayStr = window.getLocalYYYYMMDD(new Date());
+                        if (lastAutoBackup !== todayStr) {
+                             window.currentAgendaData = JSON.stringify(d);
+                             await window.createAgendaBackup(true, 'Còpia automàtica diària');
+                             await window.setAutoBackupDate(todayStr);
+                        }
                     }
                 };
-
-                // Esperem a que Firebase estigui llest i hagi comprovat l'usuari
-                if (window.firebaseInitialized) {
-                    initData();
-                } else {
-                    window.addEventListener('firebaseReady', initData);
-                }
-                
-                return () => window.removeEventListener('firebaseReady', initData);
+                window.addEventListener('firebaseReady', handleFirebaseReady);
+                return () => window.removeEventListener('firebaseReady', handleFirebaseReady);
             }, []);
 
-            // 2. Guardat automàtic al núvol (amb debounce d'1 segon per no saturar Firestore)
+            // Save to Local and Cloud
             useEffect(() => {
-                if (!isReady) return;
+                localStorage.setItem('agenda_config', JSON.stringify(config));
+                localStorage.setItem('agenda_radar', JSON.stringify(radar));
+                localStorage.setItem('agenda_weeks', JSON.stringify(weeksData));
+                localStorage.setItem('agenda_holidays', JSON.stringify(holidayWeeks));
+                localStorage.setItem('agenda_reminders', JSON.stringify(reminders));
                 
-                const timer = setTimeout(() => {
-                    const dataObj = { config, weeksData, radar, holidayWeeks, reminders };
-                    window.currentAgendaData = JSON.stringify(dataObj);
-                    
-                    // Guardar al núvol (funcions definides al script de dalt)
-                    window.saveAgendaToCloud(window.currentAgendaData);
-                    
-                }, 1000); // Guardar un segon després de deixar de teclejar
+                const allDataObj = { config, radar, weeksData, holidayWeeks, reminders };
+                const allDataStr = JSON.stringify(allDataObj);
+                window.currentAgendaData = allDataStr;
                 
-                return () => clearTimeout(timer);
-            }, [config, weeksData, radar, holidayWeeks, reminders, isReady]);
+                if (window.firebaseInitialized && window.currentUser) {
+                    window.saveAgendaToCloud(allDataStr);
+                }
+            }, [config, radar, weeksData, holidayWeeks, reminders]);
 
-            // Handlers principals
-            const handleUpdateWeekData = (wId, data) => setWeeksData(prev => ({ ...prev, [wId]: data }));
+            useEffect(() => {
+                document.body.style.backgroundColor = APP_THEMES[config.theme || 'orange'].bg;
+                
+                const theme = APP_THEMES[config.theme || 'orange'];
+                const styleEl = document.getElementById('dynamic-scrollbar-style');
+                if (styleEl) styleEl.remove();
+                
+                const newStyle = document.createElement('style');
+                newStyle.id = 'dynamic-scrollbar-style';
+                newStyle.innerHTML = `
+                    .custom-scroll::-webkit-scrollbar-thumb { background: ${theme.thumb}; }
+                    .custom-scroll::-webkit-scrollbar-thumb:hover { background: ${theme.hover}; }
+                    .loader-spinner { border-top-color: ${theme.hover}; }
+                `;
+                document.head.appendChild(newStyle);
+                
+                if (config.teacherName && view === 'config' && !currentWeekId) {
+                    setView('dashboard');
+                }
+            }, [config.theme, config.teacherName]);
+            
+            useEffect(() => {
+                if (window.firebaseInitialized && window.currentUser && document.getElementById('app-loader')) {
+                    document.getElementById('app-loader').style.display = 'none';
+                }
+            }, [config]);
+
+            const handleUpdateWeekData = (weekId, data) => {
+                setWeeksData(prev => ({ ...prev, [weekId]: data }));
+            };
+
+            const handleToggleHoliday = (weekId) => {
+                setHolidayWeeks(prev => prev.includes(weekId) ? prev.filter(id => id !== weekId) : [...prev, weekId]);
+            };
+
+            const handleSaveReminder = (dateStr, updatedReminders) => {
+                setReminders(prev => {
+                    const newRems = { ...prev };
+                    if (updatedReminders.length === 0) {
+                        delete newRems[dateStr];
+                    } else {
+                        newRems[dateStr] = updatedReminders;
+                    }
+                    return newRems;
+                });
+            };
+
+            const handleExport = () => {
+                // Genera el backup manual i el descarrega sense obrir el modal antic.
+                window.createAgendaBackup(true, 'Còpia manual abans d\'eliminar', true);
+            };
+
+            const handleReset = async () => {
+                try {
+                    if (window.currentUser) {
+                        // Eliminació real a Firebase (Requisit 4)
+                        await window.deleteDoc(window.doc(window.firebaseDb, "agenda_docent", window.currentUser.uid));
+                        
+                        // Opcional: Eliminar també la metadata dels backups si es vol un reset total
+                        // await window.deleteDoc(window.doc(window.firebaseDb, "agenda_docent_metadata", window.currentUser.uid));
+                    }
+                    
+                    // Reiniciar estat local de React
+                    setConfig({ teacherName: "", schoolYear: new Date().getFullYear(), theme: 'orange', classes: [], schedule: {}, durations: {}, utDates: [], classMaterials: {} });
+                    setRadar([]);
+                    setWeeksData({});
+                    setHolidayWeeks([]);
+                    setReminders({});
+                    setView('config');
+                    alert("✅ Agenda reiniciada correctament. Les dades s'han esborrat del núvol.");
+                } catch(e) {
+                    console.error("Error eliminant dades:", e);
+                    alert("❌ Hi ha hagut un error a l'esborrar les dades del núvol.");
+                }
+            };
+
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.config) setConfig(data.config);
+                        if (data.radar) setRadar(data.radar);
+                        if (data.weeksData) setWeeksData(data.weeksData);
+                        if (data.holidayWeeks) setHolidayWeeks(data.holidayWeeks);
+                        if (data.reminders) setReminders(data.reminders);
+                        setView('dashboard');
+                        alert("✅ Dades importades correctament.");
+                    } catch (error) {
+                        alert("❌ Error en el format de l'arxiu.");
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = null; // Reset input
+            };
             
             const handleSelectClassView = (classId) => {
                 setSelectedClassId(classId);
                 setView('class_planner');
             };
-
-            const handleExport = () => {
-                const dataObj = { config, weeksData, radar, holidayWeeks, reminders };
-                window.downloadBackupJSON(JSON.stringify(dataObj), `Agenda_Docent_Backup_${config.schoolYear}.json`);
-            };
-
-            const handleImport = (e) => { 
-                const fr = new FileReader(); 
-                fr.onload = ev => { 
-                    try {
-                        const d = JSON.parse(ev.target.result); 
-                        setConfig(d.config || { classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" }); 
-                        setRadar(d.radar || []); 
-                        setWeeksData(d.weeksData || {}); 
-                        setHolidayWeeks(d.holidayWeeks || []);
-                        setReminders(d.reminders || {});
-                        setView('dashboard'); 
-                        alert("Còpia de seguretat carregada correctament.");
-                    } catch(err) {
-                        alert("Error al carregar l'arxiu. Comprova que l'arxiu .json estigui intacte.");
-                    }
-                }; 
-                if (e.target.files[0]) fr.readAsText(e.target.files[0]); 
-            };
-
-            const handleReset = () => {
-                setConfig({ classes: [], schedule: {}, schoolYear: new Date().getFullYear().toString(), teacherName: "" });
-                setWeeksData({});
-                setRadar([]);
-                setHolidayWeeks([]);
-                setReminders({});
-                setView('config');
-            };
-
-            const handleToggleHoliday = (wId) => {
-                setHolidayWeeks(prev => prev.includes(wId) ? prev.filter(id => id !== wId) : [...prev, wId]);
-            };
-
-            const handleSaveReminder = (dateStr, rems) => {
-                setReminders(prev => {
-                    const next = { ...prev };
-                    if (rems.length === 0) delete next[dateStr];
-                    else next[dateStr] = rems;
-                    return next;
-                });
-            };
-
-            // No renderitzem l'App fins que el procés de Google SignIn / Firestore no ha acabat
-            if (!isReady) return null;
 
             return (
                 <div className="min-h-screen">
