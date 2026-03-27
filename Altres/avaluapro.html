@@ -99,7 +99,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
 
@@ -152,11 +152,25 @@
           }
         });
 
-        // GUARDAR
+        // GUARDAR (Amb protecció per eliminar document si les dades són buides)
         window.guardarDades = async function(dades) {
           if (!currentUser) return;
-          // Embolcallem l'array en un objecte per complir amb el requeriment de Firestore de guardar documents com a objectes
+          if (!dades || dades.length === 0) {
+              // Si guardem un array buit, eliminem el document completament
+              await deleteDoc(doc(db, "avaluapro", currentUser.uid));
+              return;
+          }
           await setDoc(doc(db, "avaluapro", currentUser.uid), { dades: dades });
+        };
+        
+        // ESBORRAR COMPLETAMENT (Per al botó de paperera)
+        window.esborrarDadesFirebase = async function() {
+            if (!currentUser) return;
+            try {
+                await deleteDoc(doc(db, "avaluapro", currentUser.uid));
+            } catch(e) {
+                console.error("Error esborrant document", e);
+            }
         };
 
         // CARREGAR (SOLUCIÓ DE CÀRREGA SEGURA)
@@ -514,6 +528,46 @@
                         </div>
                     </div>
                 </div>
+            );
+        };
+        
+        // MODAL NOU: Reset complet de curs
+        const ResetCourseModal = ({ isOpen, onClose, onBackup, onConfirm }) => {
+            if (!isOpen) return null;
+            
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="⚠️ Reiniciar Curs" size="md">
+                    <div className="space-y-6">
+                        <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-red-800 flex items-start gap-3">
+                            <Icon name="triangle-exclamation" className="text-2xl mt-1 shrink-0" />
+                            <div>
+                                <h4 className="font-black text-lg mb-1">Avís Crític</h4>
+                                <p className="text-sm font-medium">
+                                    S’eliminaran <strong>totes les dades</strong> del curs actual (alumnes, notes, configuracions i anotacions) de forma permanent del núvol. Aquesta acció no es pot desfer.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <p className="text-gray-600 text-sm font-medium text-center">
+                            Et recomanem fermament descarregar una còpia de seguretat abans de procedir.
+                        </p>
+
+                        <div className="flex flex-col gap-3 pt-2 border-t border-gray-100">
+                            <button onClick={onBackup} className="w-full py-3 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl font-bold transition flex items-center justify-center gap-2 shadow-sm border border-blue-200">
+                                <Icon name="download" /> Descarregar backup
+                            </button>
+                            
+                            <div className="flex gap-3 mt-2">
+                                <button onClick={onClose} className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition shadow-sm">
+                                    Cancel·lar
+                                </button>
+                                <button onClick={onConfirm} className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 rounded-xl font-bold transition shadow-sm flex items-center justify-center gap-2">
+                                    <Icon name="trash-can" /> Eliminar tot
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
             );
         };
 
@@ -1895,6 +1949,7 @@
             const [activeHalfGroupFilter, setActiveHalfGroupFilter] = useState("");
             
             // Modal States
+            const [showResetModal, setShowResetModal] = useState(false);
             const [isEditingStructure, setIsEditingStructure] = useState(false);
             const [showWizard, setShowWizard] = useState(false);
             const [showNewClassModal, setShowNewClassModal] = useState(false);
@@ -2085,11 +2140,46 @@
             const undo = () => { if (historyIndex > 0) setHistoryIndex(historyIndex - 1); };
             const redo = () => { if (historyIndex < history.length - 1) setHistoryIndex(historyIndex + 1); };
             
+            const handleBackupBeforeReset = () => {
+                const dataStr = JSON.stringify(classes, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "avaluapro_backup_" + new Date().toISOString().slice(0,10) + ".json";
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+            };
+
+            const handleConfirmReset = async () => {
+                try {
+                    // Esborrem completament el document del núvol
+                    if (window.esborrarDadesFirebase) {
+                        await window.esborrarDadesFirebase();
+                    }
+                    
+                    // Esborrem el backup passiu de localStorage per evitar càrrega fantasma
+                    localStorage.removeItem('evalApp_data_v2');
+                    
+                    // Reinicialitzem l'estat en memòria
+                    setHistory([[]]);
+                    setHistoryIndex(0);
+                    setActiveClassId(null);
+                    setShowResetModal(false);
+                    setShowWizard(true);
+                    
+                    // Prevenim que el pròxim useEffect d'autoguardat es pensi que les dades ja s'han pujat
+                    lastLoadedDataStr.current = "[]";
+                    
+                    alert("Nou curs iniciat. Les dades anteriors han estat esborrades.");
+                } catch(e) {
+                    console.error("Error esborrant dades:", e);
+                    alert("Hi ha hagut un error reiniciant el curs.");
+                }
+            };
+            
             const resetAllData = () => { 
-                if(confirm("ATENCIÓ: Esborraràs TOTES les dades i reiniciaràs l'aplicació.\nEstàs segur?")) { 
-                    try { if(window.guardarDades) window.guardarDades([]); } catch(e) {}
-                    window.location.reload(); 
-                } 
+                setShowResetModal(true);
             };
 
             let currentClass = null;
@@ -3217,6 +3307,7 @@
                 <div className="flex h-screen overflow-hidden text-gray-800">
                     <ErrorBoundary>
                         {/* MODALS */}
+                        <ResetCourseModal isOpen={showResetModal} onClose={() => setShowResetModal(false)} onBackup={handleBackupBeforeReset} onConfirm={handleConfirmReset} />
                         {showWizard && <SetupWizard onComplete={handleCreateClass} />}
                         {showSeatingChartsModal && <SeatingChartsModal isOpen={showSeatingChartsModal} onClose={() => setShowSeatingChartsModal(false)} currentClass={currentClass} onUpdateClass={handleUpdateClass} />}
                         {showHalfGroupsModal && <HalfGroupsModal isOpen={showHalfGroupsModal} onClose={() => setShowHalfGroupsModal(false)} halfGroups={currentClass && currentClass.halfGroups ? currentClass.halfGroups : []} onSave={(newList) => handleUpdateClass(activeClassId, { halfGroups: newList })} />}
