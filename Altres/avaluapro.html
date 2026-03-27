@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ca">
 <head>
@@ -21,6 +20,9 @@
     
     <!-- SheetJS (Excel Export) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- HTML2PDF per exportar perfil d'alumne -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -259,9 +261,33 @@
             
             const avg = sum / total;
             if (avg >= 3.5) return 'A';
-            if (avg >= 2.5) return 'B';
+            if (avg > 2.5) return 'B'; // Modificat: >2.5 en comptes de >=2.5
             if (avg > 1.5) return 'C';
             return 'D';
+        };
+
+        // Helpers globals per notes sobreescrites manuals
+        const getStudentCritGrade = (student, crit) => {
+            if (student.overrides && student.overrides[crit.id]) return student.overrides[crit.id];
+            let critMarks = [];
+            if(crit.indicators) {
+                crit.indicators.forEach(i => { 
+                    if(student.marks && student.marks[i.id]) critMarks.push(student.marks[i.id]); 
+                }); 
+            }
+            return calculateGrade(critMarks);
+        };
+
+        const getStudentCompGrade = (student, comp) => {
+            if (student.overrides && student.overrides[comp.id]) return student.overrides[comp.id];
+            let compMarks = [];
+            if(comp.criteria) {
+                comp.criteria.forEach(c => {
+                    const cg = getStudentCritGrade(student, c);
+                    if (cg) compMarks.push(cg);
+                });
+            }
+            return calculateGrade(compMarks);
         };
 
         const calculateNumericAverage = (marks) => {
@@ -305,7 +331,7 @@
         const getGradeFromNumeric = (avg) => {
             if (!avg) return '-';
             if (avg >= 3.5) return 'A';
-            if (avg >= 2.5) return 'B';
+            if (avg > 2.5) return 'B'; // Modificat: >2.5
             if (avg > 1.5) return 'C';
             return 'D';
         };
@@ -836,7 +862,7 @@
                 } else {
                     newStudents = names.map(name => {
                         const existing = sList.find(s => s.name === name);
-                        return existing ? existing : { id: generateUUID(), name: name, marks: {}, notes: { photo: "", diagnostics: [], diagnosticText: "", personal: "", equips: "", tutoria: "" }, halfGroup: "" };
+                        return existing ? existing : { id: generateUUID(), name: name, marks: {}, overrides: {}, profileSubjects: [], profileComment: "", notes: { photo: "", diagnostics: [], diagnosticText: "", personal: "", equips: "", tutoria: "" }, halfGroup: "" };
                     });
                 }
 
@@ -860,7 +886,277 @@
             );
         };
 
-        const StudentNotesModal = ({ isOpen, onClose, student, onSave }) => {
+        const StudentProfileModal = ({ isOpen, onClose, student, classData, onSave }) => {
+            if (!isOpen || !student) return null;
+            
+            const [subjects, setSubjects] = useState(student.profileSubjects || []);
+            const [profileComment, setProfileComment] = useState(student.profileComment !== undefined ? student.profileComment : "");
+
+            useEffect(() => {
+                if (isOpen && student) {
+                    setSubjects(student.profileSubjects || []);
+                    if (student.profileComment === undefined || student.profileComment === "") {
+                        setProfileComment(generateAutoComment());
+                    } else {
+                        setProfileComment(student.profileComment);
+                    }
+                }
+            }, [isOpen, student]);
+
+            const generateAutoComment = () => {
+                if (!classData || !classData.semesters) return "";
+                let as = [], bs = [], cs = [], ds = [];
+                classData.semesters.forEach(sem => {
+                    if (sem.id !== 'S1' && sem.id !== 'S2') return;
+                    if (sem.competencies) {
+                        sem.competencies.forEach(comp => {
+                            const grade = getStudentCompGrade(student, comp);
+                            if (grade === 'A') as.push(comp.name);
+                            else if (grade === 'B') bs.push(comp.name);
+                            else if (grade === 'C') cs.push(comp.name);
+                            else if (grade === 'D' || grade === 'NA') ds.push(comp.name);
+                        });
+                    }
+                });
+                
+                let text = `${student.name} presenta un perfil competencial `;
+                if (as.length > bs.length + cs.length + ds.length) text += "molt destacat.";
+                else if (as.length + bs.length > cs.length + ds.length) text += "adequat.";
+                else text += "que requereix atenció.";
+                
+                if (as.length > 0) text += `\n\nHa assolit amb nivell d'excel·lència (A) les competències següents: ${as.join(', ')}.`;
+                if (ds.length > 0) text += `\n\nMostra dificultats importants i cal reforçar de forma prioritària (D/NA): ${ds.join(', ')}.`;
+                else if (cs.length > 0) text += `\n\nTé marge de millora i està en procés d'assoliment en (C): ${cs.join(', ')}.`;
+                
+                return text;
+            };
+
+            const handleAddSubject = () => {
+                setSubjects([...subjects, { id: generateUUID(), name: "Nova Assignatura", competencies: [] }]);
+            };
+
+            const handleUpdateSubjectName = (id, name) => {
+                setSubjects(subjects.map(s => s.id === id ? { ...s, name } : s));
+            };
+
+            const handleRemoveSubject = (id) => {
+                setSubjects(subjects.filter(s => s.id !== id));
+            };
+
+            const handleAddCompetency = (subId) => {
+                setSubjects(subjects.map(s => {
+                    if (s.id !== subId) return s;
+                    return { ...s, competencies: [...s.competencies, { id: generateUUID(), name: "", grade: "" }] };
+                }));
+            };
+
+            const handleUpdateCompetency = (subId, compId, field, value) => {
+                setSubjects(subjects.map(s => {
+                    if (s.id !== subId) return s;
+                    return {
+                        ...s,
+                        competencies: s.competencies.map(c => c.id === compId ? { ...c, [field]: value } : c)
+                    };
+                }));
+            };
+
+            const handleRemoveCompetency = (subId, compId) => {
+                setSubjects(subjects.map(s => {
+                    if (s.id !== subId) return s;
+                    return { ...s, competencies: s.competencies.filter(c => c.id !== compId) };
+                }));
+            };
+
+            const handleSaveAndClose = () => {
+                onSave(student.id, { profileSubjects: subjects, profileComment });
+                onClose();
+            };
+
+            const exportPDF = () => {
+                const element = document.getElementById('student-profile-print');
+                const opt = {
+                    margin: 10,
+                    filename: `Perfil_${student.name.replace(/\s+/g, '_')}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(element).save();
+            };
+
+            // Calculate current class stats for the profile
+            let mainClassComps = [];
+            if (classData && classData.semesters) {
+                classData.semesters.forEach(sem => {
+                    if (sem.id === 'S1' || sem.id === 'S2') {
+                        if (sem.competencies) {
+                            sem.competencies.forEach(comp => {
+                                const grade = getStudentCompGrade(student, comp);
+                                mainClassComps.push({ name: comp.name, grade: grade || '-', color: comp.color });
+                            });
+                        }
+                    }
+                });
+            }
+
+            return (
+                <Modal isOpen={isOpen} onClose={handleSaveAndClose} title={`Perfil de l'alumne: ${student.name}`} size="xl">
+                    <div className="flex flex-col h-full bg-gray-50 rounded-xl overflow-hidden relative">
+                        <div className="absolute top-4 right-4 z-10 flex gap-2">
+                            <button onClick={exportPDF} className="bg-red-600 text-white px-4 py-2 rounded shadow font-bold hover:bg-red-700 flex items-center gap-2"><Icon name="file-pdf"/> Exportar PDF</button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-4 custom-scroll">
+                            {/* Editor View (Not in PDF directly, but syncs to it) */}
+                            <div className="mb-8 bg-white p-6 rounded-xl border shadow-sm">
+                                <h3 className="font-bold text-lg mb-4 text-indigo-800 border-b pb-2"><Icon name="pen-to-square" className="mr-2"/> Editor de Dades (Això no sortirà al PDF)</h3>
+                                
+                                <div className="mb-6">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Valoració Qualitativa (Comentari Genèric)</label>
+                                    <textarea 
+                                        value={profileComment} 
+                                        onChange={(e) => setProfileComment(e.target.value)} 
+                                        className="w-full p-3 border rounded-lg h-32 outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+                                        placeholder="Escriu la valoració global de l'alumne aquí..."
+                                    />
+                                    <button onClick={() => setProfileComment(generateAutoComment())} className="mt-2 text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-100 transition"><Icon name="wand-magic-sparkles"/> Regenerar comentari automàtic</button>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <label className="block text-sm font-bold text-gray-700">Altres Assignatures</label>
+                                        <button onClick={handleAddSubject} className="text-xs bg-green-500 text-white px-3 py-1.5 rounded font-bold hover:bg-green-600 transition">+ Afegir Assignatura</button>
+                                    </div>
+                                    
+                                    <div className="space-y-4">
+                                        {subjects.length === 0 && <p className="text-sm text-gray-400 italic">No s'han afegit altres assignatures.</p>}
+                                        {subjects.map((sub, sIdx) => (
+                                            <div key={sub.id} className="border border-gray-200 p-4 rounded-xl bg-gray-50/50 relative group">
+                                                <button onClick={() => handleRemoveSubject(sub.id)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"><Icon name="trash"/></button>
+                                                <input 
+                                                    value={sub.name} 
+                                                    onChange={(e) => handleUpdateSubjectName(sub.id, e.target.value)} 
+                                                    className="font-black text-gray-700 bg-transparent border-b border-gray-300 outline-none focus:border-indigo-500 mb-3 w-1/2"
+                                                    placeholder="Nom de l'assignatura..."
+                                                />
+                                                <div className="space-y-2 mb-3">
+                                                    {sub.competencies.map(comp => (
+                                                        <div key={comp.id} className="flex items-center gap-2">
+                                                            <input 
+                                                                value={comp.name} 
+                                                                onChange={(e) => handleUpdateCompetency(sub.id, comp.id, 'name', e.target.value)} 
+                                                                className="flex-1 text-sm p-1.5 border rounded outline-none focus:ring-1 focus:ring-indigo-400"
+                                                                placeholder="Nom competència (ex: C1. Emprenedoria)"
+                                                            />
+                                                            <select 
+                                                                value={comp.grade} 
+                                                                onChange={(e) => handleUpdateCompetency(sub.id, comp.id, 'grade', e.target.value)}
+                                                                className={`w-16 p-1.5 border rounded outline-none font-bold text-center ${getGradeTextColor(comp.grade)}`}
+                                                            >
+                                                                <option value="">-</option>
+                                                                <option value="A">A</option>
+                                                                <option value="B">B</option>
+                                                                <option value="C">C</option>
+                                                                <option value="D">D</option>
+                                                                <option value="NA">NA</option>
+                                                            </select>
+                                                            <button onClick={() => handleRemoveCompetency(sub.id, comp.id)} className="text-gray-400 hover:text-red-500"><Icon name="xmark"/></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <button onClick={() => handleAddCompetency(sub.id)} className="text-xs text-indigo-600 font-bold">+ Afegir Competència</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* PREVIEW PER PDF */}
+                            <div className="bg-white p-8 rounded border shadow-lg mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
+                                <div id="student-profile-print" className="p-8 bg-white">
+                                    {/* Header */}
+                                    <div className="flex items-center gap-4 border-b-2 border-indigo-900 pb-4 mb-6">
+                                        <div className="w-16 h-16 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-black text-2xl">
+                                            {student.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Perfil Competencial</h1>
+                                            <p className="text-lg text-gray-600">{student.name}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Valoració Qualitativa */}
+                                    <div className="mb-8">
+                                        <h2 className="text-xl font-bold text-indigo-900 mb-3 uppercase tracking-wider text-sm">Valoració Qualitativa Global</h2>
+                                        <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
+                                            {profileComment || <span className="italic text-gray-400">Sense valoració introduïda.</span>}
+                                        </div>
+                                    </div>
+
+                                    {/* Taula Principal */}
+                                    <div className="mb-8">
+                                        <h2 className="text-xl font-bold text-indigo-900 mb-3 uppercase tracking-wider text-sm">{classData ? classData.name : 'Assignatura Principal'}</h2>
+                                        <div className="border rounded-lg overflow-hidden">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-gray-100 border-b">
+                                                    <tr>
+                                                        <th className="p-3 text-left font-bold text-gray-700">Competència Treballada</th>
+                                                        <th className="p-3 text-center font-bold text-gray-700 w-24 border-l">Avaluació</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {mainClassComps.length > 0 ? mainClassComps.map((comp, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="p-3 text-gray-800 font-medium">{comp.name}</td>
+                                                            <td className="p-3 text-center border-l bg-gray-50/30">
+                                                                <span className={`px-2 py-1 rounded font-bold shadow-sm ${getGradeColor(comp.grade)}`}>{comp.grade}</span>
+                                                            </td>
+                                                        </tr>
+                                                    )) : <tr><td colSpan="2" className="p-4 text-center text-gray-400 italic">Sense competències avaluades.</td></tr>}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    {/* Altres Assignatures */}
+                                    {subjects.length > 0 && (
+                                        <div>
+                                            <h2 className="text-xl font-bold text-indigo-900 mb-3 uppercase tracking-wider text-sm">Avaluació Transversal / Altres Àmbits</h2>
+                                            <div className="space-y-6">
+                                                {subjects.map((sub, sIdx) => (
+                                                    <div key={sIdx} className="border rounded-lg overflow-hidden page-break-inside-avoid">
+                                                        <div className="bg-gray-100 border-b p-3 font-bold text-gray-800">{sub.name || 'Assignatura sense nom'}</div>
+                                                        <table className="w-full text-sm">
+                                                            <tbody className="divide-y divide-gray-100">
+                                                                {sub.competencies.length > 0 ? sub.competencies.map((comp, cIdx) => (
+                                                                    <tr key={cIdx}>
+                                                                        <td className="p-3 text-gray-700 w-3/4">{comp.name || <span className="italic text-gray-400">Competència...</span>}</td>
+                                                                        <td className="p-3 text-center border-l bg-gray-50/30 w-1/4">
+                                                                            {comp.grade ? <span className={`px-2 py-1 rounded font-bold shadow-sm ${getGradeColor(comp.grade)}`}>{comp.grade}</span> : <span className="text-gray-300">-</span>}
+                                                                        </td>
+                                                                    </tr>
+                                                                )) : <tr><td colSpan="2" className="p-3 text-center text-gray-400 italic text-xs">Sense competències definides.</td></tr>}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end p-4 border-t bg-white">
+                            <button onClick={handleSaveAndClose} className="px-8 py-3 bg-brand-500 text-white rounded-xl font-bold hover:bg-brand-600 shadow-lg">Desar i Tancar</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        const StudentNotesModal = ({ isOpen, onClose, student, onSave, onOpenProfile }) => {
             if (!isOpen || !student) return null;
             const initialNotes = student.notes ? student.notes : {};
             const [notes, setNotes] = useState({
@@ -920,10 +1216,12 @@
                 <Modal isOpen={isOpen} onClose={handleSaveAndClose} title={`Anotacions Personals: ${student.name}`} size="lg">
                     <div className="space-y-4">
                         
-                        {/* Cabçalera: Foto */}
-                        <div className="flex justify-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        {/* Cabçalera: Foto i Botons extra */}
+                        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
+                            <div className="flex-1"></div>
+                            
                             {/* Fotografia */}
-                            <div className="w-24 h-24 shrink-0 bg-gray-50 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden relative group transition-colors hover:border-brand-400">
+                            <div className="w-24 h-24 shrink-0 bg-gray-50 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden relative group transition-colors hover:border-brand-400 z-10">
                                 {notes.photo ? (
                                     <img src={notes.photo} alt="Alumne" className="w-full h-full object-cover" />
                                 ) : (
@@ -933,6 +1231,12 @@
                                     <Icon name="camera" className="mb-1 text-sm" /> Canviar
                                     <input type="file" accept="image/*" className="hidden" onChange={(e) => compressImage(e.target.files[0], 200, (res) => handleNotesChange('photo', res))} />
                                 </label>
+                            </div>
+
+                            <div className="flex-1 flex justify-end">
+                                <button onClick={() => { handleSaveAndClose(); onOpenProfile(student); }} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition shadow-sm flex items-center gap-2 border border-indigo-200">
+                                    <Icon name="id-card" /> Perfil de l'alumne
+                                </button>
                             </div>
                         </div>
 
@@ -1275,18 +1579,8 @@
                             let sum = 0; let count = 0;
                             
                             sList.forEach(s => {
-                                let marks = [];
-                                if(comp.criteria) {
-                                    comp.criteria.forEach(crit => {
-                                        if(crit.indicators) {
-                                            crit.indicators.forEach(i => { 
-                                                if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); 
-                                            });
-                                        }
-                                    });
-                                }
-                                const g = calculateGrade(marks);
-                                if(g) { sum += getNumericFromGrade(g); count++; }
+                                const g = getStudentCompGrade(s, comp);
+                                if(g && g !== '-') { sum += getNumericFromGrade(g); count++; }
                             });
                             
                             const avgNum = count > 0 ? sum/count : 0;
@@ -1366,18 +1660,7 @@
                                     if (!compSummary[comp.name]) {
                                         compSummary[comp.name] = { S1: '-', S2: '-' };
                                     }
-                                    
-                                    let marks = [];
-                                    if (comp.criteria) {
-                                        comp.criteria.forEach(c => {
-                                            if(c.indicators) {
-                                                c.indicators.forEach(i => { 
-                                                    if(student.marks && student.marks[i.id]) marks.push(student.marks[i.id]); 
-                                                });
-                                            }
-                                        });
-                                    }
-                                    const g = calculateGrade(marks);
+                                    const g = getStudentCompGrade(student, comp);
                                     if (sem.id === 'S1') compSummary[comp.name].S1 = g ? g : '-';
                                     if (sem.id === 'S2') compSummary[comp.name].S2 = g ? g : '-';
                                 });
@@ -1504,6 +1787,7 @@
             const [showBulkImport, setShowBulkImport] = useState(false);
             const [showStudentEvoModal, setShowStudentEvoModal] = useState(null);
             const [editingIndicatorDesc, setEditingIndicatorDesc] = useState(null); 
+            const [showStudentProfile, setShowStudentProfile] = useState(null); // Nou Estat per Perfil Alumne
 
             const [visibleCompetencies, setVisibleCompetencies] = useState({});
             const [expandedComps, setExpandedComps] = useState({});
@@ -1569,7 +1853,7 @@
                 }
             }, []);
 
-            // --- NOU: BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
+            // --- BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
             useEffect(() => {
                 const handleUserInteractionForBackup = () => {
                     const todayStr = window.getLocalYYYYMMDD ? window.getLocalYYYYMMDD(new Date()) : new Date().toISOString().split('T')[0];
@@ -1645,6 +1929,38 @@
                 } 
             };
 
+            const handleDownloadManualBackup = () => {
+                const data = localStorage.getItem('evalApp_data_v2');
+                if (!data || data === '[]') return alert('No hi ha dades per descarregar.');
+                const dateStr = window.getLocalYYYYMMDD ? window.getLocalYYYYMMDD(new Date()) : new Date().toISOString().split('T')[0];
+                window.downloadBackupJSON(data, `Avaluapro_${dateStr}_Manual.json`);
+            };
+
+            const handleLoadManualBackup = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!confirm("Atenció: carregar un fitxer sobreescriurà TOTES les dades actuals per les del fitxer. N'estàs segur?")) {
+                    e.target.value = null; // Reset
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const json = JSON.parse(event.target.result);
+                        if (Array.isArray(json)) {
+                            localStorage.setItem('evalApp_data_v2', event.target.result);
+                            alert('Dades carregades correctament! L\'aplicació es reiniciarà.');
+                            window.location.reload();
+                        } else {
+                            alert('El format del fitxer no és vàlid per Avaluapro.');
+                        }
+                    } catch (err) {
+                        alert('Error en llegir el fitxer JSON.');
+                    }
+                };
+                reader.readAsText(file);
+            };
+
             let currentClass = null;
             if (classes && classes.length > 0 && activeClassId) {
                 const found = classes.find(c => c.id === activeClassId);
@@ -1674,6 +1990,9 @@
             const updateStudentNotes = (sid, notes) => { 
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, notes: notes } : s) } : c)); 
             };
+            const updateStudentProfile = (sid, profileData) => {
+                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, profileSubjects: profileData.profileSubjects, profileComment: profileData.profileComment } : s) } : c));
+            };
             const updateStudentHalfGroup = (sid, hgId) => {
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, halfGroup: hgId } : s) } : c));
             };
@@ -1697,6 +2016,21 @@
             };
             const updateMark = (sid, iid, val) => {
                 updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, marks: { ...(s.marks ? s.marks : {}), [iid]: val } } : s) } : c));
+            };
+            const updateOverride = (sid, targetId, val) => {
+                updateClasses(classes.map(c => c.id === activeClassId ? {
+                    ...c,
+                    students: c.students.map(s => {
+                        if (s.id !== sid) return s;
+                        const newOverrides = { ...(s.overrides || {}) };
+                        if (val === "") {
+                            delete newOverrides[targetId];
+                        } else {
+                            newOverrides[targetId] = val;
+                        }
+                        return { ...s, overrides: newOverrides };
+                    })
+                } : c));
             };
             
             const renameItem = (type, itemId, parentId, grandParentId) => {
@@ -1947,23 +2281,19 @@
                     studentsToExport.forEach(s => { 
                         const r = [s.name]; 
                         visibleCompsList.forEach(c => { 
-                            let cm = []; 
                             if(c.criteria) {
                                 c.criteria.forEach(k => { 
-                                    let km = []; 
                                     if(k.indicators) {
                                         k.indicators.forEach(i => { 
                                             const v = (s.marks && s.marks[i.id]) ? s.marks[i.id] : ""; 
                                             r.push(v); 
-                                            if(v) km.push(v); 
                                         }); 
                                     }
-                                    const g = calculateGrade(km); 
-                                    r.push(g); 
-                                    if(g) cm.push(g); 
+                                    const g = getStudentCritGrade(s, k); 
+                                    r.push(g || ""); 
                                 }); 
                             }
-                            r.push(calculateGrade(cm)); 
+                            r.push(getStudentCompGrade(s, c) || ""); 
                         }); 
                         d.push(r); 
                     }); 
@@ -2021,14 +2351,8 @@
                                     let studentsArray = currentClass.students ? currentClass.students : [];
                                     
                                     studentsArray.forEach(s => {
-                                        let marks = []; 
-                                        if(crit.indicators) {
-                                            crit.indicators.forEach(i => { 
-                                                if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); 
-                                            });
-                                        }
-                                        const g = calculateGrade(marks); 
-                                        if(g && g !== 'NA') { 
+                                        const g = getStudentCritGrade(s, crit); 
+                                        if(g && g !== 'NA' && g !== '-') { 
                                             cStats.counts[g]++;
                                         }
                                     });
@@ -2052,22 +2376,8 @@
 
                             if (sem.competencies) {
                                 sem.competencies.forEach(comp => {
-                                    let compMarks = []; 
-                                    if(comp.criteria) {
-                                        comp.criteria.forEach(c => {
-                                            let critMarks = [];
-                                            if(c.indicators) {
-                                                c.indicators.forEach(i => { 
-                                                    if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); 
-                                                }); 
-                                            }
-                                            const cg = calculateGrade(critMarks);
-                                            if (cg) compMarks.push(cg);
-                                        });
-                                    }
-                                    
-                                    const finalCompGrade = calculateGrade(compMarks);
-                                    if(finalCompGrade) { 
+                                    const finalCompGrade = getStudentCompGrade(s, comp);
+                                    if(finalCompGrade && finalCompGrade !== '-') { 
                                         const n = getNumericFromGrade(finalCompGrade); 
                                         allG.push(n); 
                                         semG.push(n); 
@@ -2108,21 +2418,8 @@
                         if (sem.competencies) {
                             sem.competencies.forEach(comp => {
                                 studentsArray.forEach(s => {
-                                    let compMarks = []; 
-                                    if(comp.criteria) {
-                                        comp.criteria.forEach(c => {
-                                            let critMarks = [];
-                                            if(c.indicators) {
-                                                c.indicators.forEach(i => { 
-                                                    if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); 
-                                                }); 
-                                            }
-                                            const cg = calculateGrade(critMarks);
-                                            if (cg) compMarks.push(cg);
-                                        });
-                                    }
-                                    const fg = calculateGrade(compMarks);
-                                    if (fg) {
+                                    const fg = getStudentCompGrade(s, comp);
+                                    if (fg && fg !== '-') {
                                         semSum += getNumericFromGrade(fg);
                                         semCount++;
                                     }
@@ -2424,12 +2721,12 @@
 
                 return (
                     <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 flex flex-col h-full">
-                        <div className="p-3 bg-gray-50 border-b flex flex-wrap justify-between items-center shrink-0 z-40 relative gap-2">
+                        <div className="p-3 bg-gray-50 border-b flex flex-wrap justify-between items-center shrink-0 z-50 relative gap-2">
                             <div className="flex items-center space-x-2">
                                 <button onClick={() => setIsEditingStructure(!isEditingStructure)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 ${isEditingStructure ? 'bg-orange-100 text-orange-700 shadow-inner' : 'bg-white text-gray-600 border hover:bg-gray-50 shadow-sm'}`}><Icon name={isEditingStructure ? "lock" : "pen-to-square"} />{isEditingStructure ? "Bloquejar Taula" : "Editar Taula"}</button>
                                 <div className="relative group">
                                     <button className="px-3 py-1.5 bg-white border text-gray-600 rounded-lg text-sm shadow-sm hover:bg-gray-50 transition"><Icon name="eye" className="text-purple-500 mr-1"/> Filtrar</button>
-                                    <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-50 hidden group-hover:block w-56 text-sm">
+                                    <div className="absolute top-full left-0 mt-1 bg-white border rounded-xl shadow-xl p-3 z-[100] hidden group-hover:block w-56 text-sm">
                                         {activeCompetencies.map(c => (
                                             <div key={c.id} className="p-1.5 hover:bg-gray-50 rounded transition">
                                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -2556,7 +2853,7 @@
                                                                 )}
                                                             </th>
                                                         ))}
-                                                        <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner">CA</th>
+                                                        <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner" title="Càlcul / Sobreescriptura Manual">CA</th>
                                                     </React.Fragment>
                                                 ))}
                                                 <th className="p-2 border-b border-r bg-gray-200 w-14 text-center min-w-[3.5rem] shadow-inner"></th>
@@ -2632,7 +2929,7 @@
                                                                                     <select 
                                                                                         value={val} 
                                                                                         onChange={(e) => updateMark(student.id, ind.id, e.target.value)} 
-                                                                                        className={`w-full h-11 px-1 text-center text-sm font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 bg-transparent transition-colors ${getGradeTextColor(val)} hover:bg-gray-50`} 
+                                                                                        className={`w-full h-11 px-1 text-center text-sm font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500 bg-transparent transition-colors ${getGradeTextColor(val)} hover:bg-gray-50`} 
                                                                                         style={{textAlignLast:'center'}}
                                                                                     >
                                                                                         <option value="" className="text-gray-300 font-normal">-</option>
@@ -2646,17 +2943,43 @@
                                                                             );
                                                                         })}
                                                                         <td className="p-1 border-r border-b text-center bg-gray-50 w-14 min-w-[3.5rem] shadow-inner">
-                                                                            <div className={`w-8 h-8 mx-auto flex items-center justify-center rounded-full text-xs font-bold shadow-sm ${getGradeColor(calculateGrade(critMarks))}`}>{calculateGrade(critMarks)}</div>
+                                                                            <select 
+                                                                                value={(student.overrides && student.overrides[crit.id]) ? student.overrides[crit.id] : (calculateGrade(critMarks) || "")} 
+                                                                                onChange={(e) => updateOverride(student.id, crit.id, e.target.value)} 
+                                                                                className={`w-8 h-8 mx-auto block rounded-full text-xs font-bold shadow-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500 ${getGradeColor((student.overrides && student.overrides[crit.id]) ? student.overrides[crit.id] : calculateGrade(critMarks))}`}
+                                                                                style={{textAlignLast:'center', padding: 0}}
+                                                                            >
+                                                                                <option value={calculateGrade(critMarks) || ""} className="hidden">{calculateGrade(critMarks) || "-"}</option>
+                                                                                <option value="" className="text-gray-500 bg-white">Auto ({calculateGrade(critMarks) || "-"})</option>
+                                                                                <option value="A" className="text-green-600 bg-green-50">A</option>
+                                                                                <option value="B" className="text-blue-600 bg-blue-50">B</option>
+                                                                                <option value="C" className="text-orange-600 bg-orange-50">C</option>
+                                                                                <option value="D" className="text-red-600 bg-red-50">D</option>
+                                                                                <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
+                                                                            </select>
                                                                         </td>
                                                                         {(() => { 
-                                                                            const cg = calculateGrade(critMarks);
+                                                                            const cg = getStudentCritGrade(student, crit);
                                                                             if(cg) compMarks.push(cg); 
                                                                         })()}
                                                                     </React.Fragment>
                                                                 );
                                                             })}
                                                             <td className="p-1 border-r border-b text-center bg-gray-100 font-bold border-l-2 border-l-gray-300 w-14 min-w-[3.5rem] shadow-inner">
-                                                                <div className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg shadow-md text-sm font-black ${getGradeColor(calculateGrade(compMarks)).replace('bg-', 'bg-gradient-to-br from-white to-')}`}>{calculateGrade(compMarks)}</div>
+                                                                <select 
+                                                                    value={(student.overrides && student.overrides[comp.id]) ? student.overrides[comp.id] : (calculateGrade(compMarks) || "")} 
+                                                                    onChange={(e) => updateOverride(student.id, comp.id, e.target.value)} 
+                                                                    className={`w-10 h-10 mx-auto block rounded-lg shadow-md text-sm font-black appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500 ${getGradeColor((student.overrides && student.overrides[comp.id]) ? student.overrides[comp.id] : calculateGrade(compMarks)).replace('bg-', 'bg-gradient-to-br from-white to-')}`}
+                                                                    style={{textAlignLast:'center', padding: 0}}
+                                                                >
+                                                                    <option value={calculateGrade(compMarks) || ""} className="hidden">{calculateGrade(compMarks) || "-"}</option>
+                                                                    <option value="" className="text-gray-500 bg-white">Auto ({calculateGrade(compMarks) || "-"})</option>
+                                                                    <option value="A" className="text-green-600 bg-green-50">A</option>
+                                                                    <option value="B" className="text-blue-600 bg-blue-50">B</option>
+                                                                    <option value="C" className="text-orange-600 bg-orange-50">C</option>
+                                                                    <option value="D" className="text-red-600 bg-red-50">D</option>
+                                                                    <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
+                                                                </select>
                                                             </td>
                                                         </React.Fragment>
                                                     );
@@ -2684,7 +3007,8 @@
                         <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
                         <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
                         <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
-                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} onSave={updateStudentNotes} />
+                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} onSave={updateStudentNotes} onOpenProfile={(s) => setShowStudentProfile(s)} />
+                        <StudentProfileModal isOpen={!!showStudentProfile} onClose={() => setShowStudentProfile(null)} student={showStudentProfile} classData={currentClass} onSave={updateStudentProfile} />
                         <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} />
                         <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
                         <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
@@ -2714,10 +3038,17 @@
                                 })}
                                 <button onClick={() => setShowNewClassModal(true)} className="w-full mt-4 border-2 border-dashed border-slate-700 text-slate-400 p-3 rounded-xl hover:border-brand-500 hover:text-brand-500 transition flex items-center justify-center text-sm font-bold"><Icon name="plus" className="mr-2"/> Nova Classe</button>
                             </div>
-                             <div className="p-4 border-t border-slate-800 bg-slate-950">
-                                 <button onClick={handleExportExcel} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-3 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
+                             <div className="p-4 border-t border-slate-800 bg-slate-950 space-y-2">
+                                 <button onClick={handleExportExcel} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
                                      <Icon name="file-excel" className="mr-2 text-lg"/> Exportar a Excel
                                  </button>
+                                 <button onClick={handleDownloadManualBackup} className="w-full bg-blue-700 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
+                                     <Icon name="download" className="mr-2 text-lg"/> Descarregar Backup
+                                 </button>
+                                 <label className="w-full bg-purple-700 hover:bg-purple-600 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center cursor-pointer">
+                                     <Icon name="upload" className="mr-2 text-lg"/> Carregar Backup
+                                     <input type="file" accept=".json" className="hidden" onChange={handleLoadManualBackup} />
+                                 </label>
                             </div>
                         </aside>
 
