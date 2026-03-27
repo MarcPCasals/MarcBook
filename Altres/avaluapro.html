@@ -72,76 +72,108 @@
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <!-- INTERFÍCIE D'AUTENTICACIÓ FIREBASE -->
+    <div id="firebaseAuthContainer" class="fixed top-4 right-4 z-[100] flex items-center gap-3 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg border border-gray-200">
+        <p id="userInfo" class="text-sm font-bold text-gray-700 hidden px-3"></p>
+        <button id="loginBtn" class="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-blue-700 transition shadow-sm flex items-center gap-2">
+            <i class="fa-brands fa-google"></i> Inicia sessió
+        </button>
+        <button id="logoutBtn" style="display:none;" class="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-red-600 transition shadow-sm flex items-center gap-2">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> Tanca sessió
+        </button>
+    </div>
 
-    <!-- --- FUNCIONS GLOBALS DE BACKUP --- -->
+    <!-- LOGICA FIREBASE: EVENT GLOBALS I MODULE -->
     <script>
-        window.getLocalYYYYMMDD = (d) => {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
-        window.downloadBackupJSON = (dataStr, filename) => {
-            if (!dataStr) return;
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }, 100);
-        };
-
-        window.createAvaluaproBackup = (silent = false, customLabel = null, triggerDownload = false) => {
-            const currentData = localStorage.getItem('evalApp_data_v2');
-            if (!currentData || currentData === '[]') {
-                if (!silent) alert("No hi ha dades actuals per guardar al backup.");
-                return;
-            }
-            
-            let history = [];
-            try {
-                history = JSON.parse(localStorage.getItem('avaluaproBackupHistory')) || [];
-                if (!Array.isArray(history)) history = [];
-            } catch(e) { history = []; }
-            
-            if (history.length > 0 && history[0].data === currentData && silent) {
-                return; 
-            } else if (history.length > 0 && history[0].data === currentData && !silent) {
-                if(!confirm("⚠️ Les dades actuals són idèntiques a l'últim backup. Vols crear una entrada duplicada de tota manera?")) return;
-            }
-            
-            const now = new Date();
-            const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
-            const dateStrForFile = window.getLocalYYYYMMDD(now);
-            
-            history.unshift({ 
-                id: Date.now(), 
-                timestamp: timestamp, 
-                label: customLabel || (silent ? 'Còpia automàtica' : 'Còpia manual'), 
-                data: currentData 
-            });
-            
-            if (history.length > 10) history = history.slice(0, 10);
-            
-            localStorage.setItem('avaluaproBackupHistory', JSON.stringify(history));
-            
-            if (triggerDownload) {
-                const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
-                window.downloadBackupJSON(currentData, `AvaluaproBackup_${dateStrForFile}_${safeTime}.json`);
-            }
-            
-            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament.");
-            window.dispatchEvent(new Event('backupHistoryUpdated'));
+        // Sistema de pont entre Firebase i React
+        window.loadedDades = null;
+        window.isDataLoaded = false;
+        window.inicialitzarDades = function(dades) {
+            window.loadedDades = dades;
+            window.isDataLoaded = true;
+            window.dispatchEvent(new CustomEvent('dadesCarregades'));
         };
     </script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyAoUM58SRUMEFlCFm56jzI7eTU9QB-JxBE",
+          authDomain: "eines-docents.firebaseapp.com",
+          projectId: "eines-docents",
+          storageBucket: "eines-docents.firebasestorage.app",
+          messagingSenderId: "80852705741",
+          appId: "1:80852705741:web:375c1a3dfd2ae2466c6484",
+          measurementId: "G-JJ73JJ3DQX"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        let currentUser = null;
+
+        // LOGIN
+        window.login = async function() {
+          await signInWithPopup(auth, provider);
+        };
+
+        // LOGOUT
+        window.logout = async function() {
+          await signOut(auth);
+        };
+
+        // CONTROL DE SESSIÓ
+        onAuthStateChanged(auth, (user) => {
+          if (user) {
+            currentUser = user;
+            document.getElementById("userInfo").textContent = user.email;
+            document.getElementById("userInfo").style.display = "block";
+            document.getElementById("loginBtn").style.display = "none";
+            document.getElementById("logoutBtn").style.display = "flex";
+
+            carregarDades();
+          } else {
+            currentUser = null;
+            document.getElementById("userInfo").textContent = "";
+            document.getElementById("userInfo").style.display = "none";
+            document.getElementById("loginBtn").style.display = "flex";
+            document.getElementById("logoutBtn").style.display = "none";
+            
+            // Buidem la memòria en tancar sessió
+            window.inicialitzarDades([]);
+          }
+        });
+
+        // GUARDAR
+        window.guardarDades = async function(dades) {
+          if (!currentUser) return;
+          // Embolcallem l'array en un objecte per complir amb el requeriment de Firestore de guardar documents com a objectes
+          await setDoc(doc(db, "avaluapro", currentUser.uid), { dades: dades });
+        };
+
+        // CARREGAR
+        async function carregarDades() {
+          if (!currentUser) return;
+
+          const snap = await getDoc(doc(db, "avaluapro", currentUser.uid));
+
+          if (snap.exists() && snap.data().dades) {
+            window.inicialitzarDades(snap.data().dades);
+          } else {
+            window.inicialitzarDades([]);
+          }
+        }
+
+        document.getElementById("loginBtn").onclick = window.login;
+        document.getElementById("logoutBtn").onclick = window.logout;
+    </script>
+
+    <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, Component } = React;
@@ -167,15 +199,15 @@
                     return (
                         <div className="flex flex-col items-center justify-center h-screen bg-red-50 text-red-800 p-8 text-center">
                             <h1 className="text-3xl font-bold mb-4">Ups! L'aplicació ha fallat.</h1>
-                            <p className="mb-4 text-gray-700">Això passa perquè les teves dades antigues desades al navegador no coincideixen amb el nou disseny.</p>
+                            <p className="mb-4 text-gray-700">Això passa perquè les teves dades antigues no coincideixen amb el nou disseny.</p>
                             <div className="bg-white p-4 rounded border border-red-200 w-full max-w-2xl overflow-auto mb-6 text-left shadow-sm">
                                 <p className="font-bold text-red-600 mb-2">Codi de l'error:</p>
                                 <pre className="text-xs text-gray-600">{this.state.error ? this.state.error.toString() : "Error desconegut"}</pre>
                             </div>
                             <button 
                                 onClick={() => { 
-                                    if(confirm("Atenció! Si continues, s'esborraran totes les dades emmagatzemades d'aquesta pàgina i l'eina es reiniciarà de fàbrica. Vols continuar?")) {
-                                        localStorage.removeItem('evalApp_data_v2'); 
+                                    if(confirm("Atenció! Si continues, s'esborraran totes les dades emmagatzemades al núvol per aquest compte i l'eina es reiniciarà de fàbrica. Vols continuar?")) {
+                                        if(window.guardarDades) window.guardarDades([]);
                                         window.location.reload(); 
                                     }
                                 }} 
@@ -198,7 +230,7 @@
             });
         };
         
-        // Utilitat per comprimir imatges i no trencar el localStorage
+        // Utilitat per comprimir imatges i no trencar el guardat
         const compressImage = (file, maxWidth, callback) => {
             if (!file) return;
             const reader = new FileReader();
@@ -1476,6 +1508,7 @@
         const App = () => {
             const [history, setHistory] = useState([]);
             const [historyIndex, setHistoryIndex] = useState(-1);
+            const [isReady, setIsReady] = useState(false);
             
             let classes = [];
             if (historyIndex >= 0 && historyIndex < history.length) {
@@ -1507,115 +1540,88 @@
             const [visibleCompetencies, setVisibleCompetencies] = useState({});
             const [expandedComps, setExpandedComps] = useState({});
 
-            // 1. CARREGA I MIGRACIÓ DE DADES 
+            // 1. CARREGA I MIGRACIÓ DE DADES DES DEL NÚVOL (FIREBASE)
             useEffect(() => {
-                let initialData = [];
-                try { 
-                    const saved = localStorage.getItem('evalApp_data_v2'); 
-                    let parsed = [];
-                    if (saved) {
-                        parsed = JSON.parse(saved);
-                    }
-                    
-                    if (!Array.isArray(parsed)) {
-                        parsed = [];
-                    }
+                const initData = () => {
+                    if (!window.isDataLoaded) return;
+                    let parsed = window.loadedDades || [];
+                    let initialData = [];
 
-                    initialData = parsed.map(cls => {
-                        let newCls = {...cls};
-                        if (newCls.seatingChartMain === undefined) {
-                            newCls.seatingChartMain = "";
-                        }
-                        if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
-                            newCls.semesters = [
-                                { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
-                                { id: 'S2', name: '2n Semestre', isActive: false, competencies: [] },
-                                { id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() },
-                                { id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() }
-                            ];
-                        } else {
-                            let hasT1 = false;
-                            let hasT2 = false;
-                            newCls.semesters.forEach(s => {
-                                if (s.id === 'T1') hasT1 = true;
-                                if (s.id === 'T2') hasT2 = true;
-                            });
-
-                            if (!hasT1) newCls.semesters.push({ id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() });
-                            if (!hasT2) newCls.semesters.push({ id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() });
-                        }
-                        if (!newCls.students) {
-                            newCls.students = [];
-                        }
-                        if (!newCls.halfGroups) {
-                            newCls.halfGroups = [];
-                        }
-                        return newCls;
-                    });
-
-                } catch(e) { 
-                    console.error("Error loading data from localStorage", e);
-                    initialData = []; 
-                }
-                
-                if (initialData.length === 0) {
-                    setShowWizard(true);
-                }
-                setHistory([initialData]); 
-                setHistoryIndex(0);
-                if (initialData.length > 0) {
-                    setActiveClassId(initialData[0].id);
-                }
-            }, []);
-
-            // --- NOU: BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
-            useEffect(() => {
-                const handleUserInteractionForBackup = () => {
-                    const todayStr = window.getLocalYYYYMMDD ? window.getLocalYYYYMMDD(new Date()) : new Date().toISOString().split('T')[0];
-                    const lastDownload = localStorage.getItem('lastAvaluaproAutoBackupDate');
-                    
-                    if (lastDownload !== todayStr) {
-                        const currentDataStr = localStorage.getItem('evalApp_data_v2');
-                        if (currentDataStr && currentDataStr.length > 10 && currentDataStr !== '[]') {
-                            try {
-                                document.removeEventListener('click', handleUserInteractionForBackup);
-                                document.removeEventListener('keydown', handleUserInteractionForBackup);
-                                document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                                
-                                localStorage.setItem('lastAvaluaproAutoBackupDate', todayStr);
-                                
-                                if (window.createAvaluaproBackup) {
-                                    window.createAvaluaproBackup(true, 'Còpia automàtica diària', true);
-                                }
-                                console.log(`Backup automàtic diari processat i descarregat.`);
-                            } catch (err) {
-                                console.error("Error processant el backup diari:", err);
-                            }
-                        }
-                    }
-                };
-
-                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
-
-                return () => {
-                    document.removeEventListener('click', handleUserInteractionForBackup);
-                    document.removeEventListener('keydown', handleUserInteractionForBackup);
-                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                };
-            }, []);
-            // --------------------------------------------------------------
-
-            useEffect(() => { 
-                if (classes && classes.length > 0) {
                     try { 
-                        localStorage.setItem('evalApp_data_v2', JSON.stringify(classes)); 
+                        if (!Array.isArray(parsed)) {
+                            parsed = [];
+                        }
+
+                        initialData = parsed.map(cls => {
+                            let newCls = {...cls};
+                            if (newCls.seatingChartMain === undefined) {
+                                newCls.seatingChartMain = "";
+                            }
+                            if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
+                                newCls.semesters = [
+                                    { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
+                                    { id: 'S2', name: '2n Semestre', isActive: false, competencies: [] },
+                                    { id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() },
+                                    { id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() }
+                                ];
+                            } else {
+                                let hasT1 = false;
+                                let hasT2 = false;
+                                newCls.semesters.forEach(s => {
+                                    if (s.id === 'T1') hasT1 = true;
+                                    if (s.id === 'T2') hasT2 = true;
+                                });
+
+                                if (!hasT1) newCls.semesters.push({ id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() });
+                                if (!hasT2) newCls.semesters.push({ id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() });
+                            }
+                            if (!newCls.students) {
+                                newCls.students = [];
+                            }
+                            if (!newCls.halfGroups) {
+                                newCls.halfGroups = [];
+                            }
+                            return newCls;
+                        });
+
+                    } catch(e) { 
+                        console.error("Error loading data from Firebase", e);
+                        initialData = []; 
+                    }
+                    
+                    if (initialData.length === 0) {
+                        setShowWizard(true);
+                    } else {
+                        setShowWizard(false);
+                    }
+                    setHistory([initialData]); 
+                    setHistoryIndex(0);
+                    if (initialData.length > 0) {
+                        setActiveClassId(initialData[0].id);
+                    } else {
+                        setActiveClassId(null);
+                    }
+                    setIsReady(true);
+                };
+
+                window.addEventListener('dadesCarregades', initData);
+                if (window.isDataLoaded) {
+                    initData();
+                }
+
+                return () => window.removeEventListener('dadesCarregades', initData);
+            }, []);
+
+            // 2. DESAR DADES AL NÚVOL (FIREBASE)
+            useEffect(() => { 
+                if (isReady && classes) {
+                    try { 
+                        if(window.guardarDades) window.guardarDades(classes); 
                     } catch(e) {
-                        console.error("Failed to save to localStorage", e);
+                        console.error("Failed to save to Firebase", e);
                     }
                 }
-            }, [classes]);
+            }, [classes, isReady]);
 
             useEffect(() => { 
                 setActiveHalfGroupFilter(""); 
@@ -1639,7 +1645,7 @@
             
             const resetAllData = () => { 
                 if(confirm("ATENCIÓ: Esborraràs TOTES les dades i reiniciaràs l'aplicació.\nEstàs segur?")) { 
-                    try { localStorage.removeItem('evalApp_data_v2'); } catch(e) {}
+                    try { if(window.guardarDades) window.guardarDades([]); } catch(e) {}
                     window.location.reload(); 
                 } 
             };
