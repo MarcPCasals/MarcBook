@@ -159,16 +159,33 @@
           await setDoc(doc(db, "avaluapro", currentUser.uid), { dades: dades });
         };
 
-        // CARREGAR
+        // CARREGAR (SOLUCIÓ DE CÀRREGA SEGURA)
         async function carregarDades() {
           if (!currentUser) return;
 
-          const snap = await getDoc(doc(db, "avaluapro", currentUser.uid));
+          try {
+              const snap = await getDoc(doc(db, "avaluapro", currentUser.uid));
 
-          if (snap.exists() && snap.data().dades) {
-            window.inicialitzarDades(snap.data().dades);
-          } else {
-            window.inicialitzarDades([]);
+              if (snap.exists() && snap.data().dades && snap.data().dades.length > 0) {
+                  // Firebase té dades -> usar-les
+                  window.inicialitzarDades(snap.data().dades);
+              } else {
+                  // Firebase NO té dades -> carregar backup de localStorage
+                  let backupData = [];
+                  try {
+                      const localBackupStr = localStorage.getItem('evalApp_data_v2');
+                      if (localBackupStr) {
+                          backupData = JSON.parse(localBackupStr);
+                      }
+                  } catch(e) {
+                      console.error("No s'ha pogut llegir el backup local", e);
+                  }
+                  
+                  window.inicialitzarDades(backupData || []);
+              }
+          } catch (error) {
+              console.error("Error carregant les dades inicials:", error);
+              window.inicialitzarDades([]);
           }
         }
 
@@ -1860,7 +1877,7 @@
             const [history, setHistory] = useState([]);
             const [historyIndex, setHistoryIndex] = useState(-1);
             const [isReady, setIsReady] = useState(false);
-            const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
+            const [hasLoadedFromFirebase, setHasLoadedFromFirebase] = useState(false);
             const lastLoadedDataStr = useRef(null);
             
             let classes = [];
@@ -1962,7 +1979,9 @@
                     } else {
                         setActiveClassId(null);
                     }
-                    setIsFirebaseLoaded(true);
+                    
+                    // Indiquem que ja està segur guardar, ja sigui des de la BD o del backup
+                    setHasLoadedFromFirebase(true);
                     setIsReady(true);
                 };
 
@@ -1976,11 +1995,13 @@
 
             // 2. DESAR DADES AL NÚVOL (FIREBASE) SENSE BUG D'OVERWRITE
             useEffect(() => { 
-                if (!isReady || !isFirebaseLoaded || !classes) return;
+                // 🔒 BLOQUEIG FINS QUE S'HAGI DECIDIT LA FONT DE DADES INICIALS
+                if (!hasLoadedFromFirebase) return; 
+                if (!classes) return;
 
                 const currentDataStr = JSON.stringify(classes);
                 
-                // Evitem l'enviament de l'array per defecte si no hi ha hagut canvis reals de l'usuari
+                // Evitem l'enviament immediat just després de carregar el backup
                 if (currentDataStr === lastLoadedDataStr.current) {
                     return;
                 }
@@ -1992,7 +2013,7 @@
                 } catch(e) {
                     console.error("Failed to save to Firebase", e);
                 }
-            }, [classes, isReady, isFirebaseLoaded]);
+            }, [classes, hasLoadedFromFirebase]);
 
             // 3. BACKUP AUTOMÀTIC I FALLBACK A LOCALSTORAGE (només de lectura passiva)
             useEffect(() => { 
