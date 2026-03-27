@@ -99,7 +99,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
 
@@ -152,15 +152,38 @@
           }
         });
 
-        // GUARDAR (Amb protecció per eliminar document si les dades són buides)
+        // GUARDAR (Estructura de subcol·leccions individuals per esquivar límit de 1MB)
         window.guardarDades = async function(dades) {
           if (!currentUser) return;
-          if (!dades || dades.length === 0) {
-              // Si guardem un array buit, eliminem el document completament
-              await deleteDoc(doc(db, "avaluapro", currentUser.uid));
-              return;
+          
+          try {
+              // 1. Obtenim les classes actuals al núvol per veure si n'hem d'esborrar alguna (sincronització neta)
+              const subCollectionRef = collection(db, "avaluapro", currentUser.uid, "classes");
+              const querySnapshot = await getDocs(subCollectionRef);
+              
+              const dadesIds = dades ? dades.map(c => c.id) : [];
+              
+              const deletePromises = [];
+              querySnapshot.forEach((documento) => {
+                  if (!dadesIds.includes(documento.id)) {
+                      deletePromises.push(deleteDoc(documento.ref));
+                  }
+              });
+              await Promise.all(deletePromises);
+
+              // 2. Guardem o actualitzem els documents de les classes existents
+              if (dades && dades.length > 0) {
+                  const savePromises = dades.map(classe => {
+                      const classId = classe.id || "class_" + Date.now() + Math.floor(Math.random() * 1000);
+                      classe.id = classId;
+                      const docRef = doc(db, "avaluapro", currentUser.uid, "classes", classId);
+                      return setDoc(docRef, classe);
+                  });
+                  await Promise.all(savePromises);
+              }
+          } catch(e) {
+              console.error("Error en sincronitzar subcol·leccions:", e);
           }
-          await setDoc(doc(db, "avaluapro", currentUser.uid), { dades: dades });
         };
         
         // GUARDAR MANUALMENT (Funció de test i seguretat demanada)
@@ -174,10 +197,14 @@
             }
 
             try {
-                await setDoc(doc(db, "avaluapro", currentUser.uid), {
-                    dades: classes
+                const savePromises = classes.map(classe => {
+                    const classId = classe.id || "class_" + Date.now() + Math.floor(Math.random() * 1000);
+                    classe.id = classId;
+                    const docRef = doc(db, "avaluapro", currentUser.uid, "classes", classId);
+                    return setDoc(docRef, classe);
                 });
-                alert("Dades guardades correctament");
+                await Promise.all(savePromises);
+                alert("Dades guardades correctament en documents independents");
             } catch (error) {
                 console.error("Error guardant:", error);
                 alert("Error en guardar dades");
@@ -188,22 +215,37 @@
         window.esborrarDadesFirebase = async function() {
             if (!currentUser) return;
             try {
+                // Esborrem tots els documents actius de la subcol·lecció
+                const subCollectionRef = collection(db, "avaluapro", currentUser.uid, "classes");
+                const querySnapshot = await getDocs(subCollectionRef);
+                const deletePromises = [];
+                querySnapshot.forEach((documento) => {
+                    deletePromises.push(deleteDoc(documento.ref));
+                });
+                await Promise.all(deletePromises);
+                
+                // Per últim, eliminem l'arrel original per deixar-ho tot net
                 await deleteDoc(doc(db, "avaluapro", currentUser.uid));
             } catch(e) {
-                console.error("Error esborrant document", e);
+                console.error("Error esborrant col·lecció completa", e);
             }
         };
 
-        // CARREGAR (SOLUCIÓ DE CÀRREGA SEGURA)
+        // CARREGAR (Substitució cap a l'estructura de Subcol·leccions)
         async function carregarDades() {
           if (!currentUser) return;
 
           try {
-              const snap = await getDoc(doc(db, "avaluapro", currentUser.uid));
+              const classesRef = collection(db, "avaluapro", currentUser.uid, "classes");
+              const snap = await getDocs(classesRef);
 
-              if (snap.exists() && snap.data().dades && snap.data().dades.length > 0) {
-                  // Firebase té dades -> usar-les
-                  window.inicialitzarDades(snap.data().dades);
+              if (!snap.empty) {
+                  // Firebase té dades a la subcol·lecció -> reconstruir l'array i usar-les
+                  const classesCarregades = [];
+                  snap.forEach((doc) => {
+                      classesCarregades.push(doc.data());
+                  });
+                  window.inicialitzarDades(classesCarregades);
               } else {
                   // Firebase NO té dades -> carregar backup de localStorage
                   let backupData = [];
