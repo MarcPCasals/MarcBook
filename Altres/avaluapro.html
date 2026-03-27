@@ -76,7 +76,7 @@
 </head>
 <body>
     <!-- INTERFÍCIE D'AUTENTICACIÓ FIREBASE -->
-    <div id="firebaseAuthContainer" class="fixed top-4 right-4 z-[100] flex items-center gap-3 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg border border-gray-200">
+    <div id="firebaseAuthContainer" class="fixed bottom-4 right-4 z-[100] flex items-center gap-3 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg border border-gray-200">
         <p id="userInfo" class="text-sm font-bold text-gray-700 hidden px-3"></p>
         <button id="loginBtn" class="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-blue-700 transition shadow-sm flex items-center gap-2">
             <i class="fa-brands fa-google"></i> Inicia sessió
@@ -177,6 +177,74 @@
     </script>
 
     <div id="root"></div>
+
+    <!-- --- FUNCIONS GLOBALS DE BACKUP --- -->
+    <script>
+        window.getLocalYYYYMMDD = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        window.downloadBackupJSON = (dataStr, filename) => {
+            if (!dataStr) return;
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        };
+
+        window.createAvaluaproBackup = (silent = false, customLabel = null, triggerDownload = false, currentData = null) => {
+            if (!currentData || currentData === '[]') {
+                if (!silent) alert("No hi ha dades actuals per guardar al backup.");
+                return;
+            }
+            
+            let history = [];
+            try {
+                history = JSON.parse(localStorage.getItem('avaluaproBackupHistory')) || [];
+                if (!Array.isArray(history)) history = [];
+            } catch(e) { history = []; }
+            
+            if (history.length > 0 && history[0].data === currentData && silent) {
+                return; 
+            } else if (history.length > 0 && history[0].data === currentData && !silent) {
+                if(!confirm("⚠️ Les dades actuals són idèntiques a l'últim backup. Vols crear una entrada duplicada de tota manera?")) return;
+            }
+            
+            const now = new Date();
+            const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
+            const dateStrForFile = window.getLocalYYYYMMDD(now);
+            
+            history.unshift({ 
+                id: Date.now(), 
+                timestamp: timestamp, 
+                label: customLabel || (silent ? 'Còpia automàtica' : 'Còpia manual'), 
+                data: currentData 
+            });
+            
+            if (history.length > 10) history = history.slice(0, 10);
+            
+            localStorage.setItem('avaluaproBackupHistory', JSON.stringify(history));
+            
+            if (triggerDownload) {
+                const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
+                window.downloadBackupJSON(currentData, `AvaluaproBackup_${dateStrForFile}_${safeTime}.json`);
+            }
+            
+            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament.");
+            window.dispatchEvent(new Event('backupHistoryUpdated'));
+        };
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, Component } = React;
@@ -293,7 +361,7 @@
             
             const avg = sum / total;
             if (avg >= 3.5) return 'A';
-            if (avg > 2.5) return 'B';
+            if (avg > 2.5) return 'B'; // AJUST: per sobre de 2.5 és B (ex: BBBD dóna 2.75 -> B, ABCD dóna 2.5 -> C)
             if (avg > 1.5) return 'C';
             return 'D';
         };
@@ -339,7 +407,7 @@
         const getGradeFromNumeric = (avg) => {
             if (!avg) return '-';
             if (avg >= 3.5) return 'A';
-            if (avg >= 2.5) return 'B';
+            if (avg > 2.5) return 'B'; // AJUST MATEIX CANVI
             if (avg > 1.5) return 'C';
             return 'D';
         };
@@ -416,15 +484,15 @@
             if (size === "xl") finalSize = "max-w-[95vw] h-[90vh]";
             
             return (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className={`bg-white rounded-xl shadow-2xl w-full ${finalSize} flex flex-col overflow-hidden max-h-[90vh]`}>
-                        <div className="flex justify-between items-center p-4 border-b shrink-0">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4 animate-fade-in isolate">
+                    <div className={`bg-white rounded-xl shadow-2xl w-full ${finalSize} flex flex-col overflow-hidden max-h-[90vh] relative z-10 isolate`}>
+                        <div className="flex justify-between items-center p-4 border-b shrink-0 bg-white relative z-20">
                             <h3 className="text-xl font-bold text-gray-800">{title}</h3>
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
                                 <Icon name="xmark" className="text-xl" />
                             </button>
                         </div>
-                        <div className="p-6 overflow-y-auto custom-scroll flex-1">
+                        <div className="p-6 overflow-y-auto custom-scroll flex-1 relative z-10 bg-white">
                             {children}
                         </div>
                     </div>
@@ -1634,7 +1702,7 @@
                         </div>
                         
                         {/* CONTINGUT A EXPORTAR A PDF */}
-                        <div id="profile-pdf-content" className="bg-white p-8 rounded border border-gray-200 text-gray-800 space-y-8" style={{minHeight: "297mm"}}>
+                        <div id="profile-pdf-content" className="bg-white p-8 rounded border border-gray-200 text-gray-800 space-y-8 relative z-10" style={{minHeight: "297mm"}}>
                             {/* Header PDF */}
                             <div className="border-b-4 border-indigo-600 pb-6 mb-6 flex justify-between items-end">
                                 <div>
@@ -1792,6 +1860,8 @@
             const [history, setHistory] = useState([]);
             const [historyIndex, setHistoryIndex] = useState(-1);
             const [isReady, setIsReady] = useState(false);
+            const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
+            const lastLoadedDataStr = useRef(null);
             
             let classes = [];
             if (historyIndex >= 0 && historyIndex < history.length) {
@@ -1800,6 +1870,9 @@
                 }
             }
             
+            const classesRef = useRef(classes);
+            useEffect(() => { classesRef.current = classes; }, [classes]);
+
             const [activeClassId, setActiveClassId] = useState(null);
             const [activeTab, setActiveTab] = useState('S1'); 
             const [activeHalfGroupFilter, setActiveHalfGroupFilter] = useState("");
@@ -1878,6 +1951,10 @@
                     } else {
                         setShowWizard(false);
                     }
+                    
+                    // FIX BUG FIREBASE: Emmagatzemem en ref l'estat exacte tal i com arriba
+                    lastLoadedDataStr.current = JSON.stringify(initialData);
+
                     setHistory([initialData]); 
                     setHistoryIndex(0);
                     if (initialData.length > 0) {
@@ -1885,6 +1962,7 @@
                     } else {
                         setActiveClassId(null);
                     }
+                    setIsFirebaseLoaded(true);
                     setIsReady(true);
                 };
 
@@ -1896,16 +1974,75 @@
                 return () => window.removeEventListener('dadesCarregades', initData);
             }, []);
 
-            // 2. DESAR DADES AL NÚVOL (FIREBASE)
+            // 2. DESAR DADES AL NÚVOL (FIREBASE) SENSE BUG D'OVERWRITE
             useEffect(() => { 
-                if (isReady && classes) {
+                if (!isReady || !isFirebaseLoaded || !classes) return;
+
+                const currentDataStr = JSON.stringify(classes);
+                
+                // Evitem l'enviament de l'array per defecte si no hi ha hagut canvis reals de l'usuari
+                if (currentDataStr === lastLoadedDataStr.current) {
+                    return;
+                }
+
+                try { 
+                    if(window.guardarDades) window.guardarDades(classes); 
+                    // Actualitzem lastLoadedDataStr per no enviar dades duplicades constantment
+                    lastLoadedDataStr.current = currentDataStr;
+                } catch(e) {
+                    console.error("Failed to save to Firebase", e);
+                }
+            }, [classes, isReady, isFirebaseLoaded]);
+
+            // 3. BACKUP AUTOMÀTIC I FALLBACK A LOCALSTORAGE (només de lectura passiva)
+            useEffect(() => { 
+                if (classes && classes.length > 0) {
                     try { 
-                        if(window.guardarDades) window.guardarDades(classes); 
+                        localStorage.setItem('evalApp_data_v2', JSON.stringify(classes)); 
                     } catch(e) {
-                        console.error("Failed to save to Firebase", e);
+                        console.error("Failed to save to localStorage", e);
                     }
                 }
-            }, [classes, isReady]);
+            }, [classes]);
+
+            // 4. DESCARREGA BACKUP DIARI
+            useEffect(() => {
+                const handleUserInteractionForBackup = () => {
+                    const todayStr = window.getLocalYYYYMMDD ? window.getLocalYYYYMMDD(new Date()) : new Date().toISOString().split('T')[0];
+                    const lastDownload = localStorage.getItem('lastAvaluaproAutoBackupDate');
+                    
+                    if (lastDownload !== todayStr) {
+                        const currentDataStr = JSON.stringify(classesRef.current);
+                        if (currentDataStr && currentDataStr.length > 10 && currentDataStr !== '[]') {
+                            try {
+                                document.removeEventListener('click', handleUserInteractionForBackup);
+                                document.removeEventListener('keydown', handleUserInteractionForBackup);
+                                document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                                
+                                localStorage.setItem('lastAvaluaproAutoBackupDate', todayStr);
+                                
+                                if (window.createAvaluaproBackup) {
+                                    window.createAvaluaproBackup(true, 'Còpia automàtica diària', true, currentDataStr);
+                                }
+                                console.log(`Backup automàtic diari processat i descarregat.`);
+                            } catch (err) {
+                                console.error("Error processant el backup diari:", err);
+                            }
+                        }
+                    }
+                };
+
+                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
+                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
+
+                return () => {
+                    document.removeEventListener('click', handleUserInteractionForBackup);
+                    document.removeEventListener('keydown', handleUserInteractionForBackup);
+                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
+                };
+            }, []);
+
 
             useEffect(() => { 
                 setActiveHalfGroupFilter(""); 
@@ -2859,12 +2996,12 @@
                                                             {isEditingStructure && (
                                                                 <div className="absolute top-1 right-1 flex gap-1">
                                                                     <button onClick={() => deleteItem('crit', crit.id, comp.id, null)} className="text-red-500 bg-white rounded-full w-5 h-5 opacity-0 group-hover:opacity-100 shadow-sm transition"><Icon name="xmark"/></button>
-                                                                    <button onClick={() => addStructureItem('ind', crit.id, comp.id)} className="text-blue-600 bg-white rounded-full w-5 h-5 shadow-sm transition"><Icon name="plus"/></button>
+                                                                    <button onClick={() => addStructureItem('crit', crit.id, comp.id)} className="text-blue-600 bg-white rounded-full w-5 h-5 shadow-sm transition"><Icon name="plus"/></button>
                                                                 </div>
                                                             )}
                                                         </th>
                                                     ))}
-                                                    <th className="p-2 border-b border-r w-14 text-center text-xs min-w-[3.5rem] font-bold shadow-sm" style={{backgroundColor: styles.header, color: 'white', borderColor: styles.border}}>Nota</th>
+                                                    <th className="p-2 border-b border-r w-14 text-center text-xs min-w-[3.5rem] font-bold shadow-sm" style={{backgroundColor: styles.header, color: 'white', borderColor: styles.border}}>Nota <Icon name="pen" className="inline ml-0.5 text-[10px] opacity-80" title="Pots modificar la nota manualment"/></th>
                                                 </React.Fragment>
                                             );
                                         })}
@@ -2894,7 +3031,7 @@
                                                                 )}
                                                             </th>
                                                         ))}
-                                                        <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner">CA</th>
+                                                        <th className="p-2 border-b border-r bg-gray-100 w-14 text-center font-bold text-xs min-w-[3.5rem] text-gray-500 shadow-inner">CA <Icon name="pen" className="inline ml-0.5 text-[10px] text-gray-400" title="Pots modificar la nota manualment"/></th>
                                                     </React.Fragment>
                                                 ))}
                                                 <th className="p-2 border-b border-r bg-gray-200 w-14 text-center min-w-[3.5rem] shadow-inner"></th>
@@ -2999,7 +3136,7 @@
                                                                                         style={{textAlignLast:'center'}}
                                                                                         title="Pots sobreescriure la nota manualment"
                                                                                     >
-                                                                                        <option value="" className="text-gray-500 bg-white">Auto ({autoCg || '-'})</option>
+                                                                                        <option value="" className="text-gray-500 bg-white">{autoCg || '-'}</option>
                                                                                         <option value="A" className="text-green-600 bg-green-50">A</option>
                                                                                         <option value="B" className="text-blue-600 bg-blue-50">B</option>
                                                                                         <option value="C" className="text-orange-600 bg-orange-50">C</option>
@@ -3028,7 +3165,7 @@
                                                                             style={{textAlignLast:'center'}}
                                                                             title="Pots sobreescriure la nota manualment"
                                                                         >
-                                                                            <option value="" className="text-gray-500 bg-white">Auto ({autoCompG || '-'})</option>
+                                                                            <option value="" className="text-gray-500 bg-white">{autoCompG || '-'}</option>
                                                                             <option value="A" className="text-green-600 bg-green-50">A</option>
                                                                             <option value="B" className="text-blue-600 bg-blue-50">B</option>
                                                                             <option value="C" className="text-orange-600 bg-orange-50">C</option>
