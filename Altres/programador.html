@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Programació Docent</title>
+    <title>Programador Docent</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -62,6 +62,77 @@
 <body>
     <div id="root"></div>
 
+    <!-- Integració de Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAoUM58SRUMEFlCFm56jzI7eTU9QB-JxBE",
+            authDomain: "eines-docents.firebaseapp.com",
+            projectId: "eines-docents",
+            storageBucket: "eines-docents.firebasestorage.app",
+            messagingSenderId: "80852705741",
+            appId: "1:80852705741:web:375c1a3dfd2ae2466c6484",
+            measurementId: "G-JJ73JJ3DQX"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        window.currentUser = null;
+
+        window.login = async function() {
+            await signInWithPopup(auth, provider);
+        }
+
+        window.logout = async function() {
+            await signOut(auth);
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                window.currentUser = user;
+                if (window.updateReactUser) window.updateReactUser(user);
+                carregarDades();
+            } else {
+                window.currentUser = null;
+                if (window.updateReactUser) window.updateReactUser(null);
+                console.log("Usuari no logat");
+            }
+        });
+
+        window.guardarDades = async function(dades) {
+            if (!window.currentUser) return;
+            await setDoc(doc(db, "programador_docent", window.currentUser.uid), dades);
+            console.log("Dades guardades al núvol");
+        }
+
+        async function carregarDades() {
+            if (!window.currentUser) return;
+            const snap = await getDoc(doc(db, "programador_docent", window.currentUser.uid));
+
+            if (snap.exists()) {
+                const dades = snap.data();
+                console.log("Dades carregades:", dades);
+
+                // IMPORTANT: injectar dades al sistema existent
+                if (window.inicialitzarDades) {
+                    window.inicialitzarDades(dades);
+                }
+            } else {
+                // El document no existeix (nou usuari), alliberem el control de càrrega
+                if (window.inicialitzarDades) {
+                    window.inicialitzarDades(null);
+                }
+            }
+        }
+    </script>
+
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
@@ -97,29 +168,6 @@
                 ]
             }
         ];
-
-        // --- FUNCIONS DE LOCALSTORAGE ---
-        const guardarDades = (coursesToSave) => {
-            Object.keys(localStorage).forEach(k => {
-                if (k.startsWith('programacio-')) localStorage.removeItem(k);
-            });
-            coursesToSave.forEach((curs, index) => {
-                const cursToSave = { ...curs, _saveOrder: index };
-                localStorage.setItem(`programacio-${curs.name}`, JSON.stringify(cursToSave));
-            });
-        };
-
-        const llegirDades = () => {
-            const keys = Object.keys(localStorage).filter(k => k.startsWith('programacio-'));
-            const loaded = keys.map(k => {
-                try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
-            }).filter(Boolean);
-            return loaded.sort((a, b) => (a._saveOrder || 0) - (b._saveOrder || 0));
-        };
-
-        const detectarDades = () => {
-            return Object.keys(localStorage).some(k => k.startsWith('programacio-'));
-        };
 
         const migrateData = (courses) => {
             return courses.map(c => ({
@@ -158,19 +206,6 @@
             }));
         };
 
-        const getLocalYYYYMMDD = (d) => {
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
-        const getLocalHHMM = (d) => {
-            const hours = String(d.getHours()).padStart(2, '0');
-            const minutes = String(d.getMinutes()).padStart(2, '0');
-            return `${hours}${minutes}`;
-        };
-
         // --- COMPONENTS ---
 
         const AutoTextarea = ({ value, onChange, placeholder, className, onFocus }) => {
@@ -206,16 +241,9 @@
 
 
         const App = () => {
-            const [data, setData] = useState(() => {
-                let loadedData;
-                if (detectarDades()) {
-                    loadedData = llegirDades();
-                } else {
-                    const antic = localStorage.getItem('programacio_docent_data');
-                    if (antic) { try { loadedData = JSON.parse(antic); } catch (e) {} }
-                }
-                return migrateData(loadedData && loadedData.length > 0 ? loadedData : initialData);
-            });
+            const [data, setData] = useState(() => migrateData(initialData));
+            const [user, setUser] = useState(null);
+            const hasLoadedRef = useRef(false);
 
             const [activeCourseId, setActiveCourseId] = useState(data[0]?.id);
             const [activeUnitId, setActiveUnitId] = useState(data[0]?.units[0]?.id);
@@ -242,6 +270,24 @@
             useEffect(() => {
                 localStorage.setItem('programacio_agenda_url', agendaUrl);
             }, [agendaUrl]);
+
+            // Setup the bridge with Firebase auth and data
+            useEffect(() => {
+                window.inicialitzarDades = (dadesRebudes) => {
+                    hasLoadedRef.current = true;
+                    if (dadesRebudes && dadesRebudes.courses && dadesRebudes.courses.length > 0) {
+                        const migrated = migrateData(dadesRebudes.courses);
+                        setData(migrated);
+                        setActiveCourseId(migrated[0]?.id);
+                        if(migrated[0]?.units && migrated[0].units.length > 0) {
+                            setActiveUnitId(migrated[0].units[0].id);
+                        }
+                    }
+                };
+                
+                window.updateReactUser = (u) => setUser(u);
+                if (window.currentUser) setUser(window.currentUser);
+            }, []);
 
             // --- SINCRONITZACIÓ AMB AGENDA (POSTMESSAGE I LOCALSTORAGE) ---
             useEffect(() => {
@@ -385,59 +431,12 @@
                 return () => window.removeEventListener("message", handleMessage);
             }, []);
 
-            // --- BACKUP AUTOMÀTIC DIARI MITJANÇANT DESCÀRREGA JSON ---
+            // Firebase Auto-save i Control de l'Historial
             useEffect(() => {
-                const handleUserInteractionForBackup = () => {
-                    const now = new Date();
-                    const todayStr = getLocalYYYYMMDD(now);
-                    const lastDownload = localStorage.getItem('lastAutoBackupDownloadDate_prog');
-                    
-                    if (lastDownload !== todayStr) {
-                        const currentData = llegirDades();
-                        if (currentData && currentData.length > 0) {
-                            try {
-                                document.removeEventListener('click', handleUserInteractionForBackup);
-                                document.removeEventListener('keydown', handleUserInteractionForBackup);
-                                document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                                
-                                localStorage.setItem('lastAutoBackupDownloadDate_prog', todayStr);
-                                
-                                const timeStr = getLocalHHMM(now);
-                                const dataStr = JSON.stringify(currentData);
-                                const blob = new Blob([dataStr], { type: 'application/json' });
-                                const url = window.URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = `ProgramadorBackup_${todayStr}_${timeStr}.json`;
-                                document.body.appendChild(a);
-                                a.click();
-                                setTimeout(() => {
-                                    document.body.removeChild(a);
-                                    window.URL.revokeObjectURL(url);
-                                }, 100);
-                                
-                                console.log(`Backup automàtic diari processat i descarregat.`);
-                            } catch (err) {
-                                console.error("Error processant el backup diari:", err);
-                            }
-                        }
-                    }
-                };
-
-                document.addEventListener('click', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('keydown', handleUserInteractionForBackup, { passive: true });
-                document.addEventListener('touchstart', handleUserInteractionForBackup, { passive: true });
-
-                return () => {
-                    document.removeEventListener('click', handleUserInteractionForBackup);
-                    document.removeEventListener('keydown', handleUserInteractionForBackup);
-                    document.removeEventListener('touchstart', handleUserInteractionForBackup);
-                };
-            }, []);
-
-            useEffect(() => {
-                guardarDades(data);
+                if (window.currentUser && hasLoadedRef.current) {
+                    window.guardarDades({ courses: data });
+                }
+                
                 if (skipHistory) {
                     setSkipHistory(false);
                     return;
@@ -813,34 +812,6 @@
                 setActiveUnitId(newUnitId);
             };
 
-            // Funcions per Desar i Carregar JSON
-            const exportJSON = () => {
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
-                const link = document.createElement("a");
-                link.setAttribute("href", dataStr);
-                link.setAttribute("download", `programacio_docent_${new Date().toISOString().split('T')[0]}.json`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-
-            const handleImportJSON = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const importedData = JSON.parse(event.target.result);
-                        setData(migrateData(importedData));
-                        setActiveCourseId(importedData[0]?.id);
-                        showToast("Dades JSON importades correctament.");
-                    } catch (err) {
-                        alert("El fitxer no té un format JSON vàlid.");
-                    }
-                };
-                reader.readAsText(file);
-            };
-
             // Nou mètode d'exportació XLSX utilitzant SheetJS
             const executeExportXLSX = () => {
                 const targetCourse = data.find(c => c.id === exportCourseId);
@@ -999,6 +970,22 @@
                                     </div>
                                     <h1 className="text-xl font-bold text-gray-800 truncate max-w-[150px] sm:max-w-none">Programador Docent</h1>
                                     
+                                    {/* Lògica de sessió Firebase */}
+                                    <div className="hidden sm:flex items-center ml-4 pl-4 border-l-2 border-orange-200 gap-3">
+                                        {!user ? (
+                                            <button id="loginBtn" onClick={() => window.login && window.login()} className="text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md transition shadow-sm">
+                                                Inicia sessió amb Google
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-3">
+                                                <p id="userInfo" className="text-sm font-medium text-gray-600">{user.email}</p>
+                                                <button id="logoutBtn" onClick={() => window.logout && window.logout()} className="text-sm font-medium bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1.5 rounded-md transition">
+                                                    Tanca sessió
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Caixeta URL Agenda */}
                                     <div className="hidden md:flex items-center ml-4 pl-4 border-l-2 border-orange-200">
                                         <span className="text-sm font-semibold text-gray-500 mr-2">La meva agenda:</span>
@@ -1019,15 +1006,6 @@
                                          <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-1 sm:p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 rounded hover:bg-white transition-all" title="Refer"> <IconRedo /> </button>
                                     </div>
 
-                                    {/* Botons per exportar/importar JSON restablerts */}
-                                    <label className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors cursor-pointer" title="Carregar JSON">
-                                        <IconUpload /> <span className="ml-2 hidden lg:inline">Obrir JSON</span>
-                                        <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
-                                    </label>
-                                    <button onClick={exportJSON} className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Desar còpia de seguretat en format JSON">
-                                        <IconSave /> <span className="ml-2 hidden lg:inline">Desar JSON</span>
-                                    </button>
-                                    
                                     <button 
                                         onClick={() => {
                                             setExportCourseId(activeCourseId);
