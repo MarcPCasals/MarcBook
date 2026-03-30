@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape Room: Auditoría de la Huella Química</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SweetAlert2 para popups gamificados -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- SortableJS para Drag & Drop (Nivel 3) -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <!-- html2pdf para exportar el informe final -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- Google Fonts (Tema Hacker/Auditor y Nota a mano) -->
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;800&family=Caveat:wght@700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Estilos personalizados y Tema */
+        :root {
+            --neon-green: #39ff14;
+            --dark-bg: #0f172a;
+            --tutor-blue: #38bdf8;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark-bg);
+            color: #e2e8f0;
+            background-image: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
+        }
+
+        .font-mono { font-family: 'Share Tech Mono', monospace; }
+
+        /* Efectos Neón y Tutor */
+        .neon-text { color: var(--neon-green); text-shadow: 0 0 5px var(--neon-green), 0 0 10px rgba(57, 255, 20, 0.5); }
+        .neon-border { border-color: var(--neon-green); box-shadow: 0 0 10px rgba(57, 255, 20, 0.2), inset 0 0 10px rgba(57, 255, 20, 0.1); }
+        .tutor-text { color: var(--tutor-blue); text-shadow: 0 0 5px rgba(56, 189, 248, 0.5); }
+
+        /* Botones principales */
+        .btn-neon {
+            background-color: rgba(57, 255, 20, 0.1); border: 2px solid var(--neon-green); color: var(--neon-green);
+            transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .btn-neon:hover { background-color: var(--neon-green); color: var(--dark-bg); box-shadow: 0 0 20px var(--neon-green); transform: translateY(-2px); }
+
+        /* Animaciones */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        
+        @keyframes popIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .chat-bubble { animation: popIn 0.3s ease-out forwards; }
+        
+        /* Terminal Typing Effect */
+        .typing-effect::after { content: '█'; animation: blink 1s step-end infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        .blink-text { animation: blink 1s step-end infinite; }
+
+        /* Ocultar secciones no activas */
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.5s ease-out forwards; }
+
+        /* Elementos UI Interactivos */
+        input, textarea { transition: all 0.3s ease; }
+        input:focus, textarea:focus { transform: scale(1.02); box-shadow: 0 0 15px rgba(57, 255, 20, 0.2); }
+        
+        /* Drag & Drop */
+        .drag-item { cursor: grab; transition: transform 0.2s ease; }
+        .drag-item:active { cursor: grabbing; }
+        .drag-item:hover { transform: translateX(5px); }
+        .sortable-ghost { opacity: 0.4; background-color: #334155; border: 1px dashed #38bdf8; }
+        
+        /* Partículas Nivel 1 */
+        .atom { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin: 1px; transition: all 0.3s; }
+        .atom-C { background-color: #475569; border: 1px solid #94a3b8; }
+        .atom-H { background-color: #f8fafc; border: 1px solid #cbd5e1; }
+        .atom-O { background-color: #ef4444; border: 1px solid #f87171; }
+        .molecule-box { background: rgba(255,255,255,0.05); padding: 5px; border-radius: 8px; margin: 2px; display: inline-flex; align-items: center; justify-content: center; animation: fadeIn 0.3s; }
+
+        /* Modal Pestañas */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s; }
+        .tab-btn.active { background-color: #334155; border-bottom: 2px solid var(--neon-green); color: white; }
+    </style>
+</head>
+<body class="pt-32 pb-12 flex flex-col items-center">
+
+    <!-- CABECERA GLOBAL FIXA -->
+    <header class="fixed top-0 left-0 w-full z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-700 px-4 py-3 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-col gap-3">
+            <!-- Fila Superior: Identidad y Herramientas -->
+            <div class="flex justify-between items-center flex-wrap gap-2">
+                <div class="font-mono text-xl neon-text font-bold tracking-widest flex items-center gap-2">
+                    <span>⚡ AIAC_SYS</span>
+                </div>
+                
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="toggleDocs()" class="bg-slate-800 hover:bg-slate-700 text-white py-1.5 px-3 rounded text-sm border border-neon-green flex items-center gap-2 transition shadow-[0_0_10px_rgba(57,255,20,0.1)]">
+                        📁 <span class="hidden sm:inline">Documentos</span>
+                    </button>
+                    <button onclick="toggleLearningProgress()" class="bg-sky-900/80 hover:bg-sky-800 text-white py-1.5 px-3 rounded text-sm border border-sky-400 flex items-center gap-2 transition shadow-[0_0_10px_rgba(56,189,248,0.1)]">
+                        📊 <span class="hidden sm:inline">Perfil Científico</span>
+                    </button>
+                    <button onclick="toggleEvidences()" class="bg-indigo-900/80 hover:bg-indigo-800 text-white py-1.5 px-3 rounded text-sm border border-indigo-400 flex items-center gap-2 transition shadow-[0_0_10px_rgba(99,102,241,0.1)]">
+                        🛡️ <span class="hidden sm:inline">Evidencias</span>
+                    </button>
+                    <button onclick="openTeacherMode()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-3 rounded text-sm border border-slate-600 transition">
+                        🔓 <span class="hidden sm:inline">Docente</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Fila Inferior: Stats y Gamificación -->
+            <div class="flex gap-4 items-center text-xs font-mono">
+                <div id="global-timer" class="text-slate-300 bg-slate-800 px-2 py-1 rounded hidden xs:block">T: 00:00</div>
+                <button onclick="resetGame()" class="text-slate-500 hover:text-white underline hidden sm:block transition">Reiniciar</button>
+                
+                <div class="flex-1 flex gap-4 max-w-md ml-auto">
+                    <div class="flex-1">
+                        <div class="text-[10px] text-slate-400 flex justify-between mb-0.5"><span>Progreso del Caso</span><span id="progress-text">0%</span></div>
+                        <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden"><div id="progress-bar" class="h-full bg-blue-500 w-0 transition-all duration-1000"></div></div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="text-[10px] flex justify-between mb-0.5"><span id="cred-label" class="text-neon-green">Nivel Científico Global</span><span id="cred-text" class="text-neon-green">100 Pts</span></div>
+                        <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full"><div id="cred-bar" class="h-full bg-neon-green transition-all duration-500 shadow-[0_0_10px_var(--neon-green)]" style="width: 100%;"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- TERMINAL DEL SISTEMA -->
+    <div id="terminal-overlay" class="fixed inset-0 bg-black/95 z-[60] hidden flex-col items-center justify-center p-8 backdrop-blur-sm transition-all duration-500">
+        <div class="font-mono text-neon-green text-lg md:text-xl max-w-3xl w-full">
+            <p class="text-slate-500 mb-4 text-sm">=== CONEXIÓN SEGURA AIAC ESTABLECIDA ===</p>
+            <p id="terminal-text" class="typing-effect leading-relaxed"></p>
+        </div>
+    </div>
+
+    <!-- CONTENEDOR PRINCIPAL DUAL (GAME MASTER + INTERACTIVO) -->
+    <main class="w-full max-w-7xl px-4 relative flex flex-col lg:flex-row gap-6 mt-2">
+
+        <!-- ASIDE: PANEL GAME MASTER CHAT -->
+        <aside class="w-full lg:w-1/4 xl:w-[320px] flex-shrink-0 order-2 lg:order-1 z-30">
+            <div class="sticky top-28 bg-slate-900 border border-tutor-blue/40 rounded-xl flex flex-col h-[70vh] shadow-[0_0_20px_rgba(56,189,248,0.15)] overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-tutor-blue to-transparent opacity-50"></div>
+                <!-- Header GM -->
+                <div class="flex items-center gap-3 p-4 border-b border-slate-700 bg-slate-800/50 shrink-0">
+                    <div class="w-10 h-10 rounded-full bg-slate-800 border border-tutor-blue flex items-center justify-center text-xl shadow-[0_0_10px_rgba(56,189,248,0.3)]">🤖</div>
+                    <div>
+                        <h3 class="font-bold text-white font-mono leading-tight">AIAC DIRECTOR</h3>
+                        <p class="text-[10px] text-tutor-blue font-mono uppercase tracking-widest">Canal de Mando</p>
+                    </div>
+                </div>
+                <!-- Body Chat GM -->
+                <div id="gm-chat-box" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scroll scroll-smooth bg-slate-900/50 pb-8">
+                    <!-- Los mensajes se inyectan permanentemente aquí vía JS -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- ÁREA INTERACTIVA (PANTALLAS) -->
+        <div class="w-full lg:flex-1 order-1 lg:order-2">
+
+            <!-- ==========================================
+                 PANTALLA 0: INTRODUCCIÓN
+                 ========================================== -->
+            <section id="screen-0" class="screen active text-center mx-auto max-w-3xl">
+                <div class="mb-8">
+                    <h1 class="text-4xl md:text-5xl font-bold mb-4 font-mono neon-text tracking-tight">AUDITORÍA DE LA<br>HUELLA QUÍMICA</h1>
+                    <p class="text-lg text-slate-400">Agencia Internacional de Auditoría Climática (AIAC)</p>
+                </div>
+                
+                <div class="bg-slate-800 p-6 rounded-lg border border-slate-700 text-left mb-8 text-slate-300 leading-relaxed shadow-lg">
+                    <p class="mb-3 text-white font-bold text-xl border-b border-slate-600 pb-2">🎯 Expediente: Caso NOVA ENERGIA</p>
+                    <p class="mb-4 mt-4">La corporación <span class="text-red-400 font-bold">NOVA ENERGIA</span> va a publicar el informe de su nuevo "Vehículo Metano", promocionándolo como ecológico y de bajas emisiones.</p>
+                    <p class="mb-4 text-sm text-slate-400">Sin embargo, la combustión de cualquier hidrocarburo genera gases que no son inocuos. Si sus datos oficiales son sospechosamente bajos, significa que están manipulados para evadir impuestos climáticos.</p>
+                    <p class="text-tutor-blue text-sm border-l-2 border-tutor-blue pl-3 bg-sky-900/20 p-3 rounded leading-relaxed">
+                        🧠 <strong>Atención al Nivel Científico:</strong> Empiezas con 100 Puntos. Si cometes errores, solicitas pistas del Director o pides ayudas visuales, tu Nivel Científico bajará drásticamente. Al final de la partida recibirás un <strong>Ranking (A, B, C o D)</strong>. ¡Piensa como un científico antes de actuar!
+                    </p>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-4 justify-center mt-6">
+                    <button onclick="startGame('confianza')" class="btn-neon font-bold py-4 px-6 rounded-lg text-sm w-full md:w-auto shadow-[0_0_15px_rgba(57,255,20,0.4)] tracking-widest uppercase">
+                        [ INICIAR: CONFIAR EN EMPRESA ]
+                    </button>
+                    <button onclick="startGame('sospecha')" class="bg-red-900/20 border-2 border-red-500 text-red-400 hover:bg-red-500 hover:text-white font-bold py-4 px-6 rounded-lg text-sm w-full md:w-auto transition shadow-[0_0_15px_rgba(239,68,68,0.4)] tracking-widest uppercase">
+                        [ INICIAR: SOSPECHAR DE EMPRESA ]
+                    </button>
+                </div>
+            </section>
+
+            <!-- ==========================================
+                 PANTALLA 0-8: MISIÓN 0 - IDENTIFICACIÓN
+                 ========================================== -->
+            <section id="screen-0-8" class="screen max-w-3xl mx-auto">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold font-mono text-white">MISIÓN 0: Identificación</h2>
+                        <span class="bg-blue-900/50 text-blue-300 text-xs px-2 py-1 rounded border border-blue-500/30 font-mono mt-2 inline-block">Habilidades: Nomenclatura (CFN2) y Lógica (CFN1)</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 neon-border mb-6 text-slate-300 relative">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
+                            <h3 class="font-bold text-white mb-4 border-b border-slate-700 pb-2 text-sm">1. Nomenclatura</h3>
+                            <div class="flex items-center gap-3">
+                                <span class="font-mono text-xl text-blue-300 w-12">CH₄</span>
+                                <span class="text-slate-500">→</span>
+                                <input type="text" id="m0-name1" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="font-mono text-xl text-blue-300 w-12">NO₂</span>
+                                <span class="text-slate-500">→</span>
+                                <input type="text" id="m0-name2" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="font-mono text-xl text-blue-300 w-12">N₂O</span>
+                                <span class="text-slate-500">→</span>
+                                <input type="text" id="m0-name3" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
+                            <h3 class="font-bold text-white mb-4 border-b border-slate-700 pb-2 text-sm">2. Formulación</h3>
+                            <div class="flex flex-col gap-3 text-sm">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-slate-300 text-xs">Dióxido de carbono</span>
+                                    <input type="text" id="m0-form3" placeholder="Fórmula" class="w-20 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 font-mono text-center">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-slate-300 text-xs">Dióxido de azufre</span>
+                                    <input type="text" id="m0-form1" placeholder="Fórmula" class="w-20 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 font-mono text-center">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-slate-300 text-xs">Monóxido de carbono</span>
+                                    <input type="text" id="m0-form2" placeholder="Fórmula" class="w-20 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 font-mono text-center">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 mt-6">
+                        <h3 class="font-bold text-white mb-3 text-sm">3. Selección del Sospechoso</h3>
+                        <p class="text-sm mb-3 text-slate-400">¿Cuál es el Gas de Efecto Invernadero (GEI) principal resultante de la combustión?</p>
+                        <div class="grid grid-cols-5 gap-2 mb-4" id="m0-suspects">
+                            <button class="suspect-btn bg-slate-800 border border-slate-600 hover:border-blue-400 py-2 rounded transition font-mono" onclick="selectSuspect(this, 'NO2')">NO₂</button>
+                            <button class="suspect-btn bg-slate-800 border border-slate-600 hover:border-blue-400 py-2 rounded transition font-mono" onclick="selectSuspect(this, 'CO2')">CO₂</button>
+                            <button class="suspect-btn bg-slate-800 border border-slate-600 hover:border-blue-400 py-2 rounded transition font-mono" onclick="selectSuspect(this, 'SO2')">SO₂</button>
+                            <button class="suspect-btn bg-slate-800 border border-slate-600 hover:border-blue-400 py-2 rounded transition font-mono" onclick="selectSuspect(this, 'CO')">CO</button>
+                            <button class="suspect-btn bg-slate-800 border border-slate-600 hover:border-blue-400 py-2 rounded transition font-mono" onclick="selectSuspect(this, 'N2O')">N₂O</button>
+                        </div>
+                        
+                        <div class="border-t border-slate-700 pt-3">
+                            <label class="text-sm text-yellow-400 font-bold mb-2 block">Justifica tu decisión científica:</label>
+                            <textarea id="m0-justify" rows="2" placeholder="Escribe aquí tu justificación basada en los documentos analizados..." class="w-full bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm transition resize-none"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="checkLevel0_8()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition border border-slate-600">EVALUAR DATOS INICIALES</button>
+            </section>
+
+            <!-- ==========================================
+                 PANTALLA 1: LA BALANZA (AJUSTE)
+                 ========================================== -->
+            <section id="screen-1" class="screen max-w-3xl mx-auto">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold font-mono text-white">MISIÓN 1: La Base del Fraude</h2>
+                        <span class="bg-blue-900/50 text-blue-300 text-xs px-2 py-1 rounded border border-blue-500/30 font-mono mt-2 inline-block">Habilidad: Reacciones (CFN4)</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 neon-border mb-6">
+                    
+                    <!-- Botón de Ayuda Visual -->
+                    <div class="text-center mb-6">
+                        <button id="btn-activate-visual" onclick="activateVisualAid()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-500 py-2 px-4 rounded text-sm transition font-mono">
+                            👁️ Solicitar Simulador Visual (Penalización: -10 Pts)
+                        </button>
+                    </div>
+
+                    <!-- Zona de Ajuste Interactiva -->
+                    <div class="flex flex-col md:flex-row items-center justify-center gap-4 text-2xl font-mono mb-6 bg-slate-900 p-4 rounded-lg shadow-inner">
+                        <!-- Reactivos -->
+                        <div class="flex items-center gap-2">
+                            <div class="flex flex-col items-center">
+                                <div class="flex gap-1 mb-1 bg-slate-800 rounded p-1 border border-slate-700">
+                                    <button onclick="changeCoef(0, 1)" class="text-slate-400 hover:text-white px-2">+</button>
+                                    <span id="coef-0" class="text-white w-6 text-center">0</span>
+                                    <button onclick="changeCoef(0, -1)" class="text-slate-400 hover:text-white px-2">-</button>
+                                </div>
+                                <span class="text-blue-300">CH₄</span>
+                            </div>
+                            <span class="text-slate-500 font-bold">+</span>
+                            <div class="flex flex-col items-center">
+                                <div class="flex gap-1 mb-1 bg-slate-800 rounded p-1 border border-slate-700">
+                                    <button onclick="changeCoef(1, 1)" class="text-slate-400 hover:text-white px-2">+</button>
+                                    <span id="coef-1" class="text-white w-6 text-center">0</span>
+                                    <button onclick="changeCoef(1, -1)" class="text-slate-400 hover:text-white px-2">-</button>
+                                </div>
+                                <span class="text-blue-300">O₂</span>
+                            </div>
+                        </div>
+
+                        <span class="text-white font-bold text-3xl mx-4">→</span>
+
+                        <!-- Productos -->
+                        <div class="flex items-center gap-2">
+                            <div class="flex flex-col items-center">
+                                <div class="flex gap-1 mb-1 bg-slate-800 rounded p-1 border border-slate-700">
+                                    <button onclick="changeCoef(2, 1)" class="text-slate-400 hover:text-white px-2">+</button>
+                                    <span id="coef-2" class="text-white w-6 text-center">0</span>
+                                    <button onclick="changeCoef(2, -1)" class="text-slate-400 hover:text-white px-2">-</button>
+                                </div>
+                                <span class="text-orange-300">CO₂</span>
+                            </div>
+                            <span class="text-slate-500 font-bold">+</span>
+                            <div class="flex flex-col items-center">
+                                <div class="flex gap-1 mb-1 bg-slate-800 rounded p-1 border border-slate-700">
+                                    <button onclick="changeCoef(3, 1)" class="text-slate-400 hover:text-white px-2">+</button>
+                                    <span id="coef-3" class="text-white w-6 text-center">0</span>
+                                    <button onclick="changeCoef(3, -1)" class="text-slate-400 hover:text-white px-2">-</button>
+                                </div>
+                                <span class="text-orange-300">H₂O</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visualizador Molecular (Oculto por defecto) -->
+                    <div id="visual-aid-container" class="hidden flex flex-col md:flex-row items-center justify-center gap-4 mb-6 bg-slate-900/50 p-4 rounded-lg border border-sky-900/50">
+                        <div class="flex flex-1 justify-center gap-2">
+                            <div id="vis-0" class="min-h-[30px] flex flex-wrap justify-center w-16"></div>
+                            <span class="text-slate-600 font-bold mt-2">+</span>
+                            <div id="vis-1" class="min-h-[30px] flex flex-wrap justify-center w-16"></div>
+                        </div>
+                        <span class="text-neon-green font-bold mx-2 text-2xl">=</span>
+                        <div class="flex flex-1 justify-center gap-2">
+                            <div id="vis-2" class="min-h-[30px] flex flex-wrap justify-center w-16"></div>
+                            <span class="text-slate-600 font-bold mt-2">+</span>
+                            <div id="vis-3" class="min-h-[30px] flex flex-wrap justify-center w-16"></div>
+                        </div>
+                    </div>
+
+                    <!-- Panel DUA: Contador (Oculto por defecto) -->
+                    <div id="atom-counters" class="hidden grid grid-cols-3 gap-4">
+                        <div class="bg-slate-900 p-4 rounded text-center border border-slate-700 shadow-inner">
+                            <div class="text-sm text-slate-400 mb-1">Carbono (C)</div>
+                            <div class="text-xl font-mono"><span id="c-react">0</span> <span id="c-status">≠</span> <span id="c-prod">0</span></div>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded text-center border border-slate-700 shadow-inner">
+                            <div class="text-sm text-slate-400 mb-1">Hidrógeno (H)</div>
+                            <div class="text-xl font-mono"><span id="h-react">0</span> <span id="h-status">≠</span> <span id="h-prod">0</span></div>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded text-center border border-slate-700 shadow-inner">
+                            <div class="text-sm text-slate-400 mb-1">Oxígeno (O)</div>
+                            <div class="text-xl font-mono"><span id="o-react">0</span> <span id="o-status">≠</span> <span id="o-prod">0</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="checkLevel1()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition border border-slate-600">VALIDAR BALANCE DE MASAS</button>
+            </section>
+
+            <!-- ==========================================
+                 PANTALLA 2: DEUDA QUÍMICA (CÁLCULO)
+                 ========================================== -->
+            <section id="screen-2" class="screen max-w-3xl mx-auto">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold font-mono text-white">MISIÓN 2: El Choque de Datos</h2>
+                        <span class="bg-blue-900/50 text-blue-300 text-xs px-2 py-1 rounded border border-blue-500/30 font-mono mt-2 inline-block">Habilidad: Cálculo Estequiométrico (CFN4)</span>
+                    </div>
+                    <button id="btn-request-hint2" onclick="requestHint(2)" class="text-yellow-400 border border-yellow-400 hover:bg-yellow-400 hover:text-black px-3 py-1 rounded text-sm transition font-mono whitespace-nowrap">? PEDIR PISTA (-10 Pts)</button>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 neon-border mb-6">
+                    <p class="text-sm text-slate-400 mb-6 font-mono text-center border-b border-slate-700 pb-4">Reacción química base validada:<br><span class="text-white text-lg">CH₄ + 2O₂ → CO₂ + 2H₂O</span></p>
+                    
+                    <!-- Modo Guiado Adaptativo -->
+                    <div id="guided-mode-panel" class="hidden bg-sky-900/20 p-4 rounded mb-6 border border-tutor-blue/50 text-sm text-slate-300 space-y-2 shadow-inner">
+                        <h4 class="text-tutor-blue font-bold mb-2 flex items-center gap-2">🧠 Asistencia Analítica Activada:</h4>
+                        <p><strong>1. El Puente de Moles:</strong> Pasa los 3200g de CH₄ a moles (Divide entre 16 g/mol).</p>
+                        <p><strong>2. La Proporción:</strong> Según la ecuación, 1 mol de CH₄ genera 1 mol de CO₂. (Proporción 1 a 1).</p>
+                        <p><strong>3. Resultado:</strong> Pasa esos moles de CO₂ a gramos (Multiplica por 44 g/mol).</p>
+                    </div>
+
+                    <div id="calculation-block">
+                        <div class="flex flex-col md:flex-row gap-4 items-center justify-center">
+                            <input type="text" id="lvl2-input" placeholder="Ej: 100 g" class="w-full md:w-1/2 bg-slate-900 border border-slate-600 text-white text-2xl p-4 rounded outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 text-center font-mono shadow-inner transition">
+                            <span class="text-xl text-slate-400 font-mono">de CO₂ reales</span>
+                        </div>
+                        <button onclick="validateCalculationLvl2()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition border border-slate-600 mt-6">EVALUAR EVIDENCIA MATEMÁTICA</button>
+                    </div>
+
+                    <!-- Reto Extra -->
+                    <div id="extra-challenge-block" class="hidden mt-6 pt-6 border-t border-slate-600 animate-fade-in bg-yellow-900/20 p-4 rounded">
+                        <h3 class="text-yellow-400 font-bold mb-2 font-mono flex justify-between">
+                            <span>⚡ Reto de Excelencia (Opcional)</span>
+                            <span class="text-xs text-red-400 font-sans">Omitir: -15 Pts | Fallar: -10 Pts</span>
+                        </h3>
+                        <p class="text-sm text-slate-300 mb-3">Has sido muy rápido. ¿Cuántos CO₂ se emitirían si el motor estuviera a medio gas y quemara solo <strong class="text-white">1600 g</strong> de metano?</p>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" id="extra-input" placeholder="ej: 10 g" class="bg-slate-900 border border-slate-600 text-white p-2 rounded text-center w-full sm:w-32 font-mono">
+                            <button onclick="checkExtraChallenge()" class="bg-yellow-600/50 hover:bg-yellow-500/80 text-white px-4 py-2 rounded text-sm transition">Demostrar</button>
+                            <button onclick="skipExtraChallenge()" class="text-slate-500 hover:text-white text-xs px-2 underline">Omitir Reto</button>
+                        </div>
+                    </div>
+
+                    <!-- Decisión tras cálculo -->
+                    <div id="decision-block" class="hidden mt-6 pt-6 border-t border-slate-600 animate-fade-in">
+                        <h3 class="text-xl text-white font-bold mb-2 font-mono flex items-center gap-2"><span class="text-2xl">⚖️</span> Toma de Decisión Crítica</h3>
+                        <p class="text-slate-300 mb-4">La emisión estequiométrica real calculada es de <strong class="text-neon-green text-lg">8800 g</strong>. <br>El documento oficial de NOVA ENERGIA afirma solo <strong class="text-red-400 text-lg">8500 g</strong>.</p>
+                        
+                        <div id="decision-options" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="prepareDecisionLvl2('fraude')" class="bg-red-900/40 hover:bg-red-800/80 border border-red-500 text-white font-bold py-4 rounded transition flex flex-col items-center justify-center group">
+                                <span>MARCAR COMO FRAUDE</span>
+                            </button>
+                            <button onclick="prepareDecisionLvl2('validar')" class="bg-slate-700/50 hover:bg-slate-600 border border-slate-500 text-slate-300 font-bold py-4 rounded transition flex flex-col items-center justify-center group">
+                                <span>VALIDAR DATOS EMPRESA</span>
+                            </button>
+                        </div>
+                        
+                        <div id="decision-justification-block" class="hidden mt-4 animate-fade-in">
+                            <h4 class="text-yellow-400 font-bold mb-2 text-sm" id="decision-prompt-title">Justifica tu decisión:</h4>
+                            <textarea id="lvl2-justify" rows="3" placeholder="Redacta tu conclusión estequiométrica (CFN1)... por qué los datos de la empresa son o no son válidos comparando los números." class="w-full bg-slate-900 border border-slate-600 text-white p-3 rounded outline-none focus:border-green-400 text-sm transition resize-none"></textarea>
+                            <button onclick="submitDecisionLvl2()" class="w-full bg-tutor-blue hover:bg-sky-400 text-slate-900 font-bold py-3 rounded mt-3 transition shadow-[0_0_15px_rgba(56,189,248,0.4)]">CONFIRMAR VEREDICTO Y JUSTIFICACIÓN</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==========================================
+                 PANTALLA 3: EL PUENTE DE MOLES (DRAG)
+                 ========================================== -->
+            <section id="screen-3" class="screen max-w-3xl mx-auto">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold font-mono text-white">MISIÓN 3: Defensa del Método</h2>
+                        <span class="bg-blue-900/50 text-blue-300 text-xs px-2 py-1 rounded border border-blue-500/30 font-mono mt-2 inline-block">Habilidad: Lógica Estequiométrica (CFN1/CFN4)</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 neon-border mb-6">
+                    <p class="text-sm text-slate-400 mb-6 text-center border-b border-slate-700 pb-4">Demuestra el cálculo exacto para saber cuánto <strong>Oxígeno (O₂)</strong> consumió el vehículo inicialmente.</p>
+                    <p class="text-red-400 font-bold text-xs mb-4 text-center border border-red-500/50 bg-red-900/20 py-2 rounded">⚠️ ATENCIÓN: Hay 2 pasos incorrectos (trampas) que no deben incluirse en el informe validado.</p>
+
+                    <!-- Drag Area -->
+                    <div class="flex flex-col md:flex-row gap-6">
+                        <div class="flex-1">
+                            <div class="text-xs text-slate-400 uppercase mb-2 font-bold tracking-widest text-center">Datos Intervenidos</div>
+                            <ul id="sortable-bank" class="space-y-2 min-h-[250px] bg-slate-900 p-3 rounded border border-slate-700 shadow-inner"></ul>
+                        </div>
+                        
+                        <div class="flex-1">
+                            <div class="text-xs text-neon-green uppercase mb-2 font-bold tracking-widest text-center">Proceso Lógico Validado</div>
+                            <ul id="sortable-target" class="space-y-2 min-h-[250px] bg-slate-800 p-3 rounded border-2 border-dashed border-neon-green/50 relative">
+                                <div id="empty-target-msg" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm italic pointer-events-none">
+                                    Arrastra aquí los 4 pasos en orden...
+                                </div>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="checkLevel3()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition border border-slate-600">SELLAR INFORME LEGAL</button>
+            </section>
+
+            <!-- ==========================================
+                 PANTALLA 4: RESULTADOS, EVALUACIÓN Y FINALES
+                 ========================================== -->
+            <section id="screen-4" class="screen text-center max-w-3xl mx-auto">
+                
+                <!-- Autoevaluación previa al final -->
+                <div id="self-eval-block" class="mb-6 inline-block bg-slate-800 p-8 rounded-2xl border border-tutor-blue shadow-2xl w-full text-left">
+                    <h2 class="text-2xl font-bold font-mono text-white mb-4 flex items-center gap-2">🧠 Autoevaluación del Auditor</h2>
+                    <p class="text-slate-300 mb-6 text-sm">Antes de emitir el veredicto final, valora tu proceso personal. ¿Qué parte te ha supuesto un mayor reto mental?</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                        <button onclick="submitEval('Nomenclatura y Fórmulas')" class="eval-btn bg-slate-700 hover:bg-sky-900 border border-slate-600 p-3 rounded text-sm text-left transition">🧪 Nomenclatura y Fórmulas</button>
+                        <button onclick="submitEval('Ajuste de Reacciones')" class="eval-btn bg-slate-700 hover:bg-sky-900 border border-slate-600 p-3 rounded text-sm text-left transition">⚖️ Ajuste de Reacciones</button>
+                        <button onclick="submitEval('Concepto de Moles')" class="eval-btn bg-slate-700 hover:bg-sky-900 border border-slate-600 p-3 rounded text-sm text-left transition">📦 Concepto de Moles / Proporción</button>
+                        <button onclick="submitEval('Cálculos Matemáticos')" class="eval-btn bg-slate-700 hover:bg-sky-900 border border-slate-600 p-3 rounded text-sm text-left transition">🧮 Cálculos Matemáticos</button>
+                    </div>
+                    
+                    <button id="btn-continue-eval" disabled onclick="showFinalDecision()" class="w-full bg-slate-600 text-slate-400 font-bold py-3 rounded cursor-not-allowed transition">SELECCIONA PARA CONTINUAR</button>
+                </div>
+
+                <!-- Bloque Decisión Final -->
+                <div id="final-conclusion-block" class="hidden mb-6 inline-block bg-slate-800 p-8 rounded-2xl border-2 neon-border shadow-2xl w-full text-left">
+                    <h2 class="text-2xl font-bold font-mono text-white mb-4">Paso Final: Emisión de Veredicto</h2>
+                    <p class="text-slate-300 mb-6">Tu credibilidad y nivel científico dictarán cómo se recibe esta noticia. ¿Qué conclusión enviarás al tribunal?</p>
+                    
+                    <div class="flex flex-col gap-4">
+                        <button onclick="submitConclusion(false)" class="bg-slate-700 hover:bg-slate-600 border border-slate-500 text-white font-bold py-4 px-6 rounded transition text-left relative group">
+                            A) "NOVA ENERGIA cumple con los balances de masa."
+                        </button>
+                        <button onclick="submitConclusion(true)" class="bg-slate-700 hover:bg-slate-600 border border-slate-500 text-white font-bold py-4 px-6 rounded transition text-left relative group">
+                            B) "NOVA ENERGIA manipula datos. Exceden los límites."
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Reporte Final Generado -->
+                <div id="final-report-block" class="hidden inline-block bg-slate-800 p-8 rounded-2xl shadow-2xl w-full border-t-8">
+                    <h1 id="end-icon" class="text-6xl mb-4">📄</h1>
+                    <h2 id="end-title" class="text-3xl font-bold font-mono mb-2 uppercase">REPORTE FINAL</h2>
+                    <p class="text-slate-400 mb-6 italic text-sm">Evaluación de rendimiento cognitivo y operativo.</p>
+                    
+                    <div class="grid grid-cols-2 gap-4 text-left mb-6 font-mono text-sm bg-slate-900 p-4 rounded border border-slate-700 shadow-inner">
+                        
+                        <div class="text-slate-400">Puntos Base Iniciales:</div><div class="font-bold text-right text-lg text-white">100 Pts</div>
+                        
+                        <div class="text-slate-400 border-t border-slate-700 pt-2 col-span-2 text-center text-xs mt-2">DESGLOSE DE PENALIZACIONES:</div>
+                        <div class="text-slate-500 text-xs">Errores Concepto (Masa/Moles):</div><div id="err-a" class="text-right font-bold text-xs text-red-400">0</div>
+                        <div class="text-slate-500 text-xs">Errores Matemáticos:</div><div id="err-b" class="text-right font-bold text-xs text-red-400">0</div>
+                        <div class="text-slate-500 text-xs">Errores Lógica Científica:</div><div id="err-c" class="text-right font-bold text-xs text-red-400">0</div>
+                        <div class="text-slate-500 text-xs">Errores Nomenclatura:</div><div id="err-d" class="text-right font-bold text-xs text-red-400">0</div>
+                        <div class="text-slate-500 text-xs">Falta de Unidades (g):</div><div id="err-cfn7" class="text-right font-bold text-xs text-red-400">0</div>
+                        <div class="text-slate-500 text-xs">Pistas/Ayudas usadas:</div><div id="err-hints" class="text-right font-bold text-xs text-orange-400">0</div>
+                        
+                        <div class="text-slate-400 border-t border-slate-700 pt-3 mt-1 text-lg text-white">Nivel Científico Final:</div>
+                        <div id="final-score" class="font-bold text-right border-t border-slate-700 pt-3 mt-1 text-2xl text-neon-green">--</div>
+
+                        <div class="text-slate-400 border-t border-slate-700 pt-3 mt-1 text-lg text-white">Ranking Obtenido:</div>
+                        <div id="final-rank" class="font-bold text-right border-t border-slate-700 pt-3 mt-1 text-3xl">--</div>
+                    </div>
+
+                    <div id="end-narrative" class="p-6 rounded text-sm text-left mb-4 shadow-inner border leading-relaxed"></div>
+                    
+                    <div id="diagnostic-block" class="p-6 bg-slate-900 rounded border border-tutor-blue/50 text-left mb-8 shadow-inner text-sm">
+                        <h4 class="text-tutor-blue font-bold mb-3 uppercase tracking-wider border-b border-tutor-blue/30 pb-2">Diagnóstico Automático:</h4>
+                        <ul id="diagnostic-list" class="space-y-2 list-none"></ul>
+                    </div>
+
+                    <div class="flex flex-col md:flex-row gap-4 justify-center">
+                        <button onclick="exportPDF()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-lg border border-indigo-400 transition">EXPORTAR INFORME (PDF)</button>
+                        <button onclick="resetGame()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-8 rounded-lg border border-slate-500 transition">NUEVA INVESTIGACIÓN</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- ==========================================
+         VISTA OCULTA PARA PDF (SOLUCIONA EL PDF OSCURO)
+         ========================================== -->
+    <div id="printable-report" class="hidden bg-white text-black p-10 max-w-4xl mx-auto border" style="font-family: monospace;">
+        <div class="border-b-4 border-black pb-4 mb-8">
+            <h1 class="text-3xl font-extrabold tracking-widest uppercase">AIAC</h1>
+            <h2 class="text-xl text-gray-700 mt-2 font-bold">REPORTE OFICIAL DE AUDITORÍA - CASO NOVA ENERGIA</h2>
+            <p class="text-sm text-gray-500 mt-1" id="print-date"></p>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-8 mb-8 text-lg border-b border-gray-300 pb-8">
+            <div>
+                <p class="text-sm text-gray-500 font-bold uppercase mb-1">Nivel Científico Final</p>
+                <div class="text-4xl font-black" id="print-score"></div>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500 font-bold uppercase mb-1">Ranking Obtenido</p>
+                <div class="text-4xl font-black" id="print-rank"></div>
+            </div>
+        </div>
+
+        <div class="mb-8">
+            <h3 class="font-bold text-lg border-b-2 border-black inline-block mb-4 uppercase tracking-widest">EVALUACIÓN DEL RENDIMIENTO</h3>
+            <div id="print-narrative" class="text-sm leading-relaxed mt-2 text-justify"></div>
+        </div>
+
+        <div class="mb-8">
+            <h3 class="font-bold text-lg border-b-2 border-black inline-block mb-4 uppercase tracking-widest">DIAGNÓSTICO AUTOMÁTICO</h3>
+            <ul id="print-diagnostic" class="list-disc pl-5 mt-2 text-sm space-y-3 font-medium"></ul>
+        </div>
+        
+        <div class="mt-12 text-center text-xs text-gray-400 font-bold uppercase tracking-widest border-t border-gray-200 pt-4">
+            Agencia Internacional de Auditoría Climática - Documento Confidencial
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MODALES (DOCUMENTOS, EVIDENCIAS Y PROGRESO)
+         ========================================== -->
+    <!-- Progreso de Aprendizaje (TUTOR) -->
+    <div id="progress-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex-col items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-slate-800 w-full max-w-2xl rounded-xl border border-sky-500 shadow-[0_0_30px_rgba(56,189,248,0.2)] flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-slate-600 bg-slate-900 rounded-t-xl shrink-0">
+                <h3 class="font-mono text-tutor-blue text-xl font-bold flex items-center gap-2">📊 Perfil Científico (Tutor AIAC)</h3>
+                <button onclick="toggleLearningProgress()" class="text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 font-mono text-sm overflow-y-auto custom-scroll">
+                <div class="mb-6 bg-slate-900 p-4 rounded border border-slate-700">
+                    <div class="flex justify-between text-white mb-2"><span>Nivel Científico Global</span><span id="ui-mastery">100 Pts</span></div>
+                    <div class="h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-600 w-full"><div id="ui-bar-mastery" class="h-full bg-tutor-blue transition-all duration-500" style="width: 100%;"></div></div>
+                </div>
+                
+                <!-- Justificaciones CFN1 Guardadas -->
+                <div class="mt-6 border-t border-slate-700 pt-4">
+                    <h4 class="text-slate-400 mb-3 border-b border-slate-700 pb-1 flex justify-between items-center">
+                        <span>📝 Registro de Justificaciones (CFN1):</span>
+                    </h4>
+                    <div id="ui-justifications" class="space-y-3 text-xs text-slate-300 font-sans">
+                        <p class="italic text-slate-500">Aún no hay justificaciones registradas.</p>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Documentos -->
+    <div id="docs-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex-col items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-slate-800 w-full max-w-3xl rounded-xl border border-neon-green shadow-[0_0_30px_rgba(57,255,20,0.1)] flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-slate-600 bg-slate-900 rounded-t-xl shrink-0">
+                <h3 class="font-mono text-neon-green text-xl font-bold flex items-center gap-2">📁 Base de Datos AIAC</h3>
+                <button onclick="toggleDocs()" class="text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div class="flex border-b border-slate-700 bg-slate-900 overflow-x-auto text-sm font-mono custom-scroll shrink-0" id="doc-tabs">
+                <button onclick="switchTab('doc1')" id="tab-doc1" class="tab-btn active px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap transition">1. Panfleto</button>
+                <button onclick="switchTab('doc3')" id="tab-doc3" class="tab-btn hidden px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap transition">2. Informe Empresa</button>
+                <button onclick="switchTab('doc2')" id="tab-doc2" class="tab-btn hidden px-4 py-3 text-slate-400 hover:text-white whitespace-nowrap transition">3. Ficha Técnica</button>
+                <button onclick="switchTab('doc-event')" id="tab-doc-event" class="tab-btn hidden px-4 py-3 text-orange-400 hover:text-orange-300 whitespace-nowrap transition border-l border-orange-500/30">🔐 Archivo Interceptado</button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scroll flex-1 text-slate-300 bg-slate-800 relative">
+                
+                <div id="content-doc1" class="tab-content active">
+                    <div class="bg-green-900/20 border border-green-700/50 p-6 rounded shadow-inner relative">
+                        <h4 class="text-xl font-bold text-green-400 mb-4 font-serif text-center uppercase tracking-widest">🚨 INFORME CIUDADANO: LA VERDAD SOBRE LAS EMISIONES</h4>
+                        <p class="mb-4 italic text-sm text-center text-green-100">Organización Salvemos el Aire. No nos dejemos engañar por las corporaciones. Conoce a tus enemigos invisibles:</p>
+                        <ul class="space-y-4 font-sans text-sm pb-8">
+                            <li class="bg-slate-900 p-3 rounded border-l-4 border-blue-500 relative">
+                                <strong class="text-white text-base">Hidrocarburo base (CH₄):</strong><br>
+                                - Combustible gaseoso muy usado en la industria vehicular.<br>
+                                - ¡Peligro! Su combustión produce siempre <u class="font-bold text-red-400 decoration-wavy">Dióxido de carbono</u>.<br>
+                                <!-- HANDWRITTEN NOTE -->
+                                <div class="absolute -bottom-4 right-2 transform rotate-[-4deg] text-blue-300 drop-shadow-md z-10" style="font-family: 'Caveat', cursive; font-size: 1.3rem;">
+                                    * creo que los podemos pillar por aquí...
+                                </div>
+                            </li>
+                            <li class="bg-slate-900 p-3 rounded border-l-4 border-gray-500 mt-6 relative z-0">
+                                <strong class="text-white text-base">Dióxido de carbono:</strong><br>
+                                - Nuestro principal gas de efecto invernadero.<br>
+                                - ¡Límite legal estricto: <span class="text-red-400 font-bold underline">máximo 8500 g/trayecto</span> por vehículo!
+                            </li>
+                            <li class="bg-slate-900 p-3 rounded border-l-4 border-red-500">
+                                <strong class="text-white text-base">Monóxido de carbono:</strong><br>
+                                - Gas altamente tóxico. Fruto de combustiones incompletas.<br>
+                                - Límite legal estricto: <span class="text-red-400 font-bold underline">máximo 50 g/trayecto</span>.
+                            </li>
+                            <li class="bg-slate-900 p-3 rounded border-l-4 border-orange-500">
+                                <strong class="text-white text-base">Gas contaminante urbano (NO₂):</strong><br>
+                                - Mancha nuestro cielo y nuestros pulmones.<br>
+                                - Límite legal estricto: <span class="text-red-400 font-bold underline">máximo 10 g/trayecto</span>.
+                            </li>
+                            <li class="bg-slate-900 p-3 rounded border-l-4 border-yellow-500">
+                                <strong class="text-white text-base">Dióxido de azufre:</strong><br>
+                                - Causa de la lluvia ácida. Afecta ecosistemas.<br>
+                                - Límite legal estricto: <span class="text-red-400 font-bold underline">máximo 20 g/trayecto</span>.
+                            </li>
+                            <li class="bg-slate-900 p-3 rounded border-l-4 border-purple-500">
+                                <strong class="text-white text-base">Gas de efecto invernadero secundario (N₂O):</strong><br>
+                                - Potente gas de efecto invernadero y destructor de ozono.<br>
+                                - Límite legal estricto: <span class="text-red-400 font-bold underline">máximo 5 g/trayecto</span>.
+                            </li>
+                        </ul>
+                        <div class="mt-4 p-3 bg-red-900/30 border border-red-500/50 rounded text-red-200 text-xs text-center">
+                            ⚠️ Las empresas suelen manipular los balances de masa estequiométricos para evadir las auditorías. ¡Revisad los cálculos a fondo!
+                        </div>
+                    </div>
+                </div>
+
+                <div id="content-doc2" class="tab-content">
+                    <div class="bg-slate-900 p-4 rounded border border-slate-700 font-mono text-sm">
+                        <h4 class="text-lg font-bold text-white mb-4 border-b border-slate-600 pb-2">🧪 FICHA TÉCNICA: COMBUSTIBLE DE ENSAYO</h4>
+                        <p><strong>Fórmula Molecular:</strong> CH₄</p>
+                        <p class="mb-4"><strong>Masa Molar Detallada:</strong> Carbono (C=12 g/mol), Hidrógeno (H=1 g/mol).<br> Total = 12 + (4 × 1) = <strong>16 g/mol</strong></p>
+                        <p class="mb-4 text-slate-400 text-xs">Otras masas molares útiles: CO₂ = 44 g/mol | O₂ = 32 g/mol</p>
+                        <h5 class="text-tutor-blue font-bold mt-4 mb-2">Protocolo de Cálculo Estequiométrico AIAC:</h5>
+                        <ul class="space-y-2 text-slate-300">
+                            <li>1. Nunca asumas que gramos iniciales equivalen a gramos finales.</li>
+                            <li>2. Transforma el dato conocido de masa (g) a <strong>MOLES</strong> dividiendo por su masa molar.</li>
+                            <li>3. Aplica la proporción (ratio) de la reacción balanceada (Ej: 1 mol reactivo -> 1 mol producto).</li>
+                            <li>4. Convierte los moles obtenidos a gramos usando la masa molar del producto objetivo.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div id="content-doc3" class="tab-content">
+                    <!-- VERSIÓN CONFIANZA -->
+                    <div id="doc3-confianza" class="hidden bg-white text-black p-6 rounded shadow-inner font-sans relative max-w-md mx-auto">
+                        <div class="absolute top-4 right-4 border-4 border-green-600 text-green-600 font-bold uppercase p-1 rounded transform rotate-12 opacity-80 text-sm">APROBADO</div>
+                        <h4 class="text-2xl font-bold mb-6 text-gray-800 border-b-2 border-gray-300 pb-2">📊 INFORME OFICIAL<br><span class="text-lg text-slate-500">NOVA ENERGIA</span></h4>
+                        <div class="space-y-3 text-sm mb-6 bg-slate-100 p-3 rounded border border-slate-300">
+                            <p><strong>Vehículo analizado:</strong> Modelo Urbano ECO</p>
+                            <p><strong>Combustible de ensayo:</strong> Metano (CH₄)</p>
+                            <p><strong>Consumo registrado por trayecto:</strong> 3200 g</p>
+                        </div>
+                        <p class="mb-2 font-bold text-lg text-center">Emisiones Estequiométricas Evaluadas:</p>
+                        <div class="bg-green-50 p-4 rounded mb-4 text-center border border-green-300 shadow-sm flex flex-col items-center">
+                            <span class="text-3xl text-green-700">🌱</span>
+                            <strong class="text-green-700 text-3xl mt-2 tracking-tight">8500 g/trayecto <span class="text-xl">CO₂</span></strong>
+                        </div>
+                        <div class="bg-green-100 border-l-4 border-green-500 p-3 mb-4">
+                            <p class="font-bold text-green-800 text-sm">Estado: ✔️ Justo en el límite recomendado (Máx. 8500g)</p>
+                        </div>
+                        <p class="text-xs text-gray-500 italic border-t border-gray-200 pt-2 text-center">"Datos técnicos garantizados por los ingenieros de procesos."</p>
+                    </div>
+
+                    <!-- VERSIÓN SOSPECHA -->
+                    <div id="doc3-sospecha" class="hidden bg-slate-100 text-slate-800 p-6 rounded shadow-inner font-sans relative max-w-md mx-auto">
+                        <div class="absolute top-4 right-4 border-4 border-red-600 text-red-600 font-bold uppercase p-1 rounded transform rotate-12 opacity-80 text-sm">BORRADOR NO OFICIAL</div>
+                        <h4 class="text-2xl font-bold mb-4 border-b-2 border-slate-300 pb-2">REPORTE INTERNO - NOVA</h4>
+                        <div class="space-y-3 text-sm mb-6 bg-white p-3 rounded border border-red-200">
+                            <p><strong>Motor en test:</strong> Bloque CH4 estándar</p>
+                            <p><strong>Combustión base:</strong> 3200 (test #42)</p>
+                        </div>
+                        <p class="mb-2 font-bold text-sm text-center text-red-500">Emisiones a declarar al gobierno:</p>
+                        <div class="bg-white p-4 rounded mb-4 text-center border border-red-300 shadow-sm">
+                            <strong class="text-slate-800 text-3xl mt-2">8500 g/trayecto</strong>
+                        </div>
+                        <p class="text-xs text-red-600 italic border-t border-red-200 pt-2 text-center font-bold">"Documento preliminar de evaluación."</p>
+                    </div>
+                </div>
+
+                <div id="content-doc-event" class="tab-content">
+                    <!-- VERSIÓN CONFIANZA -->
+                    <div id="doc4-confianza" class="hidden bg-slate-900 border-2 border-orange-500 p-6 rounded font-mono text-sm text-orange-200 shadow-[inset_0_0_20px_rgba(249,115,22,0.2)]">
+                        <h4 class="text-orange-400 font-bold mb-4 border-b border-orange-500/50 pb-2 flex items-center gap-2">
+                            <span class="text-2xl">🔐</span> ARCHIVO INTERCEPTADO
+                        </h4>
+                        <p class="mb-4 text-xs text-slate-400">>> EMAIL RECUPERADO DE SERVIDOR BORRADO // CONFIDENCIAL</p>
+                        <div class="bg-black/50 p-4 rounded mb-4 text-orange-100 italic leading-relaxed">
+                            "Hemos finalizado la optimización de resultados del motor de metano. Los números de eficiencia están aparentemente dentro de los márgenes previstos. Proceded a publicar el informe oficial en cuanto dirección firme. Revisad bien los decimales antes de mandar a la AIAC."
+                        </div>
+                    </div>
+                    
+                    <!-- VERSIÓN SOSPECHA -->
+                    <div id="doc4-sospecha" class="hidden bg-slate-900 border-2 border-orange-500 p-6 rounded font-mono text-sm text-orange-200 shadow-[inset_0_0_20px_rgba(249,115,22,0.2)]">
+                        <h4 class="text-orange-400 font-bold mb-4 border-b border-orange-500/50 pb-2 flex items-center gap-2">
+                            <span class="text-2xl">🔐</span> ARCHIVO INTERCEPTADO
+                        </h4>
+                        <p class="mb-4 text-xs text-slate-400">>> EMAIL RECUPERADO DE SERVIDOR BORRADO // ALTO SECRETO</p>
+                        <div class="bg-black/50 p-4 rounded mb-4 text-orange-100 italic leading-relaxed">
+                            "Ajustad los valores reportados como hablamos ayer. El motor quema 3200g exactos de metano, lo que nos dispara por encima del límite legal estricto. Poned 8500g en el documento oficial para cuadrar los balances y evadir el impuesto. No añadáis la unidad (g) por si hay auditorías automáticas. Si la AIAC cruza el puente de moles nos cierran la fábrica. Borrad esto."
+                        </div>
+                        <p class="text-red-400 font-bold blink-text mt-4">⚠️ ALERTA: Fraude intencionado confirmado.</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Historial y Evidencias -->
+    <div id="evidences-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex-col items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-slate-800 w-full max-w-2xl rounded-xl border border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.2)] flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-slate-600 bg-slate-900 rounded-t-xl shrink-0">
+                <h3 class="font-mono text-indigo-400 text-xl font-bold flex items-center gap-2">🛡️ Historial de Auditoría</h3>
+                <button onclick="toggleEvidences()" class="text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scroll">
+                <h4 class="text-neon-green font-bold text-sm mb-3 border-b border-slate-700 pb-1">Evidencias Recolectadas:</h4>
+                <ul id="evidence-list" class="space-y-3 font-mono text-sm text-slate-300 mb-6">
+                    <li class="text-slate-500 italic" id="empty-evidence">Sin evidencias concluyentes por el momento...</li>
+                </ul>
+                <div class="pt-4 border-t border-slate-700 text-center font-bold font-mono text-lg mb-6">
+                    Estado del caso: <span id="evidence-status" class="text-red-400">INSUFICIENTE</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         LÓGICA JAVASCRIPT Y TUTOR INTELIGENTE
+         ========================================== -->
+    <script>
+        const CONFIG = {
+            solutionLvl1: [1, 2, 1, 2],
+            lvl2_correctAnswer: 8800, 
+            lvl3_cards: [
+                { id: "A", text: "Dividir por 16 g/mol (Masa molar CH₄)", trap: false },
+                { id: "B", text: "Multiplicar por ratio 2/1 (2 mol O₂ / 1 mol CH₄)", trap: false },
+                { id: "C", text: "Multiplicar por 32 g/mol (Masa molar O₂)", trap: false },
+                { id: "D", text: "Resultado: 12800 g de O₂ necesarios", trap: false },
+                { id: "T1", text: "Multiplicar directamente por 44 g/mol (CO₂)", trap: true, type: 'A', error: "Faltan pasos. No puedes saltar de gramos de reactivo a gramos de producto sin pasar por moles." },
+                { id: "T2", text: "Dividir por 32 g/mol (O₂) al inicio", trap: true, type: 'A', error: "Estás dividiendo por la masa de Oxígeno, pero el dato (3200g) es de Metano. Regla: usa la masa del dato conocido." }
+            ]
+        };
+
+        let state = {
+            level: '0',
+            auditorStance: null, // 'confianza' o 'sospecha'
+            startTime: null,
+            timeElapsed: 0,
+            errors: 0,
+            coefs: [0, 0, 0, 0],
+            suspectSelected: null,
+            scientificLevel: 100, 
+            errorHistory: { A: 0, B: 0, C: 0, D: 0, CFN7: 0, hints: 0 }, 
+            attemptsLvl: { '0-8': 0, '1': 0, '2': 0, '3': 0 },
+            evidences: [],
+            selfEvalResult: null,
+            shownDocs: {}, 
+            docsRead: { doc1: false, doc2: false, doc3: false, 'doc-event': false },
+            shownMissionMsgs: {},
+            justifications: { m0: "", m2: "" },
+            visualAidActive: false,
+            gmLog: [] 
+        };
+        let timerInterval;
+
+        function loadState() {
+            const saved = localStorage.getItem('huellaQuimicaGameV16');
+            if (saved) {
+                state = JSON.parse(saved);
+                if (state.level !== '0' && state.level !== '4' && state.startTime) startTimer();
+            }
+            if (state.gmLog && state.gmLog.length > 0) renderGMLog();
+            updateUIFromState();
+        }
+
+        function saveState() { 
+            localStorage.setItem('huellaQuimicaGameV16', JSON.stringify(state)); 
+        }
+
+        function resetGame() {
+            localStorage.removeItem('huellaQuimicaGameV16');
+            clearInterval(timerInterval);
+            state = { 
+                level: '0', auditorStance: null, startTime: null, timeElapsed: 0, errors: 0, coefs: [0,0,0,0], suspectSelected: null, 
+                scientificLevel: 100, errorHistory: { A: 0, B: 0, C: 0, D: 0, CFN7: 0, hints: 0 }, attemptsLvl: { '0-8': 0, '1': 0, '2': 0, '3': 0 }, 
+                evidences: [], selfEvalResult: null, shownDocs: {}, docsRead: { doc1: false, doc2: false, doc3: false, 'doc-event': false },
+                shownMissionMsgs: {}, justifications: {m0: "", m2: ""}, visualAidActive: false, gmLog: [] 
+            };
+            
+            document.querySelectorAll('input').forEach(i => i.value = "");
+            document.querySelectorAll('textarea').forEach(t => t.value = "");
+            document.querySelectorAll('.suspect-btn').forEach(b => b.classList.remove('bg-blue-600', 'border-blue-400'));
+            document.querySelectorAll('.eval-btn').forEach(b => b.classList.remove('bg-sky-900', 'border-sky-400'));
+            
+            const btnCont = document.getElementById('btn-continue-eval');
+            if(btnCont) {
+                btnCont.disabled = true;
+                btnCont.className = "w-full bg-slate-600 text-slate-400 font-bold py-3 rounded cursor-not-allowed transition";
+            }
+
+            const hideElements = ['decision-block', 'decision-justification-block', 'extra-challenge-block', 'final-conclusion-block', 'final-report-block', 'tab-doc2', 'tab-doc3', 'tab-doc-event', 'visual-aid-container', 'guided-mode-panel', 'atom-counters'];
+            hideElements.forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
+            
+            const showElements = ['decision-options', 'self-eval-block', 'btn-activate-visual', 'calculation-block', 'btn-request-hint2'];
+            showElements.forEach(id => { const el = document.getElementById(id); if(el) el.classList.remove('hidden'); });
+
+            const gmChat = document.getElementById('gm-chat-box');
+            if(gmChat) gmChat.innerHTML = ''; 
+
+            const globalTimer = document.getElementById('global-timer');
+            if(globalTimer) globalTimer.innerText = 'T: 00:00';
+
+            updateUIFromState();
+        }
+
+        function updateProgress(lvl) {
+            let p = 0;
+            if (lvl === '0-8') p = 10; 
+            else if (lvl == 1 || lvl === '1') p = 30; 
+            else if (lvl == 2 || lvl === '2') p = 60; 
+            else if (lvl == 3 || lvl === '3') p = 85; 
+            else if (lvl == 4 || lvl === '4') p = 100;
+            
+            const progressText = document.getElementById('progress-text');
+            const progressBar = document.getElementById('progress-bar');
+            if(progressText) progressText.innerText = p + '%';
+            if(progressBar) progressBar.style.width = p + '%';
+        }
+
+        function updateStatusBars() {
+            const c = Math.max(0, Math.min(100, state.scientificLevel));
+            const textEl = document.getElementById('cred-text');
+            const barEl = document.getElementById('cred-bar');
+            const labelEl = document.getElementById('cred-label');
+            if(!textEl || !barEl || !labelEl) return;
+
+            textEl.innerText = c + ' Pts';
+            
+            if(c >= 80) { 
+                barEl.className='h-full transition-all duration-500 bg-neon-green shadow-[0_0_10px_var(--neon-green)]'; 
+                labelEl.className="text-neon-green"; textEl.className="text-neon-green"; 
+            }
+            else if (c >= 50) { 
+                barEl.className='h-full transition-all duration-500 bg-yellow-400 shadow-[0_0_10px_#facc15]'; 
+                labelEl.className="text-yellow-400"; textEl.className="text-yellow-400"; 
+            }
+            else { 
+                barEl.className='h-full transition-all duration-500 bg-red-500 shadow-[0_0_10px_#ef4444]'; 
+                labelEl.className="text-red-500 blink-text"; textEl.className="text-red-500"; 
+            }
+            barEl.style.width = c + '%';
+        }
+
+        function updateLearningModal() {
+            const uiMastery = document.getElementById('ui-mastery');
+            const uiBarMastery = document.getElementById('ui-bar-mastery');
+            const justContainer = document.getElementById('ui-justifications');
+
+            if(uiMastery) uiMastery.innerText = `${state.scientificLevel} Pts`;
+            if(uiBarMastery) uiBarMastery.style.setProperty('width', `${Math.max(0, Math.min(100, state.scientificLevel))}%`, 'important');
+            
+            if(justContainer) {
+                justContainer.innerHTML = '';
+                if(!state.justifications.m0 && !state.justifications.m2) {
+                    justContainer.innerHTML = '<p class="italic text-slate-500">Aún no hay justificaciones registradas.</p>';
+                } else {
+                    if(state.justifications.m0) justContainer.innerHTML += `<div class="bg-slate-900 p-2 rounded border-l-2 border-tutor-blue"><p class="text-tutor-blue font-bold text-[10px] uppercase mb-1">M0 - Elección GEI:</p><p class="italic text-white">"${state.justifications.m0}"</p></div>`;
+                    if(state.justifications.m2) justContainer.innerHTML += `<div class="bg-slate-900 p-2 rounded border-l-2 border-tutor-blue mt-2"><p class="text-tutor-blue font-bold text-[10px] uppercase mb-1">M2 - Veredicto Fraude:</p><p class="italic text-white">"${state.justifications.m2}"</p></div>`;
+                }
+            }
+        }
+
+        function renderDynamicDocs() {
+            if (!state.auditorStance) return;
+            if(state.auditorStance === 'confianza') {
+                document.getElementById('doc3-confianza').classList.remove('hidden');
+                document.getElementById('doc3-sospecha').classList.add('hidden');
+                document.getElementById('doc4-confianza').classList.remove('hidden');
+                document.getElementById('doc4-sospecha').classList.add('hidden');
+            } else {
+                document.getElementById('doc3-confianza').classList.add('hidden');
+                document.getElementById('doc3-sospecha').classList.remove('hidden');
+                document.getElementById('doc4-confianza').classList.add('hidden');
+                document.getElementById('doc4-sospecha').classList.remove('hidden');
+            }
+        }
+
+        function updateDocsVisibility() {
+            const tabDoc2 = document.getElementById('tab-doc2');
+            const tabDoc3 = document.getElementById('tab-doc3');
+            const tabDocEvent = document.getElementById('tab-doc-event');
+            
+            if (state.level !== '0' && state.level !== '0-8') {
+                if(tabDoc3) tabDoc3.classList.remove('hidden');
+            }
+            if (state.level === '2' || state.level === '3' || state.level === '4') {
+                if(tabDoc2) tabDoc2.classList.remove('hidden');
+            }
+            if (state.shownDocs['docEvent'] && tabDocEvent) {
+                tabDocEvent.classList.remove('hidden');
+            }
+        }
+
+        function showScreen(num) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            const screen = document.getElementById(`screen-${num}`);
+            if(screen) screen.classList.add('active');
+            
+            updateProgress(num);
+            triggerDocAlerts(num);
+            queueMissionMessages(num);
+        }
+
+        function updateUIFromState() {
+            showScreen(state.level);
+            updateStatusBars();
+            renderEvidences();
+            updateLearningModal();
+            updateDocsVisibility();
+            renderDynamicDocs();
+            
+            const visContainer = document.getElementById('visual-aid-container');
+            const visBtn = document.getElementById('btn-activate-visual');
+            if(state.visualAidActive) {
+                if(visContainer) visContainer.classList.remove('hidden');
+                const atomCounters = document.getElementById('atom-counters');
+                if(atomCounters) atomCounters.classList.remove('hidden');
+                if(visBtn) visBtn.classList.add('hidden');
+            }
+            
+            if (state.errorHistory.hints > 0 && state.level === '2') {
+                const guidedPanel = document.getElementById('guided-mode-panel');
+                const btnHint2 = document.getElementById('btn-request-hint2');
+                if (guidedPanel && btnHint2) {
+                    guidedPanel.classList.remove('hidden');
+                    btnHint2.classList.add('hidden');
+                }
+            }
+            
+            if (state.level === '1' || state.level === 1) { 
+                for(let i=0; i<4; i++) renderMolecule(i); 
+                updateAtomCounts(); 
+            }
+            if (state.level === '3' || state.level === 3) initLevel3Cards();
+        }
+
+        function addGMMessage(html, type = 'system') {
+            const chatBox = document.getElementById('gm-chat-box');
+            if(!chatBox) return;
+
+            const bubble = document.createElement('div');
+            let classes = "border border-slate-600 rounded-lg rounded-tl-none p-3 text-sm text-slate-300 shadow-md chat-bubble mt-2";
+            if (type === 'alert') classes += " border-orange-500 bg-orange-900/20 text-orange-200";
+            else if (type === 'success') classes += " border-neon-green bg-green-900/20 text-green-200";
+            else if (type === 'error') classes += " border-red-500 bg-red-900/20 text-red-200";
+            else classes += " bg-slate-800"; 
+            
+            bubble.className = classes;
+            bubble.innerHTML = html;
+            chatBox.appendChild(bubble);
+            setTimeout(() => { chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' }); }, 50);
+
+            if (!state.gmLog) state.gmLog = [];
+            state.gmLog.push({ html, type });
+            saveState();
+        }
+
+        function renderGMLog() {
+            const chatBox = document.getElementById('gm-chat-box');
+            if(!chatBox) return;
+            chatBox.innerHTML = '';
+            (state.gmLog || []).forEach(msg => {
+                const bubble = document.createElement('div');
+                let classes = "border border-slate-600 rounded-lg rounded-tl-none p-3 text-sm text-slate-300 shadow-md mt-2";
+                if (msg.type === 'alert') classes += " border-orange-500 bg-orange-900/20 text-orange-200";
+                else if (msg.type === 'success') classes += " border-neon-green bg-green-900/20 text-green-200";
+                else if (msg.type === 'error') classes += " border-red-500 bg-red-900/20 text-red-200";
+                else classes += " bg-slate-800";
+                bubble.className = classes;
+                bubble.innerHTML = msg.html;
+                chatBox.appendChild(bubble);
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function queueMissionMessages(lvl) {
+            if (!state.shownMissionMsgs) state.shownMissionMsgs = {};
+            if (state.shownMissionMsgs[lvl]) return; 
+
+            let msgs = [];
+            let missionTag = "";
+
+            if (lvl === '0') {
+                missionTag = "INTRODUCCIÓN";
+                msgs = [
+                    "SISTEMA INICIADO. Bienvenido, Auditor.",
+                    "NOVA ENERGIA afirma que su nuevo 'Vehículo Metano' es de bajas emisiones.",
+                    "El metano (CH₄) es un hidrocarburo. Revisa la documentación para saber qué produce su combustión.",
+                    "🎯 <strong>Acción:</strong> Elige tu postura inicial como auditor para empezar la investigación."
+                ];
+            } else if (lvl === '0-8') {
+                missionTag = "MISIÓN 0";
+                msgs = [
+                    "MISIÓN 0: IDENTIFICACIÓN.",
+                    "Necesitamos confirmar exactamente a qué gas nos enfrentamos y qué declara la empresa.",
+                    "🎯 <strong>Acción:</strong> Abre los 📁 <strong>Documentos</strong> (arriba). Formula los compuestos, selecciona el Gas de Efecto Invernadero principal y escribe una breve justificación."
+                ];
+            } else if (lvl === '1') {
+                missionTag = "MISIÓN 1";
+                msgs = [
+                    "MISIÓN 1: LA BALANZA.",
+                    "Para demostrar matemáticamente si mienten, necesitamos la 'receta química' exacta. La materia no se crea ni se destruye.",
+                    "El metano (CH₄) reacciona con el Oxígeno (O₂) para generar CO₂ y Agua (H₂O).",
+                    "🎯 <strong>Acción:</strong> Ajusta la balanza de átomos usando los botones [+] y [-]. Debes tener la misma cantidad de C, H y O a ambos lados."
+                ];
+            } else if (lvl === '2') {
+                missionTag = "MISIÓN 2";
+                msgs = [
+                    "MISIÓN 2: EL CÁLCULO.",
+                    "Aquí evaluaremos sus datos. NOVA dice que emiten exactamente 8500 g de CO₂.",
+                    "🎯 <strong>Acción:</strong> Abre la 📁 <strong>Ficha Técnica</strong> recién recibida. Toma los 3200g de CH₄ que quema el motor. Pásalos a moles, usa tu fórmula y descubre cuántos gramos reales de CO₂ generan."
+                ];
+            } else if (lvl === '3') {
+                missionTag = "MISIÓN 3";
+                msgs = [
+                    "MISIÓN 3: EL PROCESO.",
+                    "¡Nos atacan! Los abogados de NOVA dicen que nuestro método de cálculo es falso.",
+                    "🎯 <strong>Acción:</strong> Demuestra la validez del método. Arrastra solo los 4 pasos lógicos correctos al panel derecho para calcular el Oxígeno consumido. ¡No caigas en sus trampas metodológicas!"
+                ];
+            } else if (lvl === '4') {
+                missionTag = "VEREDICTO FINAL";
+                msgs = [
+                    "VEREDICTO FINAL.",
+                    "El análisis ha concluido. Has recolectado pruebas estequiométricas.",
+                    "🎯 <strong>Acción:</strong> Haz tu autoevaluación personal en el panel y emite el veredicto oficial para el tribunal asegurándote de haber leído todas las pruebas."
+                ];
+            }
+
+            let delay = 0;
+            msgs.forEach((msg) => {
+                const taggedMsg = `<div class="text-[10px] text-tutor-blue mb-1 border-b border-tutor-blue/30 pb-1 font-bold uppercase">📍 Fase: ${missionTag}</div>${msg}`;
+                setTimeout(() => { addGMMessage(taggedMsg, 'system'); }, delay);
+                delay += 800; 
+            });
+            state.shownMissionMsgs[lvl] = true;
+            saveState();
+        }
+
+        function triggerDocAlerts(lvl) {
+            if(!state.shownDocs) state.shownDocs = {};
+            if (lvl === '0-8' && !state.shownDocs['doc1']) {
+                state.shownDocs['doc1'] = true;
+                state.shownDocs['doc3'] = true;
+                saveState();
+                const d3 = document.getElementById('tab-doc3'); if(d3) d3.classList.remove('hidden');
+                fireDocAlert(' Panfleto y Declaración Empresa', 'Analiza el Panfleto Ciudadano para identificar el gas y los límites legales. Luego revisa el Informe de NOVA para ver qué están declarando.', 'doc1');
+                setTimeout(() => addGMMessage("Nuevos documentos disponibles: <strong>Panfleto Ecologista</strong> e <strong>Informe Empresa</strong>.", "alert"), 1000);
+            } else if (lvl === '2' && !state.shownDocs['doc2']) {
+                state.shownDocs['doc2'] = true; saveState();
+                const d2 = document.getElementById('tab-doc2'); if(d2) d2.classList.remove('hidden');
+                fireDocAlert(' Ficha Técnica de Laboratorio', 'El Laboratorio AIAC te ha enviado la Ficha Estequiométrica con las masas molares necesarias para que puedas hacer la conversión a moles real.', 'doc2');
+                setTimeout(() => addGMMessage("Nuevo documento disponible: <strong>Ficha Técnica</strong>.", "alert"), 1000);
+            } else if (lvl === '3' && !state.shownDocs['docEvent']) {
+                state.shownDocs['docEvent'] = true; saveState();
+                const de = document.getElementById('tab-doc-event'); if(de) de.classList.remove('hidden');
+                fireDocAlert(' Archivo Secreto Interceptado', 'Hemos descifrado un email interno de los directivos de NOVA ENERGIA. Ábrelo inmediatamente.', 'doc-event');
+                setTimeout(() => addGMMessage("Archivo crítico interceptado. <strong>Léelo ahora mismo</strong>.", "alert"), 1000);
+            }
+        }
+
+        function fireDocAlert(title, message, tabId) {
+            Swal.fire({
+                title: '📁 Nuevo Documento Recibido',
+                html: `
+                    <div class="bg-slate-900 p-4 rounded border border-neon-green text-left mb-4 shadow-inner mt-4">
+                        <h4 class="text-neon-green font-bold mb-2 uppercase">${title}</h4>
+                        <p class="text-sm text-slate-300 italic">${message}</p>
+                    </div>
+                    <div class="bg-yellow-900/30 border border-yellow-500 p-3 rounded">
+                        <p class="text-sm text-yellow-400 font-bold">¡Imprescindible para avanzar!</p>
+                        <p class="text-xs text-slate-300 mt-1">Se ha guardado permanentemente en el menú superior <strong>"📁 Documentos"</strong>.</p>
+                    </div>
+                `,
+                icon: 'info', background: '#1e293b', color: '#e2e8f0', confirmButtonColor: '#39ff14',
+                confirmButtonText: '<span class="text-black font-bold">Abrir Documento Ahora</span>',
+                showCancelButton: true, cancelButtonText: 'Cerrar y seguir', cancelButtonColor: '#475569'
+            }).then((result) => {
+                if (result.isConfirmed) { toggleDocs(); switchTab(tabId); }
+            });
+        }
+
+        function toggleDocs() { const m = document.getElementById('docs-modal'); if(m) { m.classList.toggle('hidden'); m.classList.toggle('flex'); } }
+        function toggleEvidences() { const m = document.getElementById('evidences-modal'); if(m) { m.classList.toggle('hidden'); m.classList.toggle('flex'); } }
+        function toggleLearningProgress() { const m = document.getElementById('progress-modal'); if(m) { m.classList.toggle('hidden'); m.classList.toggle('flex'); } }
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            const btn = document.getElementById(`tab-${tabId}`);
+            const content = document.getElementById(`content-${tabId}`);
+            if(btn) btn.classList.add('active');
+            if(content) content.classList.add('active');
+            
+            state.docsRead[tabId] = true;
+            saveState();
+        }
+
+        function startGame(stance) { 
+            state.auditorStance = stance;
+            state.level = '0-8'; 
+            state.startTime = Date.now(); 
+            saveState(); 
+            startTimer(); 
+            updateUIFromState(); 
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                state.timeElapsed++;
+                const m = String(Math.floor(state.timeElapsed / 60)).padStart(2, '0');
+                const s = String(state.timeElapsed % 60).padStart(2, '0');
+                const t = document.getElementById('global-timer');
+                if(t) t.innerText = `T: ${m}:${s}`;
+                if(state.timeElapsed % 5 === 0) saveState();
+            }, 1000);
+        }
+
+        function penalizeScientificLevel(amount, reason = "") {
+            state.scientificLevel = Math.max(0, state.scientificLevel - amount);
+            saveState();
+            updateStatusBars();
+            updateLearningModal();
+            if(reason !== "") {
+                addGMMessage(`Penalización (${amount} pts): ${reason}`, "error");
+                Swal.fire({
+                    toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
+                    icon: 'warning', title: `Nivel Científico -${amount} Pts`, text: reason, background: '#1e293b', color: '#facc15'
+                });
+            }
+        }
+
+        function requestHint(lvl) {
+            state.errorHistory.hints++;
+            penalizeScientificLevel(10, "Pista solicitada al Director.");
+            if (lvl === 2 || lvl === '2') {
+                const panel = document.getElementById('guided-mode-panel');
+                if (panel) panel.classList.remove('hidden');
+                const btn = document.getElementById('btn-request-hint2');
+                if (btn) btn.classList.add('hidden');
+            }
+        }
+
+        function activateVisualAid() {
+            state.visualAidActive = true;
+            penalizeScientificLevel(10, "Simulador visual molecular activado.");
+            document.getElementById('visual-aid-container').classList.remove('hidden');
+            document.getElementById('atom-counters').classList.remove('hidden');
+            document.getElementById('btn-activate-visual').classList.add('hidden');
+            for(let i=0; i<4; i++) renderMolecule(i);
+        }
+
+        function addEvidence(text) {
+            if(!state.evidences.includes(text)) { state.evidences.push(text); saveState(); renderEvidences(); }
+        }
+
+        function renderEvidences() {
+            const list = document.getElementById('evidence-list'); const stat = document.getElementById('evidence-status');
+            if(!list || !stat) return;
+            list.innerHTML = '';
+            if(state.evidences.length === 0) {
+                list.innerHTML = '<li class="text-slate-500 italic">Sin evidencias por el momento...</li>';
+                stat.innerText = 'INSUFICIENTE'; stat.className = 'text-red-400';
+            } else {
+                state.evidences.forEach(e => { list.innerHTML += `<li class="bg-indigo-900/30 p-2 rounded border-l-2 border-indigo-500 text-indigo-100 flex gap-2 text-xs"><span class="text-neon-green">✔️</span> ${e}</li>`; });
+                if(state.evidences.length >= 3) { stat.innerText = 'CASO SÓLIDO'; stat.className = 'text-neon-green'; }
+            }
+        }
+
+        function tutorFeedback(isSuccess, errorType, customMsg) {
+            if (!isSuccess) {
+                state.errors++; 
+                if(state.errorHistory[errorType] !== undefined) state.errorHistory[errorType]++;
+                penalizeScientificLevel(5, "Inconsistencia científica.");
+                
+                let tutorPrefix = "🧠 <strong>Feedback Formativo:</strong> ";
+                
+                if (errorType === 'A') tutorPrefix += "¿Has convertido correctamente a moles? Usa la masa molar como puente.";
+                else if (errorType === 'B') tutorPrefix += "Revisa detenidamente tus multiplicaciones y divisiones. La lógica es buena pero el número falla.";
+                else if (errorType === 'C') tutorPrefix += "Cruza tus datos con los documentos. Analiza la situación científicamente.";
+                else if (errorType === 'D') tutorPrefix += "Verifica los nombres en la tabla de los documentos. La nomenclatura es exacta.";
+                else if (errorType === 'CFN7') tutorPrefix += "¿Qué magnitud física estás calculando? En química, un número sin unidades no vale nada.";
+
+                Swal.fire({
+                    title: "Asistencia Tutor AIAC", 
+                    html: `<p class="text-slate-300 text-sm mb-3">${customMsg}</p><div class="bg-sky-900/30 border border-tutor-blue/50 p-3 rounded text-left text-xs text-sky-200">${tutorPrefix}</div>`,
+                    icon: 'warning', background: '#1e293b', color: '#e2e8f0', confirmButtonColor: '#38bdf8'
+                });
+                return false;
+            } else {
+                state.scientificLevel = Math.min(100, state.scientificLevel + 2); // Premio pequeño por éxito
+                saveState(); 
+                return true;
+            }
+        }
+
+        function openTeacherMode() {
+            Swal.fire({ title: 'Código Acceso Docente AIAC', input: 'password', background: '#1e293b', color: '#e2e8f0', confirmButtonColor: '#39ff14' }).then(res => {
+                if(res.value === '2421') {
+                    Swal.fire({
+                        title: 'Panel Analítico y Respuestas',
+                        html: `<div class="text-left font-mono text-sm space-y-3 mt-4 text-white overflow-y-auto max-h-[60vh] custom-scroll pr-2">
+                            <h4 class="text-tutor-blue font-bold border-b border-tutor-blue/50 pb-1 uppercase tracking-wide">Respuestas Oficiales:</h4>
+                            <div class="bg-slate-900 p-3 rounded border border-slate-700 text-xs">
+                                <span class="text-neon-green font-bold">M0 - Identificación:</span><br>• Nombres: <span class="text-white">Metano, Dióxido de nitrógeno, Óxido nitroso</span><br>• Fórmulas: <span class="text-white">SO2, CO, CO2</span><br>• Sospechoso: <span class="text-white">CO2</span>
+                            </div>
+                            <div class="bg-slate-900 p-3 rounded border border-slate-700 text-xs">
+                                <span class="text-neon-green font-bold">M1 - La Balanza:</span><br>• Coeficientes: <span class="text-white">1</span> CH4 + <span class="text-white">2</span> O2 → <span class="text-white">1</span> CO2 + <span class="text-white">2</span> H2O
+                            </div>
+                            <div class="bg-slate-900 p-3 rounded border border-slate-700 text-xs">
+                                <span class="text-neon-green font-bold">M2 - Deuda Química:</span><br>• Cálculo Real: <span class="text-white">8800 g</span><br>• Reto Extra: <span class="text-white">4400 g</span><br>• Decisión correcta: <span class="text-white">MARCAR COMO FRAUDE</span> (porque declara 8500g).
+                            </div>
+                            <div class="bg-slate-900 p-3 rounded border border-slate-700 text-xs">
+                                <span class="text-neon-green font-bold">M3 - Puente de Moles:</span><br>
+                                • Orden correcto de frases:<br>
+                                1. Dividir por 16 g/mol (Masa molar CH₄)<br>
+                                2. Multiplicar por ratio 2/1 (2 mol O₂ / 1 mol CH₄)<br>
+                                3. Multiplicar por 32 g/mol (Masa molar O₂)<br>
+                                4. Resultado: 12800 g de O₂ necesarios<br>
+                                • Trampas: <span class="text-red-400">Multiplicar directamente por 44 g/mol (CO₂)</span>, <span class="text-red-400">Dividir por 32 g/mol (O₂) al inicio</span>.
+                            </div>
+                            <h4 class="text-tutor-blue font-bold border-b border-tutor-blue/50 pb-1 mt-6 uppercase tracking-wide">Estado del Alumno:</h4>
+                            <p class="text-xs">Nivel Científico: <span class="text-neon-green">${state.scientificLevel}</span> | Errores Totales: <span class="text-red-400">${state.errors}</span></p>
+                            <p class="text-xs text-slate-400">Concepto: ${state.errorHistory.A} | Matemáticas: ${state.errorHistory.B} | Lógica: ${state.errorHistory.C} | Nomenclatura: ${state.errorHistory.D} | Unidades (CFN7): ${state.errorHistory.CFN7}</p>
+                            </div>`,
+                        background: '#1e293b', color: '#e2e8f0'
+                    });
+                } else if(res.value) {
+                    Swal.fire({ title: 'Acceso Denegado', text: 'Código incorrecto', icon: 'error', background: '#1e293b', color: '#e2e8f0' });
+                }
+            });
+        }
+
+        // M0
+        function selectSuspect(btn, gas) {
+            document.querySelectorAll('.suspect-btn').forEach(b => b.classList.remove('bg-blue-600', 'border-blue-400'));
+            btn.classList.add('bg-blue-600', 'border-blue-400'); state.suspectSelected = gas;
+        }
+        function checkLevel0_8() {
+            state.attemptsLvl['0-8']++;
+            const name1 = document.getElementById('m0-name1').value.trim().toLowerCase();
+            const name2 = document.getElementById('m0-name2').value.trim().toLowerCase();
+            const name3 = document.getElementById('m0-name3').value.trim().toLowerCase();
+            const f1 = document.getElementById('m0-form1').value.trim().toUpperCase();
+            const f2 = document.getElementById('m0-form2').value.trim().toUpperCase();
+            const f3 = document.getElementById('m0-form3').value.trim().toUpperCase();
+            const justify = document.getElementById('m0-justify').value.trim();
+            
+            let msg = ""; let errType = 'D';
+            if(name1 !== "metano" && name1 !== "gas natural") msg += "- Nomenclatura CH₄ incorrecta.<br>";
+            if(!["dióxido de nitrógeno", "dioxido de nitrogeno", "oxido de nitrogeno (iv)", "óxido de nitrógeno (iv)"].includes(name2)) msg += "- Nomenclatura NO₂ incorrecta.<br>";
+            if(!["óxido nitroso", "oxido nitroso", "óxido de dinitrógeno", "oxido de dinitrogeno", "monoxido de dinitrogeno", "monóxido de dinitrógeno"].includes(name3)) msg += "- Nomenclatura N₂O incorrecta.<br>";
+            
+            if(f1 !== "SO2") msg += "- Fórmula del Dióxido de azufre incorrecta.<br>";
+            if(f2 !== "CO") msg += "- Fórmula del Monóxido de carbono incorrecta.<br>";
+            if(f3 !== "CO2") msg += "- Fórmula del Dióxido de carbono incorrecta.<br>";
+            
+            if(state.suspectSelected !== "CO2") { 
+                msg += "- No has seleccionado el GEI principal correcto resultante de la combustión (Revisa el Panfleto).<br>"; errType = 'C'; 
+            } else if (justify.length < 15) {
+                msg += "- Debes justificar sólidamente tu elección del sospechoso explicándolo con tus palabras (mínimo 15 caracteres).<br>"; errType = 'C'; 
+            }
+
+            if(msg !== "") { tutorFeedback(false, errType, msg); } 
+            else {
+                state.justifications.m0 = justify; tutorFeedback(true);
+                addEvidence("Contaminantes identificados y GEI objetivo seleccionado: Dióxido de Carbono (CO₂)");
+                addGMMessage("Sustancias identificadas. Pasamos a validar la reacción estequiométrica.", "success");
+                Swal.fire({ title: 'Sustancias Identificadas', html: `Justificación guardada. El CO2 es nuestro objetivo a auditar.`, icon: 'success', background: '#1e293b', color: '#39ff14', confirmButtonColor: '#39ff14', timer: 1500, showConfirmButton: false }).then(() => {
+                    state.level = '1'; saveState(); updateUIFromState();
+                });
+            }
+        }
+
+        // M1
+        function changeCoef(index, delta) {
+            let newVal = state.coefs[index] + delta;
+            if (newVal < 0) newVal = 0; if (newVal > 9) newVal = 9;
+            state.coefs[index] = newVal; renderMolecule(index); updateAtomCounts(); saveState();
+        }
+        function renderMolecule(index) {
+            const el = document.getElementById(`coef-${index}`);
+            if(el) el.innerText = state.coefs[index];
+            const visDiv = document.getElementById(`vis-${index}`); 
+            if(!visDiv) return;
+            visDiv.innerHTML = "";
+            for (let i=0; i<state.coefs[index]; i++) {
+                let html = '<div class="molecule-box">';
+                if (index === 0) html += '<span class="atom atom-C"></span><span class="atom atom-H"></span><span class="atom atom-H"></span><span class="atom atom-H"></span><span class="atom atom-H"></span>'; 
+                if (index === 1) html += '<span class="atom atom-O"></span><span class="atom atom-O"></span>'; 
+                if (index === 2) html += '<span class="atom atom-O"></span><span class="atom atom-C"></span><span class="atom atom-O"></span>'; 
+                if (index === 3) html += '<span class="atom atom-H"></span><span class="atom atom-O"></span><span class="atom atom-H"></span>'; 
+                html += '</div>'; visDiv.innerHTML += html;
+            }
+        }
+        function updateAtomCounts() {
+            const cReact = state.coefs[0] * 1; const hReact = state.coefs[0] * 4; const oReact = state.coefs[1] * 2;
+            const cProd = state.coefs[2] * 1; const hProd = state.coefs[3] * 2; const oProd = (state.coefs[2] * 2) + (state.coefs[3] * 1);
+            updateCountUI('c', cReact, cProd); updateCountUI('h', hReact, hProd); updateCountUI('o', oReact, oProd);
+        }
+        function updateCountUI(atom, react, prod) {
+            const elR = document.getElementById(`${atom}-react`); const elP = document.getElementById(`${atom}-prod`); const s = document.getElementById(`${atom}-status`);
+            if(!elR || !elP || !s) return;
+            elR.innerText = react; elP.innerText = prod;
+            if (react === prod && react > 0) { s.innerText = "="; s.className = "text-green-400 font-bold mx-2"; } 
+            else { s.innerText = "≠"; s.className = "text-red-400 font-bold mx-2"; }
+        }
+        function checkLevel1() {
+            state.attemptsLvl['1']++;
+            const isCorrect = state.coefs.every((val, i) => val === CONFIG.solutionLvl1[i]);
+            if (isCorrect) {
+                tutorFeedback(true); addEvidence("Reacción base balanceada correctamente (1,2,1,2)."); 
+                addGMMessage("¡Balance de Lavoisier superado! Ya tenemos la base matemática.", "success");
+                Swal.fire({ title: '¡Balance Validado!', html: 'Reacción estabilizada.', icon: 'success', background: '#1e293b', color: '#39ff14', timer: 1500, showConfirmButton: false }).then(() => {
+                    state.level = '2'; saveState(); updateUIFromState();
+                });
+            } else {
+                let msg = ""; const cEq = state.coefs[0] === state.coefs[2]; const hEq = (state.coefs[0]*4) === (state.coefs[3]*2);
+                if (state.coefs.every(v => v === 0)) msg = "No has modificado coeficientes.";
+                else if (!cEq) msg = "El Carbono (C) no está balanceado.";
+                else if (!hEq) msg = "El Hidrógeno (H) no coincide.";
+                else msg = "Carbono e Hidrógeno bien, pero el Oxígeno (O) falla.";
+                tutorFeedback(false, 'A', msg);
+            }
+        }
+
+        // M2
+        function validateCalculationLvl2() {
+            state.attemptsLvl['2']++;
+            const rawVal = document.getElementById('lvl2-input').value.trim().toLowerCase();
+            
+            if (!rawVal.endsWith('g') && !rawVal.endsWith('gramos')) {
+                tutorFeedback(false, 'CFN7', "Faltan las unidades en tu respuesta. No podemos admitir un número desnudo, debes indicar la unidad de masa (ej: 100 g)."); 
+                return; 
+            }
+            
+            const val = parseFloat(rawVal.replace(/[^0-9.]/g, ''));
+            if (isNaN(val)) { tutorFeedback(false, 'B', "Introduce un valor numérico válido antes de la unidad."); return; }
+            
+            if (val === CONFIG.lvl2_correctAnswer) {
+                tutorFeedback(true); document.getElementById('calculation-block').classList.add('hidden');
+                addGMMessage(`Cálculo de ${val}g verificado. Procede a tomar una decisión formal.`, "success");
+                if(state.attemptsLvl['2'] === 1 && state.scientificLevel >= 80) {
+                    Swal.fire({ title: '¡Excelente Cálculo!', html: 'Has sido muy rápido. Desbloqueando reto de excelencia...', icon: 'success', background: '#1e293b', color: '#39ff14', timer: 2000, showConfirmButton: false });
+                    document.getElementById('extra-challenge-block').classList.remove('hidden');
+                } else { document.getElementById('decision-block').classList.remove('hidden'); }
+            } else {
+                let msg = ""; let errType = 'B';
+                if (val === 3200) { msg = "Has asumido 1g CH₄ = 1g CO₂. Gramos no equivalen directamente a gramos."; errType = 'A'; }
+                else if (val === 200) { msg = "200 son los MOLES. Falta multiplicar por la masa molar (44) para tener gramos."; errType = 'A'; }
+                else if (val === 58) { msg = "Has sumado las masas molares en vez de usar la fórmula correcta."; errType = 'A'; }
+                else { msg = "Revisa tus operaciones matemáticas. El resultado exacto no cuadra."; errType = 'B'; }
+                tutorFeedback(false, errType, msg);
+            }
+        }
+        function checkExtraChallenge() {
+            const rawVal = document.getElementById('extra-input').value.trim().toLowerCase();
+            if (!rawVal.endsWith('g') && !rawVal.endsWith('gramos')) {
+                tutorFeedback(false, 'CFN7', "Recuerda añadir la unidad (ej: 10 g)."); 
+                return; 
+            }
+            const val = parseFloat(rawVal.replace(/[^0-9.]/g, ''));
+            if(val === 4400) {
+                state.scientificLevel = Math.min(100, state.scientificLevel + 5); saveState(); updateLearningModal();
+                addGMMessage("Reto de excelencia superado (+5 pts).", "success");
+                Swal.fire("¡Reto Superado!", "Dominio estequiométrico absoluto. (+5 Pts)", "success").then(()=> { document.getElementById('extra-challenge-block').classList.add('hidden'); document.getElementById('decision-block').classList.remove('hidden'); });
+            } else {
+                penalizeScientificLevel(10, "Fallo en reto de excelencia.");
+                Swal.fire("Inexacto", "La mitad de 3200 genera la mitad de CO2. Avancemos al caso principal.", "info").then(()=> { document.getElementById('extra-challenge-block').classList.add('hidden'); document.getElementById('decision-block').classList.remove('hidden'); });
+            }
+        }
+        function skipExtraChallenge() {
+            penalizeScientificLevel(15, "Reto de excelencia omitido.");
+            document.getElementById('extra-challenge-block').classList.add('hidden'); document.getElementById('decision-block').classList.remove('hidden');
+        }
+
+        let pendingDecisionLvl2 = null;
+        function prepareDecisionLvl2(choice) {
+            pendingDecisionLvl2 = choice;
+            document.getElementById('decision-options').classList.add('hidden'); document.getElementById('decision-justification-block').classList.remove('hidden');
+            if(choice === 'fraude') document.getElementById('decision-prompt-title').innerText = "Has marcado FRAUDE. Justifica tu conclusión científicamente comparando tus datos con los de NOVA:";
+            else document.getElementById('decision-prompt-title').innerText = "Has VALIDADO los datos. Justifica tu conclusión:";
+        }
+
+        function submitDecisionLvl2() {
+            const text = document.getElementById('lvl2-justify').value.trim();
+            if(text.length < 15) { tutorFeedback(false, 'C', "Debes justificar científicamente tu decisión con al menos 15 caracteres."); return; }
+            state.justifications.m2 = text; saveState();
+
+            if (pendingDecisionLvl2 === 'fraude') {
+                tutorFeedback(true); addEvidence("Cálculo validado: Emisión real (8800g) supera el límite de 8500g y contradice los 8500g Declarados. Fraude documentado.");
+                addGMMessage("Decisión registrada: Fraude estequiométrico. Abogados alertados.", "alert");
+                Swal.fire({ title: 'Veredicto Guardado', text: 'Tus conclusiones han sido blindadas.', icon: 'success', background: '#1e293b', color: '#39ff14', confirmButtonColor: '#39ff14' }).then(() => {
+                    state.level = '3'; saveState(); updateUIFromState();
+                });
+            } else {
+                tutorFeedback(false, 'C', "Detectada contradicción grave: Has calculado 8800g (supera el límite de 8500) pero quieres validar los 8500g de la empresa. En ciencia la evidencia matemática manda sobre el papel.");
+                document.getElementById('decision-options').classList.remove('hidden'); document.getElementById('decision-justification-block').classList.add('hidden');
+            }
+        }
+
+        // M3
+        function initLevel3Cards() {
+            const bank = document.getElementById('sortable-bank'); const target = document.getElementById('sortable-target');
+            if(!bank || !target) return;
+            if(target.children.length > 1 || (target.children.length === 1 && target.children[0].id !== 'empty-target-msg')) return; 
+            
+            bank.innerHTML = ""; target.innerHTML = '<div id="empty-target-msg" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm italic pointer-events-none">Arrastra aquí los 4 pasos en orden...</div>';
+            
+            let shuffled = [...CONFIG.lvl3_cards].sort(() => Math.random() - 0.5);
+            shuffled.forEach(card => {
+                const li = document.createElement('li'); li.className = "drag-item bg-slate-700 p-3 border border-slate-600 rounded flex gap-3 text-white shadow-sm hover:bg-sky-900 transition relative z-10";
+                li.dataset.id = card.id; li.innerHTML = `<div class="text-slate-400 px-2 py-1 bg-slate-800 rounded flex items-center">⋮⋮</div><div class="text-sm font-sans flex-1">${card.text}</div>`;
+                bank.appendChild(li);
+            });
+            Sortable.create(bank, { group: 'shared', animation: 150, fallbackOnBody: true, swapThreshold: 0.65 });
+            Sortable.create(target, { 
+                group: 'shared', animation: 150, fallbackOnBody: true, swapThreshold: 0.65,
+                onAdd: function() { const msg = document.getElementById('empty-target-msg'); if(msg) msg.style.display = 'none'; },
+                onRemove: function(evt) { if(evt.to.children.length === 1) { const msg = document.getElementById('empty-target-msg'); if(msg) msg.style.display = 'flex'; } }
+            });
+        }
+
+        function checkLevel3() {
+            state.attemptsLvl['3']++;
+            const target = document.getElementById('sortable-target');
+            const items = Array.from(target.children).filter(c => c.id !== 'empty-target-msg').map(c => c.dataset.id);
+            
+            if (items.length < 4) { tutorFeedback(false, 'C', "Faltan pasos en el panel de proceso. Necesitas arrastrar 4 pasos correctos."); return; }
+            if (items.length > 4) { tutorFeedback(false, 'C', "Has incluido cartas trampa incorrectas. Solo debes usar 4 pasos válidos."); return; }
+
+            const trap = items.find(id => id.startsWith('T'));
+            if (trap) {
+                const tCard = CONFIG.lvl3_cards.find(c => c.id === trap);
+                tutorFeedback(false, 'A', tCard.error); return;
+            }
+
+            const isCorrect = items.every((val, i) => val === ["A", "B", "C", "D"][i]);
+            if (isCorrect) {
+                tutorFeedback(true); addEvidence("Metodología blindada ante el tribunal paso a paso."); addGMMessage("Defensa del método superada con éxito.", "success");
+                Swal.fire({ title: 'Metodología Validada', text: 'Los abogados han sido silenciados.', icon: 'success', background: '#1e293b', color: '#39ff14', confirmButtonColor: '#39ff14' }).then(() => {
+                    state.level = '4'; saveState(); updateUIFromState();
+                });
+            } else {
+                let failIndex = items.findIndex((val, i) => val !== ["A", "B", "C", "D"][i]);
+                let msg = failIndex === 0 ? "El paso inicial de cualquier cálculo estequiométrico es obtener los moles del dato conocido." : failIndex === 1 ? "Usa la proporción (ratio molar) de la reacción balanceada para cambiar de sustancia." : "Antes de dar el resultado final, debes volver a convertir los moles obtenidos en gramos usando la masa molar del oxígeno.";
+                tutorFeedback(false, 'A', msg);
+            }
+        }
+
+        // M4: AUTOEVALUACIÓN Y FIN
+        function submitEval(text) {
+            document.querySelectorAll('.eval-btn').forEach(b => { b.classList.remove('bg-sky-900', 'border-sky-400'); b.classList.add('bg-slate-700'); });
+            event.target.classList.add('bg-sky-900', 'border-sky-400'); state.selfEvalResult = text;
+            const btnCont = document.getElementById('btn-continue-eval');
+            if(btnCont) { btnCont.disabled = false; btnCont.className = "w-full bg-tutor-blue hover:bg-sky-400 text-slate-900 font-bold py-3 rounded transition shadow-[0_0_15px_rgba(56,189,248,0.4)]"; }
+            saveState();
+        }
+
+        function showFinalDecision() {
+            // Verificar si ha leído todos los docs
+            if (!state.docsRead['doc1'] || !state.docsRead['doc2'] || !state.docsRead['doc3'] || !state.docsRead['doc-event']) {
+                Swal.fire("Auditoría Incompleta", "Un verdadero científico no emite veredictos sin leer toda la evidencia. Revisa 📁 todos los documentos de las pestañas.", "error");
+                return;
+            }
+
+            document.getElementById('self-eval-block').classList.add('hidden');
+            document.getElementById('final-conclusion-block').classList.remove('hidden');
+        }
+
+        function submitConclusion(isFraud) {
+            clearInterval(timerInterval);
+            document.getElementById('final-conclusion-block').classList.add('hidden');
+            if (!isFraud) penalizeScientificLevel(50, "Veredicto contradictorio en informe final.");
+            
+            let finalRank = 'C';
+            if (!isFraud) finalRank = 'D'; 
+            else if (state.scientificLevel >= 90) finalRank = 'A';
+            else if (state.scientificLevel >= 70) finalRank = 'B';
+            else if (state.scientificLevel >= 50) finalRank = 'C';
+            else finalRank = 'D';
+            
+            renderOutro(finalRank);
+            document.getElementById('final-report-block').classList.remove('hidden');
+            addGMMessage(`Investigación cerrada. Rango asignado: <strong>${finalRank}</strong>.`, "alert");
+        }
+
+        function renderOutro(rank) {
+            document.getElementById('final-score').innerText = state.scientificLevel + ' Pts';
+            document.getElementById('err-a').innerText = state.errorHistory.A;
+            document.getElementById('err-b').innerText = state.errorHistory.B;
+            document.getElementById('err-c').innerText = state.errorHistory.C;
+            document.getElementById('err-d').innerText = state.errorHistory.D;
+            document.getElementById('err-cfn7').innerText = state.errorHistory.CFN7;
+            document.getElementById('err-hints').innerText = state.errorHistory.hints || 0;
+            
+            const title = document.getElementById('end-title'); const icon = document.getElementById('end-icon'); const rankEl = document.getElementById('final-rank'); const narrative = document.getElementById('end-narrative');
+            const block = document.getElementById('final-report-block');
+            
+            rankEl.innerText = `Rango ${rank}`;
+
+            if(rank === 'A') {
+                block.classList.add('border-neon-green'); icon.innerText = "🏆"; title.innerText = "CASO CERRADO: ÉXITO ABSOLUTO"; title.className = "text-3xl font-bold font-mono mb-2 text-neon-green";
+                rankEl.className = "font-bold text-right border-t border-slate-700 pt-3 mt-1 text-3xl text-neon-green";
+                narrative.innerHTML = "<strong>Nivel Experto:</strong> Has demostrado un rigor científico absoluto. Apenas has necesitado pistas ni ayudas visuales y tus cálculos estequiométricos han sido precisos. Gracias a ti, la AIAC ha sancionado con éxito a NOVA ENERGIA por su fraude de 8800g. Eres un verdadero Auditor Ambiental.";
+            } else if (rank === 'B') {
+                block.classList.add('border-tutor-blue'); icon.innerText = "⚖️"; title.innerText = "CASO CERRADO: BUEN TRABAJO"; title.className = "text-3xl font-bold font-mono mb-2 text-tutor-blue";
+                rankEl.className = "font-bold text-right border-t border-slate-700 pt-3 mt-1 text-3xl text-tutor-blue";
+                narrative.innerHTML = "<strong>Nivel Avanzado:</strong> Comprendes bastante bien los conceptos de estequiometría. Has logrado descubrir el fraude cruzando correctamente los datos, pero cometiste algunas penalizaciones en el camino (errores o uso de pistas/ayudas). Afina tus cálculos para la próxima auditoría.";
+            } else if (rank === 'C') {
+                block.classList.add('border-yellow-500'); icon.innerText = "⚠️"; title.innerText = "CASO CERRADO: RESULTADO MEDIOCRE"; title.className = "text-3xl font-bold font-mono mb-2 text-yellow-400";
+                rankEl.className = "font-bold text-right border-t border-slate-700 pt-3 mt-1 text-3xl text-yellow-400";
+                narrative.innerHTML = "<strong>Nivel Intermedio:</strong> Has logrado resolver el caso y encontrar la evidencia, pero con penalizaciones muy notables por fallos de cálculo matemático, falta de comprensión en los moles u omisión de unidades. El tribunal ha aceptado el informe, pero tu credibilidad profesional ha quedado tocada.";
+            } else {
+                block.classList.add('border-red-600'); icon.innerText = "☠️"; title.innerText = "CASO ARCHIVADO: DESACREDITACIÓN"; title.className = "text-3xl font-bold font-mono mb-2 text-red-500";
+                rankEl.className = "font-bold text-right border-t border-slate-700 pt-3 mt-1 text-3xl text-red-500 blink-text";
+                narrative.innerHTML = "<strong>Nivel Principiante:</strong> Demasiados errores críticos, o bien tomaste la inaceptable decisión de validar un informe falso ignorando la ciencia estequiométrica. Los abogados de NOVA ENERGIA destruyeron tu auditoría en el tribunal. Necesitas repasar urgentemente los conceptos básicos de masas, moles y nomenclatura química.";
+            }
+
+            // Diagnóstico Automático Personalizado
+            const diagList = document.getElementById('diagnostic-list');
+            diagList.innerHTML = "";
+            if (state.errorHistory.B === 0 && state.errorHistory.A === 0) diagList.innerHTML += "<li class='text-neon-green'><i class='fas fa-check-circle mr-2'></i> Excelente dominio de los cálculos estequiométricos y del concepto de mol.</li>";
+            if (state.errorHistory.A > 0) diagList.innerHTML += "<li class='text-orange-400'>🔸 <strong>Recomendación:</strong> Repasa el concepto de moles. No se pueden relacionar gramos de sustancias diferentes sin pasar antes por los moles usando la masa molar.</li>";
+            if (state.errorHistory.B > 0) diagList.innerHTML += "<li class='text-orange-400'>🔸 <strong>Recomendación:</strong> Ve con más cuidado en las operaciones matemáticas básicas de multiplicar y dividir. Revisa dos veces.</li>";
+            if (state.errorHistory.CFN7 > 0) diagList.innerHTML += "<li class='text-red-400'>⚠️ <strong>Hábito Crítico:</strong> Olvidas poner las unidades (g). En ciencia, un número sin unidad no tiene sentido. Trabaja esto urgentemente.</li>";
+            if (state.errorHistory.D > 0) diagList.innerHTML += "<li class='text-orange-400'>🔸 <strong>Recomendación:</strong> Debes asentar las reglas de nomenclatura de óxidos (CO2, NO2, SO2...).</li>";
+            if (state.errorHistory.C > 0) diagList.innerHTML += "<li class='text-orange-400'>🔸 <strong>Recomendación:</strong> Trabaja tu comprensión lectora y el cruce de datos. Lee detenidamente los documentos antes de decidir.</li>";
+            
+            if (diagList.innerHTML === "") diagList.innerHTML = "<li class='text-slate-400 italic'>Sin anomalías detectadas en la ejecución. Rendimiento impecable.</li>";
+        }
+
+        function exportPDF() {
+            const printView = document.getElementById('printable-report');
+            const mainView = document.querySelector('main');
+            const headerView = document.querySelector('header');
+            
+            // Llenamos los datos en la plantilla limpia
+            document.getElementById('print-date').innerText = new Date().toLocaleDateString('es-ES');
+            document.getElementById('print-score').innerText = state.scientificLevel + ' Pts';
+            document.getElementById('print-rank').innerText = document.getElementById('final-rank').innerText;
+            document.getElementById('print-narrative').innerHTML = document.getElementById('end-narrative').innerHTML;
+            
+            // Eliminamos las clases de color de Tailwind para la impresión
+            const rawDiagHtml = document.getElementById('diagnostic-list').innerHTML;
+            document.getElementById('print-diagnostic').innerHTML = rawDiagHtml.replace(/text-[a-z]+-\d+/g, 'text-black');
+
+            // Ocultamos la app y mostramos el documento limpio
+            mainView.style.display = 'none';
+            if (headerView) headerView.style.display = 'none';
+            printView.classList.remove('hidden');
+            printView.classList.add('block');
+            window.scrollTo(0,0);
+            
+            // Guardar estilos del body para volver a oscuro después
+            const originalBackground = document.body.style.background;
+            const originalBgImage = document.body.style.backgroundImage;
+            document.body.style.background = '#ffffff';
+            document.body.style.backgroundImage = 'none';
+            
+            const opt = {
+                margin:       15,
+                filename:     'Auditoria_AIAC_NOVA.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(printView).save().then(() => {
+                // Restauramos la app
+                printView.classList.add('hidden');
+                printView.classList.remove('block');
+                mainView.style.display = ''; 
+                if (headerView) headerView.style.display = '';
+                
+                // Restauramos el fondo oscuro
+                document.body.style.background = originalBackground;
+                document.body.style.backgroundImage = originalBgImage;
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadState);
+    </script>
+</body>
+</html>
