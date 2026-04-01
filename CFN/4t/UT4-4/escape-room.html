@@ -211,20 +211,22 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
                             <h3 class="font-bold text-white mb-4 border-b border-slate-700 pb-2 text-sm">1. Nomenclatura</h3>
-                            <div class="flex items-center gap-3">
-                                <span class="font-mono text-xl text-blue-300 w-12">CH₄</span>
-                                <span class="text-slate-500">→</span>
-                                <input type="text" id="m0-name1" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <span class="font-mono text-xl text-blue-300 w-12">NO₂</span>
-                                <span class="text-slate-500">→</span>
-                                <input type="text" id="m0-name2" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <span class="font-mono text-xl text-blue-300 w-12">N₂O</span>
-                                <span class="text-slate-500">→</span>
-                                <input type="text" id="m0-name3" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
+                            <div class="flex flex-col gap-3">
+                                <div class="flex items-center gap-3">
+                                    <span class="font-mono text-xl text-blue-300 w-12">CH₄</span>
+                                    <span class="text-slate-500">→</span>
+                                    <input type="text" id="m0-name1" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="font-mono text-xl text-blue-300 w-12">NO₂</span>
+                                    <span class="text-slate-500">→</span>
+                                    <input type="text" id="m0-name2" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="font-mono text-xl text-blue-300 w-12">N₂O</span>
+                                    <span class="text-slate-500">→</span>
+                                    <input type="text" id="m0-name3" placeholder="Nombre..." class="flex-1 bg-slate-800 border border-slate-600 text-white p-2 rounded outline-none focus:border-green-400 text-sm">
+                                </div>
                             </div>
                         </div>
 
@@ -249,7 +251,7 @@
 
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 mt-6">
                         <h3 class="font-bold text-white mb-3 text-sm">3. Selección del Sospechoso</h3>
-                        <p class="text-sm mb-3 text-slate-400">¿Cuál es el Gas de Efecto Invernadero (GEI) principal resultante de la combustión?</p>
+                        <p class="text-sm mb-3 text-slate-400">¿Cuál es el Gas de Efecto Invernadero (GEI) principal resultante de la combustión de un hidrocarburo como el metano?</p>
                         <div class="grid grid-cols-5 gap-2 mb-4" id="m0-suspects">
                             <button class="suspect-btn bg-slate-800 border border-slate-600 hover:border-blue-400 py-2 rounded transition font-mono" onclick="selectSuspect(this, 'NO2')">NO₂</button>
                             <button class="suspect-btn bg-slate-800 border border-slate-600 hover:border-blue-400 py-2 rounded transition font-mono" onclick="selectSuspect(this, 'CO2')">CO₂</button>
@@ -819,7 +821,7 @@
         let timerInterval;
 
         function loadState() {
-            const saved = localStorage.getItem('huellaQuimicaGameV16');
+            const saved = localStorage.getItem('huellaQuimicaGameV17');
             if (saved) {
                 state = JSON.parse(saved);
                 if (state.level !== '0' && state.level !== '4' && state.startTime) startTimer();
@@ -829,11 +831,11 @@
         }
 
         function saveState() { 
-            localStorage.setItem('huellaQuimicaGameV16', JSON.stringify(state)); 
+            localStorage.setItem('huellaQuimicaGameV17', JSON.stringify(state)); 
         }
 
         function resetGame() {
-            localStorage.removeItem('huellaQuimicaGameV16');
+            localStorage.removeItem('huellaQuimicaGameV17');
             clearInterval(timerInterval);
             state = { 
                 level: '0', auditorStance: null, startTime: null, timeElapsed: 0, errors: 0, coefs: [0,0,0,0], suspectSelected: null, 
@@ -891,6 +893,9 @@
 
             textEl.innerText = c + ' Pts';
             
+            // Forzar actualización visual esquivando bloqueos de tailwind
+            barEl.style.setProperty('width', `${c}%`, 'important');
+            
             if(c >= 80) { 
                 barEl.className='h-full transition-all duration-500 bg-neon-green shadow-[0_0_10px_var(--neon-green)]'; 
                 labelEl.className="text-neon-green"; textEl.className="text-neon-green"; 
@@ -903,7 +908,6 @@
                 barEl.className='h-full transition-all duration-500 bg-red-500 shadow-[0_0_10px_#ef4444]'; 
                 labelEl.className="text-red-500 blink-text"; textEl.className="text-red-500"; 
             }
-            barEl.style.width = c + '%';
         }
 
         function updateLearningModal() {
@@ -999,25 +1003,68 @@
             if (state.level === '3' || state.level === 3) initLevel3Cards();
         }
 
-        function addGMMessage(html, type = 'system') {
-            const chatBox = document.getElementById('gm-chat-box');
-            if(!chatBox) return;
+        // SISTEMA DE COLA PARA EL GAME MASTER (Evita el spam y añade 3 segundos de "escribiendo...")
+        let gmQueue = [];
+        let isProcessingQueue = false;
 
-            const bubble = document.createElement('div');
-            let classes = "border border-slate-600 rounded-lg rounded-tl-none p-3 text-sm text-slate-300 shadow-md chat-bubble mt-2";
-            if (type === 'alert') classes += " border-orange-500 bg-orange-900/20 text-orange-200";
-            else if (type === 'success') classes += " border-neon-green bg-green-900/20 text-green-200";
-            else if (type === 'error') classes += " border-red-500 bg-red-900/20 text-red-200";
-            else classes += " bg-slate-800"; 
+        function addGMMessage(html, type = 'system') {
+            gmQueue.push({ html, type });
+            if (!isProcessingQueue) processGMQueue();
+        }
+
+        async function processGMQueue() {
+            if (gmQueue.length === 0) {
+                isProcessingQueue = false;
+                return;
+            }
+            isProcessingQueue = true;
+            const msg = gmQueue.shift();
             
-            bubble.className = classes;
-            bubble.innerHTML = html;
-            chatBox.appendChild(bubble);
-            setTimeout(() => { chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' }); }, 50);
+            const chatBox = document.getElementById('gm-chat-box');
+            
+            // Wait time: 3s for system (narrative), 1s for alerts/success so it's not too slow.
+            const waitTime = msg.type === 'system' ? 3000 : 1000;
+            
+            const typingId = "typing-" + Date.now();
+            const typingBubble = document.createElement('div');
+            typingBubble.id = typingId;
+            typingBubble.className = "border border-slate-600 rounded-lg rounded-tl-none p-3 shadow-md chat-bubble mt-2 bg-slate-800 flex items-center justify-center gap-1 w-16 h-10";
+            // 3 dots animation
+            typingBubble.innerHTML = `
+                <div class="w-1.5 h-1.5 bg-tutor-blue rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                <div class="w-1.5 h-1.5 bg-tutor-blue rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                <div class="w-1.5 h-1.5 bg-tutor-blue rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+            `;
+            
+            if(chatBox) {
+                chatBox.appendChild(typingBubble);
+                chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+            }
+
+            await new Promise(r => setTimeout(r, waitTime));
+
+            const ind = document.getElementById(typingId);
+            if(ind) ind.remove();
+
+            if(chatBox) {
+                const bubble = document.createElement('div');
+                let classes = "border border-slate-600 rounded-lg rounded-tl-none p-3 text-sm text-slate-300 shadow-md chat-bubble mt-2";
+                if (msg.type === 'alert') classes += " border-orange-500 bg-orange-900/20 text-orange-200";
+                else if (msg.type === 'success') classes += " border-neon-green bg-green-900/20 text-green-200";
+                else if (msg.type === 'error') classes += " border-red-500 bg-red-900/20 text-red-200";
+                else classes += " bg-slate-800"; 
+                
+                bubble.className = classes;
+                bubble.innerHTML = msg.html;
+                chatBox.appendChild(bubble);
+                chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+            }
 
             if (!state.gmLog) state.gmLog = [];
-            state.gmLog.push({ html, type });
+            state.gmLog.push(msg);
             saveState();
+
+            processGMQueue();
         }
 
         function renderGMLog() {
@@ -1091,11 +1138,9 @@
                 ];
             }
 
-            let delay = 0;
             msgs.forEach((msg) => {
                 const taggedMsg = `<div class="text-[10px] text-tutor-blue mb-1 border-b border-tutor-blue/30 pb-1 font-bold uppercase">📍 Fase: ${missionTag}</div>${msg}`;
-                setTimeout(() => { addGMMessage(taggedMsg, 'system'); }, delay);
-                delay += 800; 
+                addGMMessage(taggedMsg, 'system');
             });
             state.shownMissionMsgs[lvl] = true;
             saveState();
@@ -1109,17 +1154,17 @@
                 saveState();
                 const d3 = document.getElementById('tab-doc3'); if(d3) d3.classList.remove('hidden');
                 fireDocAlert(' Panfleto y Declaración Empresa', 'Analiza el Panfleto Ciudadano para identificar el gas y los límites legales. Luego revisa el Informe de NOVA para ver qué están declarando.', 'doc1');
-                setTimeout(() => addGMMessage("Nuevos documentos disponibles: <strong>Panfleto Ecologista</strong> e <strong>Informe Empresa</strong>.", "alert"), 1000);
+                addGMMessage("Nuevos documentos disponibles: <strong>Panfleto Ecologista</strong> e <strong>Informe Empresa</strong>.", "alert");
             } else if (lvl === '2' && !state.shownDocs['doc2']) {
                 state.shownDocs['doc2'] = true; saveState();
                 const d2 = document.getElementById('tab-doc2'); if(d2) d2.classList.remove('hidden');
                 fireDocAlert(' Ficha Técnica de Laboratorio', 'El Laboratorio AIAC te ha enviado la Ficha Estequiométrica con las masas molares necesarias para que puedas hacer la conversión a moles real.', 'doc2');
-                setTimeout(() => addGMMessage("Nuevo documento disponible: <strong>Ficha Técnica</strong>.", "alert"), 1000);
+                addGMMessage("Nuevo documento disponible: <strong>Ficha Técnica</strong>.", "alert");
             } else if (lvl === '3' && !state.shownDocs['docEvent']) {
                 state.shownDocs['docEvent'] = true; saveState();
                 const de = document.getElementById('tab-doc-event'); if(de) de.classList.remove('hidden');
                 fireDocAlert(' Archivo Secreto Interceptado', 'Hemos descifrado un email interno de los directivos de NOVA ENERGIA. Ábrelo inmediatamente.', 'doc-event');
-                setTimeout(() => addGMMessage("Archivo crítico interceptado. <strong>Léelo ahora mismo</strong>.", "alert"), 1000);
+                addGMMessage("Archivo crítico interceptado. <strong>Léelo ahora mismo</strong>.", "alert");
             }
         }
 
@@ -1488,10 +1533,14 @@
         function checkLevel3() {
             state.attemptsLvl['3']++;
             const target = document.getElementById('sortable-target');
-            const items = Array.from(target.children).filter(c => c.id !== 'empty-target-msg').map(c => c.dataset.id);
+            
+            // Extraer de forma segura ignorando elementos ocultos o fantasmas generados por librerías
+            const items = Array.from(target.children)
+                .filter(c => c.tagName === 'LI' && c.dataset && c.dataset.id)
+                .map(c => c.dataset.id);
             
             if (items.length < 4) { tutorFeedback(false, 'C', "Faltan pasos en el panel de proceso. Necesitas arrastrar 4 pasos correctos."); return; }
-            if (items.length > 4) { tutorFeedback(false, 'C', "Has incluido cartas trampa incorrectas. Solo debes usar 4 pasos válidos."); return; }
+            if (items.length > 4) { tutorFeedback(false, 'C', "Has incluido cartas trampa incorrectas o demasiados pasos. Solo debes usar 4 pasos válidos."); return; }
 
             const trap = items.find(id => id.startsWith('T'));
             if (trap) {
