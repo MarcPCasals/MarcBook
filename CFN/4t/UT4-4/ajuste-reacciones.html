@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratorio de Química: ajuste de reacciones</title>
+    
+    <!-- Librerías de React y Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: #f8fafc; }
+        
+        /* Animaciones suaves */
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .pop-in { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .celebrate { animation: celebrate 0.5s ease-in-out; }
+        @keyframes celebrate {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1) rotate(2deg); }
+            100% { transform: scale(1); }
+        }
+
+        /* Estilos DUA y Accesibilidad */
+        .coef-input:focus { outline: 3px solid #3b82f6; outline-offset: 2px; }
+        
+        /* Ocultar flechas del input number */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+
+        /* Scrollbar personalizado */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800 h-screen flex flex-col overflow-hidden">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // ==========================================
+        // 1. BASE DE DATOS Y CONFIGURACIÓN
+        // ==========================================
+
+        const ELEMENT_COLORS = {
+            'H': '#fcd34d', 'O': '#ef4444', 'C': '#8b5cf6', 'N': '#3b82f6', 
+            'Cl': '#22c55e', 'Mg': '#f472b6', 'Ca': '#a855f7', 'S': '#eab308',
+            'Al': '#0ea5e9', 'Cr': '#14b8a6', 'Na': '#8b5cf6', 'P': '#f97316', 'F': '#86efac'
+        };
+
+        const ELEMENT_SIZES = {
+            'H': 12, 'O': 16, 'C': 18, 'N': 17, 'F': 15,
+            'Na': 22, 'Mg': 20, 'Al': 19, 'P': 21, 'S': 20, 'Cl': 19,
+            'Ca': 26, 'Cr': 24
+        };
+
+        const EQUATIONS = [
+            { id: 'eq1', type: 'Desplazamiento simple', desc: 'Reacción de un ácido con un metal (corrosión). Frecuente en la degradación de estructuras metálicas expuestas a lluvia ácida.', reactants: [{ f: 'Mg', a: {Mg:1} }, { f: 'HCl', a: {H:1, Cl:1} }], products: [{ f: 'MgCl₂', a: {Mg:1, Cl:2} }, { f: 'H₂', a: {H:2} }], solution: [1, 2, 1, 1] },
+            { id: 'eq2', type: 'Síntesis', desc: 'Formación de nitruros. Reacción que ocurre al calentar metales en atmósferas ricas en nitrógeno.', reactants: [{ f: 'Ca', a: {Ca:1} }, { f: 'N₂', a: {N:2} }], products: [{ f: 'Ca₃N₂', a: {Ca:3, N:2} }], solution: [3, 1, 1] },
+            { id: 'eq3', type: 'Descomposición', desc: 'Descomposición de nitrato de amonio (fertilizante). Su uso excesivo causa eutrofización y contaminación grave de acuíferos.', reactants: [{ f: 'NH₄NO₃', a: {N:2, H:4, O:3} }], products: [{ f: 'N₂O', a: {N:2, O:1} }, { f: 'H₂O', a: {H:2, O:1} }], solution: [1, 1, 2] },
+            { id: 'eq4', type: 'Doble desplazamiento', desc: 'Formación de sulfuro de hidrógeno (gas tóxico). Puede darse en vertidos industriales incontrolados que mezclan ácidos y sulfuros.', reactants: [{ f: 'AlCl₃', a: {Al:1, Cl:3} }, { f: 'H₂S', a: {H:2, S:1} }], products: [{ f: 'Al₂S₃', a: {Al:2, S:3} }, { f: 'HCl', a: {H:1, Cl:1} }], solution: [2, 3, 1, 6] },
+            { id: 'eq5', type: 'Combustión', desc: 'Combustión de butano (gas fósil). Principal causa de emisión de CO₂ antropogénico y del calentamiento global.', reactants: [{ f: 'C₄H₁₀', a: {C:4, H:10} }, { f: 'O₂', a: {O:2} }], products: [{ f: 'CO₂', a: {C:1, O:2} }, { f: 'H₂O', a: {H:2, O:1} }], solution: [2, 13, 8, 10] },
+            { id: 'eq6', type: 'Combustión celular', desc: 'Respiración celular. El proceso biológico fundamental donde los seres vivos obtienen energía quemando glucosa.', reactants: [{ f: 'C₆H₁₂O₆', a: {C:6, H:12, O:6} }, { f: 'O₂', a: {O:2} }], products: [{ f: 'CO₂', a: {C:1, O:2} }, { f: 'H₂O', a: {H:2, O:1} }], solution: [1, 6, 6, 6] },
+            { id: 'eq7', type: 'Redox', desc: 'Formación de lluvia ácida. Los gases de los tubos de escape (NO₂) reaccionan con el agua de las nubes formando ácido nítrico.', reactants: [{ f: 'NO₂', a: {N:1, O:2} }, { f: 'H₂O', a: {H:2, O:1} }], products: [{ f: 'HNO₃', a: {H:1, N:1, O:3} }, { f: 'NO', a: {N:1, O:1} }], solution: [3, 1, 2, 1] },
+            { id: 'eq8', type: 'Doble desplazamiento', desc: 'Tratamiento de aguas residuales. Se usa hidróxido de sodio para neutralizar y precipitar metales pesados contaminantes como el cromo.', reactants: [{ f: 'Cr₂(SO₄)₃', a: {Cr:2, S:3, O:12} }, { f: 'NaOH', a: {Na:1, O:1, H:1} }], products: [{ f: 'Cr(OH)₃', a: {Cr:1, O:3, H:3} }, { f: 'Na₂SO₄', a: {Na:2, S:1, O:4} }], solution: [1, 6, 2, 3] },
+            { id: 'eq9', type: 'Hidrólisis', desc: 'Generación de gas metano. El metano es un gas de efecto invernadero 25 veces más potente que el CO₂.', reactants: [{ f: 'Al₄C₃', a: {Al:4, C:3} }, { f: 'H₂O', a: {H:2, O:1} }], products: [{ f: 'CH₄', a: {C:1, H:4} }, { f: 'Al(OH)₃', a: {Al:1, O:3, H:3} }], solution: [1, 12, 3, 4] },
+            // Extras
+            { id: 'ext1', type: 'Síntesis', desc: 'Combustión incompleta. Forma monóxido de carbono (CO), un gas muy tóxico y silencioso producido en estufas mal ventiladas.', reactants: [{ f: 'C', a: {C:1} }, { f: 'O₂', a: {O:2} }], products: [{ f: 'CO', a: {C:1, O:1} }], solution: [2, 1, 2] },
+            { id: 'ext2', type: 'Síntesis', desc: 'Contaminación por motores. Forma gases NOx responsables del "smog fotoquímico" (la boina de humo) en grandes ciudades.', reactants: [{ f: 'N₂', a: {N:2} }, { f: 'O₂', a: {O:2} }], products: [{ f: 'N₂O₅', a: {N:2, O:5} }], solution: [2, 5, 2] },
+            { id: 'ext3', type: 'Síntesis', desc: 'Formación de óxidos de fósforo. Usado en la industria química; un mal vertido daña gravemente ecosistemas acuáticos.', reactants: [{ f: 'P', a: {P:1} }, { f: 'O₂', a: {O:2} }], products: [{ f: 'P₂O₅', a: {P:2, O:5} }], solution: [4, 5, 2] },
+            { id: 'ext4', type: 'Hidrogenación', desc: 'Reacción muy utilizada en la industria petroquímica y alimentaria para procesar y saturar compuestos.', reactants: [{ f: 'C₂H₂', a: {C:2, H:2} }, { f: 'H₂', a: {H:2} }], products: [{ f: 'C₂H₆', a: {C:2, H:6} }], solution: [1, 2, 1] },
+        ];
+
+        const RETOS = [
+            { id: 'r1', level: 1, title: 'Nivel 1: Con ayudas visuales', hints: true, views: ['balanza', 'barras', 'tabla'], reactants: [{ f: 'PCl₃', a: {P:1, Cl:3} }], products: [{ f: 'P₄', a: {P:4} }, { f: 'Cl₂', a: {Cl:2} }], solution: [4, 1, 6] },
+            { id: 'r2', level: 2, title: 'Nivel 2: Solo gráficos', hints: false, views: ['barras', 'tabla'], reactants: [{ f: 'OF₂', a: {O:1, F:2} }, { f: 'H₂O', a: {H:2, O:1} }], products: [{ f: 'O₂', a: {O:2} }, { f: 'HF', a: {H:1, F:1} }], solution: [1, 1, 1, 2] },
+            { id: 'r3', level: 3, title: 'Nivel 3: A ciegas', hints: false, views: [], reactants: [{ f: 'CO₂', a: {C:1, O:2} }, { f: 'H₂O', a: {H:2, O:1} }], products: [{ f: 'C₂H₆', a: {C:2, H:6} }, { f: 'O₂', a: {O:2} }], solution: [4, 6, 2, 7] }
+        ];
+
+        // ==========================================
+        // 2. UTILIDADES QUÍMICAS Y LÓGICA
+        // ==========================================
+
+        const gcd = (a, b) => b ? gcd(b, a % b) : a;
+        
+        const getSimplifiedStatus = (coefs) => {
+            const allZero = coefs.every(c => c === 0);
+            if (allZero) return false;
+            const hasZero = coefs.some(c => c === 0);
+            if (hasZero) return false; // Si falta algún coef, no está completo
+            
+            const divisor = coefs.reduce((acc, val) => gcd(acc, val));
+            return divisor === 1;
+        };
+
+        const calculateAtoms = (equation, coefs) => {
+            const rTotals = {}; const pTotals = {};
+            const elements = new Set();
+
+            equation.reactants.forEach((mol, idx) => {
+                const c = coefs[idx] || 0;
+                Object.entries(mol.a).forEach(([elem, count]) => {
+                    rTotals[elem] = (rTotals[elem] || 0) + (count * c);
+                    elements.add(elem);
+                });
+            });
+
+            equation.products.forEach((mol, idx) => {
+                const c = coefs[idx + equation.reactants.length] || 0;
+                Object.entries(mol.a).forEach(([elem, count]) => {
+                    pTotals[elem] = (pTotals[elem] || 0) + (count * c);
+                    elements.add(elem);
+                });
+            });
+
+            return { rTotals, pTotals, elements: Array.from(elements) };
+        };
+
+        // ==========================================
+        // 3. COMPONENTES VISUALES (DUA)
+        // ==========================================
+
+        const FormattedFormula = ({ formula, blackText = false }) => {
+            const parts = formula.split(/([A-Z][a-z]*)/);
+            return (
+                <span>
+                    {parts.map((part, i) => {
+                        if (!part) return null;
+                        if (/^[A-Z][a-z]*$/.test(part)) return <span key={i} style={{ color: blackText ? '#000' : (ELEMENT_COLORS[part] || 'inherit') }}>{part}</span>;
+                        return <span key={i}>{part}</span>;
+                    })}
+                </span>
+            );
+        };
+
+        const AtomSphere = ({ element, count }) => {
+            const color = ELEMENT_COLORS[element] || '#9ca3af';
+            const size = ELEMENT_SIZES[element] || 16;
+            const spheres = Array.from({ length: Math.min(count, 36) }); // Cap visual
+            return (
+                <div className="flex flex-wrap gap-1 justify-center max-w-[80px]">
+                    {spheres.map((_, i) => (
+                        <div key={i} className="rounded-full shadow-md border border-slate-300" style={{ backgroundColor: color, width: `${size}px`, height: `${size}px` }} title={element}></div>
+                    ))}
+                    {count > 36 && <span className="text-xs font-bold">+</span>}
+                </div>
+            );
+        };
+
+        const BalanzaView = ({ elements, rTotals, pTotals }) => {
+            return (
+                <div className="p-4 fade-in w-full shrink-0">
+                    <h3 className="text-center font-bold text-slate-400 mb-6 text-xs uppercase tracking-widest">Balanzas por Elemento</h3>
+                    <div className="flex flex-wrap justify-center gap-12 sm:gap-16 md:gap-20 mb-4 w-full max-w-5xl mx-auto">
+                        {elements.map(el => {
+                            const rCount = rTotals[el] || 0;
+                            const pCount = pTotals[el] || 0;
+                            // Calcular rotación: si hay más reactivos inclina a izq (negativo), si más productos a der (positivo)
+                            const diff = pCount - rCount;
+                            const angle = Math.max(-20, Math.min(20, diff * 5)); 
+                            const isBalanced = rCount === pCount && rCount > 0;
+                            const bgClass = isBalanced ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100';
+                            
+                            return (
+                                <div key={el} className={`flex flex-col items-center px-4 sm:px-8 py-4 rounded-xl shadow-sm border transition-colors duration-500 ${bgClass}`}>
+                                    <span className="font-bold text-slate-600 mb-2" style={{color: ELEMENT_COLORS[el]}}>{el}</span>
+                                    <div className="relative w-40 sm:w-48 h-24 flex items-end justify-center">
+                                        {/* Fulcro */}
+                                        <div className="absolute bottom-0 w-0 h-0 border-l-[10px] border-r-[10px] border-b-[20px] border-transparent border-b-slate-400 z-10"></div>
+                                        
+                                        {/* Viga y platillos */}
+                                        <div className="absolute bottom-[20px] w-full h-1 bg-slate-400 transition-transform duration-500 origin-center flex justify-between" style={{ transform: `rotate(${angle}deg)` }}>
+                                            {/* Platillo Reactivos */}
+                                            <div className="relative" style={{ transform: `rotate(${-angle}deg)` }}>
+                                                <div className="absolute -top-16 -left-6 w-16 flex flex-col items-center">
+                                                    <AtomSphere element={el} count={rCount} />
+                                                    <div className="w-14 h-1 bg-slate-300 mt-1"></div>
+                                                </div>
+                                            </div>
+                                            {/* Platillo Productos */}
+                                            <div className="relative" style={{ transform: `rotate(${-angle}deg)` }}>
+                                                <div className="absolute -top-16 -right-6 w-16 flex flex-col items-center">
+                                                    <AtomSphere element={el} count={pCount} />
+                                                    <div className="w-14 h-1 bg-slate-300 mt-1"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between w-full mt-2 px-2 text-xs font-bold text-slate-500">
+                                        <span>{rCount}</span><span>{pCount}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        const BarrasView = ({ elements, rTotals, pTotals }) => {
+            const maxVal = Math.max(1, ...Object.values(rTotals), ...Object.values(pTotals));
+            return (
+                <div className="p-4 space-y-4 fade-in bg-white rounded-xl shadow-sm border border-slate-100 w-full max-w-xl mx-auto">
+                    <div className="flex justify-between text-xs font-bold text-slate-400 border-b pb-2 px-2">
+                        <span className="w-1/3 text-right pr-4">REACTIVOS</span>
+                        <span className="w-1/3 text-center">ELEMENTO</span>
+                        <span className="w-1/3 pl-4">PRODUCTOS</span>
+                    </div>
+                    {elements.map(el => {
+                        const rCount = rTotals[el] || 0;
+                        const pCount = pTotals[el] || 0;
+                        const rWidth = (rCount / maxVal) * 100;
+                        const pWidth = (pCount / maxVal) * 100;
+                        const color = ELEMENT_COLORS[el] || '#9ca3af';
+
+                        return (
+                            <div key={el} className="flex items-center w-full">
+                                <div className="w-1/3 flex justify-end items-center pr-4">
+                                    <span className="mr-2 text-xs font-bold">{rCount}</span>
+                                    <div className="h-6 rounded-l-md transition-all duration-300" style={{ width: `${rWidth}%`, backgroundColor: color, border: '1px solid #cbd5e1' }}></div>
+                                </div>
+                                <div className="w-1/3 text-center font-bold text-lg text-slate-700 bg-slate-50 py-1 rounded">{el}</div>
+                                <div className="w-1/3 flex justify-start items-center pl-4">
+                                    <div className="h-6 rounded-r-md transition-all duration-300" style={{ width: `${pWidth}%`, backgroundColor: color, border: '1px solid #cbd5e1' }}></div>
+                                    <span className="ml-2 text-xs font-bold">{pCount}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+
+        const TablaView = ({ elements, rTotals, pTotals }) => {
+            return (
+                <div className="p-4 fade-in w-full">
+                    <table className="w-full max-w-lg mx-auto bg-white rounded-xl shadow-sm overflow-hidden text-center">
+                        <thead className="bg-slate-100 text-slate-600 text-sm">
+                            <tr>
+                                <th className="py-3 px-4">Reactivos</th>
+                                <th className="py-3 px-4">Elemento</th>
+                                <th className="py-3 px-4">Productos</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {elements.map(el => {
+                                const rCount = rTotals[el] || 0;
+                                const pCount = pTotals[el] || 0;
+                                const isEq = rCount === pCount && rCount > 0;
+                                const isEmpty = rCount === 0 && pCount === 0;
+
+                                return (
+                                    <tr key={el} className={isEq ? 'bg-green-50/50' : ''}>
+                                        <td className={`py-3 px-4 text-xl font-bold ${isEmpty ? 'text-slate-300' : (rCount > pCount ? 'text-orange-500' : 'text-slate-600')}`}>{rCount}</td>
+                                        <td className="py-3 px-4">
+                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 font-bold shadow-sm" style={{ backgroundColor: ELEMENT_COLORS[el] || '#fff' }}>{el}</span>
+                                        </td>
+                                        <td className={`py-3 px-4 text-xl font-bold ${isEmpty ? 'text-slate-300' : (pCount > rCount ? 'text-orange-500' : 'text-slate-600')}`}>{pCount}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 4. CONTROLES Y WORKSPACE (ESPACIO DE TRABAJO)
+        // ==========================================
+
+        const CoefInput = ({ value, onChange }) => {
+            return (
+                <div className="flex flex-col items-center bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                    <button onClick={() => onChange(Math.min(15, value + 1))} className="w-12 h-8 bg-slate-100 hover:bg-blue-100 text-blue-500 hover:text-blue-700 flex items-center justify-center transition-colors">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 15l-6-6-6 6"/></svg>
+                    </button>
+                    <input 
+                        type="number" 
+                        min="0" max="15"
+                        value={value} 
+                        onChange={(e) => { const v = parseInt(e.target.value); onChange(isNaN(v) ? 0 : Math.max(0, Math.min(15, v))); }}
+                        className="w-12 h-12 text-center text-2xl font-bold text-slate-800 focus:outline-none coef-input"
+                    />
+                    <button onClick={() => onChange(Math.max(0, value - 1))} className="w-12 h-8 bg-slate-100 hover:bg-blue-100 text-blue-500 hover:text-blue-700 flex items-center justify-center transition-colors">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                </div>
+            );
+        };
+
+        const EquationWorkspace = ({ equation, onSolve, showHints, allowedViews, isReto }) => {
+            const numCoefs = equation.reactants.length + equation.products.length;
+            const [coefs, setCoefs] = useState(Array(numCoefs).fill(0));
+            const [view, setView] = useState(allowedViews.length > 0 ? allowedViews[0] : null);
+
+            // Reiniciar estado si cambia la ecuación
+            useEffect(() => { setCoefs(Array(numCoefs).fill(0)); }, [equation]);
+            // Asegurar que la vista seleccionada esté permitida
+            useEffect(() => { if (allowedViews.length > 0 && !allowedViews.includes(view)) setView(allowedViews[0]); }, [allowedViews]);
+
+            const updateCoef = (idx, val) => {
+                const newCoefs = [...coefs];
+                newCoefs[idx] = val;
+                setCoefs(newCoefs);
+            };
+
+            const { rTotals, pTotals, elements } = calculateAtoms(equation, coefs);
+            
+            const isStarted = coefs.some(c => c > 0);
+            const isSimplified = getSimplifiedStatus(coefs);
+            
+            let isBalanced = true;
+            let excessReactants = [];
+            let excessProducts = [];
+            
+            elements.forEach(el => {
+                const r = rTotals[el] || 0;
+                const p = pTotals[el] || 0;
+                if (r !== p) isBalanced = false;
+                if (r > p) excessReactants.push(el);
+                if (p > r) excessProducts.push(el);
+            });
+            
+            // Si faltan coeficientes, no está balanceado realmente
+            if (coefs.some(c => c === 0)) isBalanced = false;
+
+            // Trigger guardado si no es reto y está resuelta
+            useEffect(() => {
+                if (!isReto && isStarted && isBalanced && isSimplified) {
+                    onSolve(true);
+                }
+            }, [isStarted, isBalanced, isSimplified, isReto]);
+
+            // Generar feedback inteligente
+            let feedback = { msg: "Empieza añadiendo coeficientes (1, 2, 3...) a las moléculas.", type: "neutral" };
+            
+            if (isStarted) {
+                if (isBalanced) {
+                    if (isSimplified) feedback = { msg: "¡Excelente! La ecuación está perfectamente ajustada.", type: "success" };
+                    else feedback = { msg: "La ecuación está balanceada, pero los coeficientes se pueden simplificar más.", type: "warning" };
+                } else {
+                    if (showHints) {
+                        if (excessReactants.length > 0 && excessProducts.length === 0) {
+                            feedback = { msg: `Hay demasiados átomos de ${excessReactants.join(', ')} en los reactivos. Añade productos.`, type: "error" };
+                        } else if (excessProducts.length > 0 && excessReactants.length === 0) {
+                            feedback = { msg: `Hay demasiados átomos de ${excessProducts.join(', ')} en los productos. Añade reactivos.`, type: "error" };
+                        } else {
+                            feedback = { msg: "Los átomos no coinciden. Fíjate en los elementos que tienen cantidades diferentes.", type: "error" };
+                        }
+                    } else {
+                        feedback = { msg: "La ecuación aún no está equilibrada.", type: "neutral" };
+                    }
+                }
+            }
+
+            // Cálculo Balanza General (Siempre presente abajo)
+            let totalR = 0;
+            let totalP = 0;
+            elements.forEach(el => {
+                totalR += rTotals[el] || 0;
+                totalP += pTotals[el] || 0;
+            });
+            const generalDiff = totalP - totalR;
+            const generalAngle = Math.max(-20, Math.min(20, generalDiff * 2));
+            const isGeneralBalanced = elements.length > 0 && elements.every(el => rTotals[el] === pTotals[el] && rTotals[el] > 0);
+            const bgGeneralClass = isGeneralBalanced ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200';
+
+            return (
+                <div className="flex flex-col bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+                    {/* Panel de Ecuación */}
+                    <div className="bg-slate-800 text-white shadow-inner relative flex flex-col w-full">
+                        <div className="p-6 md:p-10 flex flex-wrap justify-center items-center gap-4 relative">
+                            {equation.type && !isReto && <div className="absolute top-4 left-4 text-xs font-bold text-blue-300 uppercase tracking-widest">{equation.type}</div>}
+                            
+                            {/* Reactivos */}
+                            {equation.reactants.map((mol, i) => (
+                                <React.Fragment key={`r-${i}`}>
+                                    <div className="flex items-center gap-3">
+                                        <CoefInput value={coefs[i]} onChange={(v) => updateCoef(i, v)} />
+                                        <span className="text-3xl md:text-4xl font-bold tracking-wide"><FormattedFormula formula={mol.f} /></span>
+                                    </div>
+                                    {i < equation.reactants.length - 1 && <span className="text-3xl font-bold text-slate-400 mx-2">+</span>}
+                                </React.Fragment>
+                            ))}
+
+                            <span className="text-4xl font-black text-blue-400 mx-4">→</span>
+
+                            {/* Productos */}
+                            {equation.products.map((mol, i) => (
+                                <React.Fragment key={`p-${i}`}>
+                                    <div className="flex items-center gap-3">
+                                        <CoefInput value={coefs[i + equation.reactants.length]} onChange={(v) => updateCoef(i + equation.reactants.length, v)} />
+                                        <span className="text-3xl md:text-4xl font-bold tracking-wide"><FormattedFormula formula={mol.f} /></span>
+                                    </div>
+                                    {i < equation.products.length - 1 && <span className="text-3xl font-bold text-slate-400 mx-2">+</span>}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                        
+                        {/* Explicación ambiental / práctica */}
+                        {equation.desc && !isReto && (
+                            <div className="w-full bg-slate-900/60 p-4 text-center text-sm md:text-base text-slate-200 italic border-t border-slate-700">
+                                <span className="mr-2">💡</span> {equation.desc}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Panel Inferior: DUA y Feedback */}
+                    <div className="flex flex-col md:flex-row bg-slate-50">
+                        {/* Izquierda: Visualizaciones */}
+                        <div className="flex-1 p-4 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col">
+                            {allowedViews.length > 0 ? (
+                                <>
+                                    <div className="flex justify-center gap-2 mb-4 bg-white p-1 rounded-lg shadow-sm w-max mx-auto border border-slate-200">
+                                        {allowedViews.includes('balanza') && <button onClick={() => setView('balanza')} className={`px-4 py-2 rounded-md font-bold text-sm transition-colors ${view === 'balanza' ? 'bg-blue-500 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>⚖️ Balanza</button>}
+                                        {allowedViews.includes('barras') && <button onClick={() => setView('barras')} className={`px-4 py-2 rounded-md font-bold text-sm transition-colors ${view === 'barras' ? 'bg-blue-500 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>📊 Barras</button>}
+                                        {allowedViews.includes('tabla') && <button onClick={() => setView('tabla')} className={`px-4 py-2 rounded-md font-bold text-sm transition-colors ${view === 'tabla' ? 'bg-blue-500 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>🔢 Tabla</button>}
+                                    </div>
+                                    
+                                    <div className="flex-1 flex flex-col items-center justify-start mt-2">
+                                        {view === 'balanza' && <BalanzaView elements={elements} rTotals={rTotals} pTotals={pTotals} />}
+                                        {view === 'barras' && <BarrasView elements={elements} rTotals={rTotals} pTotals={pTotals} />}
+                                        {view === 'tabla' && <TablaView elements={elements} rTotals={rTotals} pTotals={pTotals} />}
+                                        
+                                        {/* Leyenda de colores universal */}
+                                        <div className="mt-4 pt-4 border-t border-slate-200 w-full flex flex-wrap justify-center gap-3 shrink-0">
+                                            <span className="text-xs font-bold text-slate-400 uppercase mr-2 flex items-center">Leyenda:</span>
+                                            {elements.map(el => (
+                                                <div key={`leg-${el}`} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-white px-2 py-1 rounded shadow-sm border border-slate-100">
+                                                    <div className="rounded-full shadow-sm" style={{ backgroundColor: ELEMENT_COLORS[el] || '#9ca3af', width: `${Math.max(12, Math.min(20, ELEMENT_SIZES[el] || 16))}px`, height: `${Math.max(12, Math.min(20, ELEMENT_SIZES[el] || 16))}px` }}></div>
+                                                    <span>{el}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Balanza General Universal (Siempre visible abajo) */}
+                                        <div className="w-full max-w-md mx-auto border-t border-slate-200 pt-8 mt-6 shrink-0">
+                                            <h3 className="text-center font-bold text-slate-600 mb-3">Balanza General (Total de Átomos)</h3>
+                                            <div className={`flex flex-col items-center p-6 rounded-2xl shadow-sm border ${bgGeneralClass} transition-colors duration-500`}>
+                                                <div className="relative w-56 sm:w-64 h-32 flex items-end justify-center">
+                                                    {/* Fulcro */}
+                                                    <div className="absolute bottom-0 w-0 h-0 border-l-[15px] border-r-[15px] border-b-[30px] border-transparent border-b-slate-400 z-10"></div>
+                                                    {/* Viga y platillos */}
+                                                    <div className="absolute bottom-[30px] w-full h-1.5 bg-slate-400 transition-transform duration-500 origin-center flex justify-between" style={{ transform: `rotate(${generalAngle}deg)` }}>
+                                                        <div className="relative" style={{ transform: `rotate(${-generalAngle}deg)` }}>
+                                                            <div className="absolute -top-24 -left-10 w-28 flex flex-col items-center">
+                                                                <div className="flex flex-wrap gap-1 justify-center max-w-[120px] mb-2">
+                                                                    {elements.map(el => {
+                                                                        if(rTotals[el] > 0) return <AtomSphere key={`g-r-${el}`} element={el} count={rTotals[el]} />;
+                                                                        return null;
+                                                                    })}
+                                                                </div>
+                                                                <div className="w-24 h-1.5 bg-slate-300 mt-1"></div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="relative" style={{ transform: `rotate(${-generalAngle}deg)` }}>
+                                                            <div className="absolute -top-24 -right-10 w-28 flex flex-col items-center">
+                                                                <div className="flex flex-wrap gap-1 justify-center max-w-[120px] mb-2">
+                                                                    {elements.map(el => {
+                                                                        if(pTotals[el] > 0) return <AtomSphere key={`g-p-${el}`} element={el} count={pTotals[el]} />;
+                                                                        return null;
+                                                                    })}
+                                                                </div>
+                                                                <div className="w-24 h-1.5 bg-slate-300 mt-1"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-between w-full mt-4 px-4 text-sm font-black text-slate-600">
+                                                    <span>{totalR} átomos</span><span>{totalP} átomos</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex-1 flex items-center justify-center py-12">
+                                    <div className="text-center text-slate-400 max-w-sm">
+                                        <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0a9.953 9.953 0 015.8-2.292c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0l3.29 3.29"></path></svg>
+                                        <p className="font-bold text-lg">Modo Experto</p>
+                                        <p className="text-sm">Las ayudas visuales están desactivadas. Confía en tus cálculos matemáticos.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Derecha: Feedback y Controles */}
+                        <div className="w-full md:w-80 p-6 flex flex-col gap-6 bg-white shrink-0 h-auto">
+                            {/* Indicadores Globales */}
+                            <div className="space-y-3">
+                                <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${isBalanced && isStarted ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isBalanced && isStarted ? 'bg-green-500' : 'bg-slate-300'}`}>✓</div>
+                                    <span className="font-bold">Equilibrado</span>
+                                </div>
+                                <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${isSimplified && isBalanced ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${isSimplified && isBalanced ? 'bg-green-500' : 'bg-slate-300'}`}>✓</div>
+                                    <span className="font-bold">Simplificado</span>
+                                </div>
+                            </div>
+
+                            {/* Mensaje inteligente */}
+                            <div className={`flex-1 min-h-[100px] p-4 rounded-xl border ${feedback.type === 'success' ? 'bg-green-100 border-green-300 text-green-800 celebrate' : feedback.type === 'error' ? 'bg-orange-50 border-orange-200 text-orange-800' : feedback.type === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+                                <p className="font-medium text-sm">{feedback.msg}</p>
+                            </div>
+
+                            {/* Controles de Acción */}
+                            {isReto ? (
+                                <button 
+                                    onClick={() => onSolve(isBalanced && isSimplified, { rTotals, pTotals })}
+                                    className="w-full py-4 rounded-xl font-black text-lg text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 active:translate-y-0"
+                                >
+                                    COMPROBAR
+                                </button>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <button onClick={() => setCoefs(Array(numCoefs).fill(0))} className="flex-1 py-3 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Reiniciar</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 5. PESTAÑAS PRINCIPALES
+        // ==========================================
+
+        const TabIntro = () => {
+            return (
+                <div className="max-w-4xl mx-auto p-6 fade-in space-y-8 pb-12">
+                    <div className="text-center space-y-4">
+                        <h1 className="text-4xl font-black text-slate-800">El Arte de Balancear</h1>
+                        <p className="text-lg text-slate-600 max-w-2xl mx-auto">En una reacción química, la materia no se crea ni se destruye, solo se transforma. Por eso, debe haber el <strong>mismo número de átomos</strong> de cada elemento a ambos lados de la flecha.</p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <h2 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2"><span className="text-2xl">⚖️</span> Conservación de la masa</h2>
+                            <p className="text-slate-600 mb-4">Si empiezas con 4 átomos de Hidrógeno y 2 de Oxígeno, debes terminar exactamente con lo mismo.</p>
+                            <div className="bg-blue-50 p-4 rounded-lg text-center font-mono text-lg font-bold text-slate-700 border border-blue-100">
+                                Reactivos = Productos
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <h2 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2"><span className="text-2xl">🔢</span> Coeficientes vs Subíndices</h2>
+                            <p className="text-slate-600 mb-4">Solo puedes cambiar los <strong>números grandes (coeficientes)</strong> delante de las moléculas. No puedes cambiar los subíndices (números pequeños) porque cambiarías la sustancia.</p>
+                            <div className="flex justify-center items-end gap-2 font-mono text-2xl font-bold bg-orange-50 py-3 rounded-lg border border-orange-100">
+                                <span className="text-blue-600 text-4xl">2</span><span className="text-slate-700">H</span><span className="text-slate-500 text-lg mb-1">2</span><span className="text-slate-700">O</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800 text-white rounded-2xl p-4 md:p-8 text-center shadow-lg flex flex-col">
+                        <h2 className="text-2xl font-bold mb-2 shrink-0">¡Pruébalo!</h2>
+                        <p className="text-slate-300 mb-6 shrink-0">Ajusta la creación de agua.</p>
+                        <div className="w-full">
+                            <EquationWorkspace 
+                                equation={{ reactants: [{ f: 'H₂', a: {H:2} }, { f: 'O₂', a: {O:2} }], products: [{ f: 'H₂O', a: {H:2, O:1} }] }}
+                                onSolve={() => {}} showHints={true} allowedViews={['balanza']} isReto={false}
+                            />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TabEcuaciones = () => {
+            const [selectedEqId, setSelectedEqId] = useState(EQUATIONS[0].id);
+            const [completedEqs, setCompletedEqs] = useState([]);
+            const equation = EQUATIONS.find(eq => eq.id === selectedEqId);
+
+            // Cargar estado de completadas al inicio
+            useEffect(() => {
+                const saved = localStorage.getItem('phEt_completed_eqs');
+                if (saved) setCompletedEqs(JSON.parse(saved));
+            }, []);
+
+            // Guardar ecuación completada
+            const handleSolve = (isCorrect) => {
+                if (isCorrect && !completedEqs.includes(selectedEqId)) {
+                    const newEqs = [...completedEqs, selectedEqId];
+                    setCompletedEqs(newEqs);
+                    localStorage.setItem('phEt_completed_eqs', JSON.stringify(newEqs));
+                }
+            };
+
+            return (
+                <div className="max-w-6xl mx-auto p-4 md:p-6 flex flex-col fade-in">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200 shrink-0">
+                        <div className="flex-1 w-full">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Selecciona una ecuación para practicar:</label>
+                            <select 
+                                value={selectedEqId} 
+                                onChange={(e) => setSelectedEqId(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 font-bold outline-none cursor-pointer"
+                            >
+                                <optgroup label="Ecuaciones Obligatorias">
+                                    {EQUATIONS.slice(0, 9).map((eq, i) => (
+                                        <option key={eq.id} value={eq.id}>{completedEqs.includes(eq.id) ? '✅ ' : ''}{i+1}. {eq.reactants.map(m=>m.f).join(' + ')} → {eq.products.map(m=>m.f).join(' + ')}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Ejercicios Extra">
+                                    {EQUATIONS.slice(9).map((eq, i) => (
+                                        <option key={eq.id} value={eq.id}>{completedEqs.includes(eq.id) ? '✅ ' : ''}Extra {i+1}. {eq.reactants.map(m=>m.f).join(' + ')} → {eq.products.map(m=>m.f).join(' + ')}</option>
+                                    ))}
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div className="hidden md:block">
+                            <button onClick={() => {
+                                const currentIndex = EQUATIONS.findIndex(e => e.id === selectedEqId);
+                                const nextIndex = (currentIndex + 1) % EQUATIONS.length;
+                                setSelectedEqId(EQUATIONS[nextIndex].id);
+                            }} className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2.5 px-4 rounded-lg transition-colors flex items-center gap-2">
+                                Siguiente Ecuación <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="w-full">
+                        <EquationWorkspace equation={equation} onSolve={handleSolve} showHints={true} allowedViews={['balanza', 'barras', 'tabla']} isReto={false} />
+                    </div>
+                </div>
+            );
+        };
+
+        const TabReto = () => {
+            const [levelIdx, setLevelIdx] = useState(0);
+            const [stats, setStats] = useState({ attempts: 0, errors: 0, types: { O: 0, H: 0, Coefs: 0 } });
+            const [statusMsg, setStatusMsg] = useState(null);
+
+            const currentReto = RETOS[levelIdx];
+            const isFinished = levelIdx >= RETOS.length;
+
+            // Load progress on mount
+            useEffect(() => {
+                const saved = localStorage.getItem('phEt_reto_stats');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Only load if not finished, otherwise start fresh
+                    if (parsed.levelIdx < RETOS.length) {
+                        setLevelIdx(parsed.levelIdx);
+                        setStats(parsed.stats);
+                    }
+                }
+            }, []);
+
+            // Save progress
+            useEffect(() => {
+                localStorage.setItem('phEt_reto_stats', JSON.stringify({ levelIdx, stats }));
+            }, [levelIdx, stats]);
+
+            const handleSolve = (isCorrect, { rTotals, pTotals }) => {
+                setStats(s => ({ ...s, attempts: s.attempts + 1 }));
+
+                if (isCorrect) {
+                    setStatusMsg({ text: "¡Correcto! Has superado el nivel.", type: "success" });
+                    setTimeout(() => {
+                        setLevelIdx(l => l + 1);
+                        setStatusMsg(null);
+                    }, 1500);
+                } else {
+                    // Analyze error
+                    let errorTypes = { ...stats.types };
+                    if ((rTotals['O'] || 0) !== (pTotals['O'] || 0)) errorTypes.O += 1;
+                    if ((rTotals['H'] || 0) !== (pTotals['H'] || 0)) errorTypes.H += 1;
+                    errorTypes.Coefs += 1; // Generic error
+
+                    setStats(s => ({ ...s, errors: s.errors + 1, types: errorTypes }));
+                    setStatusMsg({ text: "Incorrecto. Revisa tus cálculos e inténtalo de nuevo.", type: "error" });
+                    setTimeout(() => setStatusMsg(null), 2500);
+                }
+            };
+
+            const resetReto = () => {
+                setLevelIdx(0);
+                setStats({ attempts: 0, errors: 0, types: { O: 0, H: 0, Coefs: 0 } });
+                localStorage.removeItem('phEt_reto_stats');
+            };
+
+            if (isFinished) {
+                let evalMsg = "Excelente dominio del ajuste de ecuaciones. ¡Has superado el reto a ciegas!";
+                if (stats.errors > 5) evalMsg = "Has completado el reto, pero necesitas revisar el equilibrio de átomos con más cuidado. Practica un poco más en la pestaña de Ecuaciones.";
+                
+                // Cargar datos del resumen de ecuaciones de práctica
+                const savedEqs = localStorage.getItem('phEt_completed_eqs');
+                const completedCount = savedEqs ? JSON.parse(savedEqs).length : 0;
+                const totalEqs = EQUATIONS.length;
+                const pendingCount = totalEqs - completedCount;
+
+                return (
+                    <div className="max-w-2xl mx-auto p-6 mt-10 text-center fade-in bg-white rounded-3xl shadow-xl border border-slate-200">
+                        <div className="text-6xl mb-6">🏆</div>
+                        <h2 className="text-3xl font-black text-slate-800 mb-2">¡Reto Completado!</h2>
+                        <p className="text-slate-600 mb-8">{evalMsg}</p>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                <p className="text-xs font-bold text-blue-600 uppercase">Intentos en Reto</p>
+                                <p className="text-3xl font-black text-slate-800">{stats.attempts}</p>
+                            </div>
+                            <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                                <p className="text-xs font-bold text-red-600 uppercase">Errores en Reto</p>
+                                <p className="text-3xl font-black text-slate-800">{stats.errors}</p>
+                            </div>
+                        </div>
+
+                        {/* Nuevo resumen global del progreso */}
+                        <div className="text-left bg-indigo-50 p-6 rounded-xl border border-indigo-100 mb-6">
+                            <h3 className="font-bold text-indigo-800 mb-4 border-b border-indigo-200 pb-2 flex justify-between items-center">
+                                <span>Resumen Global (Práctica)</span>
+                                <span className="text-sm font-black bg-indigo-200 px-2 py-0.5 rounded text-indigo-800">{Math.round((completedCount/totalEqs)*100)}% Completado</span>
+                            </h3>
+                            <ul className="space-y-3 text-sm font-medium text-indigo-700">
+                                <li className="flex justify-between items-center">
+                                    <span>✅ Ecuaciones superadas:</span> 
+                                    <span className="bg-white px-3 py-1 rounded shadow-sm font-black text-green-600">{completedCount}</span>
+                                </li>
+                                <li className="flex justify-between items-center">
+                                    <span>⏳ Ecuaciones pendientes:</span> 
+                                    <span className="bg-white px-3 py-1 rounded shadow-sm font-black text-orange-500">{pendingCount}</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div className="text-left bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
+                            <h3 className="font-bold text-slate-700 mb-4 border-b pb-2">Análisis de Errores</h3>
+                            <ul className="space-y-2 text-sm font-medium text-slate-600">
+                                <li className="flex justify-between"><span>Desajuste en Oxígeno (O):</span> <span className="bg-white px-2 py-1 rounded shadow-sm">{stats.types.O}</span></li>
+                                <li className="flex justify-between"><span>Desajuste en Hidrógeno (H):</span> <span className="bg-white px-2 py-1 rounded shadow-sm">{stats.types.H}</span></li>
+                                <li className="flex justify-between"><span>Fallo general (coeficientes):</span> <span className="bg-white px-2 py-1 rounded shadow-sm">{stats.types.Coefs}</span></li>
+                            </ul>
+                        </div>
+
+                        <button onClick={resetReto} className="bg-slate-800 text-white font-bold py-3 px-8 rounded-xl hover:bg-slate-700 transition shadow-lg">Volver a intentar el Reto</button>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-6xl mx-auto p-4 md:p-6 flex flex-col fade-in">
+                    <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200 shrink-0">
+                        <div>
+                            <h2 className="text-xl font-black text-indigo-700">{currentReto.title}</h2>
+                            <p className="text-sm text-slate-500 font-medium">Nivel {currentReto.level} de {RETOS.length}</p>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Errores</span>
+                            <span className="text-xl font-black text-red-500">{stats.errors}</span>
+                        </div>
+                    </div>
+
+                    {statusMsg && (
+                        <div className={`absolute top-20 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-2xl font-bold text-white pop-in ${statusMsg.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                            {statusMsg.text}
+                        </div>
+                    )}
+                    
+                    <div className="w-full">
+                        <EquationWorkspace 
+                            equation={currentReto} 
+                            onSolve={handleSolve} 
+                            showHints={currentReto.hints} 
+                            allowedViews={currentReto.views} 
+                            isReto={true} 
+                        />
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // MAIN APP COMPONENT
+        // ==========================================
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('intro');
+            const [showDocente, setShowDocente] = useState(false);
+            const [docenteCode, setDocenteCode] = useState('');
+            const [isDocenteAuth, setIsDocenteAuth] = useState(false);
+
+            const handleDocenteSubmit = (e) => {
+                e.preventDefault();
+                if (docenteCode === '2421') {
+                    setIsDocenteAuth(true);
+                } else {
+                    alert('Código incorrecto');
+                    setDocenteCode('');
+                }
+            };
+
+            const clearData = () => {
+                if(confirm('¿Estás seguro de que quieres eliminar todo tu progreso guardado?')) {
+                    localStorage.removeItem('phEt_completed_eqs');
+                    localStorage.removeItem('phEt_reto_stats');
+                    window.location.reload();
+                }
+            };
+
+            const renderDocenteModal = () => {
+                if (!showDocente) return null;
+                return (
+                    <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+                            <div className="p-4 bg-slate-800 text-white flex justify-between items-center shrink-0 rounded-t-2xl">
+                                <h2 className="font-bold text-xl flex items-center gap-2">👨‍🏫 Modo Docente - Soluciones</h2>
+                                <button onClick={() => setShowDocente(false)} className="text-slate-300 hover:text-white">
+                                    <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                            <div className="p-6 overflow-y-auto custom-scroll flex-1">
+                                {!isDocenteAuth ? (
+                                    <form onSubmit={handleDocenteSubmit} className="flex flex-col items-center gap-4 py-8">
+                                        <p className="text-slate-600 text-center font-medium">Introduce el código de acceso para ver las soluciones.</p>
+                                        <input type="password" value={docenteCode} onChange={e => setDocenteCode(e.target.value)} placeholder="Código" className="border-2 border-slate-300 rounded-lg px-4 py-2 text-center text-xl focus:border-blue-500 outline-none w-48 tracking-widest" autoFocus/>
+                                        <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">Acceder</button>
+                                    </form>
+                                ) : (
+                                    <div className="space-y-6">
+                                        <div>
+                                            <h3 className="font-black text-slate-800 border-b pb-2 mb-4 text-lg">Ecuaciones de Práctica</h3>
+                                            <div className="space-y-4">
+                                                {EQUATIONS.map((eq, i) => (
+                                                    <div key={eq.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                                        <div className="text-xs font-bold text-slate-400 mb-2">Ecuación {i+1}</div>
+                                                        <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-black">
+                                                            {eq.reactants.map((m, idx) => <span key={`r${idx}`}><span className="text-blue-600 mr-1">{eq.solution[idx]}</span><FormattedFormula formula={m.f} blackText={true} /> {idx < eq.reactants.length-1 && '+ '}</span>)}
+                                                            <span className="mx-2 text-black">→</span>
+                                                            {eq.products.map((m, idx) => <span key={`p${idx}`}><span className="text-blue-600 mr-1">{eq.solution[eq.reactants.length + idx]}</span><FormattedFormula formula={m.f} blackText={true} /> {idx < eq.products.length-1 && '+ '}</span>)}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-slate-800 border-b pb-2 mb-4 text-lg">Retos</h3>
+                                            <div className="space-y-4">
+                                                {RETOS.map((eq, i) => (
+                                                    <div key={eq.id} className="bg-indigo-50 p-4 rounded-xl border border-indigo-200">
+                                                        <div className="text-xs font-bold text-indigo-400 mb-2">Nivel {i+1}</div>
+                                                        <div className="flex flex-wrap items-center gap-2 text-lg font-bold text-black">
+                                                            {eq.reactants.map((m, idx) => <span key={`r${idx}`}><span className="text-blue-600 mr-1">{eq.solution[idx]}</span><FormattedFormula formula={m.f} blackText={true} /> {idx < eq.reactants.length-1 && '+ '}</span>)}
+                                                            <span className="mx-2 text-black">→</span>
+                                                            {eq.products.map((m, idx) => <span key={`p${idx}`}><span className="text-blue-600 mr-1">{eq.solution[eq.reactants.length + idx]}</span><FormattedFormula formula={m.f} blackText={true} /> {idx < eq.products.length-1 && '+ '}</span>)}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const navItems = [
+                { id: 'intro', label: '1. Introducción', icon: '📚' },
+                { id: 'ecuaciones', label: '2. Simulador', icon: '🧪' },
+                { id: 'reto', label: '3. El Reto', icon: '🎮' }
+            ];
+
+            return (
+                <>
+                    {/* Header y Navegación */}
+                    <header className="bg-slate-800 text-white shadow-md z-10 shrink-0">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between h-16 items-center">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg flex items-center justify-center font-black shadow-inner">N</div>
+                                    <h1 className="font-bold text-lg hidden md:block tracking-wide">Laboratorio de Química: ajuste de reacciones</h1>
+                                </div>
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                    <nav className="flex space-x-1 sm:space-x-2">
+                                        {navItems.map(item => (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => setActiveTab(item.id)}
+                                                className={`px-3 py-2 rounded-md text-sm font-bold transition-all duration-200 ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg scale-105' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                                            >
+                                                <span className="mr-1 sm:mr-2">{item.icon}</span>
+                                                <span className="hidden sm:inline">{item.label}</span>
+                                            </button>
+                                        ))}
+                                    </nav>
+                                    <div className="w-px h-6 bg-slate-600 mx-1"></div>
+                                    <button onClick={() => setShowDocente(true)} className="px-2 sm:px-3 py-2 rounded-md text-sm font-bold text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center" title="Modo Docente">
+                                        <span className="mr-1">👨‍🏫</span><span className="hidden lg:inline">Docente</span>
+                                    </button>
+                                    <button onClick={clearData} className="px-2 py-2 rounded-md text-slate-300 hover:bg-red-500/20 hover:text-red-400 transition-colors flex items-center" title="Borrar Datos">
+                                        <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Contenido Principal */}
+                    <main className="flex-1 overflow-y-auto overflow-x-hidden relative bg-slate-100/50">
+                        {activeTab === 'intro' && <TabIntro />}
+                        {activeTab === 'ecuaciones' && <TabEcuaciones />}
+                        {activeTab === 'reto' && <TabReto />}
+                        {renderDocenteModal()}
+                    </main>
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
