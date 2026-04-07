@@ -464,7 +464,7 @@
                 if ((countD > 0 || countNA > 0) && avg < 2.75) return 'C';
                 return 'B';
             }
-            if (avg >= 1.5) return 'C';
+            if (avg > 1.5) return 'C';
             return 'D';
         };
 
@@ -510,7 +510,7 @@
             if (!avg) return '-';
             if (avg >= 3.5) return 'A';
             if (avg >= 2.5) return 'B'; 
-            if (avg >= 1.5) return 'C';
+            if (avg > 1.5) return 'C';
             return 'D';
         };
 
@@ -2723,6 +2723,7 @@
                     let assolit = 0; let proces = 0; let noAssolit = 0;
                     let studentsArray = currentClass.students ? currentClass.students : [];
                     let riskStudentsList = [];
+                    let attentionStudentsList = [];
 
                     studentsArray.forEach(s => {
                         studentStats[s.id] = { name: s.name, timePoints: [], radarFirst: {}, radarLast: {}, finalAvg: 0, studentId: s.id };
@@ -2785,7 +2786,10 @@
                         studentStats[s.id].finalAvg = finalAvg;
 
                         if (finalAvg >= 2.5) assolit++;
-                        else if (finalAvg > 1.5) proces++;
+                        else if (finalAvg > 1.5) {
+                            proces++;
+                            attentionStudentsList.push({ id: s.id, name: s.name, finalAvg: finalAvg });
+                        }
                         else if (finalAvg > 0) {
                             noAssolit++;
                             riskStudentsList.push({ id: s.id, name: s.name, finalAvg: finalAvg });
@@ -2880,7 +2884,7 @@
                         iecg: { range: range, level: iecgLevel }, 
                         iecgExplanation: iecgExplanation,
                         progressMap: progressMap, 
-                        achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit, riskStudents: riskStudentsList },
+                        achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit, riskStudents: riskStudentsList, attentionStudents: attentionStudentsList },
                         allCompNames: compNamesSet
                     };
 
@@ -3050,7 +3054,24 @@
                                         </div>
                                         <div className="mt-auto p-5 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100 text-gray-700 italic rounded-xl shadow-inner relative">
                                             <Icon name="quote-left" className="text-purple-200 text-4xl absolute top-2 left-2 opacity-50"/>
-                                            <p className="relative z-10 font-medium">Es recomana centrar els esforços de reforç en <span className="font-bold text-purple-700">{stats.worstComp ? stats.worstComp.name : '...'}</span>, especialment treballant els criteris amb més suspensos. {stats.achievement.noAssolit > 0 ? `Hi ha ${stats.achievement.noAssolit} alumnes que requereixen atenció directa i un possible pla individualitzat.` : 'El grup avança favorablement sense riscos greus d\'estancament generalitzat.'}</p>
+                                            <p className="relative z-10 font-medium">
+                                                {(() => {
+                                                    let textParts = [];
+                                                    if (stats.achievement.proces > 0) {
+                                                        textParts.push(`${stats.achievement.proces} alumnes que requereixen atenció directa (${stats.achievement.attentionStudents.map(s=>s.name).join(', ')})`);
+                                                    }
+                                                    if (stats.achievement.noAssolit > 0) {
+                                                        const noun = stats.achievement.proces > 0 ? "" : "alumnes ";
+                                                        textParts.push(`${stats.achievement.noAssolit} ${noun}que requereixen una possible modificació (${stats.achievement.riskStudents.map(s=>s.name).join(', ')})`);
+                                                    }
+                                                    return (
+                                                        <React.Fragment>
+                                                            Es recomana centrar els esforços de reforç en <span className="font-bold text-purple-700">{stats.worstComp ? stats.worstComp.name : '...'}</span>, especialment treballant els criteris amb més suspensos.
+                                                            {textParts.length > 0 ? ` Hi ha ${textParts.join(' i ')}.` : ` El grup avança favorablement sense riscos greus d'estancament generalitzat.`}
+                                                        </React.Fragment>
+                                                    );
+                                                })()}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
