@@ -44,7 +44,7 @@
                         grade: {
                             A: '#22c55e',
                             B: '#3b82f6',
-                            C: '#f9b516',
+                            C: '#eab308',
                             D: '#ef4444',
                         }
                     }
@@ -173,7 +173,8 @@
 
               // 2. Guardem o actualitzem els documents de les classes existents
               if (dades && dades.length > 0) {
-                  const savePromises = dades.map(classe => {
+                  const savePromises = dades.map((classe, index) => {
+                      classe.orderIndex = index; // Mantenim l'ordre
                       const classId = classe.id || "class_" + Date.now() + Math.floor(Math.random() * 1000);
                       classe.id = classId;
                       const docRef = doc(db, "avaluapro", currentUser.uid, "classes", classId);
@@ -197,7 +198,8 @@
             }
 
             try {
-                const savePromises = classes.map(classe => {
+                const savePromises = classes.map((classe, index) => {
+                    classe.orderIndex = index; // Mantenim l'ordre manual
                     const classId = classe.id || "class_" + Date.now() + Math.floor(Math.random() * 1000);
                     classe.id = classId;
                     const docRef = doc(db, "avaluapro", currentUser.uid, "classes", classId);
@@ -245,6 +247,8 @@
                   snap.forEach((doc) => {
                       classesCarregades.push(doc.data());
                   });
+                  // Ordenem correctament segons la configuració guardada de l'usuari
+                  classesCarregades.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
                   window.inicialitzarDades(classesCarregades);
               } else {
                   // Firebase NO té dades -> carregar backup de localStorage
@@ -455,8 +459,12 @@
             
             const avg = sum / total;
             if (avg >= 3.5) return 'A';
-            if (avg > 2.5) return 'B'; // AJUST: per sobre de 2.5 és B (ex: BBBD dóna 2.75 -> B, ABCD dóna 2.5 -> C)
-            if (avg > 1.5) return 'C';
+            if (avg >= 2.5) {
+                // Penalització si l'alumne te alguna D (ex: ABD=2.66 dona C, però BC=2.5 dona B)
+                if ((countD > 0 || countNA > 0) && avg < 2.75) return 'C';
+                return 'B';
+            }
+            if (avg >= 1.5) return 'C';
             return 'D';
         };
 
@@ -501,8 +509,8 @@
         const getGradeFromNumeric = (avg) => {
             if (!avg) return '-';
             if (avg >= 3.5) return 'A';
-            if (avg > 2.5) return 'B'; // AJUST MATEIX CANVI
-            if (avg > 1.5) return 'C';
+            if (avg >= 2.5) return 'B'; 
+            if (avg >= 1.5) return 'C';
             return 'D';
         };
 
@@ -628,6 +636,26 @@
                                     <Icon name="trash-can" /> Eliminar tot
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        const RiskStudentsModal = ({ isOpen, onClose, students }) => {
+            if (!isOpen) return null;
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Alumnes en Risc (No Assolit)" size="md">
+                    <div className="space-y-3">
+                        <p className="text-sm text-gray-600 mb-4">Llista d'alumnes amb una mitjana global inferior o igual a 1.5.</p>
+                        {students && students.length > 0 ? students.map(s => (
+                            <div key={s.id} className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 font-bold flex justify-between items-center">
+                                <span>{s.name}</span>
+                                <span className="bg-red-200 text-red-900 px-3 py-1 rounded-lg shadow-sm">{s.finalAvg.toFixed(2)}</span>
+                            </div>
+                        )) : <p className="text-gray-500 text-center py-4 font-bold">No hi ha alumnes en risc.</p>}
+                        <div className="flex justify-end pt-4 mt-2 border-t">
+                            <button onClick={onClose} className="px-6 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow">Tancar</button>
                         </div>
                     </div>
                 </Modal>
@@ -1957,7 +1985,7 @@
                                                             <option value="" className="text-gray-400">-</option>
                                                             <option value="A" className="text-green-600">A</option>
                                                             <option value="B" className="text-blue-600">B</option>
-                                                            <option value="C" className="text-orange-600">C</option>
+                                                            <option value="C" className="text-yellow-600">C</option>
                                                             <option value="D" className="text-red-600">D</option>
                                                             <option value="NA" className="text-gray-800">NA</option>
                                                         </select>
@@ -2028,6 +2056,7 @@
             const [showBulkImport, setShowBulkImport] = useState(false);
             const [showStudentEvoModal, setShowStudentEvoModal] = useState(null);
             const [editingIndicatorDesc, setEditingIndicatorDesc] = useState(null); 
+            const [showRiskModal, setShowRiskModal] = useState(null);
 
             const [isFilterOpen, setIsFilterOpen] = useState(false);
             const filterRef = useRef(null);
@@ -2693,6 +2722,7 @@
 
                     let assolit = 0; let proces = 0; let noAssolit = 0;
                     let studentsArray = currentClass.students ? currentClass.students : [];
+                    let riskStudentsList = [];
 
                     studentsArray.forEach(s => {
                         studentStats[s.id] = { name: s.name, timePoints: [], radarFirst: {}, radarLast: {}, finalAvg: 0, studentId: s.id };
@@ -2756,7 +2786,10 @@
 
                         if (finalAvg >= 2.5) assolit++;
                         else if (finalAvg > 1.5) proces++;
-                        else if (finalAvg > 0) noAssolit++;
+                        else if (finalAvg > 0) {
+                            noAssolit++;
+                            riskStudentsList.push({ id: s.id, name: s.name, finalAvg: finalAvg });
+                        }
                     });
 
                     currentClass.semesters.forEach(sem => {
@@ -2847,7 +2880,7 @@
                         iecg: { range: range, level: iecgLevel }, 
                         iecgExplanation: iecgExplanation,
                         progressMap: progressMap, 
-                        achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit },
+                        achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit, riskStudents: riskStudentsList },
                         allCompNames: compNamesSet
                     };
 
@@ -2927,8 +2960,13 @@
                                     </div>
                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
                                         <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Nivells d'Assoliment</h4>
-                                        <div className="flex h-24 items-center justify-center relative"><ChartComponent type="doughnut" className="h-full w-full" data={{labels: ['Assolit', 'Procés', 'No'], datasets: [{ data: [stats.achievement.assolit, stats.achievement.proces, stats.achievement.noAssolit], backgroundColor: ['#22c55e', '#f97316', '#ef4444'], borderWidth: 0 }]}} options={{ cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }}/><div className="absolute text-center z-10 flex flex-col items-center justify-center"><span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none">Total</span><span className="font-black text-2xl text-gray-700 leading-tight">{stats.achievement.total}</span></div></div>
-                                        <div className="flex justify-between text-xs font-bold mt-3 px-2"><span className="text-green-600 bg-green-50 px-2 py-1 rounded">High: {stats.achievement.total > 0 ? Math.round(stats.achievement.assolit/stats.achievement.total*100) : 0}%</span><span className="text-red-600 bg-red-50 px-2 py-1 rounded">Risc: {stats.achievement.total > 0 ? Math.round(stats.achievement.noAssolit/stats.achievement.total*100) : 0}%</span></div>
+                                        <div className="flex h-24 items-center justify-center relative"><ChartComponent type="doughnut" className="h-full w-full" data={{labels: ['Assolit', 'Procés', 'No'], datasets: [{ data: [stats.achievement.assolit, stats.achievement.proces, stats.achievement.noAssolit], backgroundColor: ['#22c55e', '#eab308', '#ef4444'], borderWidth: 0 }]}} options={{ cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }}/><div className="absolute text-center z-10 flex flex-col items-center justify-center"><span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none">Total</span><span className="font-black text-2xl text-gray-700 leading-tight">{stats.achievement.total}</span></div></div>
+                                        <div className="flex justify-between items-center text-xs font-bold mt-3 px-2">
+                                            <span className="text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 shadow-sm">High: {stats.achievement.total > 0 ? Math.round(stats.achievement.assolit/stats.achievement.total*100) : 0}%</span>
+                                            <button onClick={() => setShowRiskModal(stats.achievement.riskStudents)} className="text-red-600 bg-red-50 px-2 py-1 rounded border border-transparent hover:border-red-200 hover:bg-red-100 transition shadow-sm cursor-pointer">
+                                                Risc: {stats.achievement.total > 0 ? Math.round(stats.achievement.noAssolit/stats.achievement.total*100) : 0}%
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="bg-red-50 p-4 rounded-xl border border-red-200 flex flex-col justify-center text-center shadow-inner">
                                         <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3"><Icon name="triangle-exclamation" className="text-2xl"/></div>
@@ -3049,7 +3087,7 @@
                                                                             <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 mb-2">
                                                                                 <div style={{width:`${c.counts.A/(stats.achievement.total||1)*100}%`}} className="bg-green-500"/>
                                                                                 <div style={{width:`${c.counts.B/(stats.achievement.total||1)*100}%`}} className="bg-blue-500"/>
-                                                                                <div style={{width:`${c.counts.C/(stats.achievement.total||1)*100}%`}} className="bg-orange-500"/>
+                                                                                <div style={{width:`${c.counts.C/(stats.achievement.total||1)*100}%`}} className="bg-yellow-500"/>
                                                                                 <div style={{width:`${c.counts.D/(stats.achievement.total||1)*100}%`}} className="bg-red-500"/>
                                                                             </div>
                                                                             <div className="flex justify-between text-xs font-bold mt-2">
@@ -3186,7 +3224,7 @@
                                                             {isEditingStructure && (
                                                                 <div className="absolute top-1 right-1 flex gap-1">
                                                                     <button onClick={() => deleteItem('crit', crit.id, comp.id, null)} className="text-red-500 bg-white rounded-full w-5 h-5 opacity-0 group-hover:opacity-100 shadow-sm transition"><Icon name="xmark"/></button>
-                                                                    <button onClick={() => addStructureItem('crit', crit.id, comp.id)} className="text-blue-600 bg-white rounded-full w-5 h-5 shadow-sm transition"><Icon name="plus"/></button>
+                                                                    <button onClick={() => addStructureItem('ind', crit.id, comp.id)} className="text-blue-600 bg-white rounded-full w-5 h-5 shadow-sm transition"><Icon name="plus"/></button>
                                                                 </div>
                                                             )}
                                                         </th>
@@ -3303,7 +3341,7 @@
                                                                                         <option value="" className="text-gray-300 font-normal">-</option>
                                                                                         <option value="A" className="text-green-600 font-black bg-green-50">A</option>
                                                                                         <option value="B" className="text-blue-600 font-black bg-blue-50">B</option>
-                                                                                        <option value="C" className="text-orange-600 font-black bg-orange-50">C</option>
+                                                                                        <option value="C" className="text-yellow-600 font-black bg-yellow-50">C</option>
                                                                                         <option value="D" className="text-red-600 font-black bg-red-50">D</option>
                                                                                         <option value="NA" className="text-gray-800 font-black bg-gray-100">NA</option>
                                                                                     </select>
@@ -3329,7 +3367,7 @@
                                                                                         <option value="" className="text-gray-500 bg-white">{autoCg || '-'}</option>
                                                                                         <option value="A" className="text-green-600 bg-green-50">A</option>
                                                                                         <option value="B" className="text-blue-600 bg-blue-50">B</option>
-                                                                                        <option value="C" className="text-orange-600 bg-orange-50">C</option>
+                                                                                        <option value="C" className="text-yellow-600 bg-yellow-50">C</option>
                                                                                         <option value="D" className="text-red-600 bg-red-50">D</option>
                                                                                         <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
                                                                                     </select>
@@ -3358,7 +3396,7 @@
                                                                             <option value="" className="text-gray-500 bg-white">{autoCompG || '-'}</option>
                                                                             <option value="A" className="text-green-600 bg-green-50">A</option>
                                                                             <option value="B" className="text-blue-600 bg-blue-50">B</option>
-                                                                            <option value="C" className="text-orange-600 bg-orange-50">C</option>
+                                                                            <option value="C" className="text-yellow-600 bg-yellow-50">C</option>
                                                                             <option value="D" className="text-red-600 bg-red-50">D</option>
                                                                             <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
                                                                         </select>
@@ -3400,6 +3438,7 @@
                         {showBulkImport && <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass && currentClass.students ? currentClass.students : []} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />}
                         <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
                         <StudentProfileModal isOpen={!!showStudentProfile} onClose={() => setShowStudentProfile(null)} studentData={showStudentProfile} classData={currentClass} onSaveNotes={updateStudentNotes} />
+                        <RiskStudentsModal isOpen={!!showRiskModal} onClose={() => setShowRiskModal(null)} students={showRiskModal} />
 
                         {/* SIDEBAR */}
                         <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
