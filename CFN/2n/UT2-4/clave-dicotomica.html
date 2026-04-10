@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clave Dicotómica de Rocas | Laboratorio de Geología</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel para compilar JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            overflow-x: hidden;
+            /* Prevenir scroll en móviles al usar la pizarra */
+            overscroll-behavior-y: none; 
+        }
+        
+        /* Animaciones suaves */
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+        
+        .slide-up {
+            animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Ocultar barra de scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Scrollbar suave para la barra lateral */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 10px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- ICONOS SVG ---
+        const IconPickaxe = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.531 12.469 6.619 20.38a1 1 0 1 1-3-3l7.912-7.911"/><path d="M15.621 5.475 14.5 4.354a1 1 0 0 0-1.414 0L11.5 5.94a2 2 0 0 0 0 2.828l4.475 4.475a2 2 0 0 0 2.828 0l1.586-1.586a1 1 0 0 0 0-1.414l-1.121-1.121"/><path d="M12 7.5 16.5 12"/></svg>
+        );
+        const IconRefresh = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        );
+        const IconBack = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        );
+        const IconInfo = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        );
+        const IconLock = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        );
+        const IconEye = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        );
+        const IconLightbulb = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+        );
+
+        // --- DATOS GEOLÓGICOS ---
+        const tree = {
+            q1: { text: "¿Se distinguen granos o cristales a simple vista?", context: "Estás analizando la textura general", options: [{ label: "SÍ", next: "q2", icon: "👁️", color: "green" }, { label: "NO", next: "q5", icon: "🔍", color: "blue" }] },
+            q2: { text: "¿Son granos de otras rocas 'pegados' (detritos) o cristales entrelazados?", context: "Estás identificando el tipo de formación", options: [{ label: "Granos pegados", next: "q3", icon: "🧱", color: "amber" }, { label: "Cristales visibles", next: "q4", icon: "💎", color: "purple" }] },
+            q3: { text: "¿Qué tamaño tienen los granos sedimentarios?", context: "Estás clasificando el tamaño de grano", options: [{ label: "Grandes (>2mm), como gravilla", next: "conglomerado", icon: "🪨", color: "green" }, { label: "Medios/Finos, tacto de lija", next: "arenisca", icon: "🖐️", color: "blue" }] },
+            q4: { text: "¿Reacciona al ácido clorhídrico (burbujea activamente)?", context: "Estás realizando pruebas químicas y de dureza", options: [{ label: "SÍ (Burbujea)", next: "marmol", icon: "🧪", color: "green" }, { label: "NO (Cristales duros, rayan el vidrio)", next: "granito", icon: "⚒️", color: "blue" }] },
+            q5: { text: "¿Tiene estructura en láminas finas (foliación)?", context: "Estás analizando la estructura interna", options: [{ label: "SÍ", next: "q6", icon: "📚", color: "green" }, { label: "NO", next: "q7", icon: "⬛", color: "blue" }] },
+            q6: { text: "¿Se rompe en láminas muy planas y es de color oscuro?", context: "Estás observando el patrón de rotura", options: [{ label: "SÍ", next: "q8", icon: "📏", color: "green" }, { label: "NO (Grano finísimo, parece lodo seco)", next: "lutita", icon: "🤎", color: "blue" }] },
+            q8: { text: "¿Presenta brillo en la superficie?", context: "Estás evaluando el grado de metamorfismo", options: [{ label: "NO (Mate)", next: "pizarra", icon: "🪨", color: "blue" }, { label: "SÍ, ligero (Satinado)", next: "filita", icon: "✨", color: "green" }, { label: "SÍ, intenso (Mucha mica)", next: "esquisto", icon: "🌟", color: "purple" }] },
+            q7: { text: "¿Tiene aspecto de vidrio negro brillante y bordes cortantes?", context: "Estás evaluando el brillo y la densidad", options: [{ label: "SÍ (Fractura concoidea)", next: "obsidiana", icon: "✨", color: "green" }, { label: "NO (Mate, densa, a veces con vesículas/burbujas)", next: "basalto", icon: "🌑", color: "blue" }] }
+        };
+
+        const predictionGroups = {
+            "img1": ["Arenisca", "Conglomerado"],
+            "img2": ["Granito", "Mármol"],
+            "img3": ["Pizarra", "Filita", "Esquisto"],
+            "img4": ["Lutita", "Pizarra"],
+            "img5": ["Basalto", "Obsidiana"]
+        };
+
+        // Imagen centralizada de metamorfismo
+        const imgMetamorficas = "https://i.ibb.co/Nn1Zm4Bw/3-metamorficas.png";
+
+        const rocks = {
+            conglomerado: {
+                name: "Conglomerado", type: "Roca Sedimentaria", colorScheme: { bg: "bg-amber-100", border: "border-amber-400", text: "text-amber-800", headerBg: "bg-amber-500" },
+                characteristics: "Formada por clastos (granos) redondeados mayores a 2mm, unidos por un cemento o matriz más fina.",
+                differentiation: "A diferencia de la brecha, sus fragmentos son redondeados, lo que indica que fueron arrastrados y desgastados por el agua antes de depositarse.",
+                formation: "Acumulación de cantos rodados en ríos caudalosos o playas, seguida de una profunda compactación y cementación (litificación) a lo largo de millones de años.",
+                predictionOptions: predictionGroups["img1"],
+                comparisons: [{ title: "Comparación visual", image: "https://i.ibb.co/BHsyWRrX/Arenisca-vs-Conglomerado.png", text: "Fíjate en el tamaño de los fragmentos:\n- Conglomerado → fragmentos grandes y redondeados\n- Arenisca → granos pequeños, textura uniforme" }]
+            },
+            arenisca: {
+                name: "Arenisca", type: "Roca Sedimentaria", colorScheme: { bg: "bg-amber-100", border: "border-amber-400", text: "text-amber-800", headerBg: "bg-amber-500" },
+                characteristics: "Granos del tamaño de la arena (0.06 - 2mm), generalmente de cuarzo. Su rasgo más distintivo es el tacto áspero, parecido al papel de lija.",
+                differentiation: "A diferencia de la cuarcita (roca metamórfica muy similar), si frotas dos areniscas o pasas el dedo con fuerza, se desprenderán granitos de arena.",
+                formation: "Litificación de antiguas dunas de desierto, playas o lechos fluviales donde se depositó arena de forma masiva.",
+                predictionOptions: predictionGroups["img1"],
+                comparisons: [{ title: "Comparación visual", image: "https://i.ibb.co/BHsyWRrX/Arenisca-vs-Conglomerado.png", text: "Fíjate en el tamaño de los fragmentos:\n- Conglomerado → fragmentos grandes y redondeados\n- Arenisca → granos pequeños, textura uniforme" }]
+            },
+            marmol: {
+                name: "Mármol", type: "Roca Metamórfica", colorScheme: { bg: "bg-purple-100", border: "border-purple-400", text: "text-purple-800", headerBg: "bg-purple-500" },
+                characteristics: "Cristales entrelazados de calcita o dolomita. Colores muy variados (blanco, vetas oscuras). Su prueba clave es que reacciona efervesciendo al contacto con ácido (HCl).",
+                differentiation: "Físicamente muy parecido a la cuarcita blanca, pero el mármol es más blando (no raya el vidrio) y sí burbujea con ácido.",
+                formation: "Metamorfismo regional o de contacto: rocas sedimentarias ricas en carbonatos (calizas) sometidas a altas presiones y temperaturas en el interior terrestre, recristalizando sus minerales.",
+                predictionOptions: predictionGroups["img2"],
+                comparisons: [{ title: "Comparación visual", image: "https://i.ibb.co/6j6dJbn/Granit-vs-marbre.png", text: "Fíjate en los cristales:\n- Granito → granos visibles de distintos colores\n- Mármol → aspecto uniforme, sin granos visibles" }]
+            },
+            granito: {
+                name: "Granito", type: "Roca Ígnea (Plutónica)", colorScheme: { bg: "bg-red-100", border: "border-red-400", text: "text-red-800", headerBg: "bg-red-500" },
+                characteristics: "Roca muy dura. Presenta tres minerales fácilmente distinguibles: cuarzo (grisáceo cristalino), feldespato (blanco o rosado mate) y mica (láminas negras y brillantes).",
+                differentiation: "A diferencia del mármol, no reacciona al ácido y es capaz de rayar el cristal. A diferencia del basalto, sus cristales son muy grandes y visibles.",
+                formation: "El magma se enfría muy lentamente a grandes profundidades de la corteza (plutones), dando tiempo a que los minerales crezcan hasta formar cristales visibles.",
+                predictionOptions: predictionGroups["img2"],
+                comparisons: [{ title: "Comparación visual", image: "https://i.ibb.co/6j6dJbn/Granit-vs-marbre.png", text: "Fíjate en los cristales:\n- Granito → granos visibles de distintos colores\n- Mármol → aspecto uniforme, sin granos visibles" }]
+            },
+            pizarra: {
+                name: "Pizarra", type: "Roca Metamórfica", colorScheme: { bg: "bg-purple-100", border: "border-purple-400", text: "text-purple-800", headerBg: "bg-purple-500" },
+                characteristics: "Color oscuro (negro, gris azulado), textura de grano finísimo. Destaca por su marcada foliación: se rompe en láminas finas y perfectamente planas.",
+                differentiation: "A diferencia de la lutita, la pizarra es más dura, su rotura es mucho más limpia, tiene un ligero brillo satinado y emite un sonido más metálico al golpearse.",
+                formation: "Metamorfismo de bajo grado. Rocas sedimentarias arcillosas (lutitas) son sometidas a presión tectónica dirigida, alineando sus minerales en planos paralelos.",
+                predictionOptions: predictionGroups["img3"],
+                comparisons: [
+                    { 
+                        title: "Evolución por aumento de Presión y Temperatura (P/T)", image: imgMetamorficas, 
+                        text: "- 1. Pizarra: Se forma a baja P/T. La arcilla original se compacta en láminas muy finas y opacas (mate).\n- 2. Filita: A medida que la P/T aumenta, los minerales crecen y comienzan a brillar (satinado).\n- 3. Esquisto: Con alta P/T, se forman grandes escamas de mica, dándole un brillo muy intenso y visible." 
+                    },
+                    { title: "Diferencia sedimentaria vs metamórfica", image: "https://i.ibb.co/RT6PcnDW/Lutita-vs-Pizarra.png", text: "Fíjate en cómo se rompe:\n- Pizarra → se separa en láminas finas\n- Lutita → aspecto más compacto, sin capas claras" }
+                ]
+            },
+            filita: {
+                name: "Filita", type: "Roca Metamórfica", colorScheme: { bg: "bg-purple-100", border: "border-purple-400", text: "text-purple-800", headerBg: "bg-purple-500" },
+                characteristics: "Presenta una textura fina y un brillo satinado o nacarado muy característico. Es un paso intermedio en temperatura y presión entre la pizarra y el esquisto.",
+                differentiation: "A diferencia de la pizarra mate, la filita brilla suavemente al darle la luz. A diferencia del esquisto, no se le ven los minerales a simple vista.",
+                formation: "Metamorfismo regional de grado bajo-medio. El aumento continuado de presión y temperatura sobre una pizarra hace que las diminutas arcillas crezcan y formen micas brillantes.",
+                predictionOptions: predictionGroups["img3"],
+                comparisons: [
+                    { 
+                        title: "Evolución por aumento de Presión y Temperatura (P/T)", image: imgMetamorficas, 
+                        text: "- 1. Pizarra: Se forma a baja P/T. La arcilla original se compacta en láminas muy finas y opacas (mate).\n- 2. Filita: A medida que la P/T aumenta, los minerales crecen y comienzan a brillar (satinado).\n- 3. Esquisto: Con alta P/T, se forman grandes escamas de mica, dándole un brillo muy intenso y visible." 
+                    }
+                ]
+            },
+            esquisto: {
+                name: "Esquisto", type: "Roca Metamórfica", colorScheme: { bg: "bg-purple-100", border: "border-purple-400", text: "text-purple-800", headerBg: "bg-purple-500" },
+                characteristics: "Tiene una textura escamosa (llamada esquistosidad) y un brillo intenso debido a la gran abundancia de micas. Los minerales ya han crecido lo suficiente para verse claramente a simple vista.",
+                differentiation: "Su brillo espectacular y la visibilidad de sus minerales en forma de escamas superpuestas lo distinguen rápidamente de la pizarra y la filita.",
+                formation: "Metamorfismo regional de grado medio-alto. La alta presión y temperatura hacen que los minerales recristalicen formando grandes escamas alineadas.",
+                predictionOptions: predictionGroups["img3"],
+                comparisons: [
+                    { 
+                        title: "Evolución por aumento de Presión y Temperatura (P/T)", image: imgMetamorficas, 
+                        text: "- 1. Pizarra: Se forma a baja P/T. La arcilla original se compacta en láminas muy finas y opacas (mate).\n- 2. Filita: A medida que la P/T aumenta, los minerales crecen y comienzan a brillar (satinado).\n- 3. Esquisto: Con alta P/T, se forman grandes escamas de mica, dándole un brillo muy intenso y visible." 
+                    }
+                ]
+            },
+            lutita: {
+                name: "Lutita / Arcilla", type: "Roca Sedimentaria", colorScheme: { bg: "bg-amber-100", border: "border-amber-400", text: "text-amber-800", headerBg: "bg-amber-500" },
+                characteristics: "Grano microscópico (indistinguible a simple vista). Tiene aspecto de lodo o barro seco. Colores muy variados (gris, verde, rojo, negro).",
+                differentiation: "Huele a tierra mojada al humedecerla y se raya con la uña o una moneda. No tiene rotura en láminas perfectas y brillantes como la pizarra.",
+                formation: "Compactación de sedimentos extremadamente finos (limos y arcillas) en ambientes acuáticos de aguas muy tranquilas, como fondos de lagos, pantanos o fondos abisales oceánicos.",
+                predictionOptions: predictionGroups["img4"],
+                comparisons: [{ title: "Diferencia sedimentaria vs metamórfica", image: "https://i.ibb.co/RT6PcnDW/Lutita-vs-Pizarra.png", text: "Fíjate en cómo se rompe:\n- Pizarra → se separa en láminas finas\n- Lutita → aspecto más compacto, sin capas claras" }]
+            },
+            obsidiana: {
+                name: "Obsidiana", type: "Roca Ígnea (Volcánica)", colorScheme: { bg: "bg-red-100", border: "border-red-400", text: "text-red-800", headerBg: "bg-red-500" },
+                characteristics: "Aspecto espectacular de vidrio negro o muy oscuro, brillante y pulido. Fractura concoidea, dejando bordes extremadamente afilados (usada para flechas en la prehistoria).",
+                differentiation: "Su brillo vítreo es inconfundible. A veces los alumnos la confunden visualmente con carbón antracita, pero la obsidiana no mancha, es mucho más densa y dura.",
+                formation: "Enfriamiento tan extremadamente rápido de una lava viscosa en la superficie terrestre (o bajo el agua) que los átomos no tienen tiempo de ordenarse en cristales, formando un vidrio.",
+                predictionOptions: predictionGroups["img5"],
+                comparisons: [{ title: "Comparación visual", image: "https://i.ibb.co/mVPL2Chh/Basalto-vs-Obsidiana.png", text: "Fíjate en el brillo:\n- Obsidiana → brillante como vidrio\n- Basalto → mate y más rugoso" }]
+            },
+            basalto: {
+                name: "Basalto", type: "Roca Ígnea (Volcánica)", colorScheme: { bg: "bg-red-100", border: "border-red-400", text: "text-red-800", headerBg: "bg-red-500" },
+                characteristics: "Roca oscura (negra o gris muy oscuro), mate, muy densa y compacta. Grano tan fino que no se ven cristales. A veces presenta poros o agujeros redondos (vesículas de gas).",
+                differentiation: "Se distingue del granito por no tener cristales visibles, y de la obsidiana por ser mate y áspera. Más pesada y dura que la mayoría de rocas sedimentarias oscuras.",
+                formation: "Enfriamiento rápido de lavas fluidas pobres en sílice (máficas) en la superficie de la Tierra, típicas de volcanes efusivos o dorsales oceánicas.",
+                predictionOptions: predictionGroups["img5"],
+                comparisons: [{ title: "Comparación visual", image: "https://i.ibb.co/mVPL2Chh/Basalto-vs-Obsidiana.png", text: "Fíjate en el brillo:\n- Obsidiana → brillante como vidrio\n- Basalto → mate y más rugoso" }]
+            }
+        };
+
+        // --- COMPONENTES COMPARTIDOS: DETALLES DE ROCA (REESTRUCTURADO ORDEN) ---
+        const RockDetails = ({ result, handleRestart }) => {
+            return (
+                <div className="w-full bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden slide-up mb-10">
+                    {/* Cabecera */}
+                    <div className={`${result.colorScheme.headerBg} p-10 sm:p-12 text-white relative overflow-hidden text-center`}>
+                        <div className="absolute -top-10 -right-10 opacity-10 transform rotate-12">
+                            <IconPickaxe size={200} />
+                        </div>
+                        <div className="relative z-10">
+                            {handleRestart && (
+                                <p className="text-white/90 font-bold mb-3 uppercase tracking-widest text-sm drop-shadow-sm">
+                                    ¡Misión completada! Has identificado:
+                                </p>
+                            )}
+                            <h2 className="text-5xl sm:text-7xl font-black mb-6 tracking-tight drop-shadow-lg">
+                                {result.name}
+                            </h2>
+                            <div className="flex justify-center gap-3">
+                                <span className="inline-flex items-center gap-2 bg-black/20 px-5 py-2 rounded-full text-base font-bold tracking-wide backdrop-blur-sm shadow-inner border border-white/20">
+                                    🏷️ {result.type}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 sm:p-10 grid gap-8">
+                        
+                        {/* 1. Características */}
+                        <div className={`p-6 rounded-2xl border-l-8 ${result.colorScheme.bg} ${result.colorScheme.border} shadow-sm`}>
+                            <h3 className={`flex items-center gap-3 font-extrabold text-xl mb-3 ${result.colorScheme.text}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h10"/><path d="M9 4v16"/><path d="m3 9 3 3-3 3"/></svg>
+                                Características
+                            </h3>
+                            <p className="text-slate-700 leading-relaxed font-medium text-lg">
+                                {result.characteristics}
+                            </p>
+                        </div>
+
+                        {/* 2. BLOQUE DE COMPARACIONES VISUALES (Justo debajo de características) */}
+                        {result.comparisons && result.comparisons.length > 0 && (
+                            <div className="mt-2">
+                                <div className="grid grid-cols-1 gap-8">
+                                    {result.comparisons.map((comp, idx) => (
+                                        <div key={idx} className="bg-slate-50 p-6 sm:p-8 rounded-3xl border border-slate-200 text-center group transition-colors hover:bg-slate-100">
+                                            {comp.title && <h4 className="font-extrabold text-lg mb-5 text-slate-700">{comp.title}</h4>}
+                                            
+                                            <div className="overflow-hidden rounded-2xl shadow-md mb-6 inline-block bg-white border border-slate-100 w-full max-w-2xl mx-auto">
+                                                <img src={comp.image} alt="Comparativa" className="w-full h-auto object-contain transform group-hover:scale-[1.03] transition-transform duration-500" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. Diferencias Clave y Cómo no confundirla */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm mt-2">
+                            <h3 className="flex items-center gap-2 font-bold text-slate-800 text-xl mb-4">
+                                <IconEye /> Diferencias clave y cómo no confundirla
+                            </h3>
+                            <div className="space-y-4">
+                                <p className="text-slate-600 font-medium leading-relaxed bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                    <strong className="text-slate-800 block mb-1">Identidad única:</strong>
+                                    {result.differentiation}
+                                </p>
+                                
+                                {/* Textos de comparación de las imágenes */}
+                                {result.comparisons && result.comparisons.map((comp, idx) => (
+                                    <div key={`txt-${idx}`} className="bg-white p-5 rounded-xl border border-blue-100 shadow-sm text-left">
+                                        <div className="text-slate-700 font-medium leading-relaxed space-y-2">
+                                            {comp.text.split('\n').map((line, i) => (
+                                                <p key={i} className={line.startsWith('-') ? 'ml-4 flex items-start gap-2' : 'font-bold text-slate-800 mb-2'}>
+                                                    {line.startsWith('-') ? <span className="text-blue-500 font-bold mt-0.5">•</span> : null}
+                                                    {line.replace('-', '').trim()}
+                                                </p>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 4. Formación (Izq) y Ciclo (Der) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4 items-stretch">
+                            {/* Formación */}
+                            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full">
+                                <h3 className="flex items-center gap-2 font-bold text-slate-800 text-lg mb-4 border-b border-slate-100 pb-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 22 12 2l10 20Z"/><path d="m12 15-3 7"/><path d="m12 15 3 7"/></svg>
+                                    Formación Geológica
+                                </h3>
+                                <p className="text-slate-600 font-medium leading-relaxed flex-1">
+                                    {result.formation}
+                                </p>
+                            </div>
+
+                            {/* Ciclo de las Rocas */}
+                            <div className="bg-slate-800 text-white p-6 sm:p-8 rounded-2xl border-l-4 border-blue-400 shadow-lg relative overflow-hidden flex flex-col h-full">
+                                <h3 className="flex items-center gap-3 font-extrabold text-xl mb-3 relative z-10 text-white">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                                    Conexión: Ciclo de las Rocas
+                                </h3>
+                                <p className="text-slate-300 leading-relaxed font-medium relative z-10 text-[15px] mb-6">
+                                    Esta roca es una pieza clave en el ciclo geológico. Al ser una roca <strong className="text-white underline decoration-blue-400 decoration-2">{result.type.split(' ')[1].toLowerCase()}</strong>, significa que {
+                                        result.type.includes('Sedimentaria') ? 'se formó en la superficie mediante la acumulación y cementación de sedimentos desgastados.' :
+                                        result.type.includes('Ígnea') ? 'nació del fuego, enfriándose y solidificándose a partir de magma o lava.' :
+                                        'es una roca transformada por el enorme calor o presión en el interior de la Tierra sin llegar a derretirse.'
+                                    }
+                                </p>
+                                {/* Imágen del Ciclo de las Rocas (Fijada en la parte inferior) */}
+                                <div className="mt-auto relative z-10">
+                                    <a href="https://ibb.co/Xx8Vhdkj" target="_blank" rel="noreferrer">
+                                        <img src="https://i.ibb.co/KxwmMQzb/Ciclo-rocas.webp" alt="Ciclo rocas" border="0" className="rounded-xl shadow-md w-full object-cover border border-slate-600 hover:opacity-90 transition-opacity" />
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    
+                    {/* Footer Acción */}
+                    {handleRestart && (
+                        <div className="bg-slate-50 p-6 border-t border-slate-200 flex justify-center">
+                            <button 
+                                onClick={handleRestart}
+                                className={`flex items-center gap-3 ${result.colorScheme.headerBg} hover:brightness-110 transition-all text-white px-10 py-4 rounded-2xl font-extrabold text-xl shadow-lg hover:shadow-xl hover:-translate-y-1`}
+                            >
+                                <IconRefresh />
+                                Identificar otra roca
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- COMPONENTE: PANTALLA PREDICCIÓN (2 PASOS) ---
+        const PredictionScreen = ({ result, onComplete }) => {
+            const [step, setStep] = useState(1); // 1: Tipo, 2: Roca, 3: Resultado Final
+            const [guessType, setGuessType] = useState(null);
+            const [guessRock, setGuessRock] = useState(null);
+
+            const isTypeCorrect = guessType && result.type.includes(guessType);
+            const isRockCorrect = guessRock && result.name === guessRock;
+
+            return (
+                <div className="w-full max-w-4xl bg-white rounded-3xl shadow-xl border border-slate-100 p-8 sm:p-12 text-center slide-up mx-auto">
+                    <div className="mb-6 flex justify-center">
+                        <span className="bg-indigo-100 text-indigo-800 text-sm font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">Modo Predicción</span>
+                    </div>
+
+                    {step === 1 && (
+                        <div className="animate-fade-in">
+                            <h2 className="text-3xl font-extrabold text-slate-800 mb-4">¿A qué gran grupo pertenece?</h2>
+                            <p className="text-lg text-slate-600 mb-8 font-medium">Observa la imagen. Antes de ver la solución, elige el grupo principal.</p>
+                            
+                            {result.comparisons && result.comparisons[0] && (
+                                <div className="mb-8 rounded-2xl overflow-hidden shadow-md border border-slate-200 inline-block bg-slate-50 max-w-2xl w-full">
+                                    <img src={result.comparisons[0].image} alt="Observación" className="w-full h-auto object-contain max-h-64 mx-auto" />
+                                </div>
+                            )}
+
+                            {!guessType ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+                                    {['Ígnea', 'Sedimentaria', 'Metamórfica'].map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => setGuessType(type)}
+                                            className="bg-white hover:bg-indigo-50 hover:border-indigo-300 border-2 border-slate-200 text-slate-700 font-bold py-5 px-4 rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-1 text-xl"
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="animate-fade-in max-w-2xl mx-auto">
+                                    <div className={`p-6 rounded-2xl border-2 mb-6 shadow-sm ${isTypeCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                        <div className="text-5xl mb-3">{isTypeCorrect ? '✅' : '❌'}</div>
+                                        <h3 className={`text-2xl font-extrabold mb-2 ${isTypeCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                                            {isTypeCorrect ? '¡Correcto!' : 'No exactamente'}
+                                        </h3>
+                                        <p className="text-slate-700 font-medium">Esta roca es del grupo <strong>{result.type.split(' ')[1]}</strong>.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setStep(2)}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-lg py-3 px-8 rounded-xl shadow-lg transition-all hover:-translate-y-1"
+                                    >
+                                        Siguiente reto →
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {step === 2 && (
+                        <div className="animate-fade-in">
+                            <h2 className="text-3xl font-extrabold text-slate-800 mb-4">¿Qué roca exacta crees que es?</h2>
+                            <p className="text-lg text-slate-600 mb-8 font-medium">La foto te da las pistas clave. Elige el nombre específico.</p>
+                            
+                            {result.comparisons && result.comparisons[0] && (
+                                <div className="mb-8 rounded-2xl overflow-hidden shadow-md border border-slate-200 inline-block bg-slate-50 max-w-2xl w-full">
+                                    <img src={result.comparisons[0].image} alt="Observación" className="w-full h-auto object-contain max-h-64 mx-auto" />
+                                </div>
+                            )}
+
+                            {!guessRock ? (
+                                <div className="flex flex-wrap justify-center gap-4 max-w-3xl mx-auto">
+                                    {result.predictionOptions && result.predictionOptions.map(name => (
+                                        <button
+                                            key={name}
+                                            onClick={() => setGuessRock(name)}
+                                            className="bg-white hover:bg-indigo-50 hover:border-indigo-300 border-2 border-slate-200 text-slate-700 font-bold py-4 px-8 rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-1 text-xl flex-1 min-w-[200px]"
+                                        >
+                                            {name}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="animate-fade-in max-w-2xl mx-auto">
+                                    <div className={`p-8 rounded-3xl border-2 mb-8 shadow-sm ${isRockCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                        <div className="text-6xl mb-4">{isRockCorrect ? '🎯' : '🤔'}</div>
+                                        <h3 className={`text-3xl font-extrabold mb-3 ${isRockCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                                            {isRockCorrect ? '¡Diana! Lo has clavado.' : `Era ${result.name}`}
+                                        </h3>
+                                        <p className="text-slate-700 font-medium text-lg leading-relaxed mb-4">
+                                            {isRockCorrect 
+                                                ? `Has identificado la roca perfecta basándote en la foto y la clave.` 
+                                                : `Ambas rocas se parecen, pero tienen diferencias clave que has de observar mejor.`}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={onComplete}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xl py-4 px-10 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-1"
+                                    >
+                                        Ver tarjeta y explicación completa
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+
+        // --- COMPONENTE: VIRTUAL BOARD (Optimizado para Touch/iPad) ---
+        const VirtualBoard = ({ children, isConstructionMode = false }) => {
+            const [scale, setScale] = useState(1);
+            const [pos, setPos] = useState({ x: 0, y: 0 });
+            const isDragging = useRef(false);
+            const lastPointer = useRef({ x: 0, y: 0 });
+
+            // Usamos Pointer Events para soportar tanto ratón como táctil en iPad
+            const handlePointerDown = (e) => {
+                if (['INPUT', 'TEXTAREA', 'BUTTON', 'IMG'].includes(e.target.tagName) || e.target.closest('[draggable="true"]')) return;
+                isDragging.current = true;
+                e.target.setPointerCapture(e.pointerId);
+                lastPointer.current = { x: e.clientX, y: e.clientY };
+            };
+            
+            const handlePointerMove = (e) => {
+                if (!isDragging.current) return;
+                const dx = e.clientX - lastPointer.current.x;
+                const dy = e.clientY - lastPointer.current.y;
+                setPos(p => ({ x: p.x + dx, y: p.y + dy }));
+                lastPointer.current = { x: e.clientX, y: e.clientY };
+            };
+            
+            const handlePointerUp = (e) => {
+                isDragging.current = false;
+                e.target.releasePointerCapture(e.pointerId);
+            };
+            
+            const handleWheel = (e) => {
+                const scaleAmount = -e.deltaY * 0.002;
+                setScale(s => Math.min(Math.max(0.3, s + scaleAmount), 3));
+            };
+
+            return (
+                <div 
+                    className={`w-full h-full overflow-hidden bg-[#f8fafc] ${!isConstructionMode ? 'cursor-grab active:cursor-grabbing' : ''} relative`}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                    onWheel={handleWheel}
+                >
+                    <div 
+                        className="absolute"
+                        style={{ 
+                            transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`, 
+                            transformOrigin: 'top left', 
+                            transition: isDragging.current ? 'none' : 'transform 0.05s ease-out' 
+                        }}
+                    >
+                        {children}
+                    </div>
+                    {/* Controles Zoom */}
+                    <div className="absolute top-6 right-6 flex flex-col gap-2 z-40 bg-white/80 p-2 rounded-2xl shadow-lg backdrop-blur">
+                        <button onClick={() => setScale(s => Math.min(3, s + 0.2))} className="w-10 h-10 bg-white shadow rounded-xl font-bold text-xl hover:bg-slate-100 flex items-center justify-center text-slate-700">+</button>
+                        <button onClick={() => {setScale(1); setPos({x:0, y:0});}} className="w-10 h-10 bg-white shadow rounded-xl font-bold text-sm hover:bg-slate-100 flex items-center justify-center text-slate-700">1x</button>
+                        <button onClick={() => setScale(s => Math.max(0.3, s - 0.2))} className="w-10 h-10 bg-white shadow rounded-xl font-bold text-xl hover:bg-slate-100 flex items-center justify-center text-slate-700">-</button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- COMPONENTE: ÁRBOL MODO DOCENTE ---
+        const TreeNode = ({ nodeId, parentOptionLabel, activeNode, setActiveNode, filterType, setSelectedRock }) => {
+            const isRock = !!rocks[nodeId];
+            const lineLength = "w-48 sm:w-72"; // Clados ALARGADOS EVITANDO SOLAPAMIENTO
+
+            if (isRock) {
+                const rock = rocks[nodeId];
+                const isDimmed = filterType !== 'all' && !rock.type.toLowerCase().includes(filterType.toLowerCase());
+                
+                return (
+                    <div className={`flex items-center transition-all duration-300 ${isDimmed ? 'opacity-20 grayscale' : 'opacity-100'}`}>
+                        <div className={`${lineLength} h-1.5 bg-slate-300 relative shrink-0 rounded-full flex items-center justify-center`}>
+                            {parentOptionLabel && (
+                                <span className="absolute -top-10 text-[12px] whitespace-nowrap text-slate-800 bg-white px-4 py-1.5 rounded-full font-extrabold shadow-md border border-slate-200 z-30">
+                                    {parentOptionLabel}
+                                </span>
+                            )}
+                        </div>
+                        <button 
+                            onClick={() => setSelectedRock(rock)} 
+                            className={`px-5 py-3 rounded-xl shadow-md border-2 ${rock.colorScheme.bg} ${rock.colorScheme.border} ${rock.colorScheme.text} hover:scale-105 transition-transform flex items-center justify-center font-bold whitespace-nowrap z-10 relative`}
+                        >
+                            {rock.name}
+                        </button>
+                    </div>
+                );
+            }
+
+            const node = tree[nodeId];
+            const isOpen = activeNode === nodeId;
+
+            return (
+                <div className="flex items-center">
+                    {/* Línia d'entrada des del pare */}
+                    {parentOptionLabel && (
+                        <div className={`${lineLength} h-1.5 bg-slate-300 relative shrink-0 rounded-full flex items-center justify-center`}>
+                            <span className="absolute -top-10 text-[12px] whitespace-nowrap text-slate-800 bg-white px-4 py-1.5 rounded-full font-extrabold shadow-md border border-slate-200 z-30">
+                                {parentOptionLabel}
+                            </span>
+                        </div>
+                    )}
+                    
+                    {/* Node actual (Punt interactiu) */}
+                    <div className="relative shrink-0 flex flex-col justify-center items-center w-12 h-12">
+                        <button 
+                            onClick={() => setActiveNode(isOpen ? null : nodeId)}
+                            className={`w-8 h-8 rounded-full border-4 z-10 relative transition-all shadow-md ${isOpen ? 'bg-blue-500 border-blue-200 scale-125' : 'bg-slate-700 border-white hover:bg-slate-600'}`}
+                        />
+                        <div className="absolute right-0 w-6 h-1.5 bg-slate-300 top-1/2 -translate-y-1/2 z-0 rounded-r-full"></div>
+                        
+                        {isOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveNode(null); }}></div>
+                                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-4 w-72 bg-slate-800 text-white text-sm p-5 rounded-2xl shadow-2xl z-50 text-center font-semibold animate-fade-in border-2 border-slate-700">
+                                    {node.text}
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800"></div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Fills (Branques) */}
+                    <div className="flex flex-col justify-center border-l-4 border-slate-300 py-6 gap-10 rounded-l-lg">
+                        {node.options.map((opt, idx) => (
+                            <TreeNode 
+                                key={idx} 
+                                nodeId={opt.next} 
+                                parentOptionLabel={opt.label} 
+                                activeNode={activeNode}
+                                setActiveNode={setActiveNode}
+                                filterType={filterType}
+                                setSelectedRock={setSelectedRock}
+                            />
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const TeacherMode = ({ onExit }) => {
+            const [activeNode, setActiveNode] = useState(null);
+            const [filterType, setFilterType] = useState('all');
+            const [selectedRock, setSelectedRock] = useState(null);
+
+            return (
+                <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col">
+                    <div className="bg-slate-900 text-white p-4 shadow-md flex justify-between items-center z-20 relative">
+                        <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-600 p-2 rounded-lg"><IconPickaxe /></div>
+                                <h2 className="font-bold text-lg hidden sm:block">Pizarra Virtual Docente</h2>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <div className="flex gap-2 flex-wrap">
+                                    {['all', 'Sedimentaria', 'Ígnea', 'Metamórfica'].map(f => (
+                                        <button 
+                                            key={f}
+                                            onClick={() => setFilterType(f)}
+                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-colors border border-transparent ${filterType === f ? 'bg-blue-500 text-white border-blue-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+                                        >
+                                            {f === 'all' ? 'Todas' : f + 's'}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex gap-4 text-[11px] font-bold ml-1">
+                                    <span className="flex items-center gap-1 text-amber-300"><div className="w-2.5 h-2.5 rounded bg-amber-500"></div> Sedimentarias</span>
+                                    <span className="flex items-center gap-1 text-red-300"><div className="w-2.5 h-2.5 rounded bg-red-500"></div> Ígneas</span>
+                                    <span className="flex items-center gap-1 text-purple-300"><div className="w-2.5 h-2.5 rounded bg-purple-500"></div> Metamórficas</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={onExit} className="bg-red-500 hover:bg-red-600 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-lg border border-red-400">Salir de vista docente</button>
+                    </div>
+
+                    <div className="flex-1 relative overflow-hidden">
+                        <VirtualBoard>
+                            <div className="absolute top-[50vh] left-20 -translate-y-1/2 pb-32">
+                                <TreeNode 
+                                    nodeId="q1" 
+                                    activeNode={activeNode} 
+                                    setActiveNode={setActiveNode} 
+                                    filterType={filterType} 
+                                    parentOptionLabel={null}
+                                    setSelectedRock={setSelectedRock}
+                                />
+                            </div>
+                        </VirtualBoard>
+                    </div>
+
+                    {selectedRock && (
+                        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setSelectedRock(null)}>
+                            <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar relative" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setSelectedRock(null)} className="absolute top-4 right-4 z-20 bg-black/30 hover:bg-black/60 text-white w-10 h-10 rounded-full flex items-center justify-center transition-colors">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                                <RockDetails result={selectedRock} handleRestart={null} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- COMPONENTE: ÁRBOL MODO EXPLORACIÓN (CLAVE MUDA TAP TO PLACE) ---
+        const BlankNode = ({ nodeId, parentOptionIndex, parentId, parentOptionLabelReal, inputs, handleInput, showSolution, placedItems, selectedBankItem, onDropItemTap }) => {
+            const isRock = !!rocks[nodeId];
+            const lineLength = "w-48 sm:w-72"; 
+
+            // Renderizar Hoja (Drop zones para roca y foto)
+            if (isRock) {
+                const rock = rocks[nodeId];
+                
+                // Determinar si hay un ítem seleccionado coincidente (Tap-to-place hints)
+                const isNameTarget = selectedBankItem?.type === 'name';
+                const isPhotoTarget = selectedBankItem?.type === 'photo';
+                
+                // Clases visuales dinámicas
+                const nameClasses = `w-36 sm:w-40 h-14 rounded-xl border-2 flex items-center justify-center font-bold text-center transition-all ${
+                    isNameTarget ? 'bg-orange-50 border-orange-400 border-dashed shadow-[0_0_15px_rgba(251,146,60,0.5)] cursor-pointer animate-pulse text-orange-600' :
+                    placedItems[`${nodeId}_name`] ? 'text-slate-800 shadow border-slate-300 bg-white' : 'text-slate-400 border-dashed border-slate-300 bg-white/50'
+                }`;
+
+                const photoClasses = `w-20 h-14 rounded-xl border-2 overflow-hidden flex items-center justify-center transition-all ${
+                    isPhotoTarget ? 'bg-orange-50 border-orange-400 border-dashed shadow-[0_0_15px_rgba(251,146,60,0.5)] cursor-pointer animate-pulse text-orange-600' :
+                    placedItems[`${nodeId}_photo`] ? 'shadow border-slate-300 bg-white' : 'border-dashed border-slate-300 text-slate-400 bg-white/50'
+                }`;
+
+                return (
+                    <div className="flex items-center relative">
+                        <div className={`${lineLength} h-1.5 bg-slate-300 relative shrink-0 rounded-full flex items-center justify-center`}>
+                            {parentId && (
+                                <div className="absolute -top-10 w-48 flex flex-col items-center z-30">
+                                    <input
+                                        type="text"
+                                        value={inputs[`${parentId}_opt_${parentOptionIndex}`] || ''}
+                                        onChange={(e) => handleInput(`${parentId}_opt_${parentOptionIndex}`, e.target.value)}
+                                        placeholder="Criterio..."
+                                        className="w-full text-xs text-center text-slate-800 bg-white px-3 py-2 rounded-full font-bold shadow-sm border border-slate-300 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                    />
+                                    {showSolution && <div className="text-[10px] text-green-700 font-extrabold bg-green-100 px-2 py-0.5 rounded shadow border border-green-300 mt-1 whitespace-nowrap">Solución: {parentOptionLabelReal}</div>}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="relative z-10 flex flex-col sm:flex-row items-center gap-3 bg-slate-50/80 p-2 rounded-xl border border-slate-200">
+                            {/* Zona de Toque: Nombre Roca */}
+                            <div className="flex flex-col items-center">
+                                <div
+                                    onClick={() => { if(isNameTarget) onDropItemTap(nodeId, 'name', selectedBankItem.value) }}
+                                    className={nameClasses}
+                                >
+                                    {placedItems[`${nodeId}_name`] || "Toca Roca"}
+                                </div>
+                                {showSolution && <div className="mt-1 text-[10px] font-extrabold text-white bg-green-600 px-2 py-0.5 rounded shadow w-max">Solución: {rock.name}</div>}
+                            </div>
+                            
+                            {/* Zona de Toque: Foto Roca */}
+                            <div className="flex flex-col items-center">
+                                <div
+                                    onClick={() => { if(isPhotoTarget) onDropItemTap(nodeId, 'photo', selectedBankItem.value) }}
+                                    className={photoClasses}
+                                >
+                                    {placedItems[`${nodeId}_photo`] ? <img src={placedItems[`${nodeId}_photo`]} className="w-full h-full object-cover" alt="Foto" /> : <span className="text-[10px] font-bold uppercase tracking-wider">Foto</span>}
+                                </div>
+                                {showSolution && <div className="mt-1 text-[10px] font-extrabold text-white bg-green-600 px-2 py-0.5 rounded shadow w-max">Foto Correcta</div>}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Renderizar Rama (Pregunta texto)
+            const node = tree[nodeId];
+            return (
+                <div className="flex items-center">
+                    {parentId && (
+                        <div className={`${lineLength} h-1.5 bg-slate-300 relative shrink-0 rounded-full flex items-center justify-center`}>
+                            <div className="absolute -top-10 w-48 flex flex-col items-center z-30">
+                                <input
+                                    type="text"
+                                    value={inputs[`${parentId}_opt_${parentOptionIndex}`] || ''}
+                                    onChange={(e) => handleInput(`${parentId}_opt_${parentOptionIndex}`, e.target.value)}
+                                    placeholder="Criterio..."
+                                    className="w-full text-xs text-center text-slate-800 bg-white px-3 py-2 rounded-full font-bold shadow-sm border border-slate-300 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+                                />
+                                {showSolution && <div className="text-[10px] text-green-700 font-extrabold bg-green-100 px-2 py-0.5 rounded shadow border border-green-300 mt-1 whitespace-nowrap">Solución: {parentOptionLabelReal}</div>}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="relative shrink-0 flex items-center">
+                        <div className="z-10 bg-white p-2 rounded-xl shadow-lg border-2 border-slate-300 relative w-56 sm:w-72 flex flex-col items-center transition-all focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200">
+                            <textarea
+                                value={inputs[`${nodeId}_q`] || ''}
+                                onChange={(e) => handleInput(`${nodeId}_q`, e.target.value)}
+                                placeholder="Escribe tu pregunta de observación..."
+                                className="w-full text-sm font-semibold text-center outline-none resize-none bg-transparent text-slate-700"
+                                rows={3}
+                            />
+                            {showSolution && (
+                                <div className="absolute top-full mt-4 w-72 text-center text-xs font-bold text-green-800 p-3 bg-green-100 rounded-xl border border-green-300 shadow-xl z-50">
+                                    {node.text}
+                                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-green-100 border-t border-l border-green-300 transform rotate-45"></div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="w-10 h-1.5 bg-slate-300 z-0 rounded-r-full"></div>
+                    </div>
+
+                    <div className="flex flex-col justify-center border-l-4 border-slate-300 py-10 gap-16 rounded-l-lg">
+                        {node.options.map((opt, idx) => (
+                            <BlankNode
+                                key={idx}
+                                nodeId={opt.next}
+                                parentId={nodeId}
+                                parentOptionIndex={idx}
+                                parentOptionLabelReal={opt.label}
+                                inputs={inputs}
+                                handleInput={handleInput}
+                                showSolution={showSolution}
+                                placedItems={placedItems}
+                                selectedBankItem={selectedBankItem}
+                                onDropItemTap={onDropItemTap}
+                            />
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const BlankTreeApp = ({ onExit }) => {
+            const [inputs, setInputs] = useState({});
+            const [placedItems, setPlacedItems] = useState({});
+            const [showSolution, setShowSolution] = useState(false);
+            const [selectedBankItem, setSelectedBankItem] = useState(null); // {type: 'name'|'photo', value}
+            
+            // Sistema de Pistas
+            const [score, setScore] = useState(10);
+            const [revealedPistas, setRevealedPistas] = useState([]);
+            
+            const pistasList = [
+                "1. Fíjate en todas las rocas, ¿en todas se distinguen granos o cristales a simple vista?",
+                "2. De las que sí tienen granos... ¿son granos pegados o son cristales entrelazados?",
+                "3. Si son granos pegados, fíjate en su tamaño: ¿como gravilla grande o finos con tacto de lija?",
+                "4. Si son cristales visibles, prueba el ácido. ¿Cuál burbujea y cuál raya el cristal?",
+                "5. Volvemos a las que NO tienen granos visibles... ¿tienen estructura en láminas (foliación)?",
+                "6. De las que tienen láminas, fíjate en su rotura y luego en su brillo para conocer su grado de metamorfismo.",
+                "7. Y de las que no tienen láminas... ¿cuál parece vidrio brillante y cuál es oscura, densa y mate?"
+            ];
+
+            const rockNamesBank = ["Conglomerado", "Arenisca", "Mármol", "Granito", "Pizarra", "Filita", "Esquisto", "Lutita", "Obsidiana", "Basalto"];
+            const photoBank = [
+                "https://i.ibb.co/BHsyWRrX/Arenisca-vs-Conglomerado.png",
+                "https://i.ibb.co/6j6dJbn/Granit-vs-marbre.png",
+                imgMetamorficas,
+                "https://i.ibb.co/RT6PcnDW/Lutita-vs-Pizarra.png",
+                "https://i.ibb.co/mVPL2Chh/Basalto-vs-Obsidiana.png"
+            ];
+
+            const handleInput = (key, value) => {
+                setInputs(prev => ({ ...prev, [key]: value }));
+            };
+
+            const handleSelectBankItem = (type, value) => {
+                if(selectedBankItem?.type === type && selectedBankItem?.value === value){
+                    setSelectedBankItem(null); // Deseleccionar si se toca el mismo
+                } else {
+                    setSelectedBankItem({type, value});
+                }
+            };
+
+            const handleDropItemTap = (targetNodeId, targetType, value) => {
+                setPlacedItems(prev => ({ ...prev, [`${targetNodeId}_${targetType}`]: value }));
+                setSelectedBankItem(null); // Quitar selección tras colocar
+            };
+
+            const handleGetPista = () => {
+                if (score > 0 && revealedPistas.length < pistasList.length) {
+                    setScore(s => s - 1);
+                    setRevealedPistas(prev => [...prev, pistasList[prev.length]]);
+                } else if (revealedPistas.length >= pistasList.length) {
+                    alert("Ya has revelado todas las pistas posibles.");
+                } else {
+                    alert("No te quedan puntos para pedir pistas.");
+                }
+            };
+
+            const handleUnlockSolution = () => {
+                if (showSolution) {
+                    setShowSolution(false);
+                } else {
+                    const pass = prompt("Introduce el código secreto para ver la solución:");
+                    if (pass && pass.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "SOLUCION") {
+                        setShowSolution(true);
+                    } else if (pass !== null) {
+                        alert("Código incorrecto.");
+                    }
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col overflow-hidden">
+                    {/* Header Construction Mode */}
+                    <div className="bg-slate-900 text-white p-4 shadow-md flex justify-between items-center z-20 relative">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-teal-600 p-2 rounded-lg"><IconPickaxe /></div>
+                            <div>
+                                <h2 className="font-bold text-lg hidden sm:block">Laboratorio: Construye tu Clave</h2>
+                                <p className="text-teal-200 text-xs hidden sm:block">Toca los elementos del panel lateral para colocarlos.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 sm:gap-4 items-center">
+                            <button 
+                                onClick={handleUnlockSolution} 
+                                className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center gap-2 border ${showSolution ? 'bg-green-600 border-green-500 hover:bg-green-700' : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'}`}
+                            >
+                                <IconEye />
+                                {showSolution ? 'Ocultar solución' : 'Ver Solución'}
+                            </button>
+                            <button onClick={onExit} className="bg-red-500 hover:bg-red-600 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-lg border border-red-400 hidden sm:block">Salir</button>
+                        </div>
+                    </div>
+
+                    {/* Contenedor Principal: Pizarra + Barra Lateral Derecha */}
+                    <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+                        
+                        {/* Area Arbol (Pizarra) */}
+                        <div className="flex-1 relative overflow-hidden bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px]">
+                            <VirtualBoard isConstructionMode={true}>
+                                <div className="absolute top-[50vh] left-[5vw] -translate-y-1/2 pb-64">
+                                    <BlankNode 
+                                        nodeId="q1" 
+                                        parentId={null}
+                                        inputs={inputs}
+                                        handleInput={handleInput}
+                                        showSolution={showSolution}
+                                        placedItems={placedItems}
+                                        selectedBankItem={selectedBankItem}
+                                        onDropItemTap={handleDropItemTap}
+                                    />
+                                </div>
+                            </VirtualBoard>
+                        </div>
+
+                        {/* Barra Lateral Derecha (Banco, Pistas y Puntuación) */}
+                        <div className="w-full md:w-80 lg:w-96 bg-white border-t-2 md:border-t-0 md:border-l-2 border-slate-200 shadow-[-10px_0_30px_rgba(0,0,0,0.05)] z-30 flex flex-col h-64 md:h-auto overflow-hidden">
+                            
+                            {/* Pistas & Puntos (Sticky top) */}
+                            <div className="bg-slate-50 p-4 border-b border-slate-200">
+                                <div className="flex justify-between items-center mb-3">
+                                    <div className="font-bold text-slate-700 flex items-center gap-2">
+                                        <span className="bg-amber-100 text-amber-600 p-1.5 rounded-lg"><IconLightbulb /></span>
+                                        <span>{score} pts</span>
+                                    </div>
+                                    <button 
+                                        onClick={handleGetPista}
+                                        className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition-colors"
+                                    >
+                                        Pedir Pista (-1)
+                                    </button>
+                                </div>
+                                {/* Lista de pistas reveladas */}
+                                {revealedPistas.length > 0 && (
+                                    <div className="bg-amber-50/50 rounded-xl border border-amber-100 p-3 max-h-32 overflow-y-auto custom-scroll text-sm text-slate-600 font-medium space-y-2">
+                                        {revealedPistas.map((pista, idx) => (
+                                            <p key={idx} className="bg-white p-2 rounded-lg border border-amber-100 shadow-sm leading-snug">{pista}</p>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Banco de Elementos (Scrollable) */}
+                            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-6 custom-scroll">
+                                <div className="bg-slate-800 text-white text-xs font-bold uppercase tracking-wider py-1.5 px-3 rounded-md text-center">
+                                    1. Toca un elemento<br/>2. Toca dónde colocarlo
+                                </div>
+                                
+                                {/* Nombres */}
+                                <div>
+                                    <h4 className="text-sm font-extrabold text-slate-500 mb-3 uppercase tracking-wider">Nombres de Rocas</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {rockNamesBank.map(name => {
+                                            const isSelected = selectedBankItem?.type === 'name' && selectedBankItem?.value === name;
+                                            return (
+                                                <button 
+                                                    key={name}
+                                                    onClick={() => handleSelectBankItem('name', name)}
+                                                    className={`px-4 py-2 font-bold rounded-xl transition-all shadow-sm ${isSelected ? 'bg-orange-500 text-white ring-4 ring-orange-300 scale-105 shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'}`}
+                                                >
+                                                    {name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Fotos */}
+                                <div className="pb-4">
+                                    <h4 className="text-sm font-extrabold text-slate-500 mb-3 uppercase tracking-wider">Fotos</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {photoBank.map((url, idx) => {
+                                            const isSelected = selectedBankItem?.type === 'photo' && selectedBankItem?.value === url;
+                                            return (
+                                                <button 
+                                                    key={idx}
+                                                    onClick={() => handleSelectBankItem('photo', url)}
+                                                    className={`h-20 bg-white border-2 rounded-xl overflow-hidden transition-all shadow-sm ${isSelected ? 'border-orange-500 ring-4 ring-orange-300 scale-105 shadow-md z-10 relative' : 'border-slate-200 hover:border-slate-300'}`}
+                                                >
+                                                    <img src={url} alt={`Bank Foto ${idx}`} className="w-full h-full object-cover pointer-events-none" />
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        // --- APLICACIÓN PRINCIPAL ---
+        const App = () => {
+            const [appMode, setAppMode] = useState(null); 
+            const [history, setHistory] = useState([]);
+            const [currentNodeId, setCurrentNodeId] = useState('q1');
+            const [result, setResult] = useState(null);
+            
+            const [pendingJustification, setPendingJustification] = useState(null);
+            const [isAnimating, setIsAnimating] = useState(false);
+            const [predictionResolved, setPredictionResolved] = useState(false);
+
+            const [teacherMode, setTeacherMode] = useState(false);
+            const [showUnlock, setShowUnlock] = useState(false);
+            const [pin, setPin] = useState("");
+
+            const handleUnlock = () => {
+                if (pin === '2421') {
+                    setTeacherMode(true);
+                    setShowUnlock(false);
+                    setPin("");
+                } else {
+                    alert("PIN incorrecto. Acceso denegado.");
+                    setPin("");
+                }
+            };
+
+            const handleAnswerClick = (option, nextId) => {
+                setIsAnimating(true);
+                setTimeout(() => {
+                    setIsAnimating(false);
+                    setPendingJustification({ option, nextId, questionId: currentNodeId });
+                }, 300);
+            };
+
+            const handleJustification = (reason) => {
+                const { option, nextId, questionId } = pendingJustification;
+                setHistory([...history, { 
+                    question: tree[questionId].text, 
+                    answer: option.label,
+                    reason: reason,
+                    nodeId: questionId
+                }]);
+
+                if (rocks[nextId]) {
+                    setResult(rocks[nextId]);
+                    if (appMode === 'prediction') {
+                        setPredictionResolved(false);
+                    }
+                } else {
+                    setCurrentNodeId(nextId);
+                }
+                setPendingJustification(null);
+            };
+
+            const handleBack = () => {
+                if (pendingJustification) {
+                    setPendingJustification(null);
+                    return;
+                }
+                if (result) {
+                    if (appMode === 'prediction' && predictionResolved) {
+                        setPredictionResolved(false); 
+                        return;
+                    }
+                    setResult(null);
+                    const newHistory = [...history];
+                    newHistory.pop();
+                    setHistory(newHistory);
+                    return;
+                }
+                if (history.length > 0) {
+                    const newHistory = [...history];
+                    const lastState = newHistory.pop();
+                    setHistory(newHistory);
+                    setCurrentNodeId(lastState.nodeId);
+                }
+            };
+
+            const handleRestart = () => {
+                setHistory([]);
+                setCurrentNodeId('q1');
+                setResult(null);
+                setPendingJustification(null);
+                setPredictionResolved(false);
+                setAppMode(null); 
+            };
+
+            // VISTAS ESPECIALES
+            if (teacherMode) {
+                return <TeacherMode onExit={() => setTeacherMode(false)} />;
+            }
+            if (appMode === 'blank') {
+                return <BlankTreeApp onExit={handleRestart} />;
+            }
+
+            // PANTALLA INICIAL (SELECTOR DE MODOS)
+            if (appMode === null) {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative py-12">
+                        <div className="bg-white p-8 sm:p-12 rounded-3xl shadow-2xl max-w-4xl w-full text-center fade-in border border-slate-100 relative slide-up">
+                            <div className="bg-blue-100 w-24 h-24 mx-auto rounded-full flex items-center justify-center text-blue-600 mb-6 shadow-inner border-4 border-white">
+                                <IconPickaxe size={48} />
+                            </div>
+                            <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800 mb-4 tracking-tight leading-tight">
+                                Laboratorio de Geología
+                            </h1>
+                            <p className="text-xl text-slate-500 mb-8 font-medium">
+                                Identifica rocas mediante la observación sistemática.
+                            </p>
+                            
+                            {/* Explicación de Observación Recuperada y Elevada */}
+                            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl text-left mb-10 border border-slate-200 shadow-sm max-w-2xl mx-auto">
+                                <h3 className="font-bold text-slate-700 mb-5 text-lg border-b border-slate-200 pb-2">
+                                    Vas a usar una clave dicotómica:
+                                </h3>
+                                <ul className="space-y-4 font-medium text-slate-600">
+                                    <li className="flex items-center gap-4">
+                                        <div className="bg-white w-12 h-12 flex items-center justify-center rounded-xl shadow-sm border border-slate-100 text-2xl shrink-0">👁️</div> 
+                                        <span><strong>Observas</strong> sus características cuidadosamente</span>
+                                    </li>
+                                    <li className="flex items-center gap-4">
+                                        <div className="bg-white w-12 h-12 flex items-center justify-center rounded-xl shadow-sm border border-slate-100 text-2xl shrink-0">🤔</div> 
+                                        <span><strong>Tomas decisiones</strong> paso a paso en cada bifurcación</span>
+                                    </li>
+                                    <li className="flex items-center gap-4">
+                                        <div className="bg-white w-12 h-12 flex items-center justify-center rounded-xl shadow-sm border border-slate-100 text-2xl shrink-0">🎯</div> 
+                                        <span><strong>Llegas a una conclusión</strong> científica fundamentada</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            
+                            <h3 className="font-bold text-slate-800 mb-4 text-xl">Elige tu modo de trabajo hoy:</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+                                {/* Modo Guiado */}
+                                <div onClick={() => setAppMode('guided')} className="bg-white p-6 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full">
+                                    <div className="text-4xl mb-4 group-hover:scale-110 transition-transform origin-left">🧭</div>
+                                    <h3 className="font-bold text-slate-800 text-xl mb-2">Modo Guiado</h3>
+                                    <p className="text-slate-600 text-sm flex-1">Usa la clave dicotómica paso a paso para identificar rocas con ayuda total.</p>
+                                    <div className="mt-4 text-blue-600 font-bold text-sm uppercase tracking-wider group-hover:translate-x-2 transition-transform">Empezar →</div>
+                                </div>
+
+                                {/* Modo Predicción */}
+                                <div onClick={() => setAppMode('prediction')} className="bg-white p-6 rounded-2xl border-2 border-slate-200 hover:border-indigo-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full relative overflow-hidden">
+                                    <div className="absolute -right-4 -top-4 bg-indigo-100 text-indigo-800 text-[10px] font-bold px-3 py-1 rounded-bl-xl rotate-12">RETO</div>
+                                    <div className="text-4xl mb-4 group-hover:scale-110 transition-transform origin-left">🧠</div>
+                                    <h3 className="font-bold text-slate-800 text-xl mb-2">Modo Predicción</h3>
+                                    <p className="text-slate-600 text-sm flex-1">Analiza la clave, pero intenta adivinar el nombre exacto de la roca antes de ver la solución.</p>
+                                    <div className="mt-4 text-indigo-600 font-bold text-sm uppercase tracking-wider group-hover:translate-x-2 transition-transform">Desafíate →</div>
+                                </div>
+
+                                {/* Modo Exploración (Mudo) */}
+                                <div onClick={() => setAppMode('blank')} className="bg-white p-6 rounded-2xl border-2 border-slate-200 hover:border-teal-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col h-full">
+                                    <div className="text-4xl mb-4 group-hover:scale-110 transition-transform origin-left">🏗️</div>
+                                    <h3 className="font-bold text-slate-800 text-xl mb-2">Construye la Clave</h3>
+                                    <p className="text-slate-600 text-sm flex-1">Modo avanzado. Observa las muestras reales y crea tu propia clave interactiva.</p>
+                                    <div className="mt-4 text-teal-600 font-bold text-sm uppercase tracking-wider group-hover:translate-x-2 transition-transform">Explorar →</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button onClick={() => setShowUnlock(true)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 transition-colors p-2" title="Acceso Docente">
+                            <IconLock />
+                        </button>
+
+                        {/* Modal Desbloqueo */}
+                        {showUnlock && (
+                            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm fade-in">
+                                <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-sm w-full relative slide-up">
+                                    <h3 className="font-bold text-xl text-slate-800 mb-2 flex items-center gap-2">
+                                        <IconLock /> Acceso Docente
+                                    </h3>
+                                    <p className="text-sm text-slate-500 mb-6">Introduce el PIN para desbloquear la vista panorámica.</p>
+                                    <input 
+                                        type="password" 
+                                        value={pin} 
+                                        onChange={e => setPin(e.target.value)} 
+                                        className="border-2 border-slate-200 p-3 w-full rounded-xl mb-6 text-center tracking-[0.5em] text-2xl font-bold focus:border-blue-500 outline-none transition-colors" 
+                                        placeholder="****" 
+                                        autoFocus 
+                                        onKeyDown={e => e.key === 'Enter' && handleUnlock()} 
+                                    />
+                                    <div className="flex justify-end gap-3">
+                                        <button onClick={() => {setShowUnlock(false); setPin("");}} className="text-slate-500 hover:bg-slate-100 px-4 py-2 rounded-lg font-medium transition-colors">Cancelar</button>
+                                        <button onClick={handleUnlock} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-colors">Desbloquear</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            const numOptions = tree[currentNodeId]?.options.length || 2;
+            const gridColsClass = numOptions === 3 ? 'md:grid-cols-3 sm:grid-cols-2' : 'sm:grid-cols-2';
+
+            return (
+                <div className="min-h-screen flex flex-col relative bg-slate-50">
+                    <header className={`text-white p-4 shadow-lg flex items-center justify-between z-10 relative ${appMode === 'prediction' ? 'bg-indigo-900' : 'bg-slate-900'}`}>
+                        <div className="flex items-center gap-4">
+                            <div className={`${appMode === 'prediction' ? 'bg-indigo-600' : 'bg-blue-600'} p-2.5 rounded-xl shadow-inner hidden sm:block`}>
+                                <IconPickaxe size={24} />
+                            </div>
+                            <div>
+                                <h1 className="font-extrabold text-xl leading-tight tracking-tight">Laboratorio de Geología</h1>
+                                <p className={`${appMode === 'prediction' ? 'text-indigo-200' : 'text-blue-200'} text-xs font-medium`}>
+                                    {appMode === 'prediction' ? 'Modo Predicción Activo' : 'Clave Dicotómica para 2º ESO'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 sm:gap-4">
+                            <button 
+                                onClick={() => setShowUnlock(true)} 
+                                className="text-slate-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-800" 
+                                title="Acceso Docente"
+                            >
+                                <IconLock />
+                            </button>
+                            <button 
+                                onClick={handleRestart}
+                                className="flex items-center gap-2 bg-black/20 hover:bg-black/40 transition-colors px-4 py-2 rounded-xl text-sm font-bold shadow-md border border-white/10"
+                            >
+                                <IconRefresh />
+                                <span className="hidden sm:inline">Cambiar Modo</span>
+                            </button>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 w-full max-w-5xl mx-auto relative">
+                        
+                        {(history.length > 0 || result || pendingJustification) && (
+                            <div className="w-full mb-8 flex flex-col gap-4">
+                                <button 
+                                    onClick={handleBack}
+                                    className="flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors w-fit text-sm font-bold px-3 py-2 -ml-3 rounded-lg hover:bg-slate-200"
+                                >
+                                    <IconBack />
+                                    Volver al paso anterior
+                                </button>
+                                
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-medium bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
+                                    <span className="text-slate-500 font-bold mr-1">Tu análisis:</span>
+                                    {history.map((step, idx) => (
+                                        <div key={idx} className="flex items-center gap-2">
+                                            <span 
+                                                className="bg-slate-50 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:border-blue-300 cursor-help transition-colors" 
+                                                title={`Justificación: ${step.reason}`}
+                                            >
+                                                {step.answer}
+                                            </span>
+                                            {idx < history.length - 1 && <span className="text-slate-300 font-bold">→</span>}
+                                        </div>
+                                    ))}
+                                    {result && <span className="text-slate-300 font-bold">→</span>}
+                                    {result && <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1.5 rounded-lg font-bold shadow-sm">{result.name}</span>}
+                                </div>
+                            </div>
+                        )}
+
+                        {!result && !pendingJustification && (
+                            <div className="w-full mb-10 fade-in max-w-4xl">
+                                <div className="flex justify-between text-xs font-bold text-slate-500 mb-3 px-1">
+                                    <span>Paso {history.length + 1}</span>
+                                    <span className={`${appMode === 'prediction' ? 'text-indigo-600' : 'text-blue-600'} uppercase tracking-wide`}>Análisis en curso</span>
+                                </div>
+                                <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden shadow-inner">
+                                    <div 
+                                        className={`${appMode === 'prediction' ? 'bg-indigo-500' : 'bg-blue-500'} h-full transition-all duration-700 ease-out rounded-full`} 
+                                        style={{width: `${Math.min(((history.length + 1) / 5) * 100, 100)}%`}}
+                                    ></div>
+                                </div>
+                                <div className="text-center mt-4">
+                                    <span className={`inline-block text-sm font-semibold px-4 py-2 rounded-xl shadow-sm border ${appMode === 'prediction' ? 'text-indigo-700 bg-indigo-50 border-indigo-100' : 'text-blue-700 bg-blue-50 border-blue-100'}`}>
+                                        📍 {tree[currentNodeId].context}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {!result && !pendingJustification && (
+                            <div key={currentNodeId} className="w-full max-w-4xl bg-white rounded-3xl shadow-xl border border-slate-100 p-8 sm:p-12 fade-in text-center relative">
+                                <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-800 mb-12 leading-tight">
+                                    {tree[currentNodeId].text}
+                                </h2>
+                                
+                                <div className={`grid grid-cols-1 gap-6 ${gridColsClass}`}>
+                                    {tree[currentNodeId].options.map((option, idx) => {
+                                        const colorClasses = option.color === 'green' 
+                                            ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-900 text-slate-700'
+                                            : option.color === 'amber'
+                                            ? 'bg-amber-50/40 border-amber-200 hover:border-amber-500 hover:bg-amber-50 hover:text-amber-900 text-slate-700'
+                                            : option.color === 'purple'
+                                            ? 'bg-purple-50/40 border-purple-200 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-900 text-slate-700'
+                                            : 'bg-slate-50/40 border-slate-200 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-900 text-slate-700';
+                                        
+                                        const accentColor = option.color === 'green' ? 'bg-emerald-500' : option.color === 'amber' ? 'bg-amber-500' : option.color === 'purple' ? 'bg-purple-500' : 'bg-blue-500';
+
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => handleAnswerClick(option, option.next)}
+                                                className={`group relative flex flex-col items-center justify-center gap-4 bg-white border-2 p-8 rounded-2xl transition-all duration-300 ${colorClasses} ${isAnimating ? 'scale-95 opacity-50' : 'hover:-translate-y-1 hover:shadow-xl'}`}
+                                            >
+                                                <span className="text-5xl drop-shadow-sm group-hover:scale-110 transition-transform">{option.icon}</span>
+                                                <span className="text-xl font-bold text-center leading-snug">
+                                                    {option.label}
+                                                </span>
+                                                <div className={`absolute inset-x-0 bottom-0 h-1.5 scale-x-0 group-hover:scale-x-100 transition-transform origin-left rounded-b-2xl ${accentColor}`}></div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {pendingJustification && (
+                            <div className="w-full max-w-4xl bg-white rounded-3xl shadow-xl border border-slate-100 p-8 sm:p-12 text-center slide-up">
+                                <div className="text-6xl mb-6">{pendingJustification.option.icon}</div>
+                                <h2 className="text-2xl font-bold text-slate-600 mb-2">Has elegido:</h2>
+                                <p className={`text-3xl font-extrabold mb-10 ${appMode === 'prediction' ? 'text-indigo-600' : 'text-blue-600'}`}>"{pendingJustification.option.label}"</p>
+                                
+                                <div className="bg-slate-50 rounded-2xl p-6 sm:p-8 border border-slate-200">
+                                    <p className="text-xl font-bold text-slate-800 mb-6">🤔 ¿Por qué has elegido esta opción?</p>
+                                    
+                                    <div className="flex flex-col gap-4 max-w-lg mx-auto">
+                                        {[
+                                            { text: "Por lo que observo visualmente", icon: "👀" },
+                                            { text: "Por su textura al tacto", icon: "🖐️" },
+                                            { text: "Por el resultado analítico de la prueba", icon: "🔬" }
+                                        ].map((reason, idx) => (
+                                            <button 
+                                                key={idx}
+                                                onClick={() => handleJustification(reason.text)}
+                                                className={`flex items-center gap-4 bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 px-6 rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 text-left ${appMode === 'prediction' ? 'hover:bg-indigo-50 hover:border-indigo-400' : 'hover:bg-blue-50 hover:border-blue-400'}`}
+                                            >
+                                                <span className="text-2xl">{reason.icon}</span>
+                                                <span className="text-lg">{reason.text}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {result && appMode === 'prediction' && !predictionResolved && (
+                            <PredictionScreen result={result} onComplete={() => setPredictionResolved(true)} />
+                        )}
+
+                        {result && (appMode === 'guided' || (appMode === 'prediction' && predictionResolved)) && (
+                            <RockDetails result={result} handleRestart={() => {
+                                setHistory([]);
+                                setCurrentNodeId('q1');
+                                setResult(null);
+                                setPredictionResolved(false);
+                            }} />
+                        )}
+
+                    </main>
+                    
+                    {showUnlock && (
+                        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm fade-in">
+                            <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-sm w-full relative slide-up">
+                                <h3 className="font-bold text-xl text-slate-800 mb-2 flex items-center gap-2">
+                                    <IconLock /> Acceso Docente
+                                </h3>
+                                <p className="text-sm text-slate-500 mb-6">Introduce el PIN para desbloquear la vista panorámica de la clave.</p>
+                                <input 
+                                    type="password" 
+                                    value={pin} 
+                                    onChange={e => setPin(e.target.value)} 
+                                    className="border-2 border-slate-200 p-3 w-full rounded-xl mb-6 text-center tracking-[0.5em] text-2xl font-bold focus:border-blue-500 focus:ring-0 outline-none transition-colors" 
+                                    placeholder="****" 
+                                    autoFocus 
+                                    onKeyDown={e => e.key === 'Enter' && handleUnlock()} 
+                                />
+                                <div className="flex justify-end gap-3">
+                                    <button onClick={() => {setShowUnlock(false); setPin("");}} className="text-slate-500 hover:bg-slate-100 px-4 py-2 rounded-lg font-medium transition-colors">Cancelar</button>
+                                    <button onClick={handleUnlock} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-colors">Desbloquear</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
