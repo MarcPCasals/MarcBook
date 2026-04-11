@@ -7,9 +7,12 @@
     
     <!-- 1. ICONES I METADADES APP MÒBIL (iOS / PWA) -->
     <link rel="icon" href="https://i.ibb.co/TxfBrkt8/Infuteca.png">
+    <link rel="apple-touch-icon" href="https://i.ibb.co/TxfBrkt8/Infuteca.png">
+    <link rel="apple-touch-icon-precomposed" href="https://i.ibb.co/TxfBrkt8/Infuteca.png">
     <link rel="apple-touch-icon" sizes="180x180" href="https://i.ibb.co/TxfBrkt8/Infuteca.png">
     <link rel="apple-touch-icon" sizes="152x152" href="https://i.ibb.co/TxfBrkt8/Infuteca.png">
     <link rel="apple-touch-icon" sizes="120x120" href="https://i.ibb.co/TxfBrkt8/Infuteca.png">
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Infuteca","short_name":"Infuteca","display":"standalone","icons":[{"src":"https://i.ibb.co/TxfBrkt8/Infuteca.png","sizes":"192x192","type":"image/png"},{"src":"https://i.ibb.co/TxfBrkt8/Infuteca.png","sizes":"512x512","type":"image/png"}],"start_url":".","background_color":"#f8fafc","theme_color":"#f97316"}'>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Infuteca">
@@ -380,7 +383,8 @@
 
             <div class="form-group form-full">
                 <label>Lloc de compra</label>
-                <input type="text" id="form-shop" placeholder="Botiga...">
+                <input type="text" id="form-shop" list="shop-options" placeholder="Botiga...">
+                <datalist id="shop-options"></datalist>
             </div>
 
             <div class="form-group form-full">
@@ -402,6 +406,18 @@
         <div class="stats-grid" id="stats-content">
             <!-- Omplert per JS -->
         </div>
+    </div>
+</div>
+
+<!-- MODAL: TES OBLIDATS -->
+<div class="modal-overlay" id="forgotten-modal" onclick="if(event.target===this) app.closeModal('forgotten-modal')">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>🕸️ Tes Oblidats</h2>
+            <button class="close-btn" onclick="app.closeModal('forgotten-modal')">&times;</button>
+        </div>
+        <div id="forgotten-list-content" style="margin-bottom: 20px;"></div>
+        <button class="btn-primary" style="width:100%;" onclick="app.closeModal('forgotten-modal')">Tancar</button>
     </div>
 </div>
 
@@ -648,7 +664,17 @@ const app = {
         window.scrollTo({top:0, behavior:'smooth'});
     },
 
+    updateShopList() {
+        const shops = [...new Set(this.teas.map(t => t.shop).filter(Boolean))];
+        const dataList = document.getElementById('shop-options');
+        if(dataList) {
+            dataList.innerHTML = shops.map(shop => `<option value="${shop}">`).join('');
+        }
+    },
+
     renderCards() {
+        this.updateShopList();
+        
         const grid = document.getElementById('tea-grid');
         const empty = document.getElementById('empty-state');
         grid.innerHTML = '';
@@ -851,8 +877,30 @@ const app = {
             <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total</div></div>
             <div class="stat-card"><div class="stat-value">${avg}</div><div class="stat-label">Mitjana ⭐</div></div>
             <div class="stat-card"><div class="stat-value" style="color:#10b981">${inCart}</div><div class="stat-label">Cistella</div></div>
-            <div class="stat-card"><div class="stat-value" style="color:#ef4444">${forgotten}</div><div class="stat-label">Oblidats +6m</div></div>
+            <div class="stat-card" style="cursor:pointer; border-color:#fca5a5; background:#fef2f2;" onclick="app.openForgottenTeas()">
+                <div class="stat-value" style="color:#ef4444">${forgotten}</div>
+                <div class="stat-label" style="color:#ef4444">Oblidats +6m (Veure)</div>
+            </div>
         `;
+    },
+
+    openForgottenTeas() {
+        const forgotten = this.teas.filter(t => t.lastCartDate && (Date.now() - t.lastCartDate > 180*24*60*60*1000));
+        const content = document.getElementById('forgotten-list-content');
+        if (forgotten.length === 0) {
+            content.innerHTML = '<p style="text-align:center; color:#64748b;">No tens cap te oblidat fa més de 6 mesos!</p>';
+        } else {
+            content.innerHTML = forgotten.map(t => `
+                <div class="shopping-item">
+                    <div>
+                        <div style="font-weight:700">${t.name}</div>
+                        <div style="font-size:0.8rem; color:#64748b">${t.type} ${t.shop ? `· ${t.shop}` : ''}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        this.closeModal('stats-modal');
+        this.openModal('forgotten-modal');
     },
 
     // --- LLISTA COMPRA ---
