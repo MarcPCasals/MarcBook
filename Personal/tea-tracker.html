@@ -83,6 +83,7 @@
 
         button.btn-primary { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: transform 0.1s; }
         button.btn-primary:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.7; cursor: not-allowed; }
 
         /* === FILTRES COMPACTES === */
         .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -223,6 +224,7 @@
 <!-- LOGIN -->
 <div id="auth-screen">
     <div class="auth-box">
+        <!-- Substituïm emojis antics per la icona oficial a tot arreu -->
         <img src="https://i.ibb.co/TxfBrkt8/Infuteca.png" alt="Infuteca Logo">
         <h2>Infuteca</h2>
         <p id="auth-subtitle">Accedeix a la teva col·lecció de tes</p>
@@ -306,7 +308,9 @@
     
     <!-- Missatge buit -->
     <div id="empty-state" style="display:none; text-align:center; padding: 40px 20px; color: #94a3b8;">
-        <div style="font-size: 3rem; margin-bottom: 12px;">🫖</div>
+        <div style="font-size: 3rem; margin-bottom: 12px; filter: grayscale(100%); opacity: 0.5;">
+            <img src="https://i.ibb.co/TxfBrkt8/Infuteca.png" style="width: 64px; height: 64px; border-radius: 12px;">
+        </div>
         <p>No s'han trobat tes.</p>
     </div>
 </div>
@@ -465,7 +469,7 @@ const app = {
     authMode: 'login',
     editingId: null,
     formRating: 0,
-    currentFilter: 'all', // all, fav
+    currentFilter: 'all',
     
     typeColors: {
         'Te negre': 'type-negre', 'Te verd': 'type-verd', 'Te blanc': 'type-blanc',
@@ -487,6 +491,8 @@ const app = {
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 this.currentUser = user;
+                // Agafem la primera part del correu com a nom d'usuari
+                document.getElementById('user-info-name').textContent = user.email.split('@')[0];
                 document.getElementById('user-info-email').textContent = user.email;
                 this.showApp();
                 this.subscribeToData(user.uid); 
@@ -517,12 +523,25 @@ const app = {
         
         const { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } = window.firebaseServices;
         
+        // Efecte de càrrega al botó per millorar el feedback
+        const btn = document.getElementById('auth-submit-btn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Processant...';
+        btn.disabled = true;
+
         try {
             if (this.authMode === 'login') await signInWithEmailAndPassword(auth, email, password);
             else await createUserWithEmailAndPassword(auth, email, password);
         } catch (error) {
-            errorDiv.textContent = "Error: Verifica el correu i la contrasenya (mínim 6 caràcters).";
+            console.error("Auth error:", error);
+            errorDiv.textContent = "Error de connexió.";
+            if (error.code === 'auth/invalid-credential') errorDiv.textContent = "Correu o contrasenya incorrectes.";
+            if (error.code === 'auth/email-already-in-use') errorDiv.textContent = "Aquest correu ja està registrat.";
+            if (error.code === 'auth/weak-password') errorDiv.textContent = "La contrasenya ha de tenir mínim 6 caràcters.";
             errorDiv.style.display = 'block';
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
         }
     },
 
@@ -558,6 +577,12 @@ const app = {
     // --- RENDERING TARGETES ---
     setFilter(type) {
         this.currentFilter = type;
+        
+        // Actualitzar estat actiu als botons de navegació inferior
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        if (type === 'all') document.querySelectorAll('.nav-btn')[0].classList.add('active');
+        if (type === 'fav') document.querySelectorAll('.nav-btn')[1].classList.add('active');
+        
         this.renderCards();
         window.scrollTo({top:0, behavior:'smooth'});
     },
@@ -700,7 +725,6 @@ const app = {
         const type = document.getElementById('form-type').value;
         const def = this.defaultInfusions[type];
         if (def) {
-            // Auto-omplim només si està buit, o si estem creant de zero
             const timeInp = document.getElementById('form-time');
             const tempInp = document.getElementById('form-temp');
             if (!this.editingId || !timeInp.value) timeInp.value = def.time;
@@ -805,7 +829,7 @@ const app = {
         reader.onload = (ev) => {
             try {
                 const data = JSON.parse(ev.target.result);
-                if(Array.isArray(data) && confirm("Vols substituir les dades actuals?")) {
+                if(Array.isArray(data) && confirm("Vols substituir les dades actuals per aquest arxiu?")) {
                     this.teas = data; this.saveData(); this.renderCards();
                 }
             } catch (err) { alert("Arxiu invàlid."); }
@@ -814,6 +838,9 @@ const app = {
         reader.readAsText(file);
     }
 };
+
+// IMPORTANT: Fem accessible l'objecte app de manera global perquè l'HTML pugui cridar-lo lliurement
+window.app = app;
 
 if (window.firebaseServices) app.init();
 else window.addEventListener('firebase-ready', () => app.init());
