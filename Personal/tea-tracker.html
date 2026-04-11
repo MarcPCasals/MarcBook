@@ -496,16 +496,22 @@ const app = {
 
         // Escoltem directament els canvis sense blocar amb persistències manuals
         onAuthStateChanged(auth, (user) => {
-            if (user) {
-                this.currentUser = user;
-                // Agafem la primera part del correu com a nom d'usuari
-                document.getElementById('user-info-name').textContent = user.email.split('@')[0];
-                document.getElementById('user-info-email').textContent = user.email;
-                this.showApp();
-                this.subscribeToData(user.uid); 
-            } else {
-                this.currentUser = null;
-                if (this.unsubscribeSnapshot) this.unsubscribeSnapshot();
+            try {
+                if (user) {
+                    this.currentUser = user;
+                    this.showApp();
+                    this.subscribeToData(user.uid); 
+                } else {
+                    this.currentUser = null;
+                    if (this.unsubscribeSnapshot) {
+                        this.unsubscribeSnapshot();
+                        this.unsubscribeSnapshot = null;
+                    }
+                    this.showLogin();
+                }
+            } catch (error) {
+                console.error("Error processant el login:", error);
+                document.getElementById('loading-overlay').style.display = 'none';
                 this.showLogin();
             }
         });
@@ -589,28 +595,42 @@ const app = {
         const { db, doc, onSnapshot } = window.firebaseServices;
         document.getElementById('loading-overlay').style.display = 'flex';
 
-        this.unsubscribeSnapshot = onSnapshot(doc(db, "tea_collection", uid), (docSnap) => {
+        if (this.unsubscribeSnapshot) {
+            this.unsubscribeSnapshot();
+        }
+
+        try {
+            this.unsubscribeSnapshot = onSnapshot(doc(db, "tea_collection", uid), (docSnap) => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                if (docSnap.exists()) {
+                    this.teas = docSnap.data().teas || [];
+                } else {
+                    this.teas = [];
+                    this.saveData(); 
+                }
+                this.renderCards();
+                this.renderStats();
+            }, (error) => {
+                console.error("Error Firestore:", error);
+                document.getElementById('loading-overlay').style.display = 'none';
+                alert("Error al connectar amb el núvol.");
+            });
+        } catch (error) {
+            console.error("Error inicialitzant subscripció Firestore:", error);
             document.getElementById('loading-overlay').style.display = 'none';
-            if (docSnap.exists()) {
-                this.teas = docSnap.data().teas || [];
-            } else {
-                this.teas = [];
-                this.saveData(); 
-            }
-            this.renderCards();
-            this.renderStats();
-        }, (error) => {
-            console.error("Error Firestore:", error);
-            document.getElementById('loading-overlay').style.display = 'none';
-            alert("Error al connectar amb el núvol.");
-        });
+        }
     },
 
-    saveData() {
+    async saveData() {
         if (!this.currentUser) return;
         const { db, doc, setDoc } = window.firebaseServices;
-        setDoc(doc(db, "tea_collection", this.currentUser.uid), { teas: this.teas });
-        this.renderStats();
+        try {
+            await setDoc(doc(db, "tea_collection", this.currentUser.uid), { teas: this.teas });
+            this.renderStats();
+        } catch (error) {
+            console.error("Error desant dades a Firestore:", error);
+            alert("S'ha produït un error desant les dades.");
+        }
     },
 
     // --- RENDERING TARGETES ---
