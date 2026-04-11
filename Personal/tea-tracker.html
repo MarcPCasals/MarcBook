@@ -578,9 +578,29 @@ const app = {
     },
 
     login() {
+        if (!window.firebaseServices) {
+            alert("Els serveis del núvol s'estan carregant. Espera un segon i torna-ho a provar.");
+            return;
+        }
+
         const { auth, provider, signInWithPopup } = window.firebaseServices;
+        
+        // Força que sempre demani el compte, solucionant problemes de sessions encallades al navegador
+        provider.setCustomParameters({ prompt: 'select_account' });
+        
         signInWithPopup(auth, provider)
-            .catch(error => console.error("Error en iniciar sessió:", error));
+            .catch(e => {
+                console.error("Error en iniciar sessió:", e);
+                if (e.code === 'auth/configuration-not-found') {
+                    alert("⚠️ ACCÉS AMB GOOGLE DESACTIVAT A FIREBASE ⚠️\n\nAquest error passa perquè has de configurar Firebase. Segueix aquests passos:\n\n1. Ves a console.firebase.google.com i entra al teu projecte.\n2. Al menú lateral, clica a 'Authentication' i després a la pestanya 'Sign-in method'.\n3. Clica 'Add new provider', selecciona 'Google', activa'l (Enable) i posa el teu correu de suport.\n4. Guarda els canvis.");
+                } else if (window.location.protocol === 'file:' || e.code === 'auth/unauthorized-domain') {
+                    alert("⚠️ DOMINI NO AUTORITZAT O ARXIU LOCAL\n\nPerquè funcioni a GitHub o al teu ordinador local, has d'autoritzar el domini.\n\n1. Ves a Firebase Console -> Authentication -> Settings -> Authorized domains.\n2. Afegeix la teva adreça de GitHub (o localhost).");
+                } else if (e.code === 'auth/popup-blocked') {
+                    alert("⚠️ El navegador ha bloquejat la finestra emergent. Si us plau, permet els popups a la barra d'adreces per poder iniciar sessió.");
+                } else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+                    alert("❌ S'ha produït un error al iniciar sessió: " + e.message);
+                }
+            });
     },
 
     logout() {
