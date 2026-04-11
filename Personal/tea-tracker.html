@@ -84,6 +84,23 @@
         .auth-box h2 { margin-bottom: 12px; font-size: 1.8rem; }
         .auth-box p { color: var(--text-muted); margin-bottom: 24px; line-height: 1.6; }
         
+        /* === MODAL STANDALONE iOS === */
+        #standalone-warning {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.85); display: none; justify-content: center; align-items: center; z-index: 5000;
+            backdrop-filter: blur(4px); padding: 20px;
+        }
+        .standalone-box {
+            background: white; width: 100%; max-width: 420px; border-radius: var(--radius);
+            padding: 30px 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center;
+            border-top: 6px solid #f59e0b;
+            animation: modalFadeIn 0.3s ease;
+        }
+        .standalone-icon { font-size: 3.5rem; margin-bottom: 12px; }
+        .standalone-box h3 { color: #1e293b; margin-bottom: 16px; font-size: 1.3rem; }
+        .standalone-box p { color: var(--text-muted); margin-bottom: 24px; line-height: 1.5; font-size: 0.95rem; }
+        .standalone-box .highlight { background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255,255,255,0.8); z-index: 3000;
@@ -425,6 +442,22 @@
     </div>
 </div>
 
+<!-- MODAL AVÍS STANDALONE PWA (Ocult per defecte) -->
+<div id="standalone-warning">
+    <div class="standalone-box">
+        <div class="standalone-icon">⚠️</div>
+        <h3>Atenció: Inici de sessió bloquejat</h3>
+        <p>⚠️ Per iniciar sessió per primera vegada, obre aquesta app amb Safari o Chrome.</p>
+        <p>El mode app de l'iPhone <span class="highlight">no permet completar el login</span> correctament a causa de la navegació segura.</p>
+        <button class="btn-primary" onclick="window.location.href = window.location.href;" style="width: 100%; justify-content: center; margin-top: 10px; padding: 14px; background: #0ea5e9; border-color: #0ea5e9;">
+            🧭 Obrir en Safari
+        </button>
+        <button onclick="document.getElementById('standalone-warning').style.display = 'none'" style="width: 100%; justify-content: center; margin-top: 12px; background: transparent; border: none; color: var(--text-muted); padding: 10px;">
+            Cancel·lar
+        </button>
+    </div>
+</div>
+
 <!-- OVERLAY DE CÀRREGA -->
 <div id="loading-overlay" class="loading-overlay">
     <div class="spinner"></div>
@@ -634,6 +667,9 @@ const app = {
     currentUser: null,
     unsubscribeSnapshot: null, 
     
+    // 1. DETECTAR MODE APP (STANDALONE)
+    isStandalone: window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches,
+    
     typeColors: {
         'Te negre': 'type-negre',
         'Te verd': 'type-verd',
@@ -645,7 +681,7 @@ const app = {
         'Altres': ''
     },
 
-    // AUTO-COMPLETAT INTEL·LIGENT (Actualitzat Temps 10 minuts)
+    // AUTO-COMPLETAT INTEL·LIGENT
     defaultInfusions: {
         'Te negre': { time: 3, temp: 95 },
         'Te verd': { time: 2, temp: 80 },
@@ -660,10 +696,8 @@ const app = {
         const { auth, onAuthStateChanged, setPersistence, browserLocalPersistence, getRedirectResult } = window.firebaseServices;
         
         try {
-            // 3. PERSISTÈNCIA CONFIGURADA ABANS DE RES
             await setPersistence(auth, browserLocalPersistence);
             
-            // 2. GESTIONAR EL RETORN DEL REDIRECT
             const result = await getRedirectResult(auth);
             if (result && result.user) {
                 console.log("Usuari logat via redirect:", result.user);
@@ -672,7 +706,6 @@ const app = {
             console.error("Error durant el procés de login/persistència:", error);
         }
 
-        // Escoltar l'estat d'autenticació (Això s'executarà just després del redirect o si ja estava guardat)
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 this.currentUser = user;
@@ -687,7 +720,14 @@ const app = {
         });
     },
 
+    // 5. MODIFICAR FUNCIÓ LOGIN (BLOQUEIG STANDALONE)
     login() {
+        // 2 & 6. BLOQUEIG I CONTROL D'ESTAT (Només si no està logat i està en standalone)
+        if (this.isStandalone && !this.currentUser) {
+            document.getElementById('standalone-warning').style.display = 'flex';
+            return;
+        }
+
         if (!window.firebaseServices) {
             alert("Els serveis del núvol s'estan carregant. Espera un segon i torna-ho a provar.");
             return;
@@ -695,7 +735,6 @@ const app = {
 
         const { auth, provider, signInWithRedirect } = window.firebaseServices;
         
-        // 1. LOGIN AMB REDIRECT
         provider.setCustomParameters({ prompt: 'select_account' });
         signInWithRedirect(auth, provider).catch(e => {
             console.error("Error iniciant el redirect:", e);
@@ -790,11 +829,9 @@ const app = {
         });
 
         filteredTeas.sort((a, b) => {
-            // 1. Agrupar sempre primer per tipus de te
             if (a.type < b.type) return -1;
             if (a.type > b.type) return 1;
 
-            // 2. Ordenació secundària (el que hagi escollit l'usuari)
             let valA = a[this.sortCol] || '';
             let valB = b[this.sortCol] || '';
             
@@ -824,7 +861,6 @@ const app = {
             else if (tea.rating === 3) ratingClass = 'rating-mid';
             else if (tea.rating >= 4) ratingClass = 'rating-high';
 
-            // Comprovacions per si són tes antics sense la propietat configurada
             const sTemp = tea.serveTemp || (['Te negre', 'Te vermell', 'Te blau (oolong)'].includes(tea.type) ? 'Calent' : 'Calent i fred');
             const hasMilk = tea.withMilk || false;
             const isFav = tea.favorite || false;
@@ -834,7 +870,6 @@ const app = {
             tr.dataset.id = tea.id; 
             tr.title = `Notes: ${tea.notes || 'Sense notes'}\nInfusió: ${tea.time || '?'} min a ${tea.temp || '?'}ºC`;
 
-            // Afegim els atributs data-label per al mode Card-View en mòbils
             tr.innerHTML = `
                 <td data-label="Preferit" style="text-align:center; cursor:pointer;" onclick="app.updateField(${tea.id}, 'favorite', ${!isFav}); app.renderTable()">
                     <span style="font-size: 1.2rem; filter: ${isFav ? 'none' : 'grayscale(100%) opacity(30%)'}; transition: all 0.2s;" title="Marcar com preferit">❤️</span>
@@ -939,17 +974,14 @@ const app = {
         if (tea) {
             tea[field] = value;
             
-            // Si la marquem com a cistella, guardem la data actual per poder fer l'estadística de 6 mesos
             if (field === 'inCart' && value === true) {
                 tea.lastCartDate = Date.now();
             }
 
-            // AUTO-UPDATE Temps, Temperatura i manera de Servir segons el Tipus
             if (field === 'type' && this.defaultInfusions[value]) {
                 tea.time = this.defaultInfusions[value].time;
                 tea.temp = this.defaultInfusions[value].temp;
                 
-                // Els negres, vermells i blaus per defecte són calents.
                 if (['Te negre', 'Te vermell', 'Te blau (oolong)'].includes(value)) {
                     tea.serveTemp = 'Calent';
                 } else {
@@ -968,7 +1000,6 @@ const app = {
         }
     },
 
-    // 5. ESTADÍSTIQUES I DASHBOARD
     renderStats() {
         const container = document.getElementById('stats-container');
         const total = this.teas.length;
@@ -978,7 +1009,6 @@ const app = {
 
         const inCart = this.teas.filter(t => t.inCart).length;
 
-        // Estadística de Tes Oblidats (> 6 mesos, exactament 180 dies)
         const sixMonthsMs = 180 * 24 * 60 * 60 * 1000; 
         const now = Date.now();
         const forgotten = this.teas.filter(t => t.lastCartDate && (now - t.lastCartDate > sixMonthsMs)).length;
@@ -1057,7 +1087,6 @@ const app = {
         this.renderTable();
     },
 
-    // TAST RÀPID
     openQuickTasting() {
         this.qtRating = 0;
         document.getElementById('qt-name').value = '';
@@ -1114,7 +1143,6 @@ const app = {
         this.closeQuickTasting();
     },
 
-    // LLISTA DE COMPRA
     openShoppingList() {
         const modal = document.getElementById('cart-modal');
         const content = document.getElementById('shopping-list-content');
@@ -1148,7 +1176,6 @@ const app = {
         this.renderTable(); 
     },
 
-    // EXPORTAR I IMPORTAR JSON
     exportData() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.teas));
         const downloadAnchorNode = document.createElement('a');
