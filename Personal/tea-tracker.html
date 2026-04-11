@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La meva col·lecció de tes</title>
+    <style>
+        /* === VARIABLES I ESTILS BASE === */
+        :root {
+            --primary: #f97316; /* Taronja principal */
+            --primary-hover: #ea580c;
+            --primary-light: #fff7ed;
+            --bg-color: #f8fafc;
+            --text-main: #334155;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --radius: 12px;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        h1, h2, h3 { color: #1e293b; }
+
+        /* === DISSENY DEL CONTENIDOR I CAPÇALERA === */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            background: white;
+            padding: 24px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border-top: 5px solid var(--primary);
+            transition: all 0.3s ease;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header-title { display: flex; align-items: center; gap: 12px; font-size: 1.8rem; }
+        
+        .header-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+
+        /* === PERFIL USUARI === */
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-left: 20px;
+            border-left: 2px solid var(--border-color);
+        }
+        .user-details { text-align: right; }
+        .user-name { font-weight: 600; font-size: 0.95rem; color: #1e293b; }
+        .user-email { font-size: 0.75rem; color: var(--text-muted); }
+        .btn-logout { background: #f1f5f9; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; color: var(--text-muted); transition: background 0.2s; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+        .btn-logout:hover { background: #fee2e2; color: #991b1b; }
+
+        /* === PANTALLA LOGIN I CÀRREGA === */
+        #auth-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color); z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .auth-box {
+            background: white; padding: 40px; border-radius: var(--radius);
+            box-shadow: var(--shadow); text-align: center; max-width: 450px;
+            border-top: 5px solid var(--primary);
+        }
+        .auth-box h2 { margin-bottom: 12px; font-size: 1.8rem; }
+        .auth-box p { color: var(--text-muted); margin-bottom: 24px; line-height: 1.6; }
+        
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8); z-index: 3000;
+            display: none; justify-content: center; align-items: center; flex-direction: column;
+            backdrop-filter: blur(3px);
+        }
+        .spinner {
+            border: 4px solid rgba(249, 115, 22, 0.2); border-left-color: var(--primary);
+            border-radius: 50%; width: 48px; height: 48px; animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* === ESTADÍSTIQUES === */
+        .stats-grid {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: var(--primary-light);
+            border: 1px solid #fed7aa;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+            transition: transform 0.2s ease;
+        }
+        .stat-card:hover { transform: translateY(-2px); }
+
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: var(--primary-hover); }
+        .stat-label { font-size: 0.8rem; color: #9a3412; text-transform: uppercase; font-weight: 600; }
+
+        /* === 3. TARGETES DESTACADES (DASHBOARD) === */
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .dash-card {
+            background: white;
+            padding: 16px 20px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--primary);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .dash-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px -5px rgba(0,0,0,0.08);
+        }
+        .dash-card-title { font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .dash-card-value { font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dash-card-sub { font-size: 0.85rem; color: var(--text-muted); }
+
+        /* === CONTROLS I FILTRES === */
+        .controls {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            background: white;
+            padding: 16px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            align-items: center;
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+        .control-group label { font-size: 0.8rem; font-weight: bold; color: var(--text-muted); }
+        
+        input[type="text"], input[type="number"], select {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: white;
+        }
+        
+        input:focus, select:focus { 
+            border-color: var(--primary); 
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1); 
+        }
+
+        /* Botons amb millor feedback */
+        button {
+            padding: 10px 16px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-main);
+        }
+
+        button:hover { background: #f1f5f9; transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        button:active { transform: translateY(0); }
+        
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        
+        .btn-secondary { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+        .btn-secondary:hover { background: #bae6fd; }
+
+        .btn-danger { background: #fee2e2; color: #991b1b; border-color: #fecaca; padding: 6px 10px; }
+        .btn-danger:hover { background: #fca5a5; }
+
+        .btn-cart { background: #ecfdf5; color: #166534; border-color: #bbf7d0; }
+        .btn-cart:hover { background: #dcfce7; }
+
+        /* === TAULA PRINCIPAL === */
+        .table-wrapper {
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow-x: auto;
+        }
+
+        table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+        
+        th {
+            background: #f8fafc;
+            padding: 14px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 2px solid var(--border-color);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+        
+        th:hover { background: #f1f5f9; color: var(--primary); }
+        th .sort-icon { font-size: 0.8rem; margin-left: 4px; color: var(--primary); }
+
+        /* Transició color fila */
+        tr { transition: background-color 0.4s ease; }
+        td { padding: 10px 14px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+        
+        td input[type="text"], td input[type="number"], td select {
+            width: 100%;
+            background: transparent;
+            border: 1px solid transparent;
+            padding: 6px;
+            transition: all 0.2s;
+        }
+        td input:hover, td select:hover, td input:focus, td select:focus {
+            border-color: rgba(0,0,0,0.15);
+            background: rgba(255,255,255,0.7);
+        }
+
+        /* === CODIFICACIÓ VISUAL (Colors per Tipus) === */
+        .type-negre { background-color: #f3f4f6; color: #1f2937; }
+        .type-blanc { background-color: #fafafa; color: #1f2937; }
+        .type-vermell { background-color: #fef2f2; color: #991b1b; }
+        .type-blau { background-color: #eff6ff; color: #1e40af; }
+        .type-verd { background-color: #f0fdf4; color: #166534; }
+        .type-rooibos { background-color: #fff7ed; color: #9a3412; }
+        .type-infusio { background-color: #f8fafc; color: #374151; }
+
+        /* === INDICADOR VISUAL DE QUALITAT === */
+        .rating-cell { transition: background-color 0.3s; }
+        .rating-low { background-color: rgba(254, 226, 226, 0.6) !important; }
+        .rating-mid { background-color: rgba(254, 252, 232, 0.6) !important; }
+        .rating-high { background-color: rgba(220, 252, 231, 0.6) !important; }
+
+        /* === BADGES PER BOTIGUES === */
+        .shop-badge {
+            border-radius: 999px !important;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.85rem !important;
+            padding: 4px 10px !important;
+            border: 1px solid rgba(0,0,0,0.05) !important;
+        }
+
+        /* === SISTEMA D'ESTRELLES I MICROANIMACIONS === */
+        .stars { display: inline-flex; gap: 2px; cursor: pointer; }
+        .star { font-size: 1.2rem; color: #cbd5e1; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s; }
+        .star.active { color: #f59e0b; }
+        .star:hover ~ .star { color: #cbd5e1 !important; }
+        .stars:hover .star { color: #fcd34d; }
+        
+        /* Efecte "pop" en clicar estrelles */
+        @keyframes pop { 
+            0% { transform: scale(1); } 
+            50% { transform: scale(1.5); } 
+            100% { transform: scale(1); } 
+        }
+        .star-pop { animation: pop 0.3s ease; color: #f59e0b !important; }
+
+        /* Animació suau en afegir nova fila */
+        @keyframes fadeInRow { 
+            from { opacity: 0; transform: translateY(-10px); background-color: var(--primary-light); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        .new-row { animation: fadeInRow 0.6s ease forwards; }
+
+        /* === CHECKBOX CISTELLA === */
+        .cart-checkbox {
+            appearance: none; width: 24px; height: 24px; border: 2px solid #cbd5e1;
+            border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            background: white; transition: all 0.2s;
+        }
+        .cart-checkbox:checked { background: #10b981; border-color: #10b981; }
+        .cart-checkbox:checked::after { content: '🛒'; font-size: 14px; }
+
+        /* === MODALS === */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.6); display: none; justify-content: center; align-items: center; z-index: 1000;
+            backdrop-filter: blur(2px);
+        }
+        .modal {
+            background: white; width: 90%; max-width: 500px; border-radius: var(--radius);
+            padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 90vh; overflow-y: auto;
+            animation: modalFadeIn 0.3s ease;
+        }
+        @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid var(--primary); padding-bottom: 10px;}
+        .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); padding: 0; }
+        .close-btn:hover { color: var(--text-main); transform: scale(1.1); background: transparent; box-shadow: none; }
+        .shopping-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+        .shopping-item input[type="number"] { width: 80px; text-align: right; }
+        
+        .modal-form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+        .modal-form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+        .modal-form-group input { width: 100%; }
+    </style>
+</head>
+<body>
+
+<!-- PANTALLA D'AUTENTICACIÓ -->
+<div id="auth-screen">
+    <div class="auth-box">
+        <h2>🍵 Col·lecció de Tes</h2>
+        <p>Inicia sessió per utilitzar la teva col·lecció de tes, accedir a les dades des de qualsevol dispositiu i guardar el teu registre al núvol de forma segura.</p>
+        <button class="btn-primary" onclick="app.login()" style="width: 100%; justify-content: center; font-size: 1.1rem; padding: 14px;">
+            <svg viewBox="0 0 24 24" width="24" height="24" style="margin-right: 8px;"><path fill="#ffffff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#ffffff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#ffffff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#ffffff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Iniciar sessió amb Google
+        </button>
+    </div>
+</div>
+
+<!-- OVERLAY DE CÀRREGA -->
+<div id="loading-overlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <p style="color: var(--text-muted); font-weight: 600; font-size: 1.1rem;">Sincronitzant amb el núvol...</p>
+</div>
+
+<!-- CONTINGUT PRINCIPAL (Ocult inicialment) -->
+<div class="container" id="app-content" style="display: none;">
+    <!-- CAPÇALERA I ESTADÍSTIQUES -->
+    <header class="header">
+        <div class="header-title">
+            🍵 <h1>La meva col·lecció de tes</h1>
+        </div>
+        <div class="header-actions">
+            <div class="stats-grid" id="stats-container">
+                <!-- S'omple amb JS -->
+            </div>
+            
+            <div class="user-profile">
+                <div class="user-details">
+                    <div id="user-info-name" class="user-name">Carregant...</div>
+                    <div id="user-info-email" class="user-email">...</div>
+                </div>
+                <button class="btn-logout" onclick="app.logout()" title="Tancar sessió">
+                    🚪 Surt
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 3. TARGETES DESTACADES (NOVA SECCIÓ) -->
+    <div class="dashboard-cards" id="top-dashboard">
+        <!-- S'omple amb JS -->
+    </div>
+
+    <!-- CONTROLS I FILTRES -->
+    <div class="controls">
+        <button class="btn-primary" onclick="app.addTea()">➕ Nou Te</button>
+        <!-- 4. MODE TAST RÀPID -->
+        <button class="btn-secondary" onclick="app.openQuickTasting()">⚡ Tast ràpid</button>
+        
+        <div class="control-group">
+            <input type="text" id="filter-name" placeholder="🔍 Cercar per nom..." oninput="app.renderTable()">
+        </div>
+        
+        <div class="control-group">
+            <select id="filter-type" onchange="app.renderTable()">
+                <option value="">Tots els tipus</option>
+                <option value="Te negre">Te negre</option>
+                <option value="Te verd">Te verd</option>
+                <option value="Te blanc">Te blanc</option>
+                <option value="Te vermell">Te vermell</option>
+                <option value="Te blau (oolong)">Te blau (oolong)</option>
+                <option value="Rooibos">Rooibos</option>
+                <option value="Infusió">Infusió</option>
+                <option value="Altres">Altres</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <select id="filter-rating" onchange="app.renderTable()">
+                <option value="0">Totes les valoracions</option>
+                <option value="5">⭐⭐⭐⭐⭐ 5 estrelles</option>
+                <option value="4">⭐⭐⭐⭐ Mínim 4</option>
+                <option value="3">⭐⭐⭐ Mínim 3</option>
+            </select>
+        </div>
+
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; color:var(--text-muted)">
+            <input type="checkbox" id="filter-cart" onchange="app.renderTable()" style="width:18px;height:18px;">
+            Només cistella
+        </label>
+
+        <div style="flex-grow: 1;"></div> <!-- Espaiador -->
+
+        <button class="btn-cart" onclick="app.openShoppingList()">🛒 Llista de compra</button>
+        <button onclick="app.exportData()">💾 Exportar</button>
+        <button onclick="document.getElementById('import-file').click()">📂 Importar</button>
+        <input type="file" id="import-file" style="display:none;" accept=".json" onchange="app.importData(event)">
+    </div>
+
+    <!-- TAULA PRINCIPAL -->
+    <div class="table-wrapper">
+        <table id="tea-table">
+            <thead>
+                <tr>
+                    <th onclick="app.sort('name')">Nom del te <span class="sort-icon" id="sort-name"></span></th>
+                    <th onclick="app.sort('type')">Tipus <span class="sort-icon" id="sort-type"></span></th>
+                    <th onclick="app.sort('rating')" style="min-width: 130px;">Valoració <span class="sort-icon" id="sort-rating"></span></th>
+                    <th onclick="app.sort('time')" style="width: 80px;" title="Temps d'infusió en minuts">Temps <span class="sort-icon" id="sort-time"></span></th>
+                    <th onclick="app.sort('temp')" style="width: 80px;" title="Temperatura en ºC">Temp. <span class="sort-icon" id="sort-temp"></span></th>
+                    <th onclick="app.sort('shop')">Botiga <span class="sort-icon" id="sort-shop"></span></th>
+                    <th>Notes</th>
+                    <th style="text-align: center;">Comprar</th>
+                    <th>Accions</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                <!-- S'omple dinàmicament amb JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Llista interactiva per botigues -->
+<datalist id="shop-options"></datalist>
+
+<!-- MODAL LLISTA DE COMPRA -->
+<div class="modal-overlay" id="cart-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>🛒 Llista de la compra</h2>
+            <button class="close-btn" onclick="app.closeShoppingList()">&times;</button>
+        </div>
+        <p style="margin-bottom: 16px; color: var(--text-muted); font-size: 0.9rem;">
+            Aquests són els tes que has marcat per recomprar. Indica la quantitat en grams.
+        </p>
+        <div id="shopping-list-content">
+            <!-- Omplert per JS -->
+        </div>
+        <div style="margin-top: 20px; text-align: right;">
+            <button class="btn-primary" onclick="app.closeShoppingList()" style="display: inline-block;">Tancar i Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL TAST RÀPID -->
+<div class="modal-overlay" id="quick-taste-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 style="color: #0369a1;">⚡ Tast Ràpid</h2>
+            <button class="close-btn" onclick="app.closeQuickTasting()">&times;</button>
+        </div>
+        <div class="modal-form-group">
+            <label>Nom del te</label>
+            <input type="text" id="qt-name" placeholder="Ex: Sencha Japonès Premium">
+        </div>
+        <div class="modal-form-group">
+            <label>Valoració</label>
+            <div id="qt-stars" class="stars" style="font-size: 1.5rem;">
+                <!-- S'omple amb JS -->
+            </div>
+        </div>
+        <div class="modal-form-group">
+            <label>Notes de tast</label>
+            <input type="text" id="qt-notes" placeholder="Gust herbaci, molt suau...">
+        </div>
+        <div style="text-align: right; margin-top: 24px;">
+            <button class="btn-primary" onclick="app.saveQuickTasting()" style="display: inline-block; width: 100%; justify-content: center;">Guardar Tast 🍵</button>
+        </div>
+    </div>
+</div>
+
+<!-- 1. AFEGIR SCRIPTS FIREBASE I EXPORTAR AL WINDOW -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBl_w8TEzlqjbU4dRv39vqq7_TuvsDUg18",
+        authDomain: "tea-tracker-d4d03.firebaseapp.com",
+        projectId: "tea-tracker-d4d03",
+        storageBucket: "tea-tracker-d4d03.firebasestorage.app",
+        messagingSenderId: "457918393046",
+        appId: "1:457918393046:web:f16a8e2d3a63c536317777"
+    };
+
+    const appFirebase = initializeApp(firebaseConfig);
+    const auth = getAuth(appFirebase);
+    const db = getFirestore(appFirebase);
+    const provider = new GoogleAuthProvider();
+
+    // Fem els serveis accessibles globalment pel script principal sense bundlers
+    window.firebaseServices = { auth, db, provider, signInWithPopup, onAuthStateChanged, signOut, doc, setDoc, getDoc, onSnapshot };
+    
+    // Avisem a l'aplicació que Firebase ja està carregat i disponible a window
+    window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
+<!-- SCRIPT PRINCIPAL DE L'APLICACIÓ (Sense modules) -->
+<script>
+/**
+ * === APLICACIÓ PRINCIPAL ===
+ */
+const app = {
+    // Dades i estat
+    teas: [],
+    sortCol: 'name',
+    sortAsc: true,
+    lastAddedId: null, 
+    qtRating: 0, 
+    currentUser: null,
+    unsubscribeSnapshot: null, // Per escoltar canvis en temps real
+    
+    // Opcions de tipus de te (per a mapejar colors)
+    typeColors: {
+        'Te negre': 'type-negre',
+        'Te verd': 'type-verd',
+        'Te blanc': 'type-blanc',
+        'Te vermell': 'type-vermell',
+        'Te blau (oolong)': 'type-blau',
+        'Rooibos': 'type-rooibos',
+        'Infusió': 'type-infusio',
+        'Altres': ''
+    },
+
+    // AUTO-COMPLETAT INTEL·LIGENT
+    defaultInfusions: {
+        'Te negre': { time: 3, temp: 95 },
+        'Te verd': { time: 2, temp: 80 },
+        'Te blanc': { time: 5, temp: 75 },
+        'Te vermell': { time: 4, temp: 95 },
+        'Te blau (oolong)': { time: 3, temp: 85 },
+        'Rooibos': { time: 5, temp: 100 },
+        'Infusió': { time: 5, temp: 95 }
+    },
+
+    // 1. INICIALITZACIÓ I AUTENTICACIÓ
+    init() {
+        const { auth, onAuthStateChanged } = window.firebaseServices;
+        
+        // Escoltar l'estat d'autenticació
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                this.currentUser = user;
+                this.updateUserInfo(user);
+                this.showApp();
+                this.subscribeToData(user.uid); // Començar escolta en temps real
+            } else {
+                this.currentUser = null;
+                if (this.unsubscribeSnapshot) this.unsubscribeSnapshot();
+                this.showLogin();
+            }
+        });
+    },
+
+    login() {
+        const { auth, provider, signInWithPopup } = window.firebaseServices;
+        signInWithPopup(auth, provider)
+            .catch(error => console.error("Error en iniciar sessió:", error));
+    },
+
+    logout() {
+        const { auth, signOut } = window.firebaseServices;
+        signOut(auth).catch(error => console.error("Error en tancar sessió:", error));
+    },
+
+    showLogin() {
+        document.getElementById('auth-screen').style.display = 'flex';
+        document.getElementById('app-content').style.display = 'none';
+        document.getElementById('loading-overlay').style.display = 'none';
+    },
+
+    showApp() {
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+    },
+
+    updateUserInfo(user) {
+        document.getElementById('user-info-name').textContent = user.displayName || 'Usuari';
+        document.getElementById('user-info-email').textContent = user.email;
+    },
+
+    // 2. GESTIÓ DE DADES: CONNEXIÓ A FIRESTORE (Temps real, sense localStorage)
+    subscribeToData(uid) {
+        const { db, doc, onSnapshot } = window.firebaseServices;
+        const docRef = doc(db, "tea_collection", uid);
+        
+        document.getElementById('loading-overlay').style.display = 'flex';
+
+        // L'escoltador onSnapshot s'executarà de fons quan s'actualitzi des d'altres dispositius
+        this.unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+            document.getElementById('loading-overlay').style.display = 'none';
+            
+            if (docSnap.exists()) {
+                this.teas = docSnap.data().teas || [];
+                // Re-renderitzar interfície completa quan rep dades noves del núvol
+                this.renderTable();
+                this.renderStats();
+                this.renderDashboard();
+                this.updateDatalist();
+            } else {
+                // Si el document no existeix al núvol, el creem buit/defecte
+                this.teas = [
+                    { id: Date.now(), name: 'Earl Grey Superior', type: 'Te negre', rating: 5, time: 3, temp: 95, shop: 'Tea Shop', notes: 'Perfecte per esmorzar amb una gota de llet.', inCart: false, grams: 0 },
+                    { id: Date.now()+1, name: 'Pai Mu Tan', type: 'Te blanc', rating: 4, time: 5, temp: 75, shop: 'Tetere', notes: 'Molt suau, notes florals.', inCart: true, grams: 100 }
+                ];
+                this.saveData(); // Escriurà a Firestore per primer cop
+            }
+        }, (error) => {
+            console.error("Error obtenint dades de Firestore:", error);
+            document.getElementById('loading-overlay').style.display = 'none';
+            alert("S'ha produït un error al carregar les teves dades des del núvol.");
+        });
+    },
+
+    saveData() {
+        if (!this.currentUser) return;
+        
+        const { db, doc, setDoc } = window.firebaseServices;
+        const docRef = doc(db, "tea_collection", this.currentUser.uid);
+        
+        // Desem l'array sencer directament al document de l'usuari (Substitueix LocalStorage)
+        setDoc(docRef, { teas: this.teas })
+            .catch(err => console.error("Error guardant a Firestore:", err));
+        
+        // L'esdeveniment onSnapshot actualitzarà la taula, 
+        // però refresquem algunes coses visuals ara per donar feedback immediat
+        this.renderStats();
+        this.renderDashboard();
+        this.updateDatalist();
+    },
+
+    // 3. RENDERITZACIÓ DE LA TAULA I FILTRES
+    renderTable() {
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+
+        const filterName = document.getElementById('filter-name').value.toLowerCase();
+        const filterType = document.getElementById('filter-type').value;
+        const filterRating = parseInt(document.getElementById('filter-rating').value);
+        const filterCart = document.getElementById('filter-cart').checked;
+
+        let filteredTeas = this.teas.filter(tea => {
+            if (filterName && !tea.name.toLowerCase().includes(filterName)) return false;
+            if (filterType && tea.type !== filterType) return false;
+            if (filterRating > 0 && tea.rating < filterRating) return false;
+            if (filterCart && !tea.inCart) return false;
+            return true;
+        });
+
+        filteredTeas.sort((a, b) => {
+            let valA = a[this.sortCol] || '';
+            let valB = b[this.sortCol] || '';
+            
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+
+            if (valA < valB) return this.sortAsc ? -1 : 1;
+            if (valA > valB) return this.sortAsc ? 1 : -1;
+            return 0;
+        });
+
+        if (filteredTeas.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 30px; color: #64748b;">No s'han trobat tes amb aquests filtres.</td></tr>`;
+            return;
+        }
+
+        filteredTeas.forEach(tea => {
+            let colorClass = this.typeColors[tea.type] || '';
+            
+            if (tea.id === this.lastAddedId) {
+                colorClass += ' new-row';
+                this.lastAddedId = null; 
+            }
+
+            let ratingClass = '';
+            if (tea.rating === 1 || tea.rating === 2) ratingClass = 'rating-low';
+            else if (tea.rating === 3) ratingClass = 'rating-mid';
+            else if (tea.rating >= 4) ratingClass = 'rating-high';
+
+            const tr = document.createElement('tr');
+            tr.className = colorClass;
+            tr.dataset.id = tea.id; 
+            tr.title = `Notes: ${tea.notes || 'Sense notes'}\nInfusió: ${tea.time || '?'} min a ${tea.temp || '?'}ºC`;
+
+            tr.innerHTML = `
+                <td><input type="text" value="${tea.name}" onchange="app.updateField(${tea.id}, 'name', this.value)" placeholder="Nom..."></td>
+                <td>
+                    <select onchange="app.updateField(${tea.id}, 'type', this.value);">
+                        ${Object.keys(this.typeColors).map(t => `<option value="${t}" ${tea.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="rating-cell ${ratingClass}">${this.generateStars(tea.id, tea.rating)}</td>
+                <td><input type="number" value="${tea.time || ''}" min="1" max="20" onchange="app.updateField(${tea.id}, 'time', this.value)" placeholder="Min"></td>
+                <td><input type="number" value="${tea.temp || ''}" min="20" max="100" onchange="app.updateField(${tea.id}, 'temp', this.value)" placeholder="ºC"></td>
+                <td>
+                    <input type="text" list="shop-options" value="${tea.shop || ''}" 
+                           onchange="app.updateField(${tea.id}, 'shop', this.value);" 
+                           placeholder="Botiga..."
+                           class="shop-badge"
+                           style="background-color: ${this.getBadgeColor(tea.shop)};">
+                </td>
+                <td><input type="text" value="${tea.notes || ''}" onchange="app.updateField(${tea.id}, 'notes', this.value)" placeholder="Notes de tast..."></td>
+                <td style="text-align:center;">
+                    <input type="checkbox" class="cart-checkbox" ${tea.inCart ? 'checked' : ''} onchange="app.updateField(${tea.id}, 'inCart', this.checked)">
+                </td>
+                <td>
+                    <button class="btn-danger" onclick="app.deleteTea(${tea.id})" title="Eliminar">🗑️</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        this.renderStats();
+        this.renderDashboard();
+    },
+
+    getBadgeColor(shopName) {
+        if (!shopName || shopName.trim() === '') return 'transparent';
+        const colors = ['#e0f2fe', '#dcfce7', '#fef3c7', '#ffedd5', '#f3e8ff', '#ffe4e6'];
+        let hash = 0;
+        for (let i = 0; i < shopName.length; i++) hash = shopName.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    },
+
+    generateStars(id, currentRating) {
+        let html = '<div class="stars">';
+        for (let i = 1; i <= 5; i++) {
+            const isActive = i <= currentRating ? 'active' : '';
+            html += `<span class="star ${isActive}" onclick="app.starClick(event, ${id}, ${i})">★</span>`;
+        }
+        html += '</div>';
+        return html;
+    },
+
+    starClick(event, id, rating) {
+        const starEl = event.target;
+        starEl.classList.add('star-pop');
+        setTimeout(() => {
+            starEl.classList.remove('star-pop');
+            this.updateField(id, 'rating', rating);
+        }, 300);
+    },
+
+    // 4. ACCIONS CRUD
+    addTea() {
+        const newTea = {
+            id: Date.now(),
+            name: '',
+            type: 'Te negre',
+            rating: 0,
+            time: this.defaultInfusions['Te negre'].time, 
+            temp: this.defaultInfusions['Te negre'].temp, 
+            shop: '',
+            notes: '',
+            inCart: false,
+            grams: 0
+        };
+        this.teas.unshift(newTea);
+        this.lastAddedId = newTea.id; 
+        document.getElementById('filter-name').value = '';
+        this.saveData(); 
+        // No cridem renderTable aquí perquè s'actualitzarà pel núvol via onSnapshot
+    },
+
+    updateField(id, field, value) {
+        const tea = this.teas.find(t => t.id === id);
+        if (tea) {
+            tea[field] = value;
+            
+            if (field === 'type' && this.defaultInfusions[value]) {
+                if (!tea.time || tea.time === '') tea.time = this.defaultInfusions[value].time;
+                if (!tea.temp || tea.temp === '') tea.temp = this.defaultInfusions[value].temp;
+            }
+            
+            this.saveData();
+        }
+    },
+
+    deleteTea(id) {
+        if (confirm('Segur que vols eliminar aquest te de la col·lecció?')) {
+            this.teas = this.teas.filter(t => t.id !== id);
+            this.saveData();
+        }
+    },
+
+    // 5. ESTADÍSTIQUES I DASHBOARD
+    renderStats() {
+        const container = document.getElementById('stats-container');
+        const total = this.teas.length;
+        
+        const ratedTeas = this.teas.filter(t => t.rating > 0);
+        const avg = ratedTeas.length ? (ratedTeas.reduce((sum, t) => sum + t.rating, 0) / ratedTeas.length).toFixed(1) : 0;
+
+        const inCart = this.teas.filter(t => t.inCart).length;
+
+        container.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-value">${total}</div>
+                <div class="stat-label">Tes Provats</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${avg} ⭐</div>
+                <div class="stat-label">Mitjana Valoració</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: #10b981;">${inCart}</div>
+                <div class="stat-label">A la cistella</div>
+            </div>
+        `;
+    },
+
+    renderDashboard() {
+        const container = document.getElementById('top-dashboard');
+        if(this.teas.length === 0) { container.innerHTML = ''; return; }
+
+        const rated = [...this.teas].filter(t => t.rating > 0).sort((a,b) => b.rating - a.rating || b.id - a.id);
+        const best = rated.length > 0 ? rated[0] : null;
+
+        const cartTeas = [...this.teas].filter(t => t.inCart).sort((a,b) => (b.grams||0) - (a.grams||0));
+        const topCart = cartTeas.length > 0 ? cartTeas[0] : null;
+
+        const recent5 = rated.find(t => t.rating === 5);
+
+        container.innerHTML = `
+            <div class="dash-card">
+                <div class="dash-card-title">🥇 Te millor valorat</div>
+                <div class="dash-card-value">${best && best.name ? best.name : '-'}</div>
+                <div class="dash-card-sub">${best ? best.rating + ' ⭐ (' + best.type + ')' : 'Cap valoració'}</div>
+            </div>
+            <div class="dash-card">
+                <div class="dash-card-title" style="color: #0369a1;">🔁 Destacat a la cistella</div>
+                <div class="dash-card-value">${topCart && topCart.name ? topCart.name : '-'}</div>
+                <div class="dash-card-sub">${topCart ? (topCart.grams || 0) + ' grams marcats' : 'Cistella buida'}</div>
+            </div>
+            <div class="dash-card">
+                <div class="dash-card-title" style="color: #166534;">⭐ 5 estrelles recent</div>
+                <div class="dash-card-value">${recent5 && recent5.name ? recent5.name : '-'}</div>
+                <div class="dash-card-sub">${recent5 ? 'Excel·lent descobriment' : 'Pendent de trobar!'}</div>
+            </div>
+        `;
+    },
+
+    updateDatalist() {
+        const datalist = document.getElementById('shop-options');
+        const shops = [...new Set(this.teas.map(t => t.shop).filter(s => s && s.trim() !== ''))];
+        datalist.innerHTML = shops.map(shop => `<option value="${shop}">`).join('');
+    },
+
+    sort(column) {
+        if (this.sortCol === column) {
+            this.sortAsc = !this.sortAsc; 
+        } else {
+            this.sortCol = column;
+            this.sortAsc = true;
+        }
+
+        document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '');
+        document.getElementById(`sort-${column}`).textContent = this.sortAsc ? '▲' : '▼';
+
+        this.renderTable();
+    },
+
+    // TAST RÀPID
+    openQuickTasting() {
+        this.qtRating = 0;
+        document.getElementById('qt-name').value = '';
+        document.getElementById('qt-notes').value = '';
+        this.renderQTStars();
+        document.getElementById('quick-taste-modal').style.display = 'flex';
+    },
+
+    closeQuickTasting() {
+        document.getElementById('quick-taste-modal').style.display = 'none';
+    },
+
+    renderQTStars() {
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            const isActive = i <= this.qtRating ? 'active' : '';
+            html += `<span class="star ${isActive}" onclick="app.setQTRating(event, ${i})" style="cursor:pointer;">★</span>`;
+        }
+        document.getElementById('qt-stars').innerHTML = html;
+    },
+
+    setQTRating(event, rating) {
+        this.qtRating = rating;
+        const starEl = event.target;
+        starEl.classList.add('star-pop');
+        setTimeout(() => {
+            starEl.classList.remove('star-pop');
+            this.renderQTStars();
+        }, 300);
+    },
+
+    saveQuickTasting() {
+        const name = document.getElementById('qt-name').value.trim();
+        const notes = document.getElementById('qt-notes').value.trim();
+
+        if (!name) {
+            alert('Afegeix almenys el nom del te per guardar.');
+            return;
+        }
+
+        const newTea = {
+            id: Date.now(),
+            name: name,
+            type: 'Altres',
+            rating: this.qtRating,
+            time: '', temp: '', shop: '', notes: notes, inCart: false, grams: 0
+        };
+        
+        this.teas.unshift(newTea);
+        this.lastAddedId = newTea.id;
+        document.getElementById('filter-name').value = '';
+        this.saveData();
+        this.closeQuickTasting();
+    },
+
+    // LLISTA DE COMPRA
+    openShoppingList() {
+        const modal = document.getElementById('cart-modal');
+        const content = document.getElementById('shopping-list-content');
+        
+        const cartTeas = this.teas.filter(t => t.inCart);
+        
+        if (cartTeas.length === 0) {
+            content.innerHTML = '<p style="text-align:center; padding: 20px;">No tens cap te a la cistella. Marca el botó 🛒 a la taula principal.</p>';
+        } else {
+            content.innerHTML = cartTeas.map(tea => `
+                <div class="shopping-item">
+                    <div>
+                        <strong>${tea.name || 'Te sense nom'}</strong> <span style="font-size:0.8rem; color:#666;">(${tea.shop || 'Sense botiga'})</span>
+                        <div style="font-size:0.85rem; color:#888;">${tea.type}</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="number" min="0" step="50" value="${tea.grams || 0}" 
+                               onchange="app.updateField(${tea.id}, 'grams', this.value)" 
+                               placeholder="g"> grams
+                        <button class="btn-danger" onclick="app.updateField(${tea.id}, 'inCart', false); app.openShoppingList();" title="Treure de la cistella">✖</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        modal.style.display = 'flex';
+    },
+
+    closeShoppingList() {
+        document.getElementById('cart-modal').style.display = 'none';
+        this.renderTable(); 
+    },
+
+    // EXPORTAR I IMPORTAR JSON
+    exportData() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.teas));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href",     dataStr);
+        downloadAnchorNode.setAttribute("download", "colleccio_tes_copia_seguretat.json");
+        document.body.appendChild(downloadAnchorNode); 
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    },
+
+    importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (Array.isArray(imported)) {
+                    if (confirm("Això substituirà les teves dades al núvol per les del document local. Vols continuar?")) {
+                        this.teas = imported;
+                        this.saveData(); // Guardo a Firebase directament
+                        alert("Dades importades i guardades al núvol correctament!");
+                    }
+                } else {
+                    alert("L'arxiu no és vàlid.");
+                }
+            } catch (err) {
+                alert("Error llegint l'arxiu. Comprova que és un JSON vàlid.");
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+};
+
+// Esperar de forma segura a que Firebase estigui carregat abans d'iniciar
+if (window.firebaseServices) {
+    app.init();
+} else {
+    window.addEventListener('firebase-ready', () => {
+        app.init();
+    });
+}
+</script>
+
+</body>
+</html>
