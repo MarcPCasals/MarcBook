@@ -7,7 +7,7 @@
     
     <!-- Meta tags per a PWA / Mòbil -->
     <meta name="theme-color" content="#059669">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Aviteca">
     
@@ -61,6 +61,7 @@
         <i data-lucide="bird" class="w-16 h-16 mb-4 animate-bounce"></i>
         <h1 class="text-3xl font-bold tracking-wider mb-2">Aviteca</h1>
         <div class="loader mt-4"></div>
+        <p id="loading-text" class="mt-4 text-emerald-200 text-sm font-medium">Carregant dades...</p>
     </div>
 
     <!-- PANTALLA D'AUTENTICACIÓ -->
@@ -301,7 +302,7 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Lloc</label>
-                                <input type="text" id="check-location" placeholder="Ex: Delta de l'Ebre" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <input type="text" id="check-location" placeholder="Ex: Delta de l'Ebre" autocomplete="off" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
                             </div>
                         </div>
 
@@ -326,6 +327,18 @@
                                 <button type="button" id="btn-helper-add" class="bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700">
                                     Afegeix
                                 </button>
+                            </div>
+
+                            <!-- SUGGERIMENTS PER UBICACIÓ (MÈTODE 3) -->
+                            <div id="location-suggestions-container" class="hidden border-t border-gray-100 pt-3 mt-3 mb-4">
+                                <p class="text-[10px] text-gray-500 mb-2 uppercase tracking-wide flex justify-between items-center">
+                                    <span>Mètode 3: Espècies freqüents a <span id="lbl-suggestion-location" class="font-bold text-emerald-600"></span></span>
+                                </p>
+                                <div class="bg-white border border-emerald-100 rounded-xl shadow-sm overflow-hidden">
+                                    <div id="location-suggestions-list" class="grid grid-cols-1 gap-1 max-h-48 overflow-y-auto custom-scroll p-1 bg-gray-50">
+                                        <!-- Items via JS -->
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- LLISTA VISUAL EDITABLE -->
@@ -462,7 +475,6 @@
     <!-- Firebase SDK (Mòduls) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // L'import d'analytics es farà de forma dinàmica a baix per evitar que els Adblockers trenquin tota l'aplicació.
         import { 
             getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, 
             signInWithEmailAndPassword, createUserWithEmailAndPassword 
@@ -472,11 +484,20 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // ==========================================
+        // 0. GESTIÓ SEGURA DE LOCALSTORAGE (EVITA CRASH)
+        // ==========================================
+        let customBirds = [];
+        try {
+            const stored = localStorage.getItem('aviteca_custom_birds');
+            if (stored) customBirds = JSON.parse(stored);
+        } catch (e) {
+            console.warn("Mecanisme de seguretat activat: L'entorn actual bloqueja localStorage (típic en iframes). S'utilitzarà memòria temporal.", e);
+        }
+
+        // ==========================================
         // 1. BASE DE DADES D'OCELLS (MOCK + FETCH)
         // ==========================================
         let birdDb = [];
-        // Carregar espècies customitzades de localStorage
-        let customBirds = JSON.parse(localStorage.getItem('aviteca_custom_birds') || '[]');
 
         const loadBirds = async () => {
             try {
@@ -488,7 +509,7 @@
                     throw new Error("No s'ha trobat birds.json");
                 }
             } catch (e) {
-                console.warn("Utilitzant llista temporal o custom. Posa 'birds.json' a la mateixa carpeta.", e);
+                console.warn("Utilitzant només llista temporal. Posa 'birds.json' a la mateixa carpeta per tenir dades inicials.", e);
                 birdDb = [...customBirds];
             }
             if(document.getElementById('guide-list').innerHTML !== '') renderGuide();
@@ -592,23 +613,33 @@
                   measurementId: "G-44NJ1XZYHS"
                 };
                 
-                const finalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
+                // Parseig extremadament segur
+                let finalConfig = firebaseConfig;
+                try {
+                    if (typeof __firebase_config !== 'undefined') {
+                        finalConfig = typeof __firebase_config === 'string' ? JSON.parse(__firebase_config) : __firebase_config;
+                    }
+                } catch(e) { console.warn("Error interpretant config, usant fallback"); }
+
                 const app = initializeApp(finalConfig);
 
-                // Carregar Analytics de forma dinàmica per evitar que Adblockers aturin tot el JavaScript
+                // Carregar Analytics dinàmic sense aturar procés principal si falla l'adblocker
                 import("https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js")
-                    .then(({ getAnalytics }) => {
-                        analytics = getAnalytics(app);
-                    })
-                    .catch((err) => {
-                        console.warn("Analytics ha estat bloquejat per l'Adblocker o el navegador. L'app continuarà funcionant.", err);
-                    });
+                    .then(({ getAnalytics }) => { analytics = getAnalytics(app); })
+                    .catch(() => { /* Silenciós per no empipar */ });
 
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+                // Gestió Custom Token obligatori de l'entorn amb Try/Catch fort
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth); // Fallback robust si estem a local
+                    }
+                } catch(errAuth) {
+                    console.error("No es pot autenticar el token:", errAuth);
                 }
                 
                 onAuthStateChanged(auth, (user) => {
@@ -618,7 +649,7 @@
                         UI.app.classList.remove('hidden');
                         UI.app.classList.add('flex');
                         UI.loading.classList.add('hidden');
-                        lucide.createIcons();
+                        if (window.lucide) lucide.createIcons();
                         setupDataListeners();
                         loadBirds(); // Carregar dades quan entra
                     } else {
@@ -630,8 +661,9 @@
                     }
                 });
             } catch (err) {
-                console.error("Error init Firebase:", err);
-                UI.loading.innerHTML = `<p class="text-white mt-4">Error de connexió</p>`;
+                console.error("Error init Firebase General:", err);
+                UI.loading.innerHTML = `<div class="p-6 text-center text-white"><i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-2 text-red-300"></i><p class="font-bold">Error de connexió</p><p class="text-xs opacity-70 mt-2">${err.message}</p></div>`;
+                if(window.lucide) lucide.createIcons();
             }
         };
 
@@ -703,17 +735,6 @@
             panelFilters.classList.toggle('hidden');
             btnToggleFilters.classList.toggle('bg-emerald-100');
             btnToggleFilters.classList.toggle('text-emerald-700');
-        });
-        document.getElementById('btn-clear-filters').addEventListener('click', () => {
-            document.getElementById('filter-family').value = '';
-            document.getElementById('filter-order').value = '';
-            document.getElementById('filter-date-start').value = '';
-            document.getElementById('filter-date-end').value = '';
-            document.getElementById('filter-text').value = '';
-            renderObservations();
-        });
-        ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end'].forEach(id => {
-            document.getElementById(id).addEventListener('input', renderObservations);
         });
 
         const renderObservations = () => {
@@ -827,9 +848,22 @@
                     htmlStr += `</div>`;
                 }
                 list.innerHTML = htmlStr;
-                lucide.createIcons();
+                if(window.lucide) lucide.createIcons();
             }
         };
+
+        document.getElementById('btn-clear-filters').addEventListener('click', () => {
+            document.getElementById('filter-family').value = '';
+            document.getElementById('filter-order').value = '';
+            document.getElementById('filter-date-start').value = '';
+            document.getElementById('filter-date-end').value = '';
+            document.getElementById('filter-text').value = '';
+            renderObservations();
+        });
+
+        ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end'].forEach(id => {
+            document.getElementById(id).addEventListener('input', renderObservations);
+        });
 
         // --- Sortides i Guia ---
         const renderChecklists = () => {
@@ -862,7 +896,7 @@
                             <i data-lucide="bird" class="w-4 h-4"></i> ${obsCount} espècies registrades
                         </div>
                     </div>`}).join('');
-                lucide.createIcons();
+                if(window.lucide) lucide.createIcons();
             }
         };
 
@@ -895,7 +929,7 @@
                         </div>
                     </div>
                 </div>`}).join('');
-            lucide.createIcons();
+            if(window.lucide) lucide.createIcons();
         };
         document.getElementById('guide-search').addEventListener('input', renderGuide);
 
@@ -915,7 +949,11 @@
                 order: document.getElementById('custom-order').value.trim()
             };
             customBirds.push(nou);
-            localStorage.setItem('aviteca_custom_birds', JSON.stringify(customBirds));
+            
+            try {
+                localStorage.setItem('aviteca_custom_birds', JSON.stringify(customBirds));
+            } catch(e) { /* Silenci si l'iframe bloqueja l'escriptura */ }
+
             birdDb.push(nou);
             birdDb.sort((a,b)=>a.commonName.localeCompare(b.commonName));
             
@@ -1039,7 +1077,7 @@
                 notes: document.getElementById('input-notes').value,
             };
             
-            if(state.currentPhotoB64) obs.photo = state.currentPhotoB64; // Només sobreescriu si hi ha foto nova al editar
+            if(state.currentPhotoB64) obs.photo = state.currentPhotoB64; 
             if(!isEdit) {
                 obs.id = id;
                 obs.checklistId = null;
@@ -1064,7 +1102,7 @@
                 alert("Error al guardar l'observació.");
             } finally {
                 btn.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i><span id="text-save-obs">${origText}</span>`;
-                lucide.createIcons();
+                if(window.lucide) lucide.createIcons();
                 btn.disabled = false;
             }
         });
@@ -1103,7 +1141,6 @@
             document.getElementById('input-hide').checked = obs.hide;
             document.getElementById('input-notes').value = obs.notes || '';
             
-            // Radio buttons
             const types = document.getElementsByName('input-type');
             for(let i=0; i<types.length; i++) {
                 if(types[i].value === (obs.type || 'visual')) types[i].checked = true;
@@ -1164,11 +1201,12 @@
 
 
         // ==========================================
-        // LÒGICA CHECKLISTS (SISTEMA VISUAL MILLORAT I SUGGERIMENTS)
+        // LÒGICA CHECKLISTS (SISTEMA VISUAL MILLORAT I SUGGERIMENTS MÈTODE 3)
         // ==========================================
         
         let currentLocationSuggestions = [];
 
+        // Integració Mètode 3: Suggeriments per Ubicació
         document.getElementById('check-location').addEventListener('blur', (e) => {
             generateLocationSuggestions(e.target.value);
         });
@@ -1183,7 +1221,6 @@
                 return;
             }
 
-            // Trobar observacions d'aquesta ubicació
             const locObs = state.observations.filter(o => o.location && o.location.toLowerCase() === loc);
             
             if (locObs.length === 0) {
@@ -1192,7 +1229,6 @@
                 return;
             }
 
-            // Comptar freqüències de cada espècie en aquesta ubicació
             const freq = {};
             locObs.forEach(o => {
                 if (!freq[o.species]) {
@@ -1207,7 +1243,6 @@
                 freq[o.species].freqCount++;
             });
 
-            // Ordenar descendentment i limitar a 20
             currentLocationSuggestions = Object.values(freq)
                 .sort((a, b) => b.freqCount - a.freqCount)
                 .slice(0, 20);
@@ -1297,7 +1332,7 @@
             `).join('');
             if (window.lucide) lucide.createIcons();
             
-            // Sincronitzem els suggeriments perquè mostrin l'estat actual actualitzat
+            // Sincronitzar suggeriments
             renderLocationSuggestions();
         };
 
@@ -1328,7 +1363,6 @@
                     const bird = findClosestSpecies(rawName);
                     
                     if (bird) {
-                        // Comprovar si ja hi és per sumar
                         const exist = state.checklistVisualItems.find(i => i.species === bird.commonName);
                         if(exist) exist.count += count;
                         else {
@@ -1438,7 +1472,7 @@
                 document.getElementById('check-date').valueAsDate = new Date();
                 state.checklistVisualItems = [];
                 
-                // Netejar suggeriments d'ubicació
+                // Netejar suggeriments ubicació
                 document.getElementById('location-suggestions-container').classList.add('hidden');
                 currentLocationSuggestions = [];
                 
@@ -1449,7 +1483,7 @@
                 alert("Error al processar la llista.");
             } finally {
                 btn.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i> Guardar Sortida i Observacions`;
-                lucide.createIcons();
+                if(window.lucide) lucide.createIcons();
                 btn.disabled = false;
             }
         });
@@ -1490,7 +1524,7 @@
         document.getElementById('btn-close-stats').addEventListener('click', () => document.getElementById('modal-stats').classList.add('hidden'));
 
         window.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
+            if(window.lucide) lucide.createIcons();
             initFirebase();
         });
 
