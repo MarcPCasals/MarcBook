@@ -176,7 +176,7 @@
             border-color: var(--primary);
         }
 
-        /* Línia 1: Nom i Cor */
+        /* Línia 1: Nom i Cor / Casa */
         .tea-name { font-size: 1.25rem; font-weight: 800; color: #0f172a; line-height: 1.2; }
         .btn-fav { background: transparent; border: none; font-size: 1.4rem; cursor: pointer; filter: grayscale(100%) opacity(30%); transition: all 0.2s; padding: 0; }
         .btn-fav.active { filter: none; transform: scale(1.1); }
@@ -330,7 +330,7 @@
 
     <!-- CERCA I FILTRES COMPACTES -->
     <div class="search-bar">
-        <input type="text" id="filter-search" placeholder="🔍 Cercar nom o notes..." oninput="app.renderCards()">
+        <input type="text" id="filter-search" placeholder="🔍 Cercar nom, notes o propietats..." oninput="app.renderCards()">
         <button class="btn-filter-toggle" onclick="document.getElementById('advanced-filters').classList.toggle('open')">⚙️ Filtres</button>
     </div>
 
@@ -355,6 +355,29 @@
                 <option value="0">Totes</option>
                 <option value="5">⭐⭐⭐⭐⭐ 5</option>
                 <option value="4">⭐⭐⭐⭐ Mínim 4</option>
+            </select>
+        </div>
+        <div class="filter-item">
+            <label>Propietat</label>
+            <select id="filter-prop" onchange="app.renderCards()">
+                <option value="">Totes</option>
+                <option value="Digestiu">Digestiu</option>
+                <option value="Relaxant">Relaxant</option>
+                <option value="Detox">Detox</option>
+                <option value="Diürètic">Diürètic</option>
+                <option value="Antiinflamatori">Antiinflamatori</option>
+                <option value="Energitzant">Energitzant</option>
+                <option value="Antiox">Antiox</option>
+                <option value="Isotònic">Isotònic</option>
+                <option value="Vitamínic">Vitamínic</option>
+            </select>
+        </div>
+        <div class="filter-item">
+            <label>Inventari</label>
+            <select id="filter-athome" onchange="app.renderCards()">
+                <option value="">Tots</option>
+                <option value="true">🏠 Tinc a casa</option>
+                <option value="false">❌ No en tinc</option>
             </select>
         </div>
         <div style="flex: 1 1 100%; display: flex; gap: 12px; margin-top: 4px;">
@@ -460,7 +483,11 @@
                 <textarea id="form-notes" rows="2" placeholder="Gust, aromes..."></textarea>
             </div>
         </div>
-        <button class="btn-primary" style="width: 100%;" onclick="app.saveTea()">Guardar Te</button>
+        
+        <div style="display: flex; gap: 8px; width: 100%;">
+            <button class="btn-primary" style="flex: 1;" onclick="app.saveTea()">Guardar Te</button>
+            <button type="button" id="btn-delete-tea" style="background: #fee2e2; color: #b91c1c; border: none; border-radius: 10px; padding: 0 16px; font-size: 1.2rem; cursor: pointer; display: none;" onclick="app.deleteFromForm()" title="Eliminar te">🗑️</button>
+        </div>
     </div>
 </div>
 
@@ -782,13 +809,23 @@ const app = {
         const search = document.getElementById('filter-search').value.toLowerCase();
         const fType = document.getElementById('filter-type').value;
         const fRating = parseInt(document.getElementById('filter-rating').value);
+        const fProp = document.getElementById('filter-prop').value;
+        const fAtHome = document.getElementById('filter-athome').value;
 
         let filtered = this.teas.filter(t => {
             if (t.wishlist) return false; // Exclou tes que només estan a la wishlist
             
-            if (search && !(t.name||'').toLowerCase().includes(search) && !(t.notes||'').toLowerCase().includes(search)) return false;
+            // Cerca de text (nom, notes o propietats)
+            let propMatch = t.properties && t.properties.some(p => p.toLowerCase().includes(search));
+            if (search && !(t.name||'').toLowerCase().includes(search) && !(t.notes||'').toLowerCase().includes(search) && !propMatch) return false;
+            
+            // Filtres desplegables múltiples
             if (fType && t.type !== fType) return false;
             if (fRating > 0 && t.rating < fRating) return false;
+            if (fProp && (!t.properties || !t.properties.includes(fProp))) return false;
+            if (fAtHome === 'true' && !t.atHome) return false;
+            if (fAtHome === 'false' && t.atHome) return false;
+
             if (this.currentFilter === 'fav' && !t.favorite) return false;
             return true;
         });
@@ -809,6 +846,7 @@ const app = {
         filtered.forEach(tea => {
             const colorClass = this.typeColors[tea.type] || '';
             const isFav = tea.favorite || false;
+            const isAtHome = tea.atHome || false;
             const inCart = tea.inCart || false;
             const sTemp = tea.serveTemp || 'Calent';
 
@@ -843,7 +881,10 @@ const app = {
                         </div>
                         ${notesHtml}
                     </div>
-                    <button class="btn-fav ${isFav ? 'active' : ''}" onclick="app.updateField(${tea.id}, 'favorite', ${!isFav}); event.stopPropagation();">❤️</button>
+                    <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+                        <button class="btn-fav ${isFav ? 'active' : ''}" onclick="app.updateField(${tea.id}, 'favorite', ${!isFav}); event.stopPropagation();" title="Preferit">❤️</button>
+                        <button class="btn-fav ${isAtHome ? 'active' : ''}" onclick="app.updateField(${tea.id}, 'atHome', ${!isAtHome}); event.stopPropagation();" title="A casa">🏠</button>
+                    </div>
                 </div>
                 
                 <div class="tea-line-2">
@@ -871,17 +912,21 @@ const app = {
         const tea = this.teas.find(t => t.id === id);
         if (tea) {
             tea[field] = value;
-            if (field === 'inCart' && value) tea.lastCartDate = Date.now();
+            if (field === 'inCart' && value) {
+                tea.lastCartDate = Date.now();
+                if (!tea.grams) tea.grams = 100; // Preconfigurat a 100g al afegir-ho
+            }
             this.saveData();
             this.renderCards();
         }
     },
 
-    deleteTea(id) {
-        if (confirm("Segur que vols eliminar aquest te?")) {
-            this.teas = this.teas.filter(t => t.id !== id);
+    deleteFromForm() {
+        if (this.editingId && confirm("Segur que vols eliminar aquest te?")) {
+            this.teas = this.teas.filter(t => t.id !== this.editingId);
             this.saveData();
             this.renderCards();
+            this.closeModal('tea-modal');
         }
     },
 
@@ -911,6 +956,7 @@ const app = {
             document.getElementById('form-notes').value = tea.notes || '';
             this.setFormStars(tea.rating || 0);
             this.formProperties = tea.properties ? [...tea.properties] : [];
+            document.getElementById('btn-delete-tea').style.display = 'block';
         } else {
             document.getElementById('form-name').value = '';
             document.getElementById('form-type').value = 'Te negre';
@@ -920,6 +966,7 @@ const app = {
             document.getElementById('form-notes').value = '';
             this.setFormStars(0);
             this.formProperties = [];
+            document.getElementById('btn-delete-tea').style.display = 'none';
         }
         
         this.renderFormProperties();
@@ -936,7 +983,7 @@ const app = {
     },
 
     renderFormProperties() {
-        const props = ['Digestiu', 'Relaxant', 'Detox', 'Diürètic', 'Antiinflamatori', 'Energitzant'];
+        const props = ['Digestiu', 'Relaxant', 'Detox', 'Diürètic', 'Antiinflamatori', 'Energitzant', 'Antiox', 'Isotònic', 'Vitamínic'];
         let html = '';
         props.forEach(p => {
             const isActive = this.formProperties.includes(p);
@@ -994,6 +1041,7 @@ const app = {
             teaData.id = Date.now();
             teaData.inCart = false;
             teaData.favorite = false;
+            teaData.atHome = false; // Per defecte no el tenim
             teaData.grams = 0;
             this.teas.unshift(teaData);
         }
@@ -1007,6 +1055,7 @@ const app = {
     renderStats() {
         const activeTeas = this.teas.filter(t => !t.wishlist);
         const total = activeTeas.length;
+        const atHome = activeTeas.filter(t => t.atHome).length;
         const rated = activeTeas.filter(t => t.rating > 0);
         const avg = rated.length ? (rated.reduce((s, t) => s + t.rating, 0) / rated.length).toFixed(1) : 0;
         const inCart = activeTeas.filter(t => t.inCart).length;
@@ -1014,11 +1063,12 @@ const app = {
 
         document.getElementById('stats-content').innerHTML = `
             <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:#3b82f6">${atHome}</div><div class="stat-label">A casa 🏠</div></div>
             <div class="stat-card"><div class="stat-value">${avg}</div><div class="stat-label">Mitjana ⭐</div></div>
             <div class="stat-card"><div class="stat-value" style="color:#10b981">${inCart}</div><div class="stat-label">Cistella</div></div>
-            <div class="stat-card" style="cursor:pointer; border-color:#fca5a5; background:#fef2f2;" onclick="app.openForgottenTeas()">
+            <div class="stat-card" style="grid-column: 1 / -1; cursor:pointer; border-color:#fca5a5; background:#fef2f2;" onclick="app.openForgottenTeas()">
                 <div class="stat-value" style="color:#ef4444">${forgotten}</div>
-                <div class="stat-label" style="color:#ef4444">Oblidats +6m (Veure)</div>
+                <div class="stat-label" style="color:#ef4444">Oblidats +6m (Veure quins són)</div>
             </div>
         `;
     },
@@ -1058,7 +1108,7 @@ const app = {
                     </div>
                     <div style="display:flex; gap:8px;">
                         <input type="number" min="0" step="50" value="${t.grams || 0}" onchange="app.updateField(${t.id}, 'grams', this.value)" placeholder="g">
-                        <button onclick="app.updateField(${t.id}, 'inCart', false); app.openShoppingList();" style="background:#fee2e2; border:none; border-radius:8px; padding:0 12px; color:#b91c1c; cursor:pointer;">✖</button>
+                        <button onclick="app.updateField(${t.id}, 'inCart', false); app.openShoppingList();" style="background:#dcfce7; border:none; border-radius:8px; padding:6px 12px; color:#166534; font-weight:bold; cursor:pointer;">✔️ OK</button>
                     </div>
                 </div>
             `).join('');
@@ -1103,6 +1153,7 @@ const app = {
             wishlist: true,
             inCart: false,
             favorite: false,
+            atHome: false,
             rating: 0,
             properties: []
         });
