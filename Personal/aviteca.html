@@ -495,7 +495,7 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // ==========================================
-        // 0. GESTIÓ SEGURA DE LOCALSTORAGE (EVITA CRASH)
+        // 0. GESTIÓ SEGURA DE LOCALSTORAGE I UTILS
         // ==========================================
         let customBirds = [];
         try {
@@ -504,6 +504,17 @@
         } catch (e) {
             console.warn("Mecanisme de seguretat activat: L'entorn actual bloqueja localStorage (típic en iframes). S'utilitzarà memòria temporal.", e);
         }
+
+        // Generador segur d'ID per entorns on crypto.randomUUID() està bloquejat
+        const generateUUID = () => {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return crypto.randomUUID();
+            }
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        };
 
         // ==========================================
         // 1. BASE DE DADES D'OCELLS (INCRUSTADA)
@@ -1169,7 +1180,7 @@
             btn.disabled = true;
 
             const isEdit = !!state.editingObsId;
-            const id = isEdit ? state.editingObsId : crypto.randomUUID();
+            const id = isEdit ? state.editingObsId : generateUUID();
             
             const obs = {
                 species: document.getElementById('input-species').value,
@@ -1265,7 +1276,7 @@
             const original = state.observations.find(o => o.id === id);
             if(!original) return;
 
-            const newId = crypto.randomUUID();
+            const newId = generateUUID();
             const today = new Date().toISOString().split('T')[0];
             const duplicat = { ...original, id: newId, date: today, checklistId: null, createdAt: new Date().toISOString() };
             
@@ -1552,7 +1563,7 @@
             btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div> Processant...`;
             btn.disabled = true;
 
-            const checklistId = crypto.randomUUID();
+            const checklistId = generateUUID();
             const date = document.getElementById('check-date').value;
             const location = document.getElementById('check-location').value;
 
@@ -1565,7 +1576,7 @@
                 await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', checklistId), checklistObj);
                 
                 for (const item of state.checklistVisualItems) {
-                    const obsId = crypto.randomUUID();
+                    const obsId = generateUUID();
                     await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obsId), {
                         id: obsId, species: item.species, scientificName: item.scientificName,
                         family: item.family, order: item.order, count: item.count,
