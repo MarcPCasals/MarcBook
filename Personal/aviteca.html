@@ -462,7 +462,7 @@
     <!-- Firebase SDK (Mòduls) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+        // L'import d'analytics es farà de forma dinàmica a baix per evitar que els Adblockers trenquin tota l'aplicació.
         import { 
             getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, 
             signInWithEmailAndPassword, createUserWithEmailAndPassword 
@@ -594,7 +594,16 @@
                 
                 const finalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
                 const app = initializeApp(finalConfig);
-                analytics = getAnalytics(app);
+
+                // Carregar Analytics de forma dinàmica per evitar que Adblockers aturin tot el JavaScript
+                import("https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js")
+                    .then(({ getAnalytics }) => {
+                        analytics = getAnalytics(app);
+                    })
+                    .catch((err) => {
+                        console.warn("Analytics ha estat bloquejat per l'Adblocker o el navegador. L'app continuarà funcionant.", err);
+                    });
+
                 auth = getAuth(app);
                 db = getFirestore(app);
 
@@ -1155,9 +1164,111 @@
 
 
         // ==========================================
-        // LÒGICA CHECKLISTS (SISTEMA VISUAL MILLORAT)
+        // LÒGICA CHECKLISTS (SISTEMA VISUAL MILLORAT I SUGGERIMENTS)
         // ==========================================
         
+        let currentLocationSuggestions = [];
+
+        document.getElementById('check-location').addEventListener('blur', (e) => {
+            generateLocationSuggestions(e.target.value);
+        });
+
+        const generateLocationSuggestions = (locInput) => {
+            const loc = locInput ? locInput.trim().toLowerCase() : '';
+            const container = document.getElementById('location-suggestions-container');
+            
+            if (!loc) {
+                container.classList.add('hidden');
+                currentLocationSuggestions = [];
+                return;
+            }
+
+            // Trobar observacions d'aquesta ubicació
+            const locObs = state.observations.filter(o => o.location && o.location.toLowerCase() === loc);
+            
+            if (locObs.length === 0) {
+                container.classList.add('hidden');
+                currentLocationSuggestions = [];
+                return;
+            }
+
+            // Comptar freqüències de cada espècie en aquesta ubicació
+            const freq = {};
+            locObs.forEach(o => {
+                if (!freq[o.species]) {
+                    freq[o.species] = { 
+                        species: o.species, 
+                        scientificName: o.scientificName, 
+                        family: o.family, 
+                        order: o.order, 
+                        freqCount: 0 
+                    };
+                }
+                freq[o.species].freqCount++;
+            });
+
+            // Ordenar descendentment i limitar a 20
+            currentLocationSuggestions = Object.values(freq)
+                .sort((a, b) => b.freqCount - a.freqCount)
+                .slice(0, 20);
+
+            document.getElementById('lbl-suggestion-location').innerText = locInput.trim();
+            container.classList.remove('hidden');
+            renderLocationSuggestions();
+        };
+
+        const renderLocationSuggestions = () => {
+            const list = document.getElementById('location-suggestions-list');
+            if (!currentLocationSuggestions || currentLocationSuggestions.length === 0) return;
+
+            list.innerHTML = currentLocationSuggestions.map((sug, idx) => {
+                const existingIndex = state.checklistVisualItems.findIndex(item => item.species === sug.species);
+                const isSelected = existingIndex !== -1;
+                const currentCount = isSelected ? state.checklistVisualItems[existingIndex].count : 0;
+
+                return `
+                <div class="flex items-center justify-between p-2 rounded-lg border ${isSelected ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-transparent'} hover:bg-white transition-colors">
+                    <div class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onclick="toggleSuggestion(${idx})">
+                        <div class="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-emerald-500 text-white' : 'border border-gray-300 bg-gray-50'}">
+                            ${isSelected ? '<i data-lucide="check" class="w-3 h-3"></i>' : ''}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-bold text-sm ${isSelected ? 'text-emerald-800' : 'text-gray-700'} truncate">${sug.species}</p>
+                            <p class="text-[10px] text-gray-500 truncate">${sug.freqCount} vegades observada aquí</p>
+                        </div>
+                    </div>
+                    
+                    ${isSelected ? `
+                    <div class="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-emerald-100 shadow-sm ml-2 shrink-0" onclick="event.stopPropagation()">
+                        <button type="button" onclick="changeChecklistItemCount(${existingIndex}, -1)" class="w-6 h-6 flex items-center justify-center text-emerald-700 hover:bg-emerald-100 rounded"><i data-lucide="minus" class="w-3 h-3"></i></button>
+                        <span class="w-6 text-center text-xs font-bold text-emerald-800">${currentCount}</span>
+                        <button type="button" onclick="changeChecklistItemCount(${existingIndex}, 1)" class="w-6 h-6 flex items-center justify-center text-emerald-700 hover:bg-emerald-100 rounded"><i data-lucide="plus" class="w-3 h-3"></i></button>
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        };
+
+        window.toggleSuggestion = (idx) => {
+            const sug = currentLocationSuggestions[idx];
+            const existingIndex = state.checklistVisualItems.findIndex(item => item.species === sug.species);
+            
+            if (existingIndex !== -1) {
+                state.checklistVisualItems.splice(existingIndex, 1);
+            } else {
+                state.checklistVisualItems.push({
+                    species: sug.species,
+                    scientificName: sug.scientificName,
+                    family: sug.family,
+                    order: sug.order,
+                    count: 1
+                });
+            }
+            renderVisualChecklist();
+        };
+
         // Renderitzar llista visual
         const renderVisualChecklist = () => {
             const container = document.getElementById('visual-checklist-items');
@@ -1184,7 +1295,10 @@
                     </button>
                 </div>
             `).join('');
-            lucide.createIcons();
+            if (window.lucide) lucide.createIcons();
+            
+            // Sincronitzem els suggeriments perquè mostrin l'estat actual actualitzat
+            renderLocationSuggestions();
         };
 
         window.changeChecklistItemCount = (index, delta) => {
@@ -1323,6 +1437,11 @@
                 document.getElementById('form-new-checklist').reset();
                 document.getElementById('check-date').valueAsDate = new Date();
                 state.checklistVisualItems = [];
+                
+                // Netejar suggeriments d'ubicació
+                document.getElementById('location-suggestions-container').classList.add('hidden');
+                currentLocationSuggestions = [];
+                
                 renderVisualChecklist();
                 UI.switchView('view-checklists', 'Sortides');
             } catch (err) {
