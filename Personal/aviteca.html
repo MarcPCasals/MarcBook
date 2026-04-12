@@ -733,7 +733,11 @@
                 if (isLoginMode) await signInWithEmailAndPassword(auth, email, pass);
                 else await createUserWithEmailAndPassword(auth, email, pass);
             } catch (err) {
-                errEl.innerText = err.message.replace('Firebase:', '').trim();
+                let msg = err.message.replace('Firebase:', '').trim();
+                if (err.code === 'auth/admin-restricted-operation' || err.code === 'auth/operation-not-allowed') {
+                    msg = "⚠️ Has d'anar a la teva consola de Firebase > Authentication > Sign-in method i habilitar 'Correu/Contrasenya'.";
+                }
+                errEl.innerText = msg;
                 errEl.classList.remove('hidden');
                 btn.innerHTML = isLoginMode ? '<span>Inicia Sessió</span>' : '<span>Crea Compte</span>';
             }
@@ -752,13 +756,18 @@
                 state.observations = snap.docs.map(d => d.data());
                 renderObservations();
                 updateStats();
-            }, (err) => console.error(err));
+            }, (err) => {
+                console.error(err);
+                if (err.code === 'permission-denied') UI.showToast("⚠️ Firebase: Accés denegat. Cal actualitzar les Rules de Firestore.");
+            });
             
             const chkRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_checklists');
             const unsubChk = onSnapshot(chkRef, (snap) => {
                 state.checklists = snap.docs.map(d => d.data());
                 renderChecklists();
-            }, (err) => console.error(err));
+            }, (err) => {
+                console.error(err);
+            });
 
             state.unsubs.push(unsubObs, unsubChk);
             
@@ -1217,7 +1226,11 @@
                 UI.switchView('view-registry', 'Registre');
             } catch (err) {
                 console.error("Error saving:", err);
-                alert("Error al guardar l'observació.");
+                if (err.code === 'permission-denied') {
+                    alert("⚠️ PERMISOS DENEGATS:\n\nFirebase bloqueja l'escriptura per defecte.\nVes a Firebase > Firestore Database > pestanya 'Rules' i canvia-ho per:\n\nmatch /{document=**} {\n  allow read, write: if true;\n}");
+                } else {
+                    alert("Error al guardar l'observació.");
+                }
             } finally {
                 btn.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i><span id="text-save-obs">${origText}</span>`;
                 if(window.lucide) lucide.createIcons();
@@ -1598,7 +1611,11 @@
                 UI.switchView('view-checklists', 'Sortides');
             } catch (err) {
                 console.error("Error saving checklist:", err);
-                alert("Error al processar la llista.");
+                if (err.code === 'permission-denied') {
+                    alert("⚠️ PERMISOS DENEGATS:\n\nFirebase bloqueja l'escriptura per defecte.\nVes a Firebase > Firestore Database > pestanya 'Rules' i canvia-ho per:\n\nmatch /{document=**} {\n  allow read, write: if true;\n}");
+                } else {
+                    alert("Error al processar la llista.");
+                }
             } finally {
                 btn.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i> Guardar Sortida i Observacions`;
                 if(window.lucide) lucide.createIcons();
@@ -1609,7 +1626,10 @@
         window.deleteObservation = async (id) => {
             if (!state.user || !confirm("Vols esborrar aquesta observació?")) return;
             try { await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id)); UI.showToast("Observació esborrada"); } 
-            catch (err) { console.error(err); }
+            catch (err) { 
+                console.error(err); 
+                if (err.code === 'permission-denied') alert("Error de permisos a Firestore (Rules)."); 
+            }
         };
 
         window.deleteChecklist = async (id) => {
@@ -1619,7 +1639,10 @@
                 const toDelete = state.observations.filter(o => o.checklistId === id);
                 for (const obs of toDelete) await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id));
                 UI.showToast("Sortida i dades esborrades");
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error(err); 
+                if (err.code === 'permission-denied') alert("Error de permisos a Firestore (Rules)."); 
+            }
         };
 
         const formatDate = (dateStr) => {
