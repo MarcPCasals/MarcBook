@@ -374,6 +374,17 @@
                             <i data-lucide="plus" class="w-5 h-5"></i>
                         </button>
                     </div>
+                    
+                    <!-- BOTONS IMPORTAR / EXPORTAR -->
+                    <div class="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                        <button id="btn-export" class="flex-1 bg-emerald-50 text-emerald-700 font-bold py-2 rounded-xl text-sm border border-emerald-100 hover:bg-emerald-100 transition-colors flex justify-center items-center gap-2">
+                            <i data-lucide="download" class="w-4 h-4"></i> Descarregar
+                        </button>
+                        <label for="input-import" class="flex-1 bg-gray-50 text-gray-700 font-bold py-2 rounded-xl text-sm border border-gray-200 hover:bg-gray-100 transition-colors flex justify-center items-center gap-2 cursor-pointer">
+                            <i data-lucide="upload" class="w-4 h-4"></i> Importar
+                        </label>
+                        <input type="file" id="input-import" accept=".json" class="hidden">
+                    </div>
                 </div>
                 
                 <div class="text-sm text-gray-500 mb-3 px-1 font-medium" id="guide-count-label"></div>
@@ -495,23 +506,40 @@
         }
 
         // ==========================================
-        // 1. BASE DE DADES D'OCELLS (MOCK + FETCH)
+        // 1. BASE DE DADES D'OCELLS (INCRUSTADA)
         // ==========================================
+        // Llista base combinada amb els teus resultats clau
+        const birdDbBase = [
+            { commonName: "Abellerol comú", scientificName: "Merops apiaster", family: "Meropidae", order: "Coraciiformes" },
+            { commonName: "Agró blanc", scientificName: "Ardea alba", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Agró roig", scientificName: "Ardea purpurea", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Ànec collverd", scientificName: "Anas platyrhynchos", family: "Anatidae", order: "Anseriformes" },
+            { commonName: "Àguila calçada", scientificName: "Hieraaetus pennatus", family: "Accipitridae", order: "Accipitriformes" },
+            { commonName: "Becadell comú", scientificName: "Gallinago gallinago", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Becut", scientificName: "Numenius arquata", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Bernat pescaire", scientificName: "Ardea cinerea", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Bitxac comú", scientificName: "Saxicola rubicola", family: "Muscicapidae", order: "Passeriformes" },
+            { commonName: "Cigonya blanca", scientificName: "Ciconia ciconia", family: "Ciconiidae", order: "Ciconiiformes" },
+            { commonName: "Corb marí gros", scientificName: "Phalacrocorax carbo", family: "Phalacrocoracidae", order: "Suliformes" },
+            { commonName: "Flamenc", scientificName: "Phoenicopterus roseus", family: "Phoenicopteridae", order: "Phoenicopteriformes" },
+            { commonName: "Fredeluga", scientificName: "Vanellus vanellus", family: "Charadriidae", order: "Charadriiformes" },
+            { commonName: "Gamba verda", scientificName: "Tringa nebularia", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Gavià argentat", scientificName: "Larus michahellis", family: "Laridae", order: "Charadriiformes" },
+            { commonName: "Gavina vulgar", scientificName: "Chroicocephalus ridibundus", family: "Laridae", order: "Charadriiformes" },
+            { commonName: "Grasset de muntanya", scientificName: "Anthus spinoletta", family: "Motacillidae", order: "Passeriformes" },
+            { commonName: "Martinet blanc", scientificName: "Egretta garzetta", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Martinet de nit", scientificName: "Nycticorax nycticorax", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Pit-roig", scientificName: "Erithacus rubecula", family: "Muscicapidae", order: "Passeriformes" },
+            { commonName: "Tètol cuanegre", scientificName: "Limosa limosa", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Voltor comú", scientificName: "Gyps fulvus", family: "Accipitridae", order: "Accipitriformes" },
+            { commonName: "Xivitona comuna", scientificName: "Actitis hypoleucos", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Xoriguer comú", scientificName: "Falco tinnunculus", family: "Falconidae", order: "Falconiformes" }
+        ];
+
         let birdDb = [];
 
-        const loadBirds = async () => {
-            try {
-                const res = await fetch('birds.json');
-                if(res.ok) {
-                    const data = await res.json();
-                    birdDb = [...data, ...customBirds].sort((a, b) => a.commonName.localeCompare(b.commonName));
-                } else {
-                    throw new Error("No s'ha trobat birds.json");
-                }
-            } catch (e) {
-                console.warn("Utilitzant només llista temporal. Posa 'birds.json' a la mateixa carpeta per tenir dades inicials.", e);
-                birdDb = [...customBirds];
-            }
+        const loadBirds = () => {
+            birdDb = [...birdDbBase, ...customBirds].sort((a, b) => a.commonName.localeCompare(b.commonName));
             if(document.getElementById('guide-list').innerHTML !== '') renderGuide();
         };
 
@@ -631,15 +659,17 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // Gestió Custom Token obligatori de l'entorn amb Try/Catch fort
+                // Gestió Custom Token obligatori de l'entorn amb Try/Catch fort per si fa servir el seu propi firebase
                 try {
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
-                        await signInAnonymously(auth); // Fallback robust si estem a local
+                        await signInAnonymously(auth);
                     }
                 } catch(errAuth) {
-                    console.error("No es pot autenticar el token:", errAuth);
+                    console.warn("L'accés silenciós està desactivat. S'utilitzarà el formulari per iniciar sessió.");
+                    // L'error de admin-restricted-operation és normal aquí si l'accés anònim no està habilitat al teu Firebase.
+                    // El codi continuarà cap avall i et mostrarà la pantalla per fer login manualment.
                 }
                 
                 onAuthStateChanged(auth, (user) => {
@@ -649,9 +679,10 @@
                         UI.app.classList.remove('hidden');
                         UI.app.classList.add('flex');
                         UI.loading.classList.add('hidden');
+                        document.getElementById('loading-text').classList.add('hidden');
                         if (window.lucide) lucide.createIcons();
                         setupDataListeners();
-                        loadBirds(); // Carregar dades quan entra
+                        loadBirds(); // Carrega la base de dades local ràpida
                     } else {
                         clearDataListeners();
                         UI.app.classList.add('hidden');
@@ -704,6 +735,7 @@
             if (!state.user) return;
             const uid = state.user.uid;
             
+            // IMPORTANT: Aquestes rutes compleixen la normativa de seguretat
             const obsRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_observations');
             const unsubObs = onSnapshot(obsRef, (snap) => {
                 state.observations = snap.docs.map(d => d.data());
@@ -961,6 +993,81 @@
             document.getElementById('modal-custom-species').classList.add('hidden');
             UI.showToast("Espècie afegida correctament!");
             renderGuide();
+        });
+
+
+        // ==========================================
+        // FUNCIONS D'EXPORTACIÓ I IMPORTACIÓ
+        // ==========================================
+        document.getElementById('btn-export').addEventListener('click', () => {
+            const data = {
+                observations: state.observations,
+                checklists: state.checklists,
+                customBirds: customBirds
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+            const a = document.createElement('a');
+            a.href = dataStr; 
+            a.download = "aviteca_dades.json";
+            document.body.appendChild(a); 
+            a.click(); 
+            a.remove();
+            UI.showToast("Dades exportades correctament!");
+        });
+
+        document.getElementById('input-import').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            
+            if(!confirm("Això importarà les dades de l'arxiu al teu compte de Firebase. Vols continuar?")) {
+                e.target.value = '';
+                return;
+            }
+
+            UI.loading.classList.remove('hidden');
+            document.getElementById('loading-text').innerText = "Important dades al núvol...";
+            document.getElementById('loading-text').classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    
+                    // Importar ocells custom
+                    if (data.customBirds && Array.isArray(data.customBirds)) {
+                        customBirds = data.customBirds;
+                        try { localStorage.setItem('aviteca_custom_birds', JSON.stringify(customBirds)); } catch(e) {}
+                        loadBirds(); 
+                    }
+
+                    let imports = 0;
+                    
+                    // Importar Checklists
+                    if (data.checklists && state.user) {
+                        for (const chk of data.checklists) {
+                            await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', chk.id), chk);
+                            imports++;
+                        }
+                    }
+                    
+                    // Importar Observacions
+                    if (data.observations && state.user) {
+                        for (const obs of data.observations) {
+                            await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id), obs);
+                            imports++;
+                        }
+                    }
+
+                    UI.showToast(`Importació completada (${imports} documents).`);
+                } catch (err) {
+                    alert("Error en llegir o importar l'arxiu: " + err.message);
+                } finally {
+                    UI.loading.classList.add('hidden');
+                    document.getElementById('loading-text').classList.add('hidden');
+                }
+                e.target.value = ''; // Reset input
+            };
+            reader.readAsText(file);
         });
 
 
