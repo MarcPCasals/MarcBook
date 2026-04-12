@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aviteca - Registre Ornitològic</title>
+    
+    <!-- Meta tags per a PWA / Mòbil -->
+    <meta name="theme-color" content="#059669">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aviteca">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icones (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f3f4f6; 
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Ocultar scrollbars per un disseny més net tipus App */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Animacions suaus */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Nav inferior actiu */
+        .nav-item.active { color: #059669; }
+        .nav-item.active .icon-container { background-color: #d1fae5; border-radius: 9999px; padding: 0.25rem 1rem; }
+
+        /* Loader */
+        .loader {
+            border: 3px solid #f3f3f3; border-top: 3px solid #059669;
+            border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Toast personalitzat */
+        #toast-container { transition: all 0.3s ease; }
+        .toast-show { transform: translateY(0); opacity: 1; }
+        .toast-hide { transform: translateY(100%); opacity: 0; }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden bg-gray-50">
+
+    <!-- PANTALLA DE CÀRREGA (Inicial) -->
+    <div id="loading-screen" class="fixed inset-0 bg-emerald-600 flex flex-col items-center justify-center z-50 text-white">
+        <i data-lucide="bird" class="w-16 h-16 mb-4 animate-bounce"></i>
+        <h1 class="text-3xl font-bold tracking-wider mb-2">Aviteca</h1>
+        <div class="loader mt-4"></div>
+    </div>
+
+    <!-- PANTALLA D'AUTENTICACIÓ -->
+    <div id="auth-screen" class="hidden fixed inset-0 bg-white z-40 overflow-y-auto pb-20">
+        <div class="max-w-md mx-auto p-6 flex flex-col min-h-screen justify-center">
+            <div class="text-center mb-10">
+                <div class="inline-flex items-center justify-center w-20 h-20 bg-emerald-100 rounded-full mb-4 text-emerald-600">
+                    <i data-lucide="bird" class="w-10 h-10"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Benvingut a Aviteca</h2>
+                <p class="text-gray-500 mt-2">El teu quadern de camp al núvol</p>
+            </div>
+            
+            <form id="auth-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Correu electrònic</label>
+                    <input type="email" id="auth-email" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Contrasenya</label>
+                    <input type="password" id="auth-password" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                </div>
+                
+                <div id="auth-error" class="text-red-500 text-sm hidden font-medium text-center"></div>
+                
+                <button type="submit" id="auth-submit-btn" class="w-full bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-emerald-700 transition-colors flex justify-center items-center">
+                    <span>Inicia Sessió</span>
+                </button>
+            </form>
+            
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-600">
+                    <span id="auth-toggle-text">No tens compte?</span> 
+                    <button type="button" id="auth-toggle-btn" class="text-emerald-600 font-bold hover:underline">Registra't aquí</button>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- APLICACIÓ PRINCIPAL -->
+    <div id="app-screen" class="hidden flex-col h-full w-full max-w-md mx-auto bg-white shadow-xl relative">
+        
+        <!-- HEADER -->
+        <header class="bg-emerald-600 text-white p-4 shadow-md flex justify-between items-center z-10">
+            <div class="flex items-center gap-2">
+                <i data-lucide="bird" class="w-6 h-6"></i>
+                <h1 id="header-title" class="font-bold text-lg tracking-wide">Registre</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="btn-stats" class="p-2 hover:bg-emerald-700 rounded-full transition-colors">
+                    <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+                </button>
+                <button id="btn-logout" class="p-2 hover:bg-emerald-700 rounded-full transition-colors">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- CONTINGUT PRINCIPAL (Vistes) -->
+        <main class="flex-1 overflow-y-auto bg-gray-50 pb-24 no-scrollbar relative" id="main-content">
+            
+            <!-- VISTA: REGISTRE (OBSERVACIONS) -->
+            <div id="view-registry" class="p-4 space-y-4 fade-in">
+                
+                <!-- Cercador i Filtres -->
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4 sticky top-0 z-10">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
+                        <input type="text" id="filter-text" placeholder="Cerca per espècie o lloc..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
+                    </div>
+                </div>
+
+                <div id="observations-list" class="space-y-4">
+                    <!-- Targetes d'observació generades via JS -->
+                </div>
+                
+                <div id="empty-state-registry" class="hidden flex-col items-center justify-center py-10 text-gray-400 text-center">
+                    <i data-lucide="feather" class="w-16 h-16 mb-3 opacity-50"></i>
+                    <p class="text-lg font-medium">Cap observació registrada.</p>
+                    <p class="text-sm mt-1">Vés a l'apartat de "Nova" per començar.</p>
+                </div>
+            </div>
+
+            <!-- VISTA: NOVA OBSERVACIÓ -->
+            <div id="view-new-obs" class="hidden p-4 fade-in">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Nova Observació</h2>
+                    
+                    <form id="form-new-obs" class="space-y-4">
+                        <!-- Autocomplet d'Espècie -->
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Espècie *</label>
+                            <input type="text" id="input-species" required placeholder="Escriu per cercar..." autocomplete="off" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                            
+                            <!-- Dropdown Resultats -->
+                            <div id="autocomplete-dropdown" class="hidden absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto no-scrollbar">
+                                <!-- Ítems de cerca generats via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Camps amagats però guardats -->
+                        <input type="hidden" id="input-scientific">
+                        <input type="hidden" id="input-family">
+                        <input type="hidden" id="input-order">
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Quantitat</label>
+                                <input type="number" id="input-count" min="1" value="1" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+                                <input type="date" id="input-date" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Ubicació</label>
+                            <div class="relative">
+                                <i data-lucide="map-pin" class="absolute left-3 top-3.5 text-gray-400 w-4 h-4"></i>
+                                <input type="text" id="input-location" placeholder="Ex: PN Aiguamolls..." class="w-full pl-9 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 mt-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                            <input type="checkbox" id="input-hide" class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 accent-emerald-600">
+                            <label for="input-hide" class="text-sm font-medium text-emerald-800">Observat des d'un aguait / hide</label>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Notes addicionals</label>
+                            <textarea id="input-notes" rows="2" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fotografia</label>
+                            <div class="flex items-center gap-3">
+                                <label for="input-photo" class="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-4 rounded-xl cursor-pointer transition-colors w-full border border-gray-200 border-dashed">
+                                    <i data-lucide="camera" class="w-5 h-5"></i>
+                                    <span class="text-sm font-medium">Capturar o Pujar</span>
+                                </label>
+                                <input type="file" id="input-photo" accept="image/*" class="hidden">
+                            </div>
+                            <!-- Preview de la foto -->
+                            <div id="photo-preview-container" class="hidden mt-3 relative rounded-xl overflow-hidden border border-gray-200 bg-black">
+                                <img id="photo-preview" src="" class="w-full h-40 object-cover opacity-90">
+                                <button type="button" id="btn-remove-photo" class="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:bg-red-600">
+                                    <i data-lucide="x" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btn-save-obs" class="w-full bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2 mt-6">
+                            <i data-lucide="save" class="w-5 h-5"></i>
+                            Guardar Observació
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- VISTA: SORTIDES (CHECKLISTS) -->
+            <div id="view-checklists" class="hidden p-4 fade-in">
+                <button id="btn-new-checklist" class="w-full mb-6 bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2">
+                    <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                    Nova Sortida de Camp
+                </button>
+
+                <div id="checklists-list" class="space-y-4">
+                    <!-- Targetes de sortides generades via JS -->
+                </div>
+                
+                <div id="empty-state-checklists" class="hidden flex-col items-center justify-center py-10 text-gray-400 text-center">
+                    <i data-lucide="list-checks" class="w-16 h-16 mb-3 opacity-50"></i>
+                    <p class="text-lg font-medium">Cap sortida registrada.</p>
+                </div>
+            </div>
+
+            <!-- VISTA: FORMULARI NOVA SORTIDA -->
+            <div id="view-new-checklist" class="hidden p-4 fade-in">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <div class="flex items-center gap-3 mb-4 border-b pb-3">
+                        <button id="btn-back-checklists" class="p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-700">
+                            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                        </button>
+                        <h2 class="text-xl font-bold text-gray-800">Nova Sortida (Checklist)</h2>
+                    </div>
+
+                    <form id="form-new-checklist" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nom de la Sortida *</label>
+                            <input type="text" id="check-name" required placeholder="Ex: Cens d'hivern al Delta" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+                                <input type="date" id="check-date" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Lloc</label>
+                                <input type="text" id="check-location" placeholder="Ex: Delta de l'Ebre" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-gray-100">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Llistat Ràpid d'Espècies</label>
+                            <p class="text-xs text-gray-500 mb-2">Pots escriure manualment amb el format <strong>Nom espècie (Quantitat)</strong> per línia, o utilitzar l'ajudant d'aquí sota.</p>
+                            
+                            <!-- Ajudant d'autocomplet per la llista -->
+                            <div class="flex gap-2 mb-3 bg-emerald-50 p-2 rounded-xl border border-emerald-100 relative">
+                                <div class="flex-1 relative">
+                                    <input type="text" id="helper-species" placeholder="Cerca espècie..." autocomplete="off" class="w-full p-2 text-sm bg-white border border-emerald-200 rounded-lg focus:outline-none">
+                                    <div id="helper-dropdown" class="hidden absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto no-scrollbar"></div>
+                                </div>
+                                <input type="number" id="helper-count" min="1" value="1" placeholder="Qt." class="w-16 p-2 text-sm bg-white border border-emerald-200 rounded-lg focus:outline-none text-center">
+                                <button type="button" id="btn-helper-add" class="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700">
+                                    <i data-lucide="plus" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+
+                            <textarea id="check-multiline" rows="6" placeholder="Gavià argentat (15)&#10;Gavina vulgar (3)&#10;Becut (1)" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none custom-scroll font-mono text-sm leading-relaxed"></textarea>
+                        </div>
+
+                        <button type="submit" id="btn-save-checklist" class="w-full bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2 mt-4">
+                            <i data-lucide="save" class="w-5 h-5"></i>
+                            Guardar Sortida i Observacions
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- VISTA: GUIA D'AUS (BASE DE DADES) -->
+            <div id="view-guide" class="hidden p-4 fade-in">
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4 sticky top-0 z-10">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
+                        <input type="text" id="guide-search" placeholder="Cerca al catàleg..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
+                    </div>
+                </div>
+                
+                <div class="text-sm text-gray-500 mb-3 px-1 font-medium" id="guide-count-label"></div>
+                
+                <div id="guide-list" class="space-y-3">
+                    <!-- Base de dades renderitzada aquí -->
+                </div>
+            </div>
+
+            <!-- MODAL ESTADÍSTIQUES -->
+            <div id="modal-stats" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all fade-in">
+                    <div class="bg-emerald-600 p-4 text-white flex justify-between items-center">
+                        <h3 class="font-bold text-lg flex items-center gap-2"><i data-lucide="pie-chart"></i> Estadístiques</h3>
+                        <button id="btn-close-stats" class="text-white/80 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
+                                <p class="text-xs text-emerald-800 font-medium uppercase tracking-wide">Obs. Totals</p>
+                                <p class="text-2xl font-bold text-emerald-600" id="stat-total-obs">0</p>
+                            </div>
+                            <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+                                <p class="text-xs text-blue-800 font-medium uppercase tracking-wide">Espècies Dif.</p>
+                                <p class="text-2xl font-bold text-blue-600" id="stat-diff-species">0</p>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Més observada</p>
+                            <p class="font-bold text-gray-800" id="stat-top-species">-</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Lloc principal</p>
+                            <p class="font-bold text-gray-800" id="stat-top-location">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- NAVEGACIÓ INFERIOR -->
+        <nav class="bg-white border-t border-gray-200 flex justify-around items-center p-2 pb-4 pt-3 fixed bottom-0 w-full max-w-md shadow-[0_-5px_15px_-10px_rgba(0,0,0,0.1)] z-20">
+            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors active" data-target="view-registry">
+                <div class="icon-container"><i data-lucide="list" class="w-6 h-6"></i></div>
+                <span class="text-[10px] font-medium mt-1">Registre</span>
+            </button>
+            
+            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-new-obs">
+                <div class="icon-container bg-emerald-600 text-white rounded-full p-3 -mt-6 shadow-lg shadow-emerald-200 border-4 border-white hover:bg-emerald-700 transform transition-transform hover:scale-105 active:scale-95">
+                    <i data-lucide="plus" class="w-6 h-6"></i>
+                </div>
+                <span class="text-[10px] font-medium mt-1">Nova</span>
+            </button>
+            
+            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-checklists">
+                <div class="icon-container"><i data-lucide="clipboard-list" class="w-6 h-6"></i></div>
+                <span class="text-[10px] font-medium mt-1">Sortides</span>
+            </button>
+            
+            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-guide">
+                <div class="icon-container"><i data-lucide="book-open" class="w-6 h-6"></i></div>
+                <span class="text-[10px] font-medium mt-1">Guia</span>
+            </button>
+        </nav>
+        
+        <!-- Toast de notificacions -->
+        <div id="toast-container" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-full text-sm font-medium shadow-xl flex items-center gap-2 z-50 toast-hide pointer-events-none">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+            <span id="toast-message">Operació completada</span>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDK (Mòduls) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, 
+            signInWithEmailAndPassword, createUserWithEmailAndPassword 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ==========================================
+        // 1. BASE DE DADES D'OCELLS (MOCK / INCRUSTADA)
+        // ==========================================
+        const birdDb = [
+            { commonName: "Abellerol comú", scientificName: "Merops apiaster", family: "Meropidae", order: "Coraciiformes" },
+            { commonName: "Agró blanc", scientificName: "Ardea alba", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Agró roig", scientificName: "Ardea purpurea", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Ànec collverd", scientificName: "Anas platyrhynchos", family: "Anatidae", order: "Anseriformes" },
+            { commonName: "Àguila calçada", scientificName: "Hieraaetus pennatus", family: "Accipitridae", order: "Accipitriformes" },
+            { commonName: "Becadell comú", scientificName: "Gallinago gallinago", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Becut", scientificName: "Numenius arquata", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Bernat pescaire", scientificName: "Ardea cinerea", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Bitxac comú", scientificName: "Saxicola rubicola", family: "Muscicapidae", order: "Passeriformes" },
+            { commonName: "Cigonya blanca", scientificName: "Ciconia ciconia", family: "Ciconiidae", order: "Ciconiiformes" },
+            { commonName: "Corb marí gros", scientificName: "Phalacrocorax carbo", family: "Phalacrocoracidae", order: "Suliformes" },
+            { commonName: "Flamenc", scientificName: "Phoenicopterus roseus", family: "Phoenicopteridae", order: "Phoenicopteriformes" },
+            { commonName: "Fredeluga", scientificName: "Vanellus vanellus", family: "Charadriidae", order: "Charadriiformes" },
+            { commonName: "Gamba verda", scientificName: "Tringa nebularia", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Gavià argentat", scientificName: "Larus michahellis", family: "Laridae", order: "Charadriiformes" },
+            { commonName: "Gavina vulgar", scientificName: "Chroicocephalus ridibundus", family: "Laridae", order: "Charadriiformes" },
+            { commonName: "Grasset de muntanya", scientificName: "Anthus spinoletta", family: "Motacillidae", order: "Passeriformes" },
+            { commonName: "Martinets blanc", scientificName: "Egretta garzetta", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Martinet de nit", scientificName: "Nycticorax nycticorax", family: "Ardeidae", order: "Pelecaniformes" },
+            { commonName: "Pit-roig", scientificName: "Erithacus rubecula", family: "Muscicapidae", order: "Passeriformes" },
+            { commonName: "Tètol cuanegre", scientificName: "Limosa limosa", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Voltor comú", scientificName: "Gyps fulvus", family: "Accipitridae", order: "Accipitriformes" },
+            { commonName: "Xivitona comuna", scientificName: "Actitis hypoleucos", family: "Scolopacidae", order: "Charadriiformes" },
+            { commonName: "Xoriguer comú", scientificName: "Falco tinnunculus", family: "Falconidae", order: "Falconiformes" }
+        ].sort((a, b) => a.commonName.localeCompare(b.commonName));
+
+        // ==========================================
+        // 2. CONFIGURACIÓ FIREBASE I ESTAT APP
+        // ==========================================
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'aviteca-v1';
+        let db, auth;
+        
+        const state = {
+            user: null,
+            observations: [],
+            checklists: [],
+            currentPhotoB64: null,
+            unsubs: [] // Per tancar els listeners de Firestore en desloguejar
+        };
+
+        // UI Helpers
+        const UI = {
+            loading: document.getElementById('loading-screen'),
+            auth: document.getElementById('auth-screen'),
+            app: document.getElementById('app-screen'),
+            views: {
+                'view-registry': document.getElementById('view-registry'),
+                'view-new-obs': document.getElementById('view-new-obs'),
+                'view-checklists': document.getElementById('view-checklists'),
+                'view-new-checklist': document.getElementById('view-new-checklist'),
+                'view-guide': document.getElementById('view-guide')
+            },
+            navItems: document.querySelectorAll('.nav-item'),
+            headerTitle: document.getElementById('header-title'),
+            
+            showToast(msg) {
+                const toast = document.getElementById('toast-container');
+                document.getElementById('toast-message').innerText = msg;
+                toast.classList.remove('toast-hide');
+                toast.classList.add('toast-show');
+                setTimeout(() => {
+                    toast.classList.remove('toast-show');
+                    toast.classList.add('toast-hide');
+                }, 3000);
+            },
+            
+            switchView(viewId, title) {
+                Object.values(UI.views).forEach(el => el.classList.add('hidden'));
+                if(UI.views[viewId]) UI.views[viewId].classList.remove('hidden');
+                
+                UI.navItems.forEach(btn => {
+                    if(btn.dataset.target === viewId || (viewId === 'view-new-checklist' && btn.dataset.target === 'view-checklists')) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+                
+                if(title) UI.headerTitle.innerText = title;
+                window.scrollTo(0, 0);
+            }
+        };
+
+        // INICIALITZAR FIREBASE I EXECUTAR REQUISIT OBLIGATORI (RULE 3)
+        const initFirebase = async () => {
+            try {
+                const firebaseConfig = {
+                  apiKey: "...",
+                  authDomain: "...",
+                  projectId: "...",
+                  storageBucket: "...",
+                  messagingSenderId: "...",
+                  appId: "..."
+                };
+                
+                const finalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
+                const app = initializeApp(finalConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Requisit 3: Intentar Custom Token PRIMER
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                }
+                
+                // Monitoritzar l'estat per canviar UI
+                onAuthStateChanged(auth, (user) => {
+                    state.user = user;
+                    if (user) {
+                        UI.auth.classList.add('hidden');
+                        UI.app.classList.remove('hidden');
+                        UI.app.classList.add('flex');
+                        UI.loading.classList.add('hidden');
+                        lucide.createIcons();
+                        setupDataListeners();
+                    } else {
+                        clearDataListeners();
+                        UI.app.classList.add('hidden');
+                        UI.app.classList.remove('flex');
+                        UI.auth.classList.remove('hidden');
+                        UI.loading.classList.add('hidden');
+                    }
+                });
+            } catch (err) {
+                console.error("Error init Firebase:", err);
+                UI.loading.innerHTML = `<p class="text-white mt-4">Error de connexió</p>`;
+            }
+        };
+
+        // ==========================================
+        // 3. LÒGICA D'AUTENTICACIÓ (FORMULARI EMAIL/PASS)
+        // ==========================================
+        let isLoginMode = true;
+        document.getElementById('auth-toggle-btn').addEventListener('click', () => {
+            isLoginMode = !isLoginMode;
+            document.getElementById('auth-submit-btn').innerHTML = isLoginMode ? '<span>Inicia Sessió</span>' : '<span>Crea Compte</span>';
+            document.getElementById('auth-toggle-text').innerText = isLoginMode ? "No tens compte?" : "Ja tens compte?";
+            document.getElementById('auth-toggle-btn').innerText = isLoginMode ? "Registra't aquí" : "Inicia sessió";
+            document.getElementById('auth-error').classList.add('hidden');
+        });
+
+        document.getElementById('auth-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value;
+            const pass = document.getElementById('auth-password').value;
+            const errEl = document.getElementById('auth-error');
+            const btn = document.getElementById('auth-submit-btn');
+            
+            errEl.classList.add('hidden');
+            btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div>`;
+            
+            try {
+                if (isLoginMode) {
+                    await signInWithEmailAndPassword(auth, email, pass);
+                } else {
+                    await createUserWithEmailAndPassword(auth, email, pass);
+                }
+            } catch (err) {
+                errEl.innerText = err.message.replace('Firebase:', '').trim();
+                errEl.classList.remove('hidden');
+                btn.innerHTML = isLoginMode ? '<span>Inicia Sessió</span>' : '<span>Crea Compte</span>';
+            }
+        });
+
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            if(confirm("Vols tancar la sessió?")) signOut(auth);
+        });
+
+        // ==========================================
+        // 4. LÒGICA DE DADES (FIRESTORE) - RULES 1 & 2
+        // ==========================================
+        const setupDataListeners = () => {
+            if (!state.user) return; // Guardrail (Rule 3)
+            
+            const uid = state.user.uid;
+            
+            // Listener Observacions
+            const obsRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_observations');
+            const unsubObs = onSnapshot(obsRef, (snap) => {
+                state.observations = snap.docs.map(d => d.data());
+                renderObservations();
+                updateStats();
+            }, (err) => console.error("Error fetching observations:", err));
+            
+            // Listener Checklists
+            const chkRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_checklists');
+            const unsubChk = onSnapshot(chkRef, (snap) => {
+                state.checklists = snap.docs.map(d => d.data());
+                renderChecklists();
+            }, (err) => console.error("Error fetching checklists:", err));
+
+            state.unsubs.push(unsubObs, unsubChk);
+            
+            // Fix input data per defecte (Avui)
+            document.getElementById('input-date').valueAsDate = new Date();
+            document.getElementById('check-date').valueAsDate = new Date();
+        };
+
+        const clearDataListeners = () => {
+            state.unsubs.forEach(fn => fn());
+            state.unsubs = [];
+            state.observations = [];
+            state.checklists = [];
+        };
+
+        // ==========================================
+        // 5. RENDERITZAT DE VISTES
+        // ==========================================
+        
+        // --- Registre (Observacions) ---
+        const renderObservations = () => {
+            const list = document.getElementById('observations-list');
+            const empty = document.getElementById('empty-state-registry');
+            const filterText = document.getElementById('filter-text').value.toLowerCase();
+            
+            // Filter locally (Rule 2)
+            let filtered = state.observations.filter(o => 
+                o.species.toLowerCase().includes(filterText) || 
+                (o.location && o.location.toLowerCase().includes(filterText))
+            );
+            
+            // Sort by date desc locally
+            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if(filtered.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                empty.classList.add('flex');
+            } else {
+                empty.classList.add('hidden');
+                empty.classList.remove('flex');
+                
+                list.innerHTML = filtered.map(obs => `
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 relative overflow-hidden flex flex-col gap-3 card-hover">
+                        ${obs.photo ? `
+                            <div class="h-32 -mx-4 -mt-4 mb-1 bg-gray-200">
+                                <img src="${obs.photo}" class="w-full h-full object-cover" alt="Foto ${obs.species}">
+                            </div>
+                        ` : ''}
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-gray-800 text-lg leading-tight flex items-center gap-2">
+                                    ${obs.species}
+                                    ${obs.hide ? `<i data-lucide="eye-off" class="w-4 h-4 text-emerald-600" title="Des d'aguait"></i>` : ''}
+                                </h3>
+                                <p class="text-sm italic text-gray-500">${obs.scientificName}</p>
+                            </div>
+                            <div class="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full text-sm">
+                                ${obs.count}
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600 mt-1">
+                            <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> ${formatDate(obs.date)}</span>
+                            ${obs.location ? `<span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> ${obs.location}</span>` : ''}
+                        </div>
+                        
+                        ${obs.notes ? `<div class="text-xs bg-gray-50 p-2 rounded-lg text-gray-600 mt-1 italic border border-gray-100">"${obs.notes}"</div>` : ''}
+                        
+                        <div class="mt-2 pt-3 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
+                            <span>${obs.family}</span>
+                            <button onclick="deleteObservation('${obs.id}')" class="text-red-400 hover:text-red-600 p-1 rounded transition-colors">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                lucide.createIcons();
+            }
+        };
+
+        document.getElementById('filter-text').addEventListener('input', renderObservations);
+
+        // --- Sortides (Checklists) ---
+        const renderChecklists = () => {
+            const list = document.getElementById('checklists-list');
+            const empty = document.getElementById('empty-state-checklists');
+            
+            const sorted = [...state.checklists].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if(sorted.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                empty.classList.add('flex');
+            } else {
+                empty.classList.add('hidden');
+                empty.classList.remove('flex');
+                
+                list.innerHTML = sorted.map(chk => {
+                    const obsCount = state.observations.filter(o => o.checklistId === chk.id).length;
+                    return `
+                    <div class="bg-white rounded-xl shadow-sm border border-emerald-100 p-4 border-l-4 border-l-emerald-500">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-gray-800 text-lg">${chk.name}</h3>
+                            <button onclick="deleteChecklist('${chk.id}')" class="text-red-400 hover:text-red-600">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <div class="flex flex-col gap-1 text-sm text-gray-600 mb-3">
+                            <span class="flex items-center gap-1.5"><i data-lucide="calendar" class="w-4 h-4"></i> ${formatDate(chk.date)}</span>
+                            ${chk.location ? `<span class="flex items-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4"></i> ${chk.location}</span>` : ''}
+                        </div>
+                        <div class="bg-emerald-50 text-emerald-800 text-xs font-medium py-1.5 px-3 rounded-lg inline-flex items-center gap-2 border border-emerald-100">
+                            <i data-lucide="bird" class="w-4 h-4"></i>
+                            ${obsCount} espècies registrades
+                        </div>
+                    </div>
+                `}).join('');
+                lucide.createIcons();
+            }
+        };
+
+        // --- Guia d'Aus ---
+        const renderGuide = () => {
+            const list = document.getElementById('guide-list');
+            const filterText = document.getElementById('guide-search').value.toLowerCase();
+            const label = document.getElementById('guide-count-label');
+            
+            const filtered = birdDb.filter(b => 
+                b.commonName.toLowerCase().includes(filterText) || 
+                b.scientificName.toLowerCase().includes(filterText) ||
+                b.family.toLowerCase().includes(filterText)
+            );
+            
+            label.innerText = `Mostrant ${filtered.length} espècies`;
+
+            list.innerHTML = filtered.map(bird => `
+                <div class="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex items-center gap-4">
+                    <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0">
+                        <i data-lucide="bird" class="w-6 h-6"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-gray-800 truncate">${bird.commonName}</h4>
+                        <p class="text-xs text-gray-500 italic truncate">${bird.scientificName}</p>
+                        <div class="flex gap-2 mt-1">
+                            <span class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${bird.family}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        };
+
+        document.getElementById('guide-search').addEventListener('input', renderGuide);
+
+        // --- Estadístiques ---
+        const updateStats = () => {
+            const totalObs = state.observations.reduce((acc, curr) => acc + parseInt(curr.count || 1), 0);
+            
+            const speciesSet = new Set(state.observations.map(o => o.species));
+            const diffSpecies = speciesSet.size;
+            
+            // Més observada
+            const speciesCount = {};
+            state.observations.forEach(o => {
+                speciesCount[o.species] = (speciesCount[o.species] || 0) + parseInt(o.count || 1);
+            });
+            let topSpecies = '-';
+            let maxCount = 0;
+            for (const [sp, count] of Object.entries(speciesCount)) {
+                if (count > maxCount) { maxCount = count; topSpecies = `${sp} (${count})`; }
+            }
+            
+            // Lloc principal
+            const locCount = {};
+            state.observations.forEach(o => {
+                if(o.location) locCount[o.location] = (locCount[o.location] || 0) + 1;
+            });
+            let topLoc = '-';
+            let maxLocCount = 0;
+            for (const [loc, count] of Object.entries(locCount)) {
+                if (count > maxLocCount) { maxLocCount = count; topLoc = `${loc} (${count} vegades)`; }
+            }
+
+            document.getElementById('stat-total-obs').innerText = totalObs;
+            document.getElementById('stat-diff-species').innerText = diffSpecies;
+            document.getElementById('stat-top-species').innerText = topSpecies;
+            document.getElementById('stat-top-location').innerText = topLoc;
+        };
+
+        // ==========================================
+        // 6. LÒGICA D'AUTOCOMPLETAT I FORMULARIS
+        // ==========================================
+        
+        // Autocomplet Observació Simple
+        const inputSpecies = document.getElementById('input-species');
+        const dropSpecies = document.getElementById('autocomplete-dropdown');
+        let selectedSpeciesForObs = null;
+
+        inputSpecies.addEventListener('input', () => {
+            const val = inputSpecies.value.toLowerCase();
+            dropSpecies.innerHTML = '';
+            selectedSpeciesForObs = null;
+            
+            if (!val) { dropSpecies.classList.add('hidden'); return; }
+            
+            const matches = birdDb.filter(b => b.commonName.toLowerCase().includes(val) || b.scientificName.toLowerCase().includes(val));
+            
+            if (matches.length > 0) {
+                dropSpecies.classList.remove('hidden');
+                matches.slice(0, 10).forEach(b => {
+                    const div = document.createElement('div');
+                    div.className = 'px-4 py-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex flex-col transition-colors';
+                    div.innerHTML = `<span class="font-bold text-gray-800">${b.commonName}</span><span class="text-xs text-gray-500 italic">${b.scientificName}</span>`;
+                    div.onmousedown = (e) => { // mousedown dispara abans que blur de l'input
+                        e.preventDefault();
+                        inputSpecies.value = b.commonName;
+                        selectedSpeciesForObs = b;
+                        document.getElementById('input-scientific').value = b.scientificName;
+                        document.getElementById('input-family').value = b.family;
+                        document.getElementById('input-order').value = b.order;
+                        dropSpecies.classList.add('hidden');
+                    };
+                    dropSpecies.appendChild(div);
+                });
+            } else {
+                dropSpecies.classList.add('hidden');
+            }
+        });
+
+        // Forçar selecció de la llista (NO text lliure)
+        inputSpecies.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (!selectedSpeciesForObs || inputSpecies.value !== selectedSpeciesForObs.commonName) {
+                    inputSpecies.value = '';
+                    selectedSpeciesForObs = null;
+                    UI.showToast("Has de seleccionar una espècie de la llista.");
+                }
+                dropSpecies.classList.add('hidden');
+            }, 150);
+        });
+
+        // Guardar Nova Observació
+        document.getElementById('form-new-obs').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!state.user || !selectedSpeciesForObs) return;
+
+            const btn = document.getElementById('btn-save-obs');
+            const origText = btn.innerHTML;
+            btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div> Guardant...`;
+            btn.disabled = true;
+
+            const id = crypto.randomUUID();
+            const obs = {
+                id,
+                species: document.getElementById('input-species').value,
+                scientificName: document.getElementById('input-scientific').value,
+                family: document.getElementById('input-family').value,
+                order: document.getElementById('input-order').value,
+                count: parseInt(document.getElementById('input-count').value || 1),
+                date: document.getElementById('input-date').value,
+                location: document.getElementById('input-location').value,
+                hide: document.getElementById('input-hide').checked,
+                notes: document.getElementById('input-notes').value,
+                photo: state.currentPhotoB64,
+                checklistId: null,
+                createdAt: new Date().toISOString()
+            };
+
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id);
+                await setDoc(docRef, obs);
+                
+                UI.showToast("Observació desada!");
+                document.getElementById('form-new-obs').reset();
+                document.getElementById('input-date').valueAsDate = new Date();
+                selectedSpeciesForObs = null;
+                removePhoto();
+                
+                // Tornar a registre
+                UI.switchView('view-registry', 'Registre');
+            } catch (err) {
+                console.error("Error saving:", err);
+                alert("Error al guardar l'observació.");
+            } finally {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }
+        });
+
+        // --- Gestió de Fotos (Comprimir a Base64) ---
+        document.getElementById('input-photo').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width, height = img.height;
+                    const max = 600; // Mida màxima per no saturar Firestore (1MB limit)
+                    
+                    if (width > height) { if (width > max) { height *= max / width; width = max; } } 
+                    else { if (height > max) { width *= max / height; height = max; } }
+                    
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    state.currentPhotoB64 = dataUrl;
+                    
+                    document.getElementById('photo-preview').src = dataUrl;
+                    document.getElementById('photo-preview-container').classList.remove('hidden');
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        const removePhoto = () => {
+            state.currentPhotoB64 = null;
+            document.getElementById('photo-preview-container').classList.add('hidden');
+            document.getElementById('input-photo').value = '';
+        };
+        document.getElementById('btn-remove-photo').addEventListener('click', removePhoto);
+
+
+        // --- Lògica CHECKLIST (Ajudant i Multilínia) ---
+        const helperSpecies = document.getElementById('helper-species');
+        const helperDropdown = document.getElementById('helper-dropdown');
+        let selectedHelperBird = null;
+
+        helperSpecies.addEventListener('input', () => {
+            const val = helperSpecies.value.toLowerCase();
+            helperDropdown.innerHTML = '';
+            selectedHelperBird = null;
+            
+            if (!val) { helperDropdown.classList.add('hidden'); return; }
+            
+            const matches = birdDb.filter(b => b.commonName.toLowerCase().includes(val)).slice(0, 5);
+            if (matches.length > 0) {
+                helperDropdown.classList.remove('hidden');
+                matches.forEach(b => {
+                    const div = document.createElement('div');
+                    div.className = 'p-2 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer text-sm font-medium';
+                    div.innerText = b.commonName;
+                    div.onmousedown = (e) => {
+                        e.preventDefault();
+                        helperSpecies.value = b.commonName;
+                        selectedHelperBird = b;
+                        helperDropdown.classList.add('hidden');
+                    };
+                    helperDropdown.appendChild(div);
+                });
+            } else {
+                helperDropdown.classList.add('hidden');
+            }
+        });
+
+        helperSpecies.addEventListener('blur', () => { setTimeout(() => helperDropdown.classList.add('hidden'), 150); });
+
+        document.getElementById('btn-helper-add').addEventListener('click', () => {
+            if (!selectedHelperBird) {
+                UI.showToast("Cerca i selecciona una espècie primer.");
+                return;
+            }
+            const count = document.getElementById('helper-count').value || 1;
+            const textToAdd = `${selectedHelperBird.commonName} (${count})`;
+            
+            const textarea = document.getElementById('check-multiline');
+            if (textarea.value.length > 0 && !textarea.value.endsWith('\n')) {
+                textarea.value += '\n';
+            }
+            textarea.value += textToAdd + '\n';
+            
+            // Netejar ajudant
+            helperSpecies.value = '';
+            document.getElementById('helper-count').value = '1';
+            selectedHelperBird = null;
+            helperSpecies.focus();
+        });
+
+        // Guardar Checklist + Parseig de línies
+        document.getElementById('form-new-checklist').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!state.user) return;
+
+            const multilineText = document.getElementById('check-multiline').value.trim();
+            if (!multilineText) {
+                alert("Afegeix almenys una espècie a la llista.");
+                return;
+            }
+
+            const btn = document.getElementById('btn-save-checklist');
+            const origText = btn.innerHTML;
+            btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div> Processant...`;
+            btn.disabled = true;
+
+            const checklistId = crypto.randomUUID();
+            const date = document.getElementById('check-date').value;
+            const location = document.getElementById('check-location').value;
+
+            const checklistObj = {
+                id: checklistId,
+                name: document.getElementById('check-name').value,
+                date: date,
+                location: location,
+                notes: "",
+                createdAt: new Date().toISOString()
+            };
+
+            // Parsejar les línies
+            const lines = multilineText.split('\n');
+            const observationsToSave = [];
+            let errors = 0;
+
+            for (const line of lines) {
+                const trimLine = line.trim();
+                if (!trimLine) continue;
+                
+                // Buscar format: "Espècie (Quantitat)" o només "Espècie"
+                const match = trimLine.match(/^(.*?)(?:\s*\((.*?)\))?$/);
+                if (match) {
+                    const rawName = match[1].trim();
+                    let count = 1;
+                    if (match[2] && !isNaN(parseInt(match[2]))) {
+                        count = parseInt(match[2]);
+                    }
+
+                    // Validar si existeix a la BD
+                    const bird = birdDb.find(b => b.commonName.toLowerCase() === rawName.toLowerCase());
+                    if (bird) {
+                        observationsToSave.push({
+                            id: crypto.randomUUID(),
+                            species: bird.commonName,
+                            scientificName: bird.scientificName,
+                            family: bird.family,
+                            order: bird.order,
+                            count: count,
+                            date: date,
+                            location: location,
+                            hide: false,
+                            notes: "",
+                            photo: null,
+                            checklistId: checklistId,
+                            createdAt: new Date().toISOString()
+                        });
+                    } else {
+                        errors++;
+                        console.warn("No trobat: ", rawName);
+                    }
+                }
+            }
+
+            if (observationsToSave.length === 0) {
+                alert("No s'ha pogut reconèixer cap espècie vàlida. Assegurat d'escriure els noms correctament o usar l'ajudant.");
+                btn.innerHTML = origText; btn.disabled = false;
+                return;
+            }
+
+            try {
+                // 1. Guardar Checklist
+                await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', checklistId), checklistObj);
+                
+                // 2. Guardar cada observació (En producció es faria un writeBatch, però aquí usem un bucle simple per seguir regles establertes)
+                for (const obs of observationsToSave) {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id), obs);
+                }
+
+                let msg = `Sortida guardada amb ${observationsToSave.length} espècies.`;
+                if (errors > 0) msg += ` (${errors} línies no reconegudes).`;
+                UI.showToast(msg);
+                
+                document.getElementById('form-new-checklist').reset();
+                document.getElementById('check-date').valueAsDate = new Date();
+                UI.switchView('view-checklists', 'Sortides');
+            } catch (err) {
+                console.error("Error saving checklist:", err);
+                alert("Error al processar la llista.");
+            } finally {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }
+        });
+
+
+        // ==========================================
+        // 7. FUNCIONS GLOBALS (ESBORRAR, ETC.)
+        // ==========================================
+        window.deleteObservation = async (id) => {
+            if (!state.user || !confirm("Vols esborrar aquesta observació?")) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id));
+                UI.showToast("Observació esborrada");
+            } catch (err) { console.error(err); }
+        };
+
+        window.deleteChecklist = async (id) => {
+            if (!state.user || !confirm("Esborrar aquesta sortida i TOTES les observacions associades?")) return;
+            try {
+                // Esborrar checklist
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', id));
+                // Esborrar observacions filles (Recerca local per ids i esborrar cadascuna)
+                const toDelete = state.observations.filter(o => o.checklistId === id);
+                for (const obs of toDelete) {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id));
+                }
+                UI.showToast("Sortida i dades esborrades");
+            } catch (err) { console.error(err); }
+        };
+
+        // Format de Data
+        const formatDate = (dateStr) => {
+            if(!dateStr) return '';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+
+
+        // ==========================================
+        // 8. NAVEGACIÓ I ESDEVENIMENTS UI
+        // ==========================================
+        UI.navItems.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.dataset.target;
+                const titles = {
+                    'view-registry': 'Registre',
+                    'view-new-obs': 'Nova Observació',
+                    'view-checklists': 'Sortides',
+                    'view-guide': "Guia d'Aus"
+                };
+                UI.switchView(target, titles[target]);
+                
+                // Actualitzar contingut si cal
+                if (target === 'view-guide' && document.getElementById('guide-list').innerHTML === '') {
+                    renderGuide();
+                }
+            });
+        });
+
+        document.getElementById('btn-new-checklist').addEventListener('click', () => {
+            UI.switchView('view-new-checklist', 'Nova Sortida');
+        });
+        document.getElementById('btn-back-checklists').addEventListener('click', () => {
+            UI.switchView('view-checklists', 'Sortides');
+        });
+
+        // Gestió Modal Estadístiques
+        const modalStats = document.getElementById('modal-stats');
+        document.getElementById('btn-stats').addEventListener('click', () => {
+            updateStats();
+            modalStats.classList.remove('hidden');
+        });
+        document.getElementById('btn-close-stats').addEventListener('click', () => modalStats.classList.add('hidden'));
+
+        // ==========================================
+        // 9. INICI DE L'APP
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initFirebase();
+        });
+
+    </script>
+</body>
+</html>
