@@ -127,13 +127,37 @@
                 
                 <!-- Cercador i Filtres -->
                 <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4 sticky top-0 z-10">
-                    <div class="relative">
-                        <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
-                        <input type="text" id="filter-text" placeholder="Cerca per espècie o lloc..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
+                            <input type="text" id="filter-text" placeholder="Cerca per espècie o lloc..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+                        <button id="btn-toggle-filters" class="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 border border-gray-200 transition-colors">
+                            <i data-lucide="filter" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <!-- Filtres avançats ocults per defecte -->
+                    <div id="advanced-filters" class="hidden mt-3 pt-3 border-t border-gray-100 space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="filter-family" placeholder="Família..." class="w-full p-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none">
+                            <input type="text" id="filter-order" placeholder="Ordre..." class="w-full p-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Data inici</label>
+                                <input type="date" id="filter-date-start" class="w-full p-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Data fi</label>
+                                <input type="date" id="filter-date-end" class="w-full p-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none">
+                            </div>
+                        </div>
+                        <button id="btn-clear-filters" class="w-full bg-gray-200 text-gray-700 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-300">Netejar filtres</button>
                     </div>
                 </div>
 
-                <div id="observations-list" class="space-y-4">
+                <div id="observations-list" class="space-y-6">
                     <!-- Targetes d'observació generades via JS -->
                 </div>
                 
@@ -144,12 +168,25 @@
                 </div>
             </div>
 
-            <!-- VISTA: NOVA OBSERVACIÓ -->
+            <!-- VISTA: NOVA OBSERVACIÓ (I EDITAR) -->
             <div id="view-new-obs" class="hidden p-4 fade-in">
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Nova Observació</h2>
+                    <h2 id="new-obs-title" class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Nova Observació</h2>
                     
                     <form id="form-new-obs" class="space-y-4">
+                        
+                        <!-- Tipus d'observació -->
+                        <div class="flex gap-2">
+                            <label class="flex items-center justify-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-xl border border-gray-200 flex-1 hover:bg-emerald-50 transition-colors">
+                                <input type="radio" name="input-type" value="visual" checked class="w-4 h-4 text-emerald-600 accent-emerald-600">
+                                <i data-lucide="eye" class="w-4 h-4 text-gray-600"></i> <span class="text-sm font-medium text-gray-700">Visual</span>
+                            </label>
+                            <label class="flex items-center justify-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-xl border border-gray-200 flex-1 hover:bg-emerald-50 transition-colors">
+                                <input type="radio" name="input-type" value="auditiva" class="w-4 h-4 text-emerald-600 accent-emerald-600">
+                                <i data-lucide="ear" class="w-4 h-4 text-gray-600"></i> <span class="text-sm font-medium text-gray-700">Auditiva</span>
+                            </label>
+                        </div>
+
                         <!-- Autocomplet d'Espècie -->
                         <div class="relative">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Espècie *</label>
@@ -215,7 +252,10 @@
 
                         <button type="submit" id="btn-save-obs" class="w-full bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2 mt-6">
                             <i data-lucide="save" class="w-5 h-5"></i>
-                            Guardar Observació
+                            <span id="text-save-obs">Guardar Observació</span>
+                        </button>
+                        <button type="button" id="btn-cancel-edit" class="hidden w-full bg-gray-200 text-gray-800 font-bold py-3.5 px-4 rounded-xl hover:bg-gray-300 transition-colors mt-2">
+                            Cancel·lar Edició
                         </button>
                     </form>
                 </div>
@@ -266,22 +306,39 @@
                         </div>
 
                         <div class="pt-2 border-t border-gray-100">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Llistat Ràpid d'Espècies</label>
-                            <p class="text-xs text-gray-500 mb-2">Pots escriure manualment amb el format <strong>Nom espècie (Quantitat)</strong> per línia, o utilitzar l'ajudant d'aquí sota.</p>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Llistat d'Espècies</label>
+                            <p class="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">Mètode 1: Escriu lliurement i processa</p>
                             
+                            <div class="relative mb-4">
+                                <textarea id="check-multiline" rows="3" placeholder="Gavià argentat (15)&#10;Gavina vulgar (3)&#10;Becut (1)" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-sm leading-relaxed"></textarea>
+                                <button type="button" id="btn-process-text" class="absolute bottom-3 right-3 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 shadow-sm transition-colors">
+                                    <i data-lucide="list-plus" class="w-3 h-3"></i> Convertir a Llista
+                                </button>
+                            </div>
+
+                            <p class="text-[10px] text-gray-500 mb-2 uppercase tracking-wide border-t border-gray-100 pt-3">Mètode 2: Cerca i afegeix ràpid</p>
                             <!-- Ajudant d'autocomplet per la llista -->
                             <div class="flex gap-2 mb-3 bg-emerald-50 p-2 rounded-xl border border-emerald-100 relative">
                                 <div class="flex-1 relative">
                                     <input type="text" id="helper-species" placeholder="Cerca espècie..." autocomplete="off" class="w-full p-2 text-sm bg-white border border-emerald-200 rounded-lg focus:outline-none">
                                     <div id="helper-dropdown" class="hidden absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto no-scrollbar"></div>
                                 </div>
-                                <input type="number" id="helper-count" min="1" value="1" placeholder="Qt." class="w-16 p-2 text-sm bg-white border border-emerald-200 rounded-lg focus:outline-none text-center">
-                                <button type="button" id="btn-helper-add" class="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700">
-                                    <i data-lucide="plus" class="w-5 h-5"></i>
+                                <button type="button" id="btn-helper-add" class="bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700">
+                                    Afegeix
                                 </button>
                             </div>
 
-                            <textarea id="check-multiline" rows="6" placeholder="Gavià argentat (15)&#10;Gavina vulgar (3)&#10;Becut (1)" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none custom-scroll font-mono text-sm leading-relaxed"></textarea>
+                            <!-- LLISTA VISUAL EDITABLE -->
+                            <div class="mt-4 bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                                <div class="bg-gray-100 p-2 text-xs font-bold text-gray-600 flex justify-between items-center border-b border-gray-200">
+                                    <span>Llista Final a Guardar</span>
+                                    <span id="visual-list-count" class="bg-emerald-600 text-white px-2 py-0.5 rounded-full">0</span>
+                                </div>
+                                <div id="visual-checklist-items" class="p-2 space-y-2 max-h-60 overflow-y-auto custom-scroll">
+                                    <!-- Items via JS -->
+                                    <div class="text-center p-4 text-gray-400 text-xs italic">Afegeix espècies a dalt per construir la llista.</div>
+                                </div>
+                            </div>
                         </div>
 
                         <button type="submit" id="btn-save-checklist" class="w-full bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2 mt-4">
@@ -292,12 +349,17 @@
                 </div>
             </div>
 
-            <!-- VISTA: GUIA D'AUS (BASE DE DADES) -->
+            <!-- VISTA: BASE DADES (GUIA D'AUS) -->
             <div id="view-guide" class="hidden p-4 fade-in">
                 <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4 sticky top-0 z-10">
-                    <div class="relative">
-                        <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
-                        <input type="text" id="guide-search" placeholder="Cerca al catàleg..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
+                            <input type="text" id="guide-search" placeholder="Cerca al catàleg..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+                        <button id="btn-open-custom-species" class="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700 transition-colors" title="Afegir espècie manual">
+                            <i data-lucide="plus" class="w-5 h-5"></i>
+                        </button>
                     </div>
                 </div>
                 
@@ -318,23 +380,47 @@
                     <div class="p-5 space-y-4">
                         <div class="grid grid-cols-2 gap-3">
                             <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
-                                <p class="text-xs text-emerald-800 font-medium uppercase tracking-wide">Obs. Totals</p>
-                                <p class="text-2xl font-bold text-emerald-600" id="stat-total-obs">0</p>
+                                <p class="text-[10px] text-emerald-800 font-bold uppercase tracking-wide">Obs. Totals</p>
+                                <p class="text-2xl font-black text-emerald-600" id="stat-total-obs">0</p>
                             </div>
-                            <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
-                                <p class="text-xs text-blue-800 font-medium uppercase tracking-wide">Espècies Dif.</p>
-                                <p class="text-2xl font-bold text-blue-600" id="stat-diff-species">0</p>
+                            <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center relative overflow-hidden">
+                                <div class="absolute -right-2 -top-2 opacity-10"><i data-lucide="award" class="w-12 h-12"></i></div>
+                                <p class="text-[10px] text-blue-800 font-bold uppercase tracking-wide relative z-10">Life List (Espècies)</p>
+                                <p class="text-2xl font-black text-blue-600 relative z-10" id="stat-diff-species">0</p>
                             </div>
                         </div>
-                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200">
-                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Més observada</p>
-                            <p class="font-bold text-gray-800" id="stat-top-species">-</p>
+                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 flex justify-between items-center">
+                            <div>
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1">Més observada</p>
+                                <p class="font-bold text-gray-800 text-sm" id="stat-top-species">-</p>
+                            </div>
+                            <i data-lucide="trending-up" class="w-6 h-6 text-emerald-400"></i>
                         </div>
                         <div class="bg-gray-50 p-3 rounded-xl border border-gray-200">
-                            <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Lloc principal</p>
-                            <p class="font-bold text-gray-800" id="stat-top-location">-</p>
+                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1">Millor ubicació (varietat)</p>
+                            <p class="font-bold text-gray-800 text-sm" id="stat-top-location">-</p>
+                            <p class="text-xs text-gray-500" id="stat-top-location-sub"></p>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- MODAL AFEGIR ESPÈCIE MANUAL -->
+            <div id="modal-custom-species" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all fade-in p-5">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                        <h3 class="font-bold text-lg text-gray-800">Afegir Espècie Nova</h3>
+                        <button id="btn-close-custom-species" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    <form id="form-custom-species" class="space-y-3">
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Nom Comú *</label><input type="text" id="custom-common" required class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
+                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Nom Científic</label><input type="text" id="custom-scientific" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-xs font-bold text-gray-600 mb-1">Família</label><input type="text" id="custom-family" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
+                            <div><label class="block text-xs font-bold text-gray-600 mb-1">Ordre</label><input type="text" id="custom-order" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
+                        </div>
+                        <button type="submit" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-emerald-700 mt-2">Guardar a la Base de Dades</button>
+                    </form>
                 </div>
             </div>
 
@@ -361,7 +447,7 @@
             
             <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-guide">
                 <div class="icon-container"><i data-lucide="book-open" class="w-6 h-6"></i></div>
-                <span class="text-[10px] font-medium mt-1">Guia</span>
+                <span class="text-[10px] font-medium mt-1">Base dades</span>
             </button>
         </nav>
         
@@ -382,38 +468,43 @@
             signInWithEmailAndPassword, createUserWithEmailAndPassword 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
-            getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc 
+            getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // ==========================================
-        // 1. BASE DE DADES D'OCELLS (MOCK / INCRUSTADA)
+        // 1. BASE DE DADES D'OCELLS (MOCK + FETCH)
         // ==========================================
-        const birdDb = [
-            { commonName: "Abellerol comú", scientificName: "Merops apiaster", family: "Meropidae", order: "Coraciiformes" },
-            { commonName: "Agró blanc", scientificName: "Ardea alba", family: "Ardeidae", order: "Pelecaniformes" },
-            { commonName: "Agró roig", scientificName: "Ardea purpurea", family: "Ardeidae", order: "Pelecaniformes" },
-            { commonName: "Ànec collverd", scientificName: "Anas platyrhynchos", family: "Anatidae", order: "Anseriformes" },
-            { commonName: "Àguila calçada", scientificName: "Hieraaetus pennatus", family: "Accipitridae", order: "Accipitriformes" },
-            { commonName: "Becadell comú", scientificName: "Gallinago gallinago", family: "Scolopacidae", order: "Charadriiformes" },
-            { commonName: "Becut", scientificName: "Numenius arquata", family: "Scolopacidae", order: "Charadriiformes" },
-            { commonName: "Bernat pescaire", scientificName: "Ardea cinerea", family: "Ardeidae", order: "Pelecaniformes" },
-            { commonName: "Bitxac comú", scientificName: "Saxicola rubicola", family: "Muscicapidae", order: "Passeriformes" },
-            { commonName: "Cigonya blanca", scientificName: "Ciconia ciconia", family: "Ciconiidae", order: "Ciconiiformes" },
-            { commonName: "Corb marí gros", scientificName: "Phalacrocorax carbo", family: "Phalacrocoracidae", order: "Suliformes" },
-            { commonName: "Flamenc", scientificName: "Phoenicopterus roseus", family: "Phoenicopteridae", order: "Phoenicopteriformes" },
-            { commonName: "Fredeluga", scientificName: "Vanellus vanellus", family: "Charadriidae", order: "Charadriiformes" },
-            { commonName: "Gamba verda", scientificName: "Tringa nebularia", family: "Scolopacidae", order: "Charadriiformes" },
-            { commonName: "Gavià argentat", scientificName: "Larus michahellis", family: "Laridae", order: "Charadriiformes" },
-            { commonName: "Gavina vulgar", scientificName: "Chroicocephalus ridibundus", family: "Laridae", order: "Charadriiformes" },
-            { commonName: "Grasset de muntanya", scientificName: "Anthus spinoletta", family: "Motacillidae", order: "Passeriformes" },
-            { commonName: "Martinets blanc", scientificName: "Egretta garzetta", family: "Ardeidae", order: "Pelecaniformes" },
-            { commonName: "Martinet de nit", scientificName: "Nycticorax nycticorax", family: "Ardeidae", order: "Pelecaniformes" },
-            { commonName: "Pit-roig", scientificName: "Erithacus rubecula", family: "Muscicapidae", order: "Passeriformes" },
-            { commonName: "Tètol cuanegre", scientificName: "Limosa limosa", family: "Scolopacidae", order: "Charadriiformes" },
-            { commonName: "Voltor comú", scientificName: "Gyps fulvus", family: "Accipitridae", order: "Accipitriformes" },
-            { commonName: "Xivitona comuna", scientificName: "Actitis hypoleucos", family: "Scolopacidae", order: "Charadriiformes" },
-            { commonName: "Xoriguer comú", scientificName: "Falco tinnunculus", family: "Falconidae", order: "Falconiformes" }
-        ].sort((a, b) => a.commonName.localeCompare(b.commonName));
+        let birdDb = [];
+        // Carregar espècies customitzades de localStorage
+        let customBirds = JSON.parse(localStorage.getItem('aviteca_custom_birds') || '[]');
+
+        const loadBirds = async () => {
+            try {
+                const res = await fetch('birds.json');
+                if(res.ok) {
+                    const data = await res.json();
+                    birdDb = [...data, ...customBirds].sort((a, b) => a.commonName.localeCompare(b.commonName));
+                } else {
+                    throw new Error("No s'ha trobat birds.json");
+                }
+            } catch (e) {
+                console.warn("Utilitzant llista temporal o custom. Posa 'birds.json' a la mateixa carpeta.", e);
+                birdDb = [...customBirds];
+            }
+            if(document.getElementById('guide-list').innerHTML !== '') renderGuide();
+        };
+
+        // Algoritme de cerca amb tolerància (toLowerCase + includes)
+        const findClosestSpecies = (name) => {
+            if(!name) return null;
+            const lower = name.toLowerCase().trim();
+            // 1. Coincidència exacta
+            let match = birdDb.find(b => b.commonName.toLowerCase() === lower);
+            if(match) return match;
+            // 2. Coincidència parcial forta
+            match = birdDb.find(b => b.commonName.toLowerCase().includes(lower) || lower.includes(b.commonName.toLowerCase()));
+            return match || null;
+        };
 
         // ==========================================
         // 2. CONFIGURACIÓ FIREBASE I ESTAT APP
@@ -426,7 +517,20 @@
             observations: [],
             checklists: [],
             currentPhotoB64: null,
-            unsubs: [] // Per tancar els listeners de Firestore en desloguejar
+            editingObsId: null, // Per saber si estem editant
+            checklistVisualItems: [], // Llista d'objectes {species, scientificName, count, family, order}
+            unsubs: [] 
+        };
+
+        // Helpers de colors per famílies (disseny)
+        const getFamilyColorClass = (fam) => {
+            if(!fam) return 'bg-gray-100 text-gray-600';
+            const f = fam.toLowerCase();
+            if(f.includes('accipitr') || f.includes('falcon')) return 'bg-red-100 text-red-700 border-red-200';
+            if(f.includes('anat') || f.includes('ardei') || f.includes('pelecan')) return 'bg-blue-100 text-blue-700 border-blue-200';
+            if(f.includes('scolop') || f.includes('charad')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+            if(f.includes('larid')) return 'bg-cyan-100 text-cyan-700 border-cyan-200';
+            return 'bg-gray-100 text-gray-600 border-gray-200';
         };
 
         // UI Helpers
@@ -466,17 +570,18 @@
                         btn.classList.remove('active');
                     }
                 });
-                
                 if(title) UI.headerTitle.innerText = title;
+                
+                // Netejar estat edició si sortim
+                if(viewId !== 'view-new-obs' && state.editingObsId) resetObservationForm();
+                
                 window.scrollTo(0, 0);
             }
         };
 
-        // INICIALITZAR FIREBASE I EXECUTAR REQUISIT OBLIGATORI (RULE 3)
+        // INICIALITZAR FIREBASE
         const initFirebase = async () => {
             try {
-                // Your web app's Firebase configuration
-                // For Firebase JS SDK v7.20.0 and later, measurementId is optional
                 const firebaseConfig = {
                   apiKey: "AIzaSyDlDEjCYH59RFAGfP6v9BOUsWjRr0bTA-0",
                   authDomain: "aviteca-8479a.firebaseapp.com",
@@ -493,12 +598,10 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // Requisit 3: Intentar Custom Token PRIMER
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 }
                 
-                // Monitoritzar l'estat per canviar UI
                 onAuthStateChanged(auth, (user) => {
                     state.user = user;
                     if (user) {
@@ -508,6 +611,7 @@
                         UI.loading.classList.add('hidden');
                         lucide.createIcons();
                         setupDataListeners();
+                        loadBirds(); // Carregar dades quan entra
                     } else {
                         clearDataListeners();
                         UI.app.classList.add('hidden');
@@ -522,9 +626,7 @@
             }
         };
 
-        // ==========================================
-        // 3. LÒGICA D'AUTENTICACIÓ (FORMULARI EMAIL/PASS)
-        // ==========================================
+        // LÒGICA D'AUTENTICACIÓ...
         let isLoginMode = true;
         document.getElementById('auth-toggle-btn').addEventListener('click', () => {
             isLoginMode = !isLoginMode;
@@ -545,11 +647,8 @@
             btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div>`;
             
             try {
-                if (isLoginMode) {
-                    await signInWithEmailAndPassword(auth, email, pass);
-                } else {
-                    await createUserWithEmailAndPassword(auth, email, pass);
-                }
+                if (isLoginMode) await signInWithEmailAndPassword(auth, email, pass);
+                else await createUserWithEmailAndPassword(auth, email, pass);
             } catch (err) {
                 errEl.innerText = err.message.replace('Firebase:', '').trim();
                 errEl.classList.remove('hidden');
@@ -557,64 +656,77 @@
             }
         });
 
-        document.getElementById('btn-logout').addEventListener('click', () => {
-            if(confirm("Vols tancar la sessió?")) signOut(auth);
-        });
+        document.getElementById('btn-logout').addEventListener('click', () => { if(confirm("Vols tancar la sessió?")) signOut(auth); });
 
-        // ==========================================
-        // 4. LÒGICA DE DADES (FIRESTORE) - RULES 1 & 2
-        // ==========================================
+        // LÒGICA DE DADES FIRESTORE
         const setupDataListeners = () => {
-            if (!state.user) return; // Guardrail (Rule 3)
-            
+            if (!state.user) return;
             const uid = state.user.uid;
             
-            // Listener Observacions
             const obsRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_observations');
             const unsubObs = onSnapshot(obsRef, (snap) => {
                 state.observations = snap.docs.map(d => d.data());
                 renderObservations();
                 updateStats();
-            }, (err) => console.error("Error fetching observations:", err));
+            }, (err) => console.error(err));
             
-            // Listener Checklists
             const chkRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_checklists');
             const unsubChk = onSnapshot(chkRef, (snap) => {
                 state.checklists = snap.docs.map(d => d.data());
                 renderChecklists();
-            }, (err) => console.error("Error fetching checklists:", err));
+            }, (err) => console.error(err));
 
             state.unsubs.push(unsubObs, unsubChk);
             
-            // Fix input data per defecte (Avui)
             document.getElementById('input-date').valueAsDate = new Date();
             document.getElementById('check-date').valueAsDate = new Date();
         };
-
-        const clearDataListeners = () => {
-            state.unsubs.forEach(fn => fn());
-            state.unsubs = [];
-            state.observations = [];
-            state.checklists = [];
-        };
+        const clearDataListeners = () => { state.unsubs.forEach(fn => fn()); state.unsubs = []; };
 
         // ==========================================
-        // 5. RENDERITZAT DE VISTES
+        // RENDERITZAT DE VISTES I FILTRES
         // ==========================================
         
-        // --- Registre (Observacions) ---
+        // --- Filtres Avançats ---
+        const btnToggleFilters = document.getElementById('btn-toggle-filters');
+        const panelFilters = document.getElementById('advanced-filters');
+        btnToggleFilters.addEventListener('click', () => {
+            panelFilters.classList.toggle('hidden');
+            btnToggleFilters.classList.toggle('bg-emerald-100');
+            btnToggleFilters.classList.toggle('text-emerald-700');
+        });
+        document.getElementById('btn-clear-filters').addEventListener('click', () => {
+            document.getElementById('filter-family').value = '';
+            document.getElementById('filter-order').value = '';
+            document.getElementById('filter-date-start').value = '';
+            document.getElementById('filter-date-end').value = '';
+            document.getElementById('filter-text').value = '';
+            renderObservations();
+        });
+        ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end'].forEach(id => {
+            document.getElementById(id).addEventListener('input', renderObservations);
+        });
+
         const renderObservations = () => {
             const list = document.getElementById('observations-list');
             const empty = document.getElementById('empty-state-registry');
-            const filterText = document.getElementById('filter-text').value.toLowerCase();
             
-            // Filter locally (Rule 2)
-            let filtered = state.observations.filter(o => 
-                o.species.toLowerCase().includes(filterText) || 
-                (o.location && o.location.toLowerCase().includes(filterText))
-            );
+            // Valors Filtres
+            const fText = document.getElementById('filter-text').value.toLowerCase();
+            const fFam = document.getElementById('filter-family').value.toLowerCase();
+            const fOrd = document.getElementById('filter-order').value.toLowerCase();
+            const fDStart = document.getElementById('filter-date-start').value;
+            const fDEnd = document.getElementById('filter-date-end').value;
             
-            // Sort by date desc locally
+            let filtered = state.observations.filter(o => {
+                const textMatch = o.species.toLowerCase().includes(fText) || (o.location && o.location.toLowerCase().includes(fText));
+                const famMatch = !fFam || (o.family && o.family.toLowerCase().includes(fFam));
+                const ordMatch = !fOrd || (o.order && o.order.toLowerCase().includes(fOrd));
+                const dateStartMatch = !fDStart || new Date(o.date) >= new Date(fDStart);
+                const dateEndMatch = !fDEnd || new Date(o.date) <= new Date(fDEnd);
+                return textMatch && famMatch && ordMatch && dateStartMatch && dateEndMatch;
+            });
+            
             filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
             if(filtered.length === 0) {
@@ -625,52 +737,95 @@
                 empty.classList.add('hidden');
                 empty.classList.remove('flex');
                 
-                list.innerHTML = filtered.map(obs => `
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 relative overflow-hidden flex flex-col gap-3 card-hover">
-                        ${obs.photo ? `
-                            <div class="h-32 -mx-4 -mt-4 mb-1 bg-gray-200">
-                                <img src="${obs.photo}" class="w-full h-full object-cover" alt="Foto ${obs.species}">
+                // Agrupar per dates
+                const grouped = {};
+                filtered.forEach(o => {
+                    if(!grouped[o.date]) grouped[o.date] = [];
+                    grouped[o.date].push(o);
+                });
+
+                let htmlStr = '';
+                for (const [dateStr, obsArr] of Object.entries(grouped).sort((a,b)=>new Date(b[0])-new Date(a[0]))) {
+                    htmlStr += `<div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-4 px-1 border-b border-gray-200 pb-1 flex items-center gap-1"><i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> ${formatDate(dateStr)}</div>`;
+                    htmlStr += `<div class="space-y-3">`;
+                    
+                    obsArr.forEach(obs => {
+                        const isVisual = !obs.type || obs.type === 'visual';
+                        const typeIcon = isVisual ? 'eye' : 'ear';
+                        const famColor = getFamilyColorClass(obs.family);
+
+                        htmlStr += `
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 relative overflow-hidden flex flex-col gap-3 card-hover group">
+                            ${obs.photo ? `
+                                <div class="relative h-44 -mx-4 -mt-4 mb-1">
+                                    <img src="${obs.photo}" class="w-full h-full object-cover rounded-t-xl" alt="Foto">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                                    <div class="absolute bottom-3 left-4 right-4 flex justify-between items-end text-white">
+                                        <div class="flex-1 min-w-0 pr-2">
+                                            <h3 class="font-bold text-lg leading-tight flex items-center gap-2 truncate">
+                                                ${obs.species}
+                                            </h3>
+                                            <p class="text-xs italic opacity-90 truncate">${obs.scientificName}</p>
+                                        </div>
+                                        <div class="bg-emerald-500/90 font-bold px-3 py-1 rounded-full text-sm shadow-lg backdrop-blur-sm shrink-0">
+                                            ${obs.count}
+                                        </div>
+                                    </div>
+                                    <div class="absolute top-3 right-3 flex gap-1">
+                                        <div class="bg-black/50 p-1.5 rounded-full backdrop-blur-sm text-white/90">
+                                            <i data-lucide="${typeIcon}" class="w-4 h-4"></i>
+                                        </div>
+                                        ${obs.hide ? `<div class="bg-black/50 p-1.5 rounded-full backdrop-blur-sm text-white/90" title="Aguait"><i data-lucide="eye-off" class="w-4 h-4"></i></div>` : ''}
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="flex justify-between items-start">
+                                    <div class="flex-1 min-w-0 pr-2">
+                                        <h3 class="font-bold text-gray-800 text-lg leading-tight flex items-center gap-2 truncate">
+                                            ${obs.species}
+                                            <i data-lucide="${typeIcon}" class="w-4 h-4 text-emerald-600" title="${isVisual?'Visual':'Auditiva'}"></i>
+                                            ${obs.hide ? `<i data-lucide="eye-off" class="w-4 h-4 text-emerald-600" title="Des d'aguait"></i>` : ''}
+                                        </h3>
+                                        <p class="text-sm italic text-gray-500 truncate">${obs.scientificName}</p>
+                                    </div>
+                                    <div class="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full text-sm shrink-0">
+                                        ${obs.count}
+                                    </div>
+                                </div>
+                            `}
+                            
+                            <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600">
+                                ${obs.location ? `<span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100"><i data-lucide="map-pin" class="w-3.5 h-3.5 text-gray-400"></i> ${obs.location}</span>` : ''}
+                                <span class="flex items-center gap-1 border border-transparent px-1 rounded ${famColor}">${obs.family}</span>
                             </div>
-                        ` : ''}
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="font-bold text-gray-800 text-lg leading-tight flex items-center gap-2">
-                                    ${obs.species}
-                                    ${obs.hide ? `<i data-lucide="eye-off" class="w-4 h-4 text-emerald-600" title="Des d'aguait"></i>` : ''}
-                                </h3>
-                                <p class="text-sm italic text-gray-500">${obs.scientificName}</p>
+                            
+                            ${obs.notes ? `<div class="text-xs bg-orange-50/50 p-2 rounded-lg text-gray-600 italic border border-orange-100">"${obs.notes}"</div>` : ''}
+                            
+                            <!-- Botons Acció ràpida (Edit/Duplicate/Delete) -->
+                            <div class="mt-1 pt-2 border-t border-gray-50 flex justify-end items-center gap-2">
+                                <button onclick="duplicateObservation('${obs.id}')" class="text-gray-400 hover:text-blue-600 p-1.5 rounded bg-gray-50 hover:bg-blue-50 transition-colors" title="Duplicar">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="editObservation('${obs.id}')" class="text-gray-400 hover:text-emerald-600 p-1.5 rounded bg-gray-50 hover:bg-emerald-50 transition-colors" title="Editar">
+                                    <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deleteObservation('${obs.id}')" class="text-gray-400 hover:text-red-600 p-1.5 rounded bg-gray-50 hover:bg-red-50 transition-colors" title="Esborrar">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
                             </div>
-                            <div class="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full text-sm">
-                                ${obs.count}
-                            </div>
-                        </div>
-                        
-                        <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600 mt-1">
-                            <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> ${formatDate(obs.date)}</span>
-                            ${obs.location ? `<span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i> ${obs.location}</span>` : ''}
-                        </div>
-                        
-                        ${obs.notes ? `<div class="text-xs bg-gray-50 p-2 rounded-lg text-gray-600 mt-1 italic border border-gray-100">"${obs.notes}"</div>` : ''}
-                        
-                        <div class="mt-2 pt-3 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                            <span>${obs.family}</span>
-                            <button onclick="deleteObservation('${obs.id}')" class="text-red-400 hover:text-red-600 p-1 rounded transition-colors">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
+                        </div>`;
+                    });
+                    htmlStr += `</div>`;
+                }
+                list.innerHTML = htmlStr;
                 lucide.createIcons();
             }
         };
 
-        document.getElementById('filter-text').addEventListener('input', renderObservations);
-
-        // --- Sortides (Checklists) ---
+        // --- Sortides i Guia ---
         const renderChecklists = () => {
             const list = document.getElementById('checklists-list');
             const empty = document.getElementById('empty-state-checklists');
-            
             const sorted = [...state.checklists].sort((a, b) => new Date(b.date) - new Date(a.date));
 
             if(sorted.length === 0) {
@@ -680,7 +835,6 @@
             } else {
                 empty.classList.add('hidden');
                 empty.classList.remove('flex');
-                
                 list.innerHTML = sorted.map(chk => {
                     const obsCount = state.observations.filter(o => o.checklistId === chk.id).length;
                     return `
@@ -696,16 +850,13 @@
                             ${chk.location ? `<span class="flex items-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4"></i> ${chk.location}</span>` : ''}
                         </div>
                         <div class="bg-emerald-50 text-emerald-800 text-xs font-medium py-1.5 px-3 rounded-lg inline-flex items-center gap-2 border border-emerald-100">
-                            <i data-lucide="bird" class="w-4 h-4"></i>
-                            ${obsCount} espècies registrades
+                            <i data-lucide="bird" class="w-4 h-4"></i> ${obsCount} espècies registrades
                         </div>
-                    </div>
-                `}).join('');
+                    </div>`}).join('');
                 lucide.createIcons();
             }
         };
 
-        // --- Guia d'Aus ---
         const renderGuide = () => {
             const list = document.getElementById('guide-list');
             const filterText = document.getElementById('guide-search').value.toLowerCase();
@@ -718,66 +869,89 @@
             );
             
             label.innerText = `Mostrant ${filtered.length} espècies`;
-
-            list.innerHTML = filtered.map(bird => `
-                <div class="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex items-center gap-4">
+            list.innerHTML = filtered.map(bird => {
+                const famColor = getFamilyColorClass(bird.family);
+                const isCustom = customBirds.some(cb => cb.commonName === bird.commonName);
+                return `
+                <div class="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex items-center gap-4 relative">
+                    ${isCustom ? `<div class="absolute -top-1 -right-1 bg-orange-400 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full" title="Afegida manualment">M</div>` : ''}
                     <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0">
                         <i data-lucide="bird" class="w-6 h-6"></i>
                     </div>
                     <div class="flex-1 min-w-0">
                         <h4 class="font-bold text-gray-800 truncate">${bird.commonName}</h4>
-                        <p class="text-xs text-gray-500 italic truncate">${bird.scientificName}</p>
+                        <p class="text-xs text-gray-500 italic truncate">${bird.scientificName || '-'}</p>
                         <div class="flex gap-2 mt-1">
-                            <span class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${bird.family}</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded border ${famColor}">${bird.family || 'Sense Família'}</span>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                </div>`}).join('');
             lucide.createIcons();
         };
-
         document.getElementById('guide-search').addEventListener('input', renderGuide);
+
+        // --- Modal Custom Species ---
+        document.getElementById('btn-open-custom-species').addEventListener('click', () => {
+            document.getElementById('modal-custom-species').classList.remove('hidden');
+        });
+        document.getElementById('btn-close-custom-species').addEventListener('click', () => {
+            document.getElementById('modal-custom-species').classList.add('hidden');
+        });
+        document.getElementById('form-custom-species').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const nou = {
+                commonName: document.getElementById('custom-common').value.trim(),
+                scientificName: document.getElementById('custom-scientific').value.trim(),
+                family: document.getElementById('custom-family').value.trim(),
+                order: document.getElementById('custom-order').value.trim()
+            };
+            customBirds.push(nou);
+            localStorage.setItem('aviteca_custom_birds', JSON.stringify(customBirds));
+            birdDb.push(nou);
+            birdDb.sort((a,b)=>a.commonName.localeCompare(b.commonName));
+            
+            document.getElementById('form-custom-species').reset();
+            document.getElementById('modal-custom-species').classList.add('hidden');
+            UI.showToast("Espècie afegida correctament!");
+            renderGuide();
+        });
+
 
         // --- Estadístiques ---
         const updateStats = () => {
             const totalObs = state.observations.reduce((acc, curr) => acc + parseInt(curr.count || 1), 0);
-            
             const speciesSet = new Set(state.observations.map(o => o.species));
-            const diffSpecies = speciesSet.size;
             
-            // Més observada
+            // Top espècie
             const speciesCount = {};
-            state.observations.forEach(o => {
-                speciesCount[o.species] = (speciesCount[o.species] || 0) + parseInt(o.count || 1);
-            });
-            let topSpecies = '-';
-            let maxCount = 0;
-            for (const [sp, count] of Object.entries(speciesCount)) {
-                if (count > maxCount) { maxCount = count; topSpecies = `${sp} (${count})`; }
-            }
+            state.observations.forEach(o => { speciesCount[o.species] = (speciesCount[o.species] || 0) + parseInt(o.count || 1); });
+            let topSpecies = '-'; let maxCount = 0;
+            for (const [sp, count] of Object.entries(speciesCount)) { if (count > maxCount) { maxCount = count; topSpecies = `${sp} (${count})`; } }
             
-            // Lloc principal
-            const locCount = {};
+            // Lloc amb més varietat d'espècies
+            const locSpecies = {}; // { lloc: Set() }
             state.observations.forEach(o => {
-                if(o.location) locCount[o.location] = (locCount[o.location] || 0) + 1;
+                if(o.location) {
+                    if(!locSpecies[o.location]) locSpecies[o.location] = new Set();
+                    locSpecies[o.location].add(o.species);
+                }
             });
-            let topLoc = '-';
-            let maxLocCount = 0;
-            for (const [loc, count] of Object.entries(locCount)) {
-                if (count > maxLocCount) { maxLocCount = count; topLoc = `${loc} (${count} vegades)`; }
+            let topLoc = '-'; let maxLocVariety = 0;
+            for (const [loc, sSet] of Object.entries(locSpecies)) { 
+                if (sSet.size > maxLocVariety) { maxLocVariety = sSet.size; topLoc = loc; } 
             }
 
             document.getElementById('stat-total-obs').innerText = totalObs;
-            document.getElementById('stat-diff-species').innerText = diffSpecies;
+            document.getElementById('stat-diff-species').innerText = speciesSet.size;
             document.getElementById('stat-top-species').innerText = topSpecies;
             document.getElementById('stat-top-location').innerText = topLoc;
+            document.getElementById('stat-top-location-sub').innerText = maxLocVariety > 0 ? `${maxLocVariety} espècies diferents` : '';
         };
 
         // ==========================================
-        // 6. LÒGICA D'AUTOCOMPLETAT I FORMULARIS
+        // LÒGICA D'OBSERVACIONS (NOVA, EDITAR, DUPLICAR)
         // ==========================================
         
-        // Autocomplet Observació Simple
         const inputSpecies = document.getElementById('input-species');
         const dropSpecies = document.getElementById('autocomplete-dropdown');
         let selectedSpeciesForObs = null;
@@ -786,18 +960,16 @@
             const val = inputSpecies.value.toLowerCase();
             dropSpecies.innerHTML = '';
             selectedSpeciesForObs = null;
-            
             if (!val) { dropSpecies.classList.add('hidden'); return; }
             
             const matches = birdDb.filter(b => b.commonName.toLowerCase().includes(val) || b.scientificName.toLowerCase().includes(val));
-            
             if (matches.length > 0) {
                 dropSpecies.classList.remove('hidden');
                 matches.slice(0, 10).forEach(b => {
                     const div = document.createElement('div');
                     div.className = 'px-4 py-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex flex-col transition-colors';
                     div.innerHTML = `<span class="font-bold text-gray-800">${b.commonName}</span><span class="text-xs text-gray-500 italic">${b.scientificName}</span>`;
-                    div.onmousedown = (e) => { // mousedown dispara abans que blur de l'input
+                    div.onmousedown = (e) => {
                         e.preventDefault();
                         inputSpecies.value = b.commonName;
                         selectedSpeciesForObs = b;
@@ -808,36 +980,44 @@
                     };
                     dropSpecies.appendChild(div);
                 });
-            } else {
-                dropSpecies.classList.add('hidden');
-            }
+            } else dropSpecies.classList.add('hidden');
         });
 
-        // Forçar selecció de la llista (NO text lliure)
         inputSpecies.addEventListener('blur', () => {
             setTimeout(() => {
-                if (!selectedSpeciesForObs || inputSpecies.value !== selectedSpeciesForObs.commonName) {
-                    inputSpecies.value = '';
-                    selectedSpeciesForObs = null;
-                    UI.showToast("Has de seleccionar una espècie de la llista.");
+                // Autocorrecció si hi ha un match clar
+                if (!selectedSpeciesForObs && inputSpecies.value) {
+                    const closest = findClosestSpecies(inputSpecies.value);
+                    if(closest) {
+                        inputSpecies.value = closest.commonName;
+                        selectedSpeciesForObs = closest;
+                        document.getElementById('input-scientific').value = closest.scientificName;
+                        document.getElementById('input-family').value = closest.family;
+                        document.getElementById('input-order').value = closest.order;
+                        UI.showToast("Espècie auto-corregida");
+                    } else {
+                        inputSpecies.value = '';
+                        UI.showToast("Has de seleccionar una espècie vàlida.");
+                    }
                 }
                 dropSpecies.classList.add('hidden');
             }, 150);
         });
 
-        // Guardar Nova Observació
+        // Form Submit (Crear o Actualitzar)
         document.getElementById('form-new-obs').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!state.user || !selectedSpeciesForObs) return;
 
             const btn = document.getElementById('btn-save-obs');
-            const origText = btn.innerHTML;
-            btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div> Guardant...`;
+            const origText = document.getElementById('text-save-obs').innerText;
+            btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div>`;
             btn.disabled = true;
 
-            const id = crypto.randomUUID();
+            const isEdit = !!state.editingObsId;
+            const id = isEdit ? state.editingObsId : crypto.randomUUID();
+            
             const obs = {
-                id,
                 species: document.getElementById('input-species').value,
                 scientificName: document.getElementById('input-scientific').value,
                 family: document.getElementById('input-family').value,
@@ -846,56 +1026,118 @@
                 date: document.getElementById('input-date').value,
                 location: document.getElementById('input-location').value,
                 hide: document.getElementById('input-hide').checked,
+                type: document.querySelector('input[name="input-type"]:checked').value,
                 notes: document.getElementById('input-notes').value,
-                photo: state.currentPhotoB64,
-                checklistId: null,
-                createdAt: new Date().toISOString()
             };
+            
+            if(state.currentPhotoB64) obs.photo = state.currentPhotoB64; // Només sobreescriu si hi ha foto nova al editar
+            if(!isEdit) {
+                obs.id = id;
+                obs.checklistId = null;
+                obs.createdAt = new Date().toISOString();
+                if(!obs.photo) obs.photo = null;
+            }
 
             try {
                 const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id);
-                await setDoc(docRef, obs);
+                if (isEdit) {
+                    await updateDoc(docRef, obs);
+                    UI.showToast("Observació actualitzada!");
+                } else {
+                    await setDoc(docRef, obs);
+                    UI.showToast("Observació desada!");
+                }
                 
-                UI.showToast("Observació desada!");
-                document.getElementById('form-new-obs').reset();
-                document.getElementById('input-date').valueAsDate = new Date();
-                selectedSpeciesForObs = null;
-                removePhoto();
-                
-                // Tornar a registre
+                resetObservationForm();
                 UI.switchView('view-registry', 'Registre');
             } catch (err) {
                 console.error("Error saving:", err);
                 alert("Error al guardar l'observació.");
             } finally {
-                btn.innerHTML = origText;
+                btn.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i><span id="text-save-obs">${origText}</span>`;
+                lucide.createIcons();
                 btn.disabled = false;
             }
         });
 
-        // --- Gestió de Fotos (Comprimir a Base64) ---
-        document.getElementById('input-photo').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        const resetObservationForm = () => {
+            document.getElementById('form-new-obs').reset();
+            document.getElementById('input-date').valueAsDate = new Date();
+            selectedSpeciesForObs = null;
+            state.editingObsId = null;
+            removePhoto();
+            document.getElementById('new-obs-title').innerText = "Nova Observació";
+            document.getElementById('text-save-obs').innerText = "Guardar Observació";
+            document.getElementById('btn-cancel-edit').classList.add('hidden');
+        };
 
+        document.getElementById('btn-cancel-edit').addEventListener('click', () => {
+            resetObservationForm();
+            UI.switchView('view-registry', 'Registre');
+        });
+
+        // Funcions globals window
+        window.editObservation = (id) => {
+            const obs = state.observations.find(o => o.id === id);
+            if(!obs) return;
+            
+            state.editingObsId = id;
+            selectedSpeciesForObs = birdDb.find(b => b.commonName === obs.species) || {commonName: obs.species};
+            
+            document.getElementById('input-species').value = obs.species;
+            document.getElementById('input-scientific').value = obs.scientificName || '';
+            document.getElementById('input-family').value = obs.family || '';
+            document.getElementById('input-order').value = obs.order || '';
+            document.getElementById('input-count').value = obs.count;
+            document.getElementById('input-date').value = obs.date;
+            document.getElementById('input-location').value = obs.location || '';
+            document.getElementById('input-hide').checked = obs.hide;
+            document.getElementById('input-notes').value = obs.notes || '';
+            
+            // Radio buttons
+            const types = document.getElementsByName('input-type');
+            for(let i=0; i<types.length; i++) {
+                if(types[i].value === (obs.type || 'visual')) types[i].checked = true;
+            }
+
+            document.getElementById('new-obs-title').innerText = "Editar Observació";
+            document.getElementById('text-save-obs').innerText = "Actualitzar";
+            document.getElementById('btn-cancel-edit').classList.remove('hidden');
+            
+            UI.switchView('view-new-obs', 'Editar');
+        };
+
+        window.duplicateObservation = async (id) => {
+            if (!state.user) return;
+            const original = state.observations.find(o => o.id === id);
+            if(!original) return;
+
+            const newId = crypto.randomUUID();
+            const today = new Date().toISOString().split('T')[0];
+            const duplicat = { ...original, id: newId, date: today, checklistId: null, createdAt: new Date().toISOString() };
+            
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', newId), duplicat);
+                UI.showToast("Observació duplicada (data d'avui)");
+            } catch (err) { console.error(err); }
+        };
+
+        // Gestió de Fotos
+        document.getElementById('input-photo').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = (ev) => {
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     let width = img.width, height = img.height;
-                    const max = 600; // Mida màxima per no saturar Firestore (1MB limit)
-                    
+                    const max = 600; 
                     if (width > height) { if (width > max) { height *= max / width; width = max; } } 
                     else { if (height > max) { width *= max / height; height = max; } }
-                    
                     canvas.width = width; canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
+                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                     state.currentPhotoB64 = dataUrl;
-                    
                     document.getElementById('photo-preview').src = dataUrl;
                     document.getElementById('photo-preview-container').classList.remove('hidden');
                 };
@@ -912,7 +1154,87 @@
         document.getElementById('btn-remove-photo').addEventListener('click', removePhoto);
 
 
-        // --- Lògica CHECKLIST (Ajudant i Multilínia) ---
+        // ==========================================
+        // LÒGICA CHECKLISTS (SISTEMA VISUAL MILLORAT)
+        // ==========================================
+        
+        // Renderitzar llista visual
+        const renderVisualChecklist = () => {
+            const container = document.getElementById('visual-checklist-items');
+            document.getElementById('visual-list-count').innerText = state.checklistVisualItems.length;
+            
+            if(state.checklistVisualItems.length === 0) {
+                container.innerHTML = `<div class="text-center p-4 text-gray-400 text-xs italic">Afegeix espècies a dalt per construir la llista.</div>`;
+                return;
+            }
+
+            container.innerHTML = state.checklistVisualItems.map((item, index) => `
+                <div class="flex items-center justify-between bg-white p-2 rounded border border-gray-100 shadow-sm gap-2">
+                    <div class="flex-1 min-w-0">
+                        <p class="font-bold text-gray-800 text-sm truncate">${item.species}</p>
+                        <p class="text-[10px] text-gray-500 italic truncate">${item.scientificName}</p>
+                    </div>
+                    <div class="flex items-center gap-1 bg-gray-50 rounded-lg p-0.5 border border-gray-200">
+                        <button type="button" onclick="changeChecklistItemCount(${index}, -1)" class="w-6 h-6 flex items-center justify-center text-gray-600 hover:bg-gray-200 rounded"><i data-lucide="minus" class="w-3 h-3"></i></button>
+                        <span class="w-6 text-center text-xs font-bold">${item.count}</span>
+                        <button type="button" onclick="changeChecklistItemCount(${index}, 1)" class="w-6 h-6 flex items-center justify-center text-gray-600 hover:bg-gray-200 rounded"><i data-lucide="plus" class="w-3 h-3"></i></button>
+                    </div>
+                    <button type="button" onclick="removeChecklistItem(${index})" class="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded ml-1">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        };
+
+        window.changeChecklistItemCount = (index, delta) => {
+            state.checklistVisualItems[index].count += delta;
+            if(state.checklistVisualItems[index].count < 1) state.checklistVisualItems[index].count = 1;
+            renderVisualChecklist();
+        };
+        window.removeChecklistItem = (index) => {
+            state.checklistVisualItems.splice(index, 1);
+            renderVisualChecklist();
+        };
+
+        // Mètode 1: Processar Multilínia
+        document.getElementById('btn-process-text').addEventListener('click', () => {
+            const text = document.getElementById('check-multiline').value.trim();
+            if(!text) return;
+            const lines = text.split('\n');
+            let added = 0;
+            
+            for (const line of lines) {
+                const trimLine = line.trim();
+                if (!trimLine) continue;
+                const match = trimLine.match(/^(.*?)(?:\s*\((.*?)\))?$/);
+                if (match) {
+                    const rawName = match[1].trim();
+                    const count = (match[2] && !isNaN(parseInt(match[2]))) ? parseInt(match[2]) : 1;
+                    const bird = findClosestSpecies(rawName);
+                    
+                    if (bird) {
+                        // Comprovar si ja hi és per sumar
+                        const exist = state.checklistVisualItems.find(i => i.species === bird.commonName);
+                        if(exist) exist.count += count;
+                        else {
+                            state.checklistVisualItems.push({
+                                species: bird.commonName, scientificName: bird.scientificName,
+                                family: bird.family, order: bird.order, count: count
+                            });
+                        }
+                        added++;
+                    }
+                }
+            }
+            if(added>0) {
+                document.getElementById('check-multiline').value = '';
+                renderVisualChecklist();
+                UI.showToast(`${added} espècies processades a la llista.`);
+            } else UI.showToast("No s'han trobat espècies vàlides.");
+        });
+
+        // Mètode 2: Ajudant
         const helperSpecies = document.getElementById('helper-species');
         const helperDropdown = document.getElementById('helper-dropdown');
         let selectedHelperBird = null;
@@ -921,7 +1243,6 @@
             const val = helperSpecies.value.toLowerCase();
             helperDropdown.innerHTML = '';
             selectedHelperBird = null;
-            
             if (!val) { helperDropdown.classList.add('hidden'); return; }
             
             const matches = birdDb.filter(b => b.commonName.toLowerCase().includes(val)).slice(0, 5);
@@ -939,47 +1260,40 @@
                     };
                     helperDropdown.appendChild(div);
                 });
-            } else {
-                helperDropdown.classList.add('hidden');
-            }
+            } else helperDropdown.classList.add('hidden');
         });
 
         helperSpecies.addEventListener('blur', () => { setTimeout(() => helperDropdown.classList.add('hidden'), 150); });
 
         document.getElementById('btn-helper-add').addEventListener('click', () => {
             if (!selectedHelperBird) {
-                UI.showToast("Cerca i selecciona una espècie primer.");
-                return;
+                const closest = findClosestSpecies(helperSpecies.value);
+                if(closest) selectedHelperBird = closest;
+                else return UI.showToast("Espècie no vàlida.");
             }
-            const count = document.getElementById('helper-count').value || 1;
-            const textToAdd = `${selectedHelperBird.commonName} (${count})`;
             
-            const textarea = document.getElementById('check-multiline');
-            if (textarea.value.length > 0 && !textarea.value.endsWith('\n')) {
-                textarea.value += '\n';
+            const exist = state.checklistVisualItems.find(i => i.species === selectedHelperBird.commonName);
+            if(exist) exist.count += 1;
+            else {
+                state.checklistVisualItems.push({
+                    species: selectedHelperBird.commonName, scientificName: selectedHelperBird.scientificName,
+                    family: selectedHelperBird.family, order: selectedHelperBird.order, count: 1
+                });
             }
-            textarea.value += textToAdd + '\n';
             
-            // Netejar ajudant
             helperSpecies.value = '';
-            document.getElementById('helper-count').value = '1';
             selectedHelperBird = null;
             helperSpecies.focus();
+            renderVisualChecklist();
         });
 
-        // Guardar Checklist + Parseig de línies
+        // Guardar Sortida Final
         document.getElementById('form-new-checklist').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!state.user) return;
-
-            const multilineText = document.getElementById('check-multiline').value.trim();
-            if (!multilineText) {
-                alert("Afegeix almenys una espècie a la llista.");
-                return;
-            }
+            if (state.checklistVisualItems.length === 0) return alert("La llista està buida. Afegeix espècies primer.");
 
             const btn = document.getElementById('btn-save-checklist');
-            const origText = btn.innerHTML;
             btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div> Processant...`;
             btn.disabled = true;
 
@@ -988,161 +1302,74 @@
             const location = document.getElementById('check-location').value;
 
             const checklistObj = {
-                id: checklistId,
-                name: document.getElementById('check-name').value,
-                date: date,
-                location: location,
-                notes: "",
-                createdAt: new Date().toISOString()
+                id: checklistId, name: document.getElementById('check-name').value,
+                date, location, notes: "", createdAt: new Date().toISOString()
             };
 
-            // Parsejar les línies
-            const lines = multilineText.split('\n');
-            const observationsToSave = [];
-            let errors = 0;
-
-            for (const line of lines) {
-                const trimLine = line.trim();
-                if (!trimLine) continue;
-                
-                // Buscar format: "Espècie (Quantitat)" o només "Espècie"
-                const match = trimLine.match(/^(.*?)(?:\s*\((.*?)\))?$/);
-                if (match) {
-                    const rawName = match[1].trim();
-                    let count = 1;
-                    if (match[2] && !isNaN(parseInt(match[2]))) {
-                        count = parseInt(match[2]);
-                    }
-
-                    // Validar si existeix a la BD
-                    const bird = birdDb.find(b => b.commonName.toLowerCase() === rawName.toLowerCase());
-                    if (bird) {
-                        observationsToSave.push({
-                            id: crypto.randomUUID(),
-                            species: bird.commonName,
-                            scientificName: bird.scientificName,
-                            family: bird.family,
-                            order: bird.order,
-                            count: count,
-                            date: date,
-                            location: location,
-                            hide: false,
-                            notes: "",
-                            photo: null,
-                            checklistId: checklistId,
-                            createdAt: new Date().toISOString()
-                        });
-                    } else {
-                        errors++;
-                        console.warn("No trobat: ", rawName);
-                    }
-                }
-            }
-
-            if (observationsToSave.length === 0) {
-                alert("No s'ha pogut reconèixer cap espècie vàlida. Assegurat d'escriure els noms correctament o usar l'ajudant.");
-                btn.innerHTML = origText; btn.disabled = false;
-                return;
-            }
-
             try {
-                // 1. Guardar Checklist
                 await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', checklistId), checklistObj);
                 
-                // 2. Guardar cada observació (En producció es faria un writeBatch, però aquí usem un bucle simple per seguir regles establertes)
-                for (const obs of observationsToSave) {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id), obs);
+                for (const item of state.checklistVisualItems) {
+                    const obsId = crypto.randomUUID();
+                    await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obsId), {
+                        id: obsId, species: item.species, scientificName: item.scientificName,
+                        family: item.family, order: item.order, count: item.count,
+                        date, location, hide: false, type: 'visual', notes: "", photo: null,
+                        checklistId, createdAt: new Date().toISOString()
+                    });
                 }
 
-                let msg = `Sortida guardada amb ${observationsToSave.length} espècies.`;
-                if (errors > 0) msg += ` (${errors} línies no reconegudes).`;
-                UI.showToast(msg);
-                
+                UI.showToast(`Sortida guardada amb ${state.checklistVisualItems.length} espècies.`);
                 document.getElementById('form-new-checklist').reset();
                 document.getElementById('check-date').valueAsDate = new Date();
+                state.checklistVisualItems = [];
+                renderVisualChecklist();
                 UI.switchView('view-checklists', 'Sortides');
             } catch (err) {
                 console.error("Error saving checklist:", err);
                 alert("Error al processar la llista.");
             } finally {
-                btn.innerHTML = origText;
+                btn.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i> Guardar Sortida i Observacions`;
+                lucide.createIcons();
                 btn.disabled = false;
             }
         });
 
-
-        // ==========================================
-        // 7. FUNCIONS GLOBALS (ESBORRAR, ETC.)
-        // ==========================================
         window.deleteObservation = async (id) => {
             if (!state.user || !confirm("Vols esborrar aquesta observació?")) return;
-            try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id));
-                UI.showToast("Observació esborrada");
-            } catch (err) { console.error(err); }
+            try { await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id)); UI.showToast("Observació esborrada"); } 
+            catch (err) { console.error(err); }
         };
 
         window.deleteChecklist = async (id) => {
             if (!state.user || !confirm("Esborrar aquesta sortida i TOTES les observacions associades?")) return;
             try {
-                // Esborrar checklist
                 await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', id));
-                // Esborrar observacions filles (Recerca local per ids i esborrar cadascuna)
                 const toDelete = state.observations.filter(o => o.checklistId === id);
-                for (const obs of toDelete) {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id));
-                }
+                for (const obs of toDelete) await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id));
                 UI.showToast("Sortida i dades esborrades");
             } catch (err) { console.error(err); }
         };
 
-        // Format de Data
         const formatDate = (dateStr) => {
             if(!dateStr) return '';
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            return new Date(dateStr).toLocaleDateString('ca-ES', { day: 'numeric', month: 'long', year: 'numeric' });
         };
 
-
-        // ==========================================
-        // 8. NAVEGACIÓ I ESDEVENIMENTS UI
-        // ==========================================
+        // NAV & INICI
         UI.navItems.forEach(btn => {
             btn.addEventListener('click', () => {
                 const target = btn.dataset.target;
-                const titles = {
-                    'view-registry': 'Registre',
-                    'view-new-obs': 'Nova Observació',
-                    'view-checklists': 'Sortides',
-                    'view-guide': "Guia d'Aus"
-                };
+                const titles = { 'view-registry': 'Registre', 'view-new-obs': 'Nova Observació', 'view-checklists': 'Sortides', 'view-guide': "Base dades" };
                 UI.switchView(target, titles[target]);
-                
-                // Actualitzar contingut si cal
-                if (target === 'view-guide' && document.getElementById('guide-list').innerHTML === '') {
-                    renderGuide();
-                }
             });
         });
 
-        document.getElementById('btn-new-checklist').addEventListener('click', () => {
-            UI.switchView('view-new-checklist', 'Nova Sortida');
-        });
-        document.getElementById('btn-back-checklists').addEventListener('click', () => {
-            UI.switchView('view-checklists', 'Sortides');
-        });
+        document.getElementById('btn-new-checklist').addEventListener('click', () => UI.switchView('view-new-checklist', 'Nova Sortida'));
+        document.getElementById('btn-back-checklists').addEventListener('click', () => UI.switchView('view-checklists', 'Sortides'));
+        document.getElementById('btn-stats').addEventListener('click', () => { updateStats(); document.getElementById('modal-stats').classList.remove('hidden'); });
+        document.getElementById('btn-close-stats').addEventListener('click', () => document.getElementById('modal-stats').classList.add('hidden'));
 
-        // Gestió Modal Estadístiques
-        const modalStats = document.getElementById('modal-stats');
-        document.getElementById('btn-stats').addEventListener('click', () => {
-            updateStats();
-            modalStats.classList.remove('hidden');
-        });
-        document.getElementById('btn-close-stats').addEventListener('click', () => modalStats.classList.add('hidden'));
-
-        // ==========================================
-        // 9. INICI DE L'APP
-        // ==========================================
         window.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             initFirebase();
