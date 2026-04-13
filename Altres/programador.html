@@ -86,6 +86,8 @@
         const provider = new GoogleAuthProvider();
 
         window.currentUser = null;
+        window.isDataLoaded = false;
+        window.lastFirebaseData = null;
 
         window.login = async function() {
             await signInWithPopup(auth, provider);
@@ -102,6 +104,7 @@
                 carregarDades();
             } else {
                 window.currentUser = null;
+                window.isDataLoaded = false;
                 if (window.updateReactUser) window.updateReactUser(null);
                 console.log("Usuari no logat");
             }
@@ -109,24 +112,79 @@
 
         window.guardarDades = async function(dades) {
             if (!window.currentUser) return;
-            await setDoc(doc(db, "programador_docent", window.currentUser.uid), dades);
-            console.log("Dades guardades al núvol");
+            
+            // 7. CONTROL DE CÀRREGA FIREBASE i 8. ANTI-RACE CONDITION
+            if (!window.isDataLoaded) {
+                console.warn("Guardat cancel·lat per evitar pèrdua de dades: Firebase no carregat completament");
+                return;
+            }
+
+            // 1. PROTECCIÓ CONTRA SOBRESCRIPTURA (CRÍTIC)
+            if (!dades || !dades.courses || dades.courses.length === 0) {
+                console.warn("Guardat cancel·lat per evitar pèrdua de dades: estructures buides");
+                return;
+            }
+
+            if (window.lastFirebaseData && window.lastFirebaseData.courses) {
+                const oldLen = JSON.stringify(window.lastFirebaseData.courses).length;
+                const newLen = JSON.stringify(dades.courses).length;
+                if (newLen < oldLen * 0.8) { // Marge de seguretat dràstic
+                    console.warn("Guardat cancel·lat per evitar pèrdua de dades: la nova versió és dràsticament menor.");
+                    return;
+                }
+            }
+
+            console.log("Iniciant guardat segur al núvol...");
+
+            // 4. BACKUPS AUTOMÀTICS (FIREBASE)
+            try {
+                const timestamp = Date.now();
+                const histRef = doc(db, "programador_backups", window.currentUser.uid);
+                const histSnap = await getDoc(histRef);
+                let history = [];
+                if (histSnap.exists()) history = histSnap.data().history || [];
+                
+                history.unshift({ id: timestamp, timestamp: new Date().toISOString(), dades: dades });
+                if (history.length > 20) history = history.slice(0, 20);
+                await setDoc(histRef, { history });
+                console.log("Backup de seguretat al núvol generat correctament.");
+            } catch(e) { console.error("Error guardant backup a Firebase", e); }
+
+            try {
+                await setDoc(doc(db, "programador_docent", window.currentUser.uid), dades);
+                window.lastFirebaseData = dades;
+                console.log("Dades guardades al núvol correctament.");
+            } catch(e) { console.error("Error guardant dades principals", e); }
+        }
+
+        window.loadBackups = async function() {
+            if (!window.currentUser) return [];
+            try {
+                const histSnap = await getDoc(doc(db, "programador_backups", window.currentUser.uid));
+                if (histSnap.exists()) return histSnap.data().history || [];
+            } catch(e) { console.error("Error carregant backups de Firebase", e); }
+            return [];
         }
 
         async function carregarDades() {
             if (!window.currentUser) return;
+            console.log("Iniciant càrrega de dades des de Firebase...");
             const snap = await getDoc(doc(db, "programador_docent", window.currentUser.uid));
+
+            window.isDataLoaded = true;
 
             if (snap.exists()) {
                 const dades = snap.data();
                 console.log("Dades carregades:", dades);
+                window.lastFirebaseData = dades;
 
                 // IMPORTANT: injectar dades al sistema existent
                 if (window.inicialitzarDades) {
                     window.inicialitzarDades(dades);
                 }
             } else {
-                // El document no existeix (nou usuari), alliberem el control de càrrega
+                console.log("Document no trobat. Inicialitzant en blanc per a nou usuari.");
+                // El document no existeix (nou usuari o dades perdudes), alliberem el control de càrrega
                 if (window.inicialitzarDades) {
                     window.inicialitzarDades(null);
                 }
@@ -265,6 +323,10 @@
             const [exportUnitId, setExportUnitId] = useState("");
             
             const [showCompleted, setShowCompleted] = useState(false);
+            
+            // 6. RECUPERACIÓ AUTOMÀTICA UI
+            const [backups, setBackups] = useState([]);
+            const [showRestoreModal, setShowRestoreModal] = useState(false);
 
             // REQ 5: URL de l'Agenda Docent
             const [agendaUrl, setAgendaUrl] = useState(() => localStorage.getItem('programacio_agenda_url') || '');
@@ -284,6 +346,17 @@
                         if(migrated[0]?.units && migrated[0].units.length > 0) {
                             setActiveUnitId(migrated[0].units[0].id);
                         }
+                    } else {
+                        // Check for backups if data is empty
+                        if (window.loadBackups) {
+                            window.loadBackups().then(bks => {
+                                if (bks && bks.length > 0) {
+                                    console.log("S'han detectat backups disponibles després de carregar dades buides.");
+                                    setBackups(bks);
+                                    setShowRestoreModal(true);
+                                }
+                            });
+                        }
                     }
                 };
                 
@@ -291,11 +364,65 @@
                 if (window.currentUser) setUser(window.currentUser);
             }, []);
 
+            // --- 5. BACKUP LOCAL AUTOMÀTIC ---
+            const generateLocalBackup = (dataToBackup) => {
+                const date = new Date();
+                const pad = (n) => n.toString().padStart(2, '0');
+                const filename = `ProgramadorBackup_${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}.json`;
+                window.latestBackupJSON = JSON.stringify(dataToBackup);
+                window.latestBackupFilename = filename;
+            };
+
+            const downloadLocalBackup = () => {
+                if (window.latestBackupJSON && window.latestBackupFilename) {
+                    const blob = new Blob([window.latestBackupJSON], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = window.latestBackupFilename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    console.log("Còpia de seguretat local descarregada: " + window.latestBackupFilename);
+                } else {
+                    const date = new Date();
+                    const pad = (n) => n.toString().padStart(2, '0');
+                    const filename = `ProgramadorBackup_${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}.json`;
+                    const blob = new Blob([JSON.stringify({courses: data})], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    console.log("Còpia de seguretat local descarregada: " + filename);
+                }
+                showToast("Còpia de seguretat descarregada");
+            };
+
+            // --- 9. FUNCIÓ RESTAURAR ---
+            const restoreFromBackup = (backupId) => {
+                const bk = backups.find(b => b.id === backupId);
+                if (bk && bk.dades && bk.dades.courses) {
+                    console.log("Restaurant dades des del backup id:", backupId);
+                    const migrated = migrateData(bk.dades.courses);
+                    setData(migrated);
+                    setActiveCourseId(migrated[0]?.id);
+                    if(migrated[0]?.units && migrated[0].units.length > 0) {
+                        setActiveUnitId(migrated[0].units[0].id);
+                    }
+                    setShowRestoreModal(false);
+                    showToast("Dades restaurades correctament.");
+                }
+            };
+
             // --- SINCRONITZACIÓ AMB AGENDA (POSTMESSAGE I LOCALSTORAGE) ---
             useEffect(() => {
                 const processarDadesAgenda = (payload) => {
-                    if (!payload || payload.action !== 'SYNC_TABLE') return;
-                    console.log("Dades rebudes de l'Agenda per integrar a l'estat:", payload);
+                    if (!payload || !payload.html) {
+                        console.warn("Import cancel·lat per evitar pèrdua de dades: dades buides", payload);
+                        return;
+                    }
+                    console.log("DADES IMPORTADES DES DE L'AGENDA:", payload);
 
                     // Analitzar l'HTML i convertir-lo en l'estructura de dades de React
                     const parser = new DOMParser();
@@ -359,7 +486,10 @@
                         }
                     });
 
-                    if (newSessions.length === 0) return;
+                    if (newSessions.length === 0) {
+                        console.warn("L'HTML no contenia sessions vàlides per importar.");
+                        return;
+                    }
 
                     setData(prevData => {
                         let newData = JSON.parse(JSON.stringify(prevData)); 
@@ -390,14 +520,14 @@
                         let phase = unit.phases.find(p => p.name.trim().toLowerCase() === (payload.fase || "").trim().toLowerCase());
                         if (!phase) phase = unit.phases[0]; // Si no troba la fase exacta, es col·locarà a la primera
 
-                        // 4. Afegir les noves sessions a la fase (s'apilaran correctament abans del botó d'afegir)
+                        // 4. Afegir les noves sessions a la fase (s'apilaran correctament abans del botó d'afegir sense esborrar res)
                         phase.sessions.push(...newSessions);
 
                         // Actualitzar les pestanyes actives automàticament per portar-te al lloc on s'han importat
                         setTimeout(() => {
                             setActiveCourseId(course.id);
                             setActiveUnitId(unit.id);
-                            showToast(`Dades afegides a: ${course.name} > ${unit.title} > ${phase.name}`);
+                            showToast(`Dades afegides de forma segura a: ${course.name} > ${unit.title} > ${phase.name}`);
                         }, 100);
 
                         return newData;
@@ -435,7 +565,8 @@
 
             // Firebase Auto-save i Control de l'Historial
             useEffect(() => {
-                if (window.currentUser && hasLoadedRef.current) {
+                if (window.currentUser && hasLoadedRef.current && window.isDataLoaded) {
+                    generateLocalBackup({ courses: data });
                     window.guardarDades({ courses: data });
                 }
                 
@@ -814,7 +945,7 @@
                 setActiveUnitId(newUnitId);
             };
 
-            // Nou mètode d'exportació XLSX utilitzant SheetJS
+            // Mètode d'exportació XLSX utilitzant SheetJS
             const executeExportXLSX = () => {
                 const targetCourse = data.find(c => c.id === exportCourseId);
                 const targetUnit = targetCourse?.units.find(u => u.id === exportUnitId);
@@ -946,9 +1077,10 @@
                 }));
                 
                 setShowPasteModal(false);
-                showToast("Dades importades a la taula correctament.");
+                showToast("Dades importades a la taula de forma segura.");
             };
 
+            // 2. SISTEMA D’IMPORTACIÓ SEGUR (MERGE INTEL·LIGENT)
             const handleImportJSON = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -957,19 +1089,48 @@
                     try {
                         const importedData = JSON.parse(event.target.result);
                         let coursesToImport = importedData.courses || importedData;
-                        if (Array.isArray(coursesToImport)) {
-                            const migrated = migrateData(coursesToImport);
-                            setData(migrated);
-                            if (migrated.length > 0) {
-                                setActiveCourseId(migrated[0].id);
-                                if (migrated[0].units && migrated[0].units.length > 0) {
-                                    setActiveUnitId(migrated[0].units[0].id);
-                                }
-                            }
-                            showToast("Dades JSON carregades correctament.");
-                        } else {
-                            alert("Format de fitxer invàlid. Assegura't que conté un array de cursos.");
+                        
+                        if (!coursesToImport || !Array.isArray(coursesToImport) || coursesToImport.length === 0) {
+                            console.warn("Import cancel·lat per evitar pèrdua de dades: dades buides");
+                            alert("L'arxiu no conté dades vàlides per importar.");
+                            return;
                         }
+                        
+                        console.log("DADES IMPORTADES VIA JSON:", coursesToImport);
+                        const migratedImport = migrateData(coursesToImport);
+                        
+                        setData(prevData => {
+                            let newData = JSON.parse(JSON.stringify(prevData));
+                            migratedImport.forEach(importedCourse => {
+                                let existingCourse = newData.find(c => c.id === importedCourse.id || c.name.toLowerCase() === importedCourse.name.toLowerCase());
+                                if (!existingCourse) {
+                                    newData.push(importedCourse);
+                                } else {
+                                    importedCourse.units.forEach(importedUnit => {
+                                        let existingUnit = existingCourse.units.find(u => u.id === importedUnit.id || u.title.toLowerCase() === importedUnit.title.toLowerCase());
+                                        if (!existingUnit) {
+                                            existingCourse.units.push(importedUnit);
+                                        } else {
+                                            // Actualitzar sense esborrar el que ja hi ha
+                                            existingUnit.title = importedUnit.title || existingUnit.title;
+                                            importedUnit.phases.forEach(importedPhase => {
+                                                let existingPhase = existingUnit.phases.find(p => p.id === importedPhase.id || p.name.toLowerCase() === importedPhase.name.toLowerCase());
+                                                if (!existingPhase) {
+                                                    existingUnit.phases.push(importedPhase);
+                                                } else {
+                                                    // Merge sessions sense eliminar les anteriors
+                                                    if (importedPhase.sessions && importedPhase.sessions.length > 0) {
+                                                        existingPhase.sessions.push(...importedPhase.sessions);
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                            return newData;
+                        });
+                        showToast("Dades JSON importades i fusionades correctament.");
                     } catch (error) {
                         alert("Error en llegir el fitxer JSON.");
                         console.error(error);
@@ -1050,6 +1211,13 @@
                                         className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Carregar JSON"
                                     >
                                         <IconUpload /> <span className="ml-2 hidden lg:inline">Carregar JSON</span>
+                                    </button>
+
+                                    <button 
+                                        onClick={downloadLocalBackup} 
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200 shadow-sm" title="Descarregar Còpia de Seguretat de les dades actuals"
+                                    >
+                                        <IconSave /> <span className="ml-2 hidden lg:inline">Còpia Seguretat</span>
                                     </button>
 
                                     <button 
@@ -1139,6 +1307,34 @@
                     {/* Cos Principal */}
                     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                         
+                        {/* 6. MODAL RESTAURACIÓ (Backup Recovery) */}
+                        {backups.length > 0 && showRestoreModal && (
+                            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+                                <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border-t-4 border-yellow-500">
+                                    <h2 className="text-xl font-bold mb-2 text-yellow-600">⚠️ Hem detectat que el teu espai està buit</h2>
+                                    <p className="text-sm text-gray-600 mb-4 bg-yellow-50 p-3 rounded border border-yellow-200">
+                                        Però hi ha còpies de seguretat recents de les teves dades al núvol. Vols restaurar l'última versió per evitar perdre la feina?
+                                    </p>
+                                    <div className="max-h-60 overflow-y-auto border border-gray-200 rounded mb-4 custom-scroll">
+                                        {backups.map(bk => (
+                                            <div key={bk.id} className="p-3 border-b last:border-0 flex justify-between items-center hover:bg-gray-50">
+                                                <div>
+                                                    <span className="text-sm font-bold text-gray-700 block">{new Date(bk.timestamp).toLocaleString('ca-ES')}</span>
+                                                    <span className="text-xs text-gray-500">Còpia de seguretat automàtica</span>
+                                                </div>
+                                                <button onClick={() => restoreFromBackup(bk.id)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow-sm transition-colors text-sm">
+                                                    Restaurar
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex justify-end pt-2 border-t border-gray-100">
+                                        <button onClick={() => setShowRestoreModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 font-medium rounded transition-colors">Ignorar i començar de zero</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {activeCourse && (
                             <div className="flex space-x-2 mb-4 overflow-x-auto custom-scroll pb-2 border-b border-orange-200">
                                 {activeCourse.units.map(u => (
