@@ -66,7 +66,7 @@
     <!-- Integració de Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
 
@@ -136,19 +136,37 @@
 
             console.log("Iniciant guardat segur al núvol...");
 
-            // 4. BACKUPS AUTOMÀTICS (FIREBASE)
+            // 4. BACKUPS AUTOMÀTICS (FIREBASE) - ESTRUCTURA NOVA EN SUBCOL·LECCIÓ
             try {
                 const timestamp = Date.now();
-                const histRef = doc(db, "programador_backups", window.currentUser.uid);
-                const histSnap = await getDoc(histRef);
-                let history = [];
-                if (histSnap.exists()) history = histSnap.data().history || [];
+                const backupRef = doc(db, "programador_backups", window.currentUser.uid, "backups", String(timestamp));
                 
-                history.unshift({ id: timestamp, timestamp: new Date().toISOString(), dades: dades });
-                if (history.length > 20) history = history.slice(0, 20);
-                await setDoc(histRef, { history });
-                console.log("Backup de seguretat al núvol generat correctament.");
-            } catch(e) { console.error("Error guardant backup a Firebase", e); }
+                await setDoc(backupRef, { 
+                    id: timestamp, 
+                    timestamp: new Date().toISOString(), 
+                    dades: dades 
+                });
+                console.log(`Backup automàtic cloud creat a la ruta: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
+
+                // Mantenir màxim 20 backups
+                const backupsQuery = query(collection(db, "programador_backups", window.currentUser.uid, "backups"), orderBy("id", "desc"));
+                const backupsSnap = await getDocs(backupsQuery);
+                
+                if (backupsSnap.size > 20) {
+                    console.log(`S'han trobat ${backupsSnap.size} backups. Eliminant els més antics per mantenir el límit de 20...`);
+                    let count = 0;
+                    const deletePromises = [];
+                    backupsSnap.forEach((docSnap) => {
+                        count++;
+                        if (count > 20) {
+                            deletePromises.push(deleteDoc(docSnap.ref));
+                            console.log(`Eliminant backup antic: ${docSnap.id}`);
+                        }
+                    });
+                    await Promise.all(deletePromises);
+                    console.log("Neteja de backups antics completada.");
+                }
+            } catch(e) { console.error("Error guardant o netejant backup a Firebase", e); }
 
             try {
                 await setDoc(doc(db, "programador_docent", window.currentUser.uid), dades);
@@ -157,11 +175,52 @@
             } catch(e) { console.error("Error guardant dades principals", e); }
         }
 
+        // FUNCIÓ NOVA PER CREAR BACKUP MANUAL AL NÚVOL
+        window.forcarBackupNuvol = async function(dades) {
+            if (!window.currentUser) return false;
+            try {
+                console.log("Forçant creació de backup manual al núvol...");
+                const timestamp = Date.now();
+                const backupRef = doc(db, "programador_backups", window.currentUser.uid, "backups", String(timestamp));
+                
+                await setDoc(backupRef, { 
+                    id: timestamp, 
+                    timestamp: new Date().toISOString(), 
+                    dades: dades 
+                });
+                console.log(`Backup manual creat correctament a: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
+                
+                // Mantenir màxim 20 backups
+                const backupsQuery = query(collection(db, "programador_backups", window.currentUser.uid, "backups"), orderBy("id", "desc"));
+                const backupsSnap = await getDocs(backupsQuery);
+                if (backupsSnap.size > 20) {
+                    let count = 0;
+                    const deletePromises = [];
+                    backupsSnap.forEach((docSnap) => {
+                        count++;
+                        if (count > 20) deletePromises.push(deleteDoc(docSnap.ref));
+                    });
+                    await Promise.all(deletePromises);
+                }
+                return true;
+            } catch(e) { 
+                console.error("Error creant backup manual a Firebase:", e); 
+                return false;
+            }
+        }
+
         window.loadBackups = async function() {
             if (!window.currentUser) return [];
             try {
-                const histSnap = await getDoc(doc(db, "programador_backups", window.currentUser.uid));
-                if (histSnap.exists()) return histSnap.data().history || [];
+                console.log("Carregant llista de backups des de la subcol·lecció de Firebase...");
+                const backupsQuery = query(collection(db, "programador_backups", window.currentUser.uid, "backups"), orderBy("id", "desc"));
+                const backupsSnap = await getDocs(backupsQuery);
+                let history = [];
+                backupsSnap.forEach((docSnap) => {
+                    history.push(docSnap.data());
+                });
+                console.log(`Trobat(s) ${history.length} backup(s) de recuperació.`);
+                return history;
             } catch(e) { console.error("Error carregant backups de Firebase", e); }
             return [];
         }
@@ -203,6 +262,7 @@
         const IconUndo = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.6L3 13"></path></svg>;
         const IconRedo = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 019-9 9 9 0 016 2.6L21 13"></path></svg>;
         const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>;
+        const IconCloud = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg>;
         const IconEye = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
         const IconEyeOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
         const IconGripVertical = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>;
@@ -397,6 +457,20 @@
                     console.log("Còpia de seguretat local descarregada: " + filename);
                 }
                 showToast("Còpia de seguretat descarregada");
+            };
+
+            const handleForceCloudBackup = async () => {
+                if (window.forcarBackupNuvol) {
+                    showToast("Creant backup al núvol...");
+                    const success = await window.forcarBackupNuvol({ courses: data });
+                    if (success) {
+                        showToast("Backup al núvol creat correctament.");
+                    } else {
+                        showToast("Error en crear el backup al núvol.");
+                    }
+                } else {
+                    showToast("Firebase no carregat o fora de línia.");
+                }
             };
 
             // --- 9. FUNCIÓ RESTAURAR ---
@@ -1215,9 +1289,16 @@
 
                                     <button 
                                         onClick={downloadLocalBackup} 
-                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200 shadow-sm" title="Descarregar Còpia de Seguretat de les dades actuals"
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200 shadow-sm" title="Descarregar còpia local JSON"
                                     >
-                                        <IconSave /> <span className="ml-2 hidden lg:inline">Còpia Seguretat</span>
+                                        <IconSave /> <span className="ml-2 hidden lg:inline">Còpia Local</span>
+                                    </button>
+
+                                    <button 
+                                        onClick={handleForceCloudBackup} 
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors border border-blue-200 shadow-sm" title="Forçar backup immediat a Firestore"
+                                    >
+                                        <IconCloud /> <span className="ml-2 hidden lg:inline">Backup Núvol</span>
                                     </button>
 
                                     <button 
