@@ -100,7 +100,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
 
@@ -157,11 +157,32 @@
         window.guardarDades = async function(dades) {
           if (!currentUser) return;
           
+          // --- PROTECCIÓ CONTRA SOBRESCRIPTURA ---
+          if (!window.isDataLoaded) {
+              console.warn("Guardat bloquejat: dades no carregades");
+              return;
+          }
+          if (!dades || dades.length === 0) {
+              console.warn("Guardat cancel·lat: dades buides");
+              return;
+          }
+          if (window.loadedDades && dades.length < window.loadedDades.length * 0.5) {
+              console.warn("Guardat cancel·lat: possible pèrdua de dades");
+              return;
+          }
+          console.log("Iniciant guardat principal al núvol...");
+          
           try {
               // 1. Obtenim les classes actuals al núvol per veure si n'hem d'esborrar alguna (sincronització neta)
               const subCollectionRef = collection(db, "avaluapro", currentUser.uid, "classes");
               const querySnapshot = await getDocs(subCollectionRef);
               
+              if (!dades || dades.length === 0) return;
+              if (dades.length < querySnapshot.size * 0.5) {
+                  console.warn("Cancel·lat esborrat: possible pèrdua massiva");
+                  return;
+              }
+
               const dadesIds = dades ? dades.map(c => c.id) : [];
               
               const deletePromises = [];
@@ -183,6 +204,9 @@
                   });
                   await Promise.all(savePromises);
               }
+              
+              // Actualitzem les dades carregades un cop guardat per a futures comparacions
+              window.loadedDades = dades;
           } catch(e) {
               console.error("Error en sincronitzar subcol·leccions:", e);
           }
@@ -270,6 +294,152 @@
               window.inicialitzarDades([]);
           }
         }
+
+        // --- SISTEMA DE BACKUPS AL NÚVOL (FAIL-SAFE) ---
+
+        window.createAvaluaproBackupCloud = async function(tipus) {
+            if (!currentUser) return;
+            console.log(`Iniciant backup al núvol (${tipus})...`);
+            
+            const currentData = window.loadedDades;
+            
+            if (!currentData || currentData.length === 0) {
+                 console.warn("Backup núvol cancel·lat: no hi ha dades per fer backup");
+                 return;
+            }
+
+            const now = new Date();
+            const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
+            const backupId = "backup_" + Date.now();
+
+            const backupObj = {
+                id: backupId,
+                timestamp: timestamp,
+                tipus: tipus,
+                dades: currentData,
+                timeMs: Date.now()
+            };
+
+            try {
+                const docRef = doc(db, "avaluapro_backups", currentUser.uid, "backups", backupId);
+                await setDoc(docRef, backupObj);
+                console.log(`Backup ${tipus} guardat correctament al núvol amb ID: ${backupId}`);
+                
+                await window.netejarBackupsAntics();
+            } catch(e) {
+                console.error("Error creant backup al núvol:", e);
+            }
+        };
+
+        window.netejarBackupsAntics = async function() {
+            if (!currentUser) return;
+            try {
+                const backupsRef = collection(db, "avaluapro_backups", currentUser.uid, "backups");
+                const qLimit = query(backupsRef, orderBy("timeMs", "desc"), limit(25));
+                const snap = await getDocs(qLimit);
+                let count = 0;
+                const deletePromises = [];
+                snap.forEach((documento) => {
+                    count++;
+                    if (count > 20) {
+                        console.log(`Eliminant backup antic: ${documento.id}`);
+                        deletePromises.push(deleteDoc(documento.ref));
+                    }
+                });
+                await Promise.all(deletePromises);
+            } catch(e) {
+                console.error("Error netejant backups antics:", e);
+            }
+        };
+
+        window.loadBackups = async function() {
+            if (!currentUser) return [];
+            try {
+                const backupsRef = collection(db, "avaluapro_backups", currentUser.uid, "backups");
+                const q = query(backupsRef, orderBy("timeMs", "desc"), limit(20));
+                const snap = await getDocs(q);
+                const backups = [];
+                snap.forEach(doc => {
+                    backups.push(doc.data());
+                });
+                return backups;
+            } catch (error) {
+                console.error("Error carregant backups:", error);
+                return [];
+            }
+        };
+
+        window.restoreFromBackup = async function(backupId) {
+            if (!currentUser) return;
+            
+            const backups = await window.loadBackups();
+            const backupToRestore = backups.find(b => b.id === backupId);
+            
+            if (!backupToRestore || !backupToRestore.dades) {
+                alert("Error: No s'ha trobat el backup o les dades estan corruptes.");
+                return;
+            }
+
+            if (confirm(`⚠️ ATENCIÓ: Segur que vols restaurar el backup del ${backupToRestore.timestamp}? \nAixò substituirà TOTES les dades actuals i es farà un guardat immediat.`)) {
+                await window.createAvaluaproBackupCloud("pre-restore");
+                console.log(`Restaurant dades des del backup: ${backupId}`);
+                window.loadedDades = backupToRestore.dades; 
+                try {
+                    await window.guardarDades(backupToRestore.dades);
+                    console.log("Restauració completada correctament.");
+                    alert("Dades restaurades correctament. L'aplicació es recarregarà.");
+                    window.location.reload();
+                } catch(e) {
+                    console.error("Error durant la restauració:", e);
+                    alert("Hi ha hagut un error en restaurar el backup.");
+                }
+            }
+        };
+
+        window.forcarBackupNuvol = function() {
+            if (!window.isDataLoaded) {
+                alert("Bloquejat: Les dades encara no s'han carregat.");
+                return;
+            }
+            console.log("Executant backup manual al núvol...");
+            window.createAvaluaproBackupCloud("manual").then(() => {
+                alert("✅ Backup manual al núvol creat correctament.");
+                window.dispatchEvent(new Event('cloudBackupUpdated'));
+            });
+        };
+
+        window.descarregarBackupIndividual = function(backupId) {
+            window.loadBackups().then(backups => {
+                const backup = backups.find(b => b.id === backupId);
+                if (backup) {
+                    const now = new Date();
+                    const dateStr = window.getLocalYYYYMMDD(now);
+                    const timeStr = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
+                    const filename = `AvaluaproBackup_${dateStr}_${timeStr}.json`;
+                    window.downloadBackupJSON(JSON.stringify(backup.dades), filename);
+                }
+            });
+        };
+
+        // CHECK DE BACKUPS AUTOMÀTICS (23:59h)
+        setInterval(() => {
+            if (!currentUser || !window.isDataLoaded) return;
+            
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            
+            if (hours === 23 && minutes === 59 && now.getSeconds() < 5) {
+                const todayStr = window.getLocalYYYYMMDD(now);
+                const lastAuto = localStorage.getItem('avaluapro_lastAutoBackup');
+                
+                if (lastAuto !== todayStr) {
+                    console.log("Executant backup automàtic programat (23:59)...");
+                    localStorage.setItem('avaluapro_lastAutoBackup', todayStr);
+                    window.createAvaluaproBackupCloud("auto");
+                }
+            }
+        }, 1000); // Comprova cada segon per assegurar precisió amb els segons
 
         document.getElementById("loginBtn").onclick = window.login;
         document.getElementById("logoutBtn").onclick = window.logout;
@@ -684,6 +854,92 @@
                 };
             }, [data, type, options]);
             return <div className={`relative w-full ${className ? className : 'h-64'}`}><canvas ref={canvasRef} /></div>;
+        };
+
+        // --- MODALS NOU FAIL-SAFE (CLOUD BACKUPS) ---
+        const CloudBackupModal = ({ isOpen, onClose }) => {
+            const [backups, setBackups] = useState([]);
+            const [loading, setLoading] = useState(false);
+
+            const loadData = async () => {
+                setLoading(true);
+                if (window.loadBackups) {
+                    const data = await window.loadBackups();
+                    setBackups(data);
+                }
+                setLoading(false);
+            };
+
+            useEffect(() => {
+                if (isOpen) loadData();
+                const listener = () => loadData();
+                window.addEventListener('cloudBackupUpdated', listener);
+                return () => window.removeEventListener('cloudBackupUpdated', listener);
+            }, [isOpen]);
+
+            if (!isOpen) return null;
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Gestió de Backups al Núvol" size="lg">
+                    <div className="space-y-4">
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-blue-800 flex items-start gap-3 shadow-sm">
+                            <Icon name="cloud" className="text-2xl mt-1 shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium">
+                                    Aquí pots veure els teus backups desats de forma segura al núvol de Firebase. 
+                                    Es desen automàticament a les 23:59h, o manualment.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button onClick={() => window.forcarBackupNuvol()} className="w-full py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-xl font-bold transition flex items-center justify-center gap-2 shadow-sm">
+                            <Icon name="cloud-arrow-up" /> Crear Backup Manual Ara
+                        </button>
+
+                        <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="p-3 font-bold text-gray-600">Data i Hora</th>
+                                        <th className="p-3 font-bold text-gray-600">Tipus</th>
+                                        <th className="p-3 font-bold text-gray-600 text-right">Accions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {loading ? (
+                                        <tr><td colSpan="3" className="p-4 text-center text-gray-500 italic">Carregant backups...</td></tr>
+                                    ) : backups.length === 0 ? (
+                                        <tr><td colSpan="3" className="p-4 text-center text-gray-500 italic">No hi ha cap backup al núvol.</td></tr>
+                                    ) : (
+                                        backups.map(b => (
+                                            <tr key={b.id} className="hover:bg-gray-50 transition-colors">
+                                                <td className="p-3 font-medium text-gray-800">{b.timestamp}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border ${b.tipus === 'auto' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                                                        {b.tipus}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 flex justify-end gap-2">
+                                                    <button onClick={() => window.descarregarBackupIndividual(b.id)} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition font-medium shadow-sm flex items-center gap-1 text-xs">
+                                                        <Icon name="download" /> JSON
+                                                    </button>
+                                                    <button onClick={() => window.restoreFromBackup(b.id)} className="bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg transition font-bold shadow-sm flex items-center gap-1 text-xs">
+                                                        <Icon name="rotate-left" /> Restaurar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="flex justify-end pt-4 mt-2 border-t">
+                            <button onClick={onClose} className="px-6 py-2 bg-gray-200 text-gray-800 rounded font-bold hover:bg-gray-300 shadow">Tancar</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
         };
 
         // --- MODALS DE CONFIGURACIÓ I GESTIÓ ---
@@ -2025,6 +2281,8 @@
             const [isReady, setIsReady] = useState(false);
             const [hasLoadedFromFirebase, setHasLoadedFromFirebase] = useState(false);
             const lastLoadedDataStr = useRef(null);
+            
+            const [showCloudBackupModal, setShowCloudBackupModal] = useState(false);
             
             let classes = [];
             if (historyIndex >= 0 && historyIndex < history.length) {
@@ -3384,19 +3642,17 @@
                                                                                         onChange={(e) => updateMark(student.id, `override_${crit.id}`, e.target.value)}
                                                                                         className={`w-10 h-8 mx-auto appearance-none block text-center rounded-full text-xs font-bold shadow-sm outline-none cursor-pointer hover:ring-2 focus:ring-2 ring-brand-400 ${getGradeColor(finalCg)}`}
                                                                                         style={{textAlignLast:'center'}}
-                                                                                        title="Pots sobreescriure la nota manualment"
                                                                                     >
-                                                                                        <option value="" className="text-gray-500 bg-white">{autoCg || '-'}</option>
-                                                                                        <option value="A" className="text-green-600 bg-green-50">A</option>
-                                                                                        <option value="B" className="text-blue-600 bg-blue-50">B</option>
-                                                                                        <option value="C" className="text-yellow-600 bg-yellow-50">C</option>
-                                                                                        <option value="D" className="text-red-600 bg-red-50">D</option>
-                                                                                        <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
+                                                                                        <option value="" className="text-gray-300 font-normal">-</option>
+                                                                                        <option value="A" className="text-green-600 font-black bg-green-50">A</option>
+                                                                                        <option value="B" className="text-blue-600 font-black bg-blue-50">B</option>
+                                                                                        <option value="C" className="text-yellow-600 font-black bg-yellow-50">C</option>
+                                                                                        <option value="D" className="text-red-600 font-black bg-red-50">D</option>
+                                                                                        <option value="NA" className="text-gray-800 font-black bg-gray-100">NA</option>
                                                                                     </select>
                                                                                 </td>
                                                                             );
                                                                         })()}
-
                                                                     </React.Fragment>
                                                                 );
                                                             })}
@@ -3405,17 +3661,15 @@
                                                                 const autoCompG = calculateGrade(compMarks);
                                                                 const overCompG = student.marks && student.marks[`override_${comp.id}`];
                                                                 const finalCompG = overCompG || autoCompG;
-                                                                
                                                                 return (
-                                                                    <td className="p-1 border-r border-b text-center bg-gray-100 font-bold border-l-2 border-l-gray-300 w-14 min-w-[3.5rem] shadow-inner">
+                                                                    <td className="p-2 border-r border-b text-center bg-gray-100 w-14 min-w-[3.5rem] shadow-inner">
                                                                         <select
                                                                             value={overCompG || ""}
                                                                             onChange={(e) => updateMark(student.id, `override_${comp.id}`, e.target.value)}
-                                                                            className={`w-11 h-10 mx-auto appearance-none block rounded-lg shadow-md text-sm font-black outline-none cursor-pointer hover:ring-2 focus:ring-2 ring-brand-400 ${getGradeColor(finalCompG).replace('bg-', 'bg-gradient-to-br from-white to-')}`}
+                                                                            className={`w-12 h-10 mx-auto appearance-none block text-center rounded-lg text-sm font-black shadow outline-none cursor-pointer hover:ring-2 focus:ring-2 ring-brand-400 ${getGradeColor(finalCompG)}`}
                                                                             style={{textAlignLast:'center'}}
-                                                                            title="Pots sobreescriure la nota manualment"
                                                                         >
-                                                                            <option value="" className="text-gray-500 bg-white">{autoCompG || '-'}</option>
+                                                                            <option value="" className="text-gray-300 font-normal">-</option>
                                                                             <option value="A" className="text-green-600 bg-green-50">A</option>
                                                                             <option value="B" className="text-blue-600 bg-blue-50">B</option>
                                                                             <option value="C" className="text-yellow-600 bg-yellow-50">C</option>
@@ -3423,17 +3677,20 @@
                                                                             <option value="NA" className="text-gray-800 bg-gray-100">NA</option>
                                                                         </select>
                                                                     </td>
-                                                                )
+                                                                );
                                                             })()}
-                                                            
                                                         </React.Fragment>
                                                     );
                                                 })}
                                             </tr>
                                         );
                                     })}
-                                    {(!filteredStudents || filteredStudents.length === 0) && (
-                                        <tr><td colSpan="100%" className="p-12 text-center text-gray-500 font-medium text-lg">No hi ha cap alumne per mostrar amb els filtres actuals. Fes clic a "Gestió d'Alumnes" per afegir-ne.</td></tr>
+                                    {filteredStudents.length === 0 && (
+                                        <tr>
+                                            <td colSpan={100} className="p-8 text-center text-gray-500 italic">
+                                                No hi ha alumnes en aquest grup. Afegeix-ne des de la "Gestió d'Alumnes".
+                                            </td>
+                                        </tr>
                                     )}
                                 </tbody>
                             </table>
@@ -3442,112 +3699,98 @@
                 );
             };
 
+            if (!isReady) return <div className="flex h-screen items-center justify-center bg-white"><div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-500 border-t-transparent"></div></div>;
+
             return (
-                <div className="flex h-screen overflow-hidden text-gray-800">
+                <div className="flex flex-col h-screen bg-white text-gray-800 font-sans overflow-hidden">
                     <ErrorBoundary>
-                        {/* MODALS */}
-                        <ResetCourseModal isOpen={showResetModal} onClose={() => setShowResetModal(false)} onBackup={handleBackupBeforeReset} onConfirm={handleConfirmReset} />
-                        {showWizard && <SetupWizard onComplete={handleCreateClass} />}
-                        {showSeatingChartsModal && <SeatingChartsModal isOpen={showSeatingChartsModal} onClose={() => setShowSeatingChartsModal(false)} currentClass={currentClass} onUpdateClass={handleUpdateClass} />}
-                        {showHalfGroupsModal && <HalfGroupsModal isOpen={showHalfGroupsModal} onClose={() => setShowHalfGroupsModal(false)} halfGroups={currentClass && currentClass.halfGroups ? currentClass.halfGroups : []} onSave={(newList) => handleUpdateClass(activeClassId, { halfGroups: newList })} />}
-                        <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(name) => { setShowWizard(true); }} />
+                        {/* --- MODALS --- */}
+                        <SetupWizard isOpen={showWizard} onComplete={handleCreateClass} />
+                        <NewClassModal isOpen={showNewClassModal} onClose={() => setShowNewClassModal(false)} existingClasses={classes} onCreate={handleCreateClass} onOpenWizard={(n) => { setShowWizard(true); }} />
                         <EditClassModal isOpen={!!showEditClassModal} onClose={() => setShowEditClassModal(null)} cls={showEditClassModal} onUpdate={handleUpdateClass} onDelete={handleDeleteClass} />
-                        <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass && currentClass.students ? currentClass.students : []} onSave={saveStudentsList} />
-                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} onSave={updateStudentNotes} onOpenProfile={setShowStudentProfile} />
-                        <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass && currentClass.students ? currentClass.students : []} />
-                        <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
-                        <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
-                        {showBulkImport && <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass && currentClass.students ? currentClass.students : []} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />}
-                        <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
+                        <ManageStudentsModal isOpen={showManageStudents} onClose={() => setShowManageStudents(false)} students={currentClass?.students} onSave={saveStudentsList} />
+                        <HalfGroupsModal isOpen={showHalfGroupsModal} onClose={() => setShowHalfGroupsModal(false)} halfGroups={currentClass?.halfGroups} onSave={(hgs) => handleUpdateClass(activeClassId, { halfGroups: hgs })} />
+                        <SeatingChartsModal isOpen={showSeatingChartsModal} onClose={() => setShowSeatingChartsModal(false)} currentClass={currentClass} onUpdateClass={handleUpdateClass} />
+                        <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} onSave={updateStudentNotes} onOpenProfile={(s) => { setShowStudentNotes(null); setShowStudentProfile(s); }} />
                         <StudentProfileModal isOpen={!!showStudentProfile} onClose={() => setShowStudentProfile(null)} studentData={showStudentProfile} classData={currentClass} onSaveNotes={updateStudentNotes} />
+                        <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass?.students} />
+                        <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
+                        <SemesterStatsModal isOpen={showSemesterStats} onClose={() => setShowSemesterStats(false)} competencies={currentSemester?.competencies} students={currentClass?.students} />
+                        <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass?.students} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />
+                        <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
+                        <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
                         <RiskStudentsModal isOpen={!!showRiskModal} onClose={() => setShowRiskModal(null)} students={showRiskModal} />
+                        <ResetCourseModal isOpen={showResetModal} onClose={() => setShowResetModal(false)} onBackup={handleBackupBeforeReset} onConfirm={handleConfirmReset} />
+                        <CloudBackupModal isOpen={showCloudBackupModal} onClose={() => setShowCloudBackupModal(false)} />
 
-                        {/* SIDEBAR */}
-                        <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
-                            <div className="p-6 border-b border-slate-800">
-                                <h1 className="text-2xl font-black tracking-tight text-brand-500 flex items-center gap-2"><Icon name="graduation-cap"/> Avalua Pro</h1>
-                                <p className="text-xs text-slate-300 mt-2 font-medium leading-relaxed">Eina docent d’avaluació i seguiment competencial</p>
-                                <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-bold">Creat per Marc Pérez Casals</p>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll">
-                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-2">Les teves classes</div>
-                                {classes.map((c, idx) => {
-                                    const cKey = c.color && CLASS_COLORS[c.color] ? c.color : 'blue';
-                                    const classColor = CLASS_COLORS[cKey];
-                                    const isActive = activeClassId === c.id;
-                                    return (
-                                        <div 
+                        {/* --- TOP BAR --- */}
+                        <header className="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md z-50 relative shrink-0">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 shadow-inner">
+                                    <Icon name="graduation-cap" className="text-brand-500 text-xl" />
+                                    <h1 className="font-black tracking-tight text-lg">Avalua<span className="text-brand-500">Pro</span></h1>
+                                </div>
+                                <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shadow-inner">
+                                    {classes.map(c => (
+                                        <button 
                                             key={c.id} 
-                                            className="flex items-center group relative mb-2"
-                                            draggable
-                                            onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', idx); }}
-                                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                                            onDrop={(e) => {
-                                                e.preventDefault();
-                                                const draggedIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                                                const targetIdx = idx;
-                                                if (draggedIdx === targetIdx || isNaN(draggedIdx)) return;
-                                                
-                                                const newClasses = [...classes];
-                                                const draggedItem = newClasses[draggedIdx];
-                                                newClasses.splice(draggedIdx, 1);
-                                                newClasses.splice(targetIdx, 0, draggedItem);
-                                                
-                                                updateClasses(newClasses);
-                                            }}
+                                            onClick={() => setActiveClassId(c.id)} 
+                                            className={`px-4 py-1.5 rounded-md font-bold text-sm transition flex items-center gap-2 ${activeClassId === c.id ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
                                         >
-                                            <button onClick={() => setActiveClassId(c.id)} className={`w-full text-left px-3 py-3 rounded-xl transition-all flex items-center justify-between shadow-sm ${isActive ? `${classColor.bg} text-white ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-[1.02] shadow-lg` : `${classColor.bg} text-white opacity-50 hover:opacity-80`}`}>
-                                                <span className="font-semibold truncate pr-4 flex items-center gap-2">
-                                                    <i className="fa-solid fa-grip-vertical opacity-30 cursor-grab text-xs" title="Arrossega per moure"></i>
-                                                    {c.name}
-                                                </span>
-                                            </button>
-                                            <button onClick={() => setShowEditClassModal(c)} className={`absolute right-2 p-2 opacity-0 group-hover:opacity-100 transition ${isActive ? 'text-white hover:text-gray-200' : 'text-white hover:text-gray-200'}`}><Icon name="gear"/></button>
-                                        </div>
-                                    );
-                                })}
-                                <button onClick={() => setShowNewClassModal(true)} className="w-full mt-4 border-2 border-dashed border-slate-700 text-slate-400 p-3 rounded-xl hover:border-brand-500 hover:text-brand-500 transition flex items-center justify-center text-sm font-bold"><Icon name="plus" className="mr-2"/> Nova Classe</button>
+                                            <span className={`w-2 h-2 rounded-full ${CLASS_COLORS[c.color ? c.color : 'blue']?.bg}`}></span>
+                                            {c.name}
+                                        </button>
+                                    ))}
+                                    <button onClick={() => setShowNewClassModal(true)} className="px-3 py-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition text-sm font-bold"><Icon name="plus"/></button>
+                                </div>
                             </div>
-                             <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col gap-2">
-                                 <button onClick={handleExportExcel} className="w-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold py-2.5 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
-                                     <Icon name="file-excel" className="mr-2 text-lg"/> Exportar a Excel
-                                 </button>
-                                 <button onClick={handleExportJSON} className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold py-2.5 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center">
-                                     <Icon name="download" className="mr-2 text-lg"/> Backup JSON
-                                 </button>
-                                 <label className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold py-2.5 px-3 rounded-lg shadow-lg transition text-center flex items-center justify-center cursor-pointer">
-                                     <Icon name="upload" className="mr-2 text-lg"/> Carregar JSON
-                                     <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
-                                 </label>
+                            <div className="flex items-center gap-2">
+                                {currentClass && (
+                                    <button onClick={() => setShowEditClassModal(currentClass)} className="p-2 text-slate-400 hover:text-white transition" title="Configuració del Grup"><Icon name="gear"/></button>
+                                )}
+                                <div className="h-6 w-px bg-slate-700 mx-1"></div>
+                                <button onClick={() => setShowCloudBackupModal(true)} className="p-2 text-blue-400 hover:text-blue-300 transition" title="Backups al Núvol">
+                                    <Icon name="cloud" />
+                                </button>
+                                <button onClick={() => { if(window.createAvaluaproBackup) window.createAvaluaproBackup(false, null, true, JSON.stringify(classes)); }} className="p-2 text-slate-400 hover:text-white transition" title="Descarregar Backup Local JSON"><Icon name="download"/></button>
+                                <button onClick={() => document.getElementById('importFile').click()} className="p-2 text-slate-400 hover:text-white transition" title="Importar Backup JSON"><Icon name="upload"/></button>
+                                <input type="file" id="importFile" accept=".json" className="hidden" onChange={handleImportJSON} />
+                                <button onClick={handleExportExcel} className="p-2 text-green-400 hover:text-green-300 transition" title="Exportar a Excel"><Icon name="file-excel"/></button>
+                                <div className="h-6 w-px bg-slate-700 mx-1"></div>
+                                <button onClick={undo} disabled={historyIndex <= 0} className="p-2 text-slate-400 hover:text-white disabled:opacity-30 transition"><Icon name="rotate-left"/></button>
+                                <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 text-slate-400 hover:text-white disabled:opacity-30 transition"><Icon name="rotate-right"/></button>
+                                <div className="h-6 w-px bg-slate-700 mx-1"></div>
+                                <button onClick={resetAllData} className="p-2 text-red-400 hover:text-red-300 transition" title="Reiniciar curs sencer"><Icon name="trash-can"/></button>
                             </div>
-                        </aside>
+                        </header>
 
-                        {/* MAIN CONTENT */}
-                        <main className="flex-1 flex flex-col min-w-0 bg-gray-100 h-full overflow-hidden">
+                        {/* --- MAIN CONTENT --- */}
+                        <main className="flex-1 flex flex-col min-h-0 bg-gray-50/50">
                             {currentClass ? (
                                 <React.Fragment>
-                                    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10 shrink-0">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-4 h-8 rounded-full ${CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'] ? CLASS_COLORS[currentClass.color ? currentClass.color : 'blue'].bg : 'bg-blue-600'}`}></div>
-                                            <h2 className={`text-3xl font-black text-gray-800 tracking-tight`}>{currentClass.name}</h2>
-                                        </div>
-                                        <div className="flex items-center gap-6">
-                                            <div className="flex bg-gray-100 p-1.5 rounded-xl shadow-inner border border-gray-200 overflow-x-auto max-w-full custom-scroll">
-                                                {(currentClass.semesters ? currentClass.semesters : []).map(s => (
-                                                    <button key={s.id} onClick={() => setActiveTab(s.id)} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${activeTab === s.id ? 'bg-white text-brand-600 shadow border border-gray-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'}`}>{s.name}</button>
-                                                ))}
-                                                <button onClick={() => setActiveTab('GLOBAL')} className={`px-5 py-2 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${activeTab === 'GLOBAL' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'}`}><Icon name="chart-pie" className="mr-2"/>Global</button>
-                                            </div>
-                                            <div className="h-8 w-px bg-gray-300"></div>
-                                            <div className="flex items-center gap-4">
-                                                <button onClick={() => window.guardarManualment(classes)} className="px-4 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold shadow-sm hover:bg-blue-200 transition whitespace-nowrap flex items-center gap-2" title="Forçar guardat al núvol">
-                                                    <Icon name="cloud-arrow-up" /> Guardar
-                                                </button>
-                                                <button onClick={resetAllData} className="p-2 text-red-300 hover:text-red-600 transition" title="Reiniciar curs"><Icon name="trash-can" className="text-lg"/></button>
-                                                <div className="flex bg-gray-100 rounded-lg p-1"><button onClick={undo} disabled={historyIndex <= 0} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-left"/></button><button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 text-gray-500 hover:text-brand-600 disabled:opacity-30"><Icon name="rotate-right"/></button></div>
-                                            </div>
-                                        </div>
-                                    </header>
+                                    <div className="bg-white border-b border-gray-200 px-4 flex items-end gap-1 pt-2 shrink-0 shadow-sm relative z-10">
+                                        {(currentClass.semesters ? currentClass.semesters : []).map(sem => (
+                                            <button 
+                                                key={sem.id} 
+                                                onClick={() => setActiveTab(sem.id)} 
+                                                className={`px-5 py-2.5 rounded-t-lg font-bold text-sm transition-colors border border-b-0 ${activeTab === sem.id ? 'bg-white text-brand-600 border-gray-200 shadow-[0_-2px_5px_rgba(0,0,0,0.02)] relative top-[1px]' : 'bg-gray-50 text-gray-500 border-transparent hover:bg-gray-100 hover:text-gray-700'}`}
+                                            >
+                                                {sem.name}
+                                            </button>
+                                        ))}
+                                        <div className="flex-1"></div>
+                                        <button 
+                                            onClick={() => setActiveTab('GLOBAL')} 
+                                            className={`px-5 py-2.5 rounded-t-lg font-bold text-sm transition-colors border border-b-0 flex items-center gap-2 ${activeTab === 'GLOBAL' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-[0_-2px_5px_rgba(0,0,0,0.02)] relative top-[1px]' : 'bg-gray-50 text-gray-500 border-transparent hover:bg-gray-100 hover:text-indigo-600'}`}
+                                        >
+                                            <Icon name="chart-pie" /> Dashboard Global
+                                        </button>
+                                        {activeTab !== 'GLOBAL' && (
+                                            <button onClick={() => setShowSemesterStats(true)} className="px-4 py-2 mb-1 text-xs font-bold text-gray-500 hover:text-brand-600 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 transition ml-2 flex items-center gap-2">
+                                                <Icon name="chart-simple" /> Estadístiques
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="flex-1 overflow-hidden relative flex flex-col bg-gray-50/50">
                                         {isGlobalView ? (
                                             <div className="flex-1 overflow-y-auto custom-scroll">
