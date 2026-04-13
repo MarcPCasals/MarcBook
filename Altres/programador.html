@@ -66,7 +66,7 @@
     <!-- Integració de Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, getDocs, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
 
@@ -85,9 +85,25 @@
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
 
+        // Variables Globals de Control d'Integritat i Anti-concurrència
         window.currentUser = null;
         window.isDataLoaded = false;
         window.lastFirebaseData = null;
+        window.isSaving = false;
+        window.CURRENT_VERSION = 1;
+        window.lastBackupDataStr = null;
+
+        // Funció Hash per Checksums de seguretat
+        window.generateChecksum = function(obj) {
+            const str = JSON.stringify(obj);
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Converteix a 32bit integer
+            }
+            return hash.toString(16); // Hex string signature
+        };
 
         window.login = async function() {
             await signInWithPopup(auth, provider);
@@ -110,50 +126,14 @@
             }
         });
 
-        window.guardarDades = async function(dades) {
+        async function netejarBackupsAntics() {
             if (!window.currentUser) return;
-            
-            // 7. CONTROL DE CÀRREGA FIREBASE i 8. ANTI-RACE CONDITION
-            if (!window.isDataLoaded) {
-                console.warn("Guardat cancel·lat per evitar pèrdua de dades: Firebase no carregat completament");
-                return;
-            }
-
-            // 1. PROTECCIÓ CONTRA SOBRESCRIPTURA (CRÍTIC)
-            if (!dades || !dades.courses || dades.courses.length === 0) {
-                console.warn("Guardat cancel·lat per evitar pèrdua de dades: estructures buides");
-                return;
-            }
-
-            if (window.lastFirebaseData && window.lastFirebaseData.courses) {
-                const oldLen = JSON.stringify(window.lastFirebaseData.courses).length;
-                const newLen = JSON.stringify(dades.courses).length;
-                if (newLen < oldLen * 0.8) { // Marge de seguretat dràstic
-                    console.warn("Guardat cancel·lat per evitar pèrdua de dades: la nova versió és dràsticament menor.");
-                    return;
-                }
-            }
-
-            console.log("Iniciant guardat segur al núvol...");
-
-            // 4. BACKUPS AUTOMÀTICS (FIREBASE) - ESTRUCTURA NOVA EN SUBCOL·LECCIÓ
             try {
-                const timestamp = Date.now();
-                const backupRef = doc(db, "programador_backups", window.currentUser.uid, "backups", String(timestamp));
-                
-                await setDoc(backupRef, { 
-                    id: timestamp, 
-                    timestamp: new Date().toISOString(), 
-                    dades: dades 
-                });
-                console.log(`Backup automàtic cloud creat a la ruta: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
-
-                // Mantenir màxim 20 backups
-                const backupsQuery = query(collection(db, "programador_backups", window.currentUser.uid, "backups"), orderBy("id", "desc"));
+                const backupsQuery = query(collection(db, "programador_backups", window.currentUser.uid, "backups"), orderBy("id", "desc"), limit(25));
                 const backupsSnap = await getDocs(backupsQuery);
                 
                 if (backupsSnap.size > 20) {
-                    console.log(`S'han trobat ${backupsSnap.size} backups. Eliminant els més antics per mantenir el límit de 20...`);
+                    console.log(`S'han trobat ${backupsSnap.size} backups en revisar. Eliminant els més antics per mantenir el límit de 20...`);
                     let count = 0;
                     const deletePromises = [];
                     backupsSnap.forEach((docSnap) => {
@@ -164,47 +144,139 @@
                         }
                     });
                     await Promise.all(deletePromises);
-                    console.log("Neteja de backups antics completada.");
+                    console.log("Neteja de backups antics completada correctament.");
                 }
-            } catch(e) { console.error("Error guardant o netejant backup a Firebase", e); }
+            } catch(e) {
+                console.error("Error netejant backups antics de Firebase", e);
+            }
+        }
+
+        window.guardarDades = async function(dades) {
+            if (!window.currentUser) return;
+            
+            if (!window.isDataLoaded) {
+                console.warn("Guardat cancel·lat per evitar pèrdua de dades: Firebase no carregat completament");
+                return;
+            }
+
+            if (!dades || !dades.courses || dades.courses.length === 0) {
+                console.warn("Guardat cancel·lat per evitar pèrdua de dades: estructures buides");
+                return;
+            }
+
+            // Validacions estructurals precises en lloc de JSON.length
+            const countElements = (d) => {
+                if (!d || !d.courses) return { c: 0, s: 0 };
+                let courses = d.courses.length;
+                let sessions = 0;
+                d.courses.forEach(crs => crs.units?.forEach(u => u.phases?.forEach(p => sessions += (p.sessions?.length || 0))));
+                return { courses, sessions };
+            };
+
+            if (window.lastFirebaseData && window.lastFirebaseData.courses) {
+                const oldCounts = countElements(window.lastFirebaseData);
+                const newCounts = countElements(dades);
+                
+                // Si perdem absolutament tots els cursos quan n'hi havia, aturem
+                if (oldCounts.courses > 0 && newCounts.courses === 0) {
+                    console.warn("Guardat cancel·lat: prevenció de buidat total estructural detectat.");
+                    return;
+                }
+            }
+
+            // Anti-concurrència absoluta
+            if (window.isSaving) {
+                console.log("S'ha interceptat una escriptura concurrent. Ometent guardat simultani.");
+                return;
+            }
+            window.isSaving = true;
 
             try {
                 await setDoc(doc(db, "programador_docent", window.currentUser.uid), dades);
                 window.lastFirebaseData = dades;
-                console.log("Dades guardades al núvol correctament.");
-            } catch(e) { console.error("Error guardant dades principals", e); }
+                console.log("Dades guardades al núvol de forma segura.");
+            } catch(e) { 
+                console.error("Error crític guardant dades principals", e); 
+            } finally {
+                window.isSaving = false;
+            }
         }
 
-        // FUNCIÓ NOVA PER CREAR BACKUP MANUAL AL NÚVOL
         window.forcarBackupNuvol = async function(dades) {
+            if (!window.isDataLoaded) {
+                console.warn("Backup cancel·lat: Firebase no carregat");
+                return false;
+            }
             if (!window.currentUser) return false;
+
+            // Evitar backups innecessaris si l'estat és idèntic
+            const dadesStr = JSON.stringify(dades);
+            if (window.lastBackupDataStr === dadesStr) {
+                console.log("Backup innecessari: les dades actuals ja són idèntiques a l'últim backup.");
+                return true;
+            }
+
             try {
                 console.log("Forçant creació de backup manual al núvol...");
                 const timestamp = Date.now();
                 const backupRef = doc(db, "programador_backups", window.currentUser.uid, "backups", String(timestamp));
                 
+                const checksum = window.generateChecksum(dades);
+
                 await setDoc(backupRef, { 
                     id: timestamp, 
                     timestamp: new Date().toISOString(), 
-                    dades: dades 
+                    tipus: "manual",
+                    dades: dades,
+                    checksum: checksum,
+                    version: window.CURRENT_VERSION
                 });
-                console.log(`Backup manual creat correctament a: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
+                console.log(`Backup manual completat amb integritat: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
                 
-                // Mantenir màxim 20 backups
-                const backupsQuery = query(collection(db, "programador_backups", window.currentUser.uid, "backups"), orderBy("id", "desc"));
-                const backupsSnap = await getDocs(backupsQuery);
-                if (backupsSnap.size > 20) {
-                    let count = 0;
-                    const deletePromises = [];
-                    backupsSnap.forEach((docSnap) => {
-                        count++;
-                        if (count > 20) deletePromises.push(deleteDoc(docSnap.ref));
-                    });
-                    await Promise.all(deletePromises);
-                }
+                window.lastBackupDataStr = dadesStr;
+                await netejarBackupsAntics();
                 return true;
             } catch(e) { 
                 console.error("Error creant backup manual a Firebase:", e); 
+                return false;
+            }
+        }
+
+        window.crearBackupAutomaticDiari = async function(dades) {
+            if (!window.isDataLoaded) {
+                console.warn("Backup automàtic cancel·lat: Firebase no carregat");
+                return false;
+            }
+            if (!window.currentUser) return false;
+
+            const dadesStr = JSON.stringify(dades);
+            if (window.lastBackupDataStr === dadesStr) {
+                console.log("Backup automàtic innecessari: no hi ha hagut canvis.");
+                return true;
+            }
+
+            try {
+                console.log("Iniciant creació de backup automàtic al núvol (23:59)...");
+                const timestamp = Date.now();
+                const backupRef = doc(db, "programador_backups", window.currentUser.uid, "backups", String(timestamp));
+                
+                const checksum = window.generateChecksum(dades);
+
+                await setDoc(backupRef, { 
+                    id: timestamp, 
+                    timestamp: new Date().toISOString(), 
+                    tipus: "auto",
+                    dades: dades,
+                    checksum: checksum,
+                    version: window.CURRENT_VERSION
+                });
+                console.log(`Backup automàtic diari creat correctament a: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
+                
+                window.lastBackupDataStr = dadesStr;
+                await netejarBackupsAntics();
+                return true;
+            } catch(e) { 
+                console.error("Error creant backup automàtic a Firebase:", e); 
                 return false;
             }
         }
@@ -234,16 +306,14 @@
 
             if (snap.exists()) {
                 const dades = snap.data();
-                console.log("Dades carregades:", dades);
+                console.log("Dades carregades correctament.");
                 window.lastFirebaseData = dades;
 
-                // IMPORTANT: injectar dades al sistema existent
                 if (window.inicialitzarDades) {
                     window.inicialitzarDades(dades);
                 }
             } else {
                 console.log("Document no trobat. Inicialitzant en blanc per a nou usuari.");
-                // El document no existeix (nou usuari o dades perdudes), alliberem el control de càrrega
                 if (window.inicialitzarDades) {
                     window.inicialitzarDades(null);
                 }
@@ -263,6 +333,7 @@
         const IconRedo = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 019-9 9 9 0 016 2.6L21 13"></path></svg>;
         const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>;
         const IconCloud = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg>;
+        const IconShield = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>;
         const IconEye = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
         const IconEyeOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
         const IconGripVertical = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>;
@@ -364,6 +435,7 @@
             const [user, setUser] = useState(null);
             const hasLoadedRef = useRef(false);
             const fileInputRef = useRef(null);
+            const saveTimeoutRef = useRef(null);
 
             const [activeCourseId, setActiveCourseId] = useState(data[0]?.id);
             const [activeUnitId, setActiveUnitId] = useState(data[0]?.units[0]?.id);
@@ -384,11 +456,11 @@
             
             const [showCompleted, setShowCompleted] = useState(false);
             
-            // 6. RECUPERACIÓ AUTOMÀTICA UI
+            // UI DE BACKUPS I RECUPERACIÓ
             const [backups, setBackups] = useState([]);
             const [showRestoreModal, setShowRestoreModal] = useState(false);
+            const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-            // REQ 5: URL de l'Agenda Docent
             const [agendaUrl, setAgendaUrl] = useState(() => localStorage.getItem('programacio_agenda_url') || '');
 
             useEffect(() => {
@@ -407,7 +479,6 @@
                             setActiveUnitId(migrated[0].units[0].id);
                         }
                     } else {
-                        // Check for backups if data is empty
                         if (window.loadBackups) {
                             window.loadBackups().then(bks => {
                                 if (bks && bks.length > 0) {
@@ -424,7 +495,57 @@
                 if (window.currentUser) setUser(window.currentUser);
             }, []);
 
-            // --- 5. BACKUP LOCAL AUTOMÀTIC ---
+            // Cronograma Backup Automàtic Diari (23:59 precís)
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    const now = new Date();
+                    // Limitació estricta a menys de 5 segons per evitar repetició dins el mateix minut
+                    if (now.getHours() === 23 && now.getMinutes() === 59 && now.getSeconds() < 5) {
+                        const today = now.toISOString().split('T')[0];
+                        const lastAutoBackup = localStorage.getItem('lastAutoBackupDate');
+                        
+                        if (lastAutoBackup !== today && window.isDataLoaded && data) {
+                            console.log("Detectades les 23:59! Iniciant backup automàtic programat...");
+                            if (window.crearBackupAutomaticDiari) {
+                                window.crearBackupAutomaticDiari({ courses: data }).then(success => {
+                                    if (success) {
+                                        localStorage.setItem('lastAutoBackupDate', today);
+                                        console.log("Backup automàtic completat i guardat amb èxit.");
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }, 1000); // Bat de segon per precisió absoluta
+                return () => clearInterval(interval);
+            }, [data]);
+
+            // Firebase Auto-save principal amb Throttle i Historial Undo/Redo
+            useEffect(() => {
+                if (window.currentUser && hasLoadedRef.current && window.isDataLoaded) {
+                    generateLocalBackup({ courses: data });
+                    
+                    // Throttle: Guardem només si l'usuari ha deixat d'escriure durant 2 segons
+                    if (saveTimeoutRef.current) {
+                        clearTimeout(saveTimeoutRef.current);
+                    }
+                    saveTimeoutRef.current = setTimeout(() => {
+                        window.guardarDades({ courses: data });
+                    }, 2000);
+                }
+                
+                if (skipHistory) {
+                    setSkipHistory(false);
+                    return;
+                }
+                setHistory(prev => {
+                    const newHistory = prev.slice(0, historyIndex + 1);
+                    newHistory.push(data);
+                    setHistoryIndex(newHistory.length - 1);
+                    return newHistory;
+                });
+            }, [data]);
+
             const generateLocalBackup = (dataToBackup) => {
                 const date = new Date();
                 const pad = (n) => n.toString().padStart(2, '0');
@@ -456,37 +577,100 @@
                     URL.revokeObjectURL(url);
                     console.log("Còpia de seguretat local descarregada: " + filename);
                 }
-                showToast("Còpia de seguretat descarregada");
+                showToast("Còpia de seguretat local descarregada");
             };
 
             const handleForceCloudBackup = async () => {
                 if (window.forcarBackupNuvol) {
-                    showToast("Creant backup al núvol...");
+                    showToast("Creant backup manual al núvol...");
                     const success = await window.forcarBackupNuvol({ courses: data });
                     if (success) {
                         showToast("Backup al núvol creat correctament.");
                     } else {
-                        showToast("Error en crear el backup al núvol.");
+                        showToast("Error o sense canvis per fer el backup.");
                     }
                 } else {
                     showToast("Firebase no carregat o fora de línia.");
                 }
             };
 
-            // --- 9. FUNCIÓ RESTAURAR ---
-            const restoreFromBackup = (backupId) => {
+            const openHistoryModal = async () => {
+                if (!window.currentUser) {
+                    showToast("Has d'iniciar sessió per veure els backups");
+                    return;
+                }
+                console.log("Carregant historial de backups per a la UI...");
+                const bks = await window.loadBackups();
+                setBackups(bks);
+                setShowHistoryModal(true);
+            };
+
+            // Restauració Segura i Garantida
+            const restoreFromBackupSafe = async (backupId) => {
                 const bk = backups.find(b => b.id === backupId);
-                if (bk && bk.dades && bk.dades.courses) {
-                    console.log("Restaurant dades des del backup id:", backupId);
+                if (!bk || !bk.dades || !bk.dades.courses) {
+                    showToast("Error: Dades de backup invàlides");
+                    return;
+                }
+
+                // Avís de versions antigues
+                if (bk.version !== window.CURRENT_VERSION) {
+                    console.warn(`Versió antiga detectada al backup: v${bk.version || 'undefined'}`);
+                    showToast("Avís: Restaurant una versió antiga del format de dades.");
+                }
+
+                // Checksum d'Integritat (Només si existeix al backup prèviament creat)
+                if (bk.checksum && window.generateChecksum) {
+                    const calculatedHash = window.generateChecksum(bk.dades);
+                    if (calculatedHash !== bk.checksum) {
+                        alert("ERROR CRÍTIC: Backup corrupte. La signatura d'integritat no coincideix (dades alterades). Restauració cancel·lada.");
+                        console.error(`Mismatch Checksum: Esperat [${bk.checksum}], obtingut [${calculatedHash}]`);
+                        return;
+                    }
+                }
+
+                if (confirm("Segur que vols restaurar aquesta còpia? Aquesta acció sobreescriurà les dades actuals i no es pot desfer.")) {
+                    console.log("Iniciant cicle de restauració segura...");
+                    
+                    // Backup Pre-Restauració
+                    showToast("Protegint l'estat actual al núvol abans de restaurar...");
+                    if (window.forcarBackupNuvol) {
+                        await window.forcarBackupNuvol({ courses: data });
+                    }
+
+                    // Recuperació de Dades
                     const migrated = migrateData(bk.dades.courses);
                     setData(migrated);
                     setActiveCourseId(migrated[0]?.id);
                     if(migrated[0]?.units && migrated[0].units.length > 0) {
                         setActiveUnitId(migrated[0].units[0].id);
                     }
+                    
+                    // Forçar el guardat primari al moment sense esperar el throttle de 2 segons
+                    if (window.guardarDades) {
+                        await window.guardarDades({ courses: migrated });
+                    }
+
+                    setShowHistoryModal(false);
                     setShowRestoreModal(false);
-                    showToast("Dades restaurades correctament.");
+                    showToast("Dades recuperades de forma 100% segura.");
                 }
+            };
+
+            const downloadSpecificBackup = (bk) => {
+                if (!bk || !bk.dades) return;
+                const d = new Date(bk.id);
+                const pad = (n) => n.toString().padStart(2, '0');
+                const filename = `ProgramadorBackup_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+                
+                const blob = new Blob([JSON.stringify(bk.dades)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast("Còpia JSON descarregada amb èxit.");
             };
 
             // --- SINCRONITZACIÓ AMB AGENDA (POSTMESSAGE I LOCALSTORAGE) ---
@@ -636,25 +820,6 @@
                 // Neteja
                 return () => window.removeEventListener("message", handleMessage);
             }, []);
-
-            // Firebase Auto-save i Control de l'Historial
-            useEffect(() => {
-                if (window.currentUser && hasLoadedRef.current && window.isDataLoaded) {
-                    generateLocalBackup({ courses: data });
-                    window.guardarDades({ courses: data });
-                }
-                
-                if (skipHistory) {
-                    setSkipHistory(false);
-                    return;
-                }
-                setHistory(prev => {
-                    const newHistory = prev.slice(0, historyIndex + 1);
-                    newHistory.push(data);
-                    setHistoryIndex(newHistory.length - 1);
-                    return newHistory;
-                });
-            }, [data]);
 
             const activeCourse = data.find(c => c.id === activeCourseId) || data[0];
             useEffect(() => {
@@ -1282,23 +1447,31 @@
                                     />
                                     <button 
                                         onClick={() => fileInputRef.current && fileInputRef.current.click()} 
-                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Carregar JSON"
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors hidden xl:flex" title="Carregar JSON"
                                     >
-                                        <IconUpload /> <span className="ml-2 hidden lg:inline">Carregar JSON</span>
+                                        <IconUpload /> <span className="ml-2">Carregar JSON</span>
                                     </button>
 
+                                    {/* BOTONS CLARS A LA UI: 9 */}
                                     <button 
                                         onClick={downloadLocalBackup} 
-                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200 shadow-sm" title="Descarregar còpia local JSON"
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200 shadow-sm" title="Descarregar còpia local"
                                     >
-                                        <IconSave /> <span className="ml-2 hidden lg:inline">Còpia Local</span>
+                                        <IconDownload /> <span className="ml-2 hidden lg:inline">Còpia Local</span>
                                     </button>
 
                                     <button 
                                         onClick={handleForceCloudBackup} 
-                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors border border-blue-200 shadow-sm" title="Forçar backup immediat a Firestore"
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors border border-blue-200 shadow-sm" title="Crear backup manual al núvol"
                                     >
                                         <IconCloud /> <span className="ml-2 hidden lg:inline">Backup Núvol</span>
+                                    </button>
+
+                                    <button 
+                                        onClick={openHistoryModal} 
+                                        className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-md transition-colors border border-green-200 shadow-sm" title="Veure historial de backups"
+                                    >
+                                        <IconShield /> <span className="ml-2 hidden lg:inline">Historial</span>
                                     </button>
 
                                     <button 
@@ -1309,7 +1482,8 @@
                                         }} 
                                         className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors" title="Exportar a Excel"
                                     >
-                                        <IconDownload /> <span className="ml-2 hidden lg:inline">Exportar Excel</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                        <span className="ml-2 hidden lg:inline">Exportar Excel</span>
                                     </button>
                                 </div>
                             </div>
@@ -1388,7 +1562,7 @@
                     {/* Cos Principal */}
                     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                         
-                        {/* 6. MODAL RESTAURACIÓ (Backup Recovery) */}
+                        {/* MODAL RESTAURACIÓ (Backup Recovery - Dades Buides) */}
                         {backups.length > 0 && showRestoreModal && (
                             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
                                 <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border-t-4 border-yellow-500">
@@ -1400,10 +1574,10 @@
                                         {backups.map(bk => (
                                             <div key={bk.id} className="p-3 border-b last:border-0 flex justify-between items-center hover:bg-gray-50">
                                                 <div>
-                                                    <span className="text-sm font-bold text-gray-700 block">{new Date(bk.timestamp).toLocaleString('ca-ES')}</span>
-                                                    <span className="text-xs text-gray-500">Còpia de seguretat automàtica</span>
+                                                    <span className="text-sm font-bold text-gray-700 block">{new Date(bk.id).toLocaleString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                    <span className="text-xs text-gray-500">{bk.tipus === 'auto' ? 'Còpia automàtica diària' : 'Còpia manual'}</span>
                                                 </div>
-                                                <button onClick={() => restoreFromBackup(bk.id)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow-sm transition-colors text-sm">
+                                                <button onClick={() => restoreFromBackupSafe(bk.id)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow-sm transition-colors text-sm">
                                                     Restaurar
                                                 </button>
                                             </div>
@@ -1411,6 +1585,54 @@
                                     </div>
                                     <div className="flex justify-end pt-2 border-t border-gray-100">
                                         <button onClick={() => setShowRestoreModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 font-medium rounded transition-colors">Ignorar i començar de zero</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 6. MODAL HISTORIAL DE BACKUPS DES DE LA UI */}
+                        {showHistoryModal && (
+                            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+                                <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl border-t-4 border-green-500">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                                            <span className="text-green-600 bg-green-100 p-2 rounded-lg mr-3"><IconShield /></span>
+                                            Historial de Seguretat
+                                        </h2>
+                                        <button onClick={() => setShowHistoryModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl px-2">×</button>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded border border-gray-200">
+                                        Llistat de les teves últimes còpies de seguretat salvaguardades de forma encriptada i autònoma a Firebase. Et permetran viatjar en el temps en cas que passés algun desastre accidental.
+                                    </p>
+                                    <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-lg mb-4 custom-scroll bg-gray-50/50">
+                                        {backups.length === 0 ? (
+                                            <div className="p-8 text-center text-gray-500">Encara no hi ha cap còpia de seguretat disponible a l'historial.</div>
+                                        ) : (
+                                            backups.map(bk => (
+                                                <div key={bk.id} className="p-3 border-b border-gray-200 last:border-0 flex flex-col sm:flex-row sm:justify-between sm:items-center hover:bg-white transition-colors">
+                                                    <div className="mb-2 sm:mb-0">
+                                                        <span className="text-sm font-bold text-gray-800 block">
+                                                            🗓️ {new Date(bk.id).toLocaleString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block mt-1 ${bk.tipus === 'auto' ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
+                                                            {bk.tipus === 'auto' ? '🔄 Còpia automàtica diària' : '☁️ Còpia manual al núvol'}
+                                                        </span>
+                                                        {bk.checksum && <span className="text-[10px] text-gray-400 ml-2 font-mono" title="Firma d'integritat SHA">#{bk.checksum.substring(0, 8)}</span>}
+                                                    </div>
+                                                    <div className="flex space-x-2">
+                                                        <button onClick={() => downloadSpecificBackup(bk)} className="px-3 py-1.5 bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 font-medium rounded shadow-sm transition-colors text-xs flex items-center">
+                                                            ⬇️ Descarregar
+                                                        </button>
+                                                        <button onClick={() => restoreFromBackupSafe(bk.id)} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded shadow-sm transition-colors text-xs flex items-center">
+                                                            🔁 Restaurar Dades
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                    <div className="flex justify-end pt-2 border-t border-gray-100">
+                                        <button onClick={() => setShowHistoryModal(false)} className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 font-medium rounded-lg transition-colors">Tancar Historial</button>
                                     </div>
                                 </div>
                             </div>
