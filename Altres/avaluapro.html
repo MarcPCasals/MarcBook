@@ -100,7 +100,7 @@
     </script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc, query, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
 
@@ -297,38 +297,69 @@
 
         // --- SISTEMA DE BACKUPS AL NÚVOL (FAIL-SAFE) ---
 
-        window.netejarBackupsAntics = async function() {
-            if (!currentUser) return;
-            try {
-                const backupsRef = collection(db, "avaluapro_backups", currentUser.uid, "backups");
-                const qLimit = query(backupsRef, orderBy("timeMs", "desc"), limit(25));
-                const snap = await getDocs(qLimit);
-                let count = 0;
-                const deletePromises = [];
-                snap.forEach((documento) => {
-                    count++;
-                    if (count > 20) {
-                        console.log(`Eliminant backup antic: ${documento.id}`);
-                        deletePromises.push(deleteDoc(documento.ref));
-                    }
-                });
-                await Promise.all(deletePromises);
-            } catch(e) {
-                console.error("Error netejant backups antics:", e);
+        window.createAvaluaproBackupCloud = async function(data, tipus) {
+            if (!currentUser) throw new Error("No user autenticat");
+
+            if (!data || data.length === 0) {
+                throw new Error("No hi ha dades per fer backup");
             }
+
+            const now = new Date();
+            const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
+            const backupId = "backup_" + Date.now();
+
+            const backupObj = {
+                id: backupId,
+                timestamp: timestamp,
+                tipus: tipus,
+                dades: JSON.stringify(data), // Guardem en string per unificar documents i optimitzar límits de mida
+                timeMs: Date.now()
+            };
+
+            try {
+                // Guardem directament a l'array history del document central
+                const docRef = doc(db, "avaluapro_backups", currentUser.uid);
+                const docSnap = await getDoc(docRef);
+                
+                let history = [];
+                if (docSnap.exists() && docSnap.data().history) {
+                    history = docSnap.data().history;
+                }
+                
+                history.unshift(backupObj);
+                
+                if (history.length > 20) {
+                    history = history.slice(0, 20);
+                }
+                
+                await setDoc(docRef, { history: history }, { merge: true });
+
+                console.log(`✅ Backup ${tipus} guardat correctament al nou format integrat.`);
+                return true;
+            } catch(e) {
+                console.error("Error creant backup al núvol:", e);
+                throw e;
+            }
+        };
+
+        window.netejarBackupsAntics = async function() {
+            // Ja es controla automàticament en guardar dins de l'array de history
         };
 
         window.loadBackups = async function() {
             if (!currentUser) return [];
             try {
-                const backupsRef = collection(db, "avaluapro_backups", currentUser.uid, "backups");
-                const q = query(backupsRef, orderBy("timeMs", "desc"), limit(20));
-                const snap = await getDocs(q);
-                const backups = [];
-                snap.forEach(doc => {
-                    backups.push(doc.data());
-                });
-                return backups;
+                const docRef = doc(db, "avaluapro_backups", currentUser.uid);
+                const docSnap = await getDoc(docRef);
+                
+                if (docSnap.exists() && docSnap.data().history) {
+                    let history = docSnap.data().history;
+                    return history.map(b => ({
+                        ...b,
+                        dades: typeof b.dades === 'string' ? JSON.parse(b.dades) : b.dades
+                    }));
+                }
+                return [];
             } catch (error) {
                 console.error("Error carregant backups:", error);
                 return [];
@@ -368,9 +399,16 @@
                 return;
             }
 
-            return window.createAvaluaproBackupCloud(currentData, "manual")
+            if (!currentData || currentData.length === 0) {
+                alert("No hi ha dades per fer backup");
+                return;
+            }
+
+            console.log("Executant backup manual REAL...");
+
+            window.createAvaluaproBackupCloud(currentData, "manual")
                 .then(() => {
-                    alert("✅ Backup creat correctament");
+                    alert("✅ Backup manual creat correctament");
                     window.dispatchEvent(new Event('cloudBackupUpdated'));
                 })
                 .catch(err => {
@@ -445,8 +483,17 @@
 
         window.createAvaluaproBackup = (silent = false, customLabel = null, triggerDownload = false, currentData = null) => {
             if (!currentData || currentData === '[]') {
-                if (!silent) alert("No hi ha dades actuals per guardar al backup.");
+                if (!silent && !triggerDownload) alert("No hi ha dades actuals per guardar al backup.");
                 return;
+            }
+            
+            if (triggerDownload) {
+                const now = new Date();
+                const dateStrForFile = window.getLocalYYYYMMDD(now);
+                const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
+                window.downloadBackupJSON(currentData, `AvaluaproBackup_${dateStrForFile}_${safeTime}.json`);
+                if (!silent) alert("✅ Backup descarregat al teu dispositiu correctament.");
+                return; 
             }
             
             let history = [];
@@ -463,7 +510,6 @@
             
             const now = new Date();
             const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
-            const dateStrForFile = window.getLocalYYYYMMDD(now);
             
             history.unshift({ 
                 id: Date.now(), 
@@ -476,12 +522,7 @@
             
             localStorage.setItem('avaluaproBackupHistory', JSON.stringify(history));
             
-            if (triggerDownload) {
-                const safeTime = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
-                window.downloadBackupJSON(currentData, `AvaluaproBackup_${dateStrForFile}_${safeTime}.json`);
-            }
-            
-            if (!silent) alert("✅ Backup creat" + (triggerDownload ? " i descarregat" : "") + " correctament.");
+            if (!silent) alert("✅ Backup creat correctament.");
             window.dispatchEvent(new Event('backupHistoryUpdated'));
         };
     </script>
@@ -3611,7 +3652,7 @@
                                                                             return (
                                                                                 <td className="p-1 border-r border-b text-center bg-gray-50 w-14 min-w-[3.5rem] shadow-inner">
                                                                                     <select
-                                                                                        value={overCg || ""}
+                                                                                        value={finalCg || ""}
                                                                                         onChange={(e) => updateMark(student.id, `override_${crit.id}`, e.target.value)}
                                                                                         className={`w-10 h-8 mx-auto appearance-none block text-center rounded-full text-xs font-bold shadow-sm outline-none cursor-pointer hover:ring-2 focus:ring-2 ring-brand-400 ${getGradeColor(finalCg)}`}
                                                                                         style={{textAlignLast:'center'}}
@@ -3637,7 +3678,7 @@
                                                                 return (
                                                                     <td className="p-2 border-r border-b text-center bg-gray-100 w-14 min-w-[3.5rem] shadow-inner">
                                                                         <select
-                                                                            value={overCompG || ""}
+                                                                            value={finalCompG || ""}
                                                                             onChange={(e) => updateMark(student.id, `override_${comp.id}`, e.target.value)}
                                                                             className={`w-12 h-10 mx-auto appearance-none block text-center rounded-lg text-sm font-black shadow outline-none cursor-pointer hover:ring-2 focus:ring-2 ring-brand-400 ${getGradeColor(finalCompG)}`}
                                                                             style={{textAlignLast:'center'}}
