@@ -16,6 +16,15 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- Ocultem les advertències genèriques de Tailwind i Babel per a entorns CDN -->
+    <script>
+        const originalWarn = console.warn;
+        console.warn = function(...args) {
+            if (typeof args[0] === 'string' && (args[0].includes('cdn.tailwindcss.com should not be used in production') || args[0].includes('You are using the in-browser Babel transformer'))) return;
+            originalWarn.apply(console, args);
+        };
+    </script>
+    
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -312,29 +321,18 @@
                 id: backupId,
                 timestamp: timestamp,
                 tipus: tipus,
-                dades: JSON.stringify(data), // Guardem en string per unificar documents i optimitzar límits de mida
+                dades: JSON.stringify(data), 
                 timeMs: Date.now()
             };
 
             try {
-                // Guardem directament a l'array history del document central
-                const docRef = doc(db, "avaluapro_backups", currentUser.uid);
-                const docSnap = await getDoc(docRef);
-                
-                let history = [];
-                if (docSnap.exists() && docSnap.data().history) {
-                    history = docSnap.data().history;
-                }
-                
-                history.unshift(backupObj);
-                
-                if (history.length > 20) {
-                    history = history.slice(0, 20);
-                }
-                
-                await setDoc(docRef, { history: history }, { merge: true });
+                // Modificat per adaptar-se estrictament a les regles de Firebase match /avaluapro_backups/{userId}/backups/{backupId}
+                const docRef = doc(db, "avaluapro_backups", currentUser.uid, "backups", backupId);
+                await setDoc(docRef, backupObj);
 
-                console.log(`✅ Backup ${tipus} guardat correctament al nou format integrat.`);
+                console.log(`✅ Backup ${tipus} guardat correctament al núvol en subcol·leccions.`);
+                
+                await window.netejarBackupsAntics();
                 return true;
             } catch(e) {
                 console.error("Error creant backup al núvol:", e);
@@ -343,23 +341,42 @@
         };
 
         window.netejarBackupsAntics = async function() {
-            // Ja es controla automàticament en guardar dins de l'array de history
+            if (!currentUser) return;
+            try {
+                const backupsRef = collection(db, "avaluapro_backups", currentUser.uid, "backups");
+                const qLimit = query(backupsRef, orderBy("timeMs", "desc"));
+                const snap = await getDocs(qLimit);
+                let count = 0;
+                const deletePromises = [];
+                snap.forEach((documento) => {
+                    count++;
+                    if (count > 20) {
+                        console.log(`Eliminant backup antic: ${documento.id}`);
+                        deletePromises.push(deleteDoc(documento.ref));
+                    }
+                });
+                await Promise.all(deletePromises);
+            } catch(e) {
+                console.error("Error netejant backups antics:", e);
+            }
         };
 
         window.loadBackups = async function() {
             if (!currentUser) return [];
             try {
-                const docRef = doc(db, "avaluapro_backups", currentUser.uid);
-                const docSnap = await getDoc(docRef);
+                const backupsRef = collection(db, "avaluapro_backups", currentUser.uid, "backups");
+                const q = query(backupsRef, orderBy("timeMs", "desc"), limit(20));
+                const snap = await getDocs(q);
                 
-                if (docSnap.exists() && docSnap.data().history) {
-                    let history = docSnap.data().history;
-                    return history.map(b => ({
+                const backups = [];
+                snap.forEach(docSnap => {
+                    const b = docSnap.data();
+                    backups.push({
                         ...b,
                         dades: typeof b.dades === 'string' ? JSON.parse(b.dades) : b.dades
-                    }));
-                }
-                return [];
+                    });
+                });
+                return backups;
             } catch (error) {
                 console.error("Error carregant backups:", error);
                 return [];
@@ -2611,7 +2628,47 @@
                 setShowWizard(false); 
             };
             const updateMark = (sid, iid, val) => {
-                updateClasses(classes.map(c => c.id === activeClassId ? { ...c, students: c.students.map(s => s.id === sid ? { ...s, marks: { ...(s.marks ? s.marks : {}), [iid]: val } } : s) } : c));
+                updateClasses(classes.map(c => {
+                    if (c.id !== activeClassId) return c;
+                    
+                    // Si estem sobrescrivint una nota manualment, no esborrem res.
+                    if (iid.startsWith('override_')) {
+                        return { ...c, students: c.students.map(s => s.id === sid ? { ...s, marks: { ...(s.marks ? s.marks : {}), [iid]: val } } : s) };
+                    }
+                    
+                    // Si estem posant nota a un indicador, eliminem les notes manuals (overrides) dels seus pares
+                    // perquè es torni a calcular de forma automàtica immediatament.
+                    let parentCritId = null;
+                    let parentCompId = null;
+                    
+                    if (c.semesters) {
+                        c.semesters.forEach(sem => {
+                            if (sem.competencies) {
+                                sem.competencies.forEach(comp => {
+                                    if (comp.criteria) {
+                                        comp.criteria.forEach(crit => {
+                                            if (crit.indicators && crit.indicators.some(i => i.id === iid)) {
+                                                parentCritId = crit.id;
+                                                parentCompId = comp.id;
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    return {
+                        ...c,
+                        students: c.students.map(s => {
+                            if (s.id !== sid) return s;
+                            const newMarks = { ...(s.marks ? s.marks : {}), [iid]: val };
+                            if (parentCritId) delete newMarks[`override_${parentCritId}`];
+                            if (parentCompId) delete newMarks[`override_${parentCompId}`];
+                            return { ...s, marks: newMarks };
+                        })
+                    };
+                }));
             };
             
             const renameItem = (type, itemId, parentId, grandParentId) => {
@@ -3157,7 +3214,7 @@
                         iecg: { range: range, level: iecgLevel }, 
                         iecgExplanation: iecgExplanation,
                         progressMap: progressMap, 
-                        achievement: { assolit: assolit, proces: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit, riskStudents: riskStudentsList, attentionStudents: attentionStudentsList },
+                        achievement: { assolit: proces, noAssolit: noAssolit, total: assolit+proces+noAssolit, riskStudents: riskStudentsList, attentionStudents: attentionStudentsList },
                         allCompNames: compNamesSet
                     };
 
