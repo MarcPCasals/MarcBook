@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ca">
 <head>
-    <link rel="icon" href="/MarcBook/favicon.ico">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agenda Docent</title>
@@ -129,7 +128,7 @@
     <!-- FIREBASE -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-      import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+      import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
       import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
       import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
 
@@ -155,7 +154,6 @@
       window.setDoc = setDoc;
       window.getDoc = getDoc;
       window.doc = doc;
-      window.deleteDoc = deleteDoc;
       window.currentUser = null;
 
       // FUNCIONS D'AUTENTICACIÓ
@@ -238,6 +236,15 @@
               const dataObj = JSON.parse(dataStr);
               await setDoc(doc(db, "agenda_docent", window.currentUser.uid), dataObj);
           } catch(e) { console.error("Firebase save error", e); }
+      };
+
+      window.loadAgendaFromCloud = async () => {
+          if (!window.currentUser) return null;
+          try {
+              const snap = await getDoc(doc(db, "agenda_docent", window.currentUser.uid));
+              if (snap.exists()) return JSON.stringify(snap.data());
+          } catch(e) { console.error("Firebase load error", e); }
+          return null;
       };
 
       window.saveBackupToCloud = async (history) => {
@@ -386,11 +393,14 @@
             CheckCircle: () => <Icon><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Icon>,
             Calendar: () => <Icon><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></Icon>,
             Save: () => <Icon><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Icon>,
+            Clock: () => <Icon size={12}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Icon>,
             Moon: () => <Icon><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></Icon>,
             AlertCircle: () => <Icon><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>,
             ChevronLeft: () => <Icon><polyline points="15 18 9 12 15 6"/></Icon>,
             ChevronRight: () => <Icon><polyline points="9 18 15 12 9 6"/></Icon>,
+            ChevronUp: () => <Icon><polyline points="18 15 12 9 6 15"/></Icon>,
             ChevronDown: () => <Icon><polyline points="6 9 12 15 18 9"/></Icon>,
+            FileJson: () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Icon>,
             Table: () => <Icon><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></Icon>,
             AlertTriangle: () => <Icon><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>,
             ArrowRight: () => <Icon><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></Icon>,
@@ -398,6 +408,8 @@
             Plus: () => <Icon><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Icon>,
             Copy: () => <Icon><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Icon>,
             XCircle: () => <Icon><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></Icon>,
+            MoreHorizontal: () => <Icon><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></Icon>,
+            AlertOctagon: () => <Icon><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Icon>,
             FileText: () => <Icon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Icon>,
             Link: () => <Icon><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></Icon>,
             Edit: () => <Icon><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></Icon>,
@@ -530,7 +542,7 @@
             return getLocalISODate(result);
         };
 
-        window.stripClassLetter = (name) => {
+        const stripClassLetter = (name) => {
             if (!name) return "";
             const match = name.match(/(1r|2n|3r|4t|1R|2N|3R|4T)/i);
             if (match) return match[0].toLowerCase();
@@ -734,6 +746,8 @@
         const DashboardScreen = ({ config, radar, setRadar, onSelectWeek, onSelectClassView, onExport, onImport, goToConfig, onReset, onSaveConfig, holidayWeeks, onToggleHoliday, reminders, onSaveReminder, weeksData }) => {
             const [currentViewDate, setCurrentViewDate] = useState(new Date());
             const [showResetModal, setShowResetModal] = useState(false);
+            const [showInfoModal, setShowInfoModal] = useState(false);
+            const [showImportModal, setShowImportModal] = useState(false);
             const [showBackupModal, setShowBackupModal] = useState(false);
             const [showGlobalRemindersModal, setShowGlobalRemindersModal] = useState(false);
             const [showRadarHistory, setShowRadarHistory] = useState(false);
@@ -816,7 +830,8 @@
                 return now >= start && now <= end;
             };
 
-            const handleImportClick = () => { if(fileInputRef.current) fileInputRef.current.click(); };
+            const handleImportClick = () => setShowImportModal(true);
+            const confirmImport = () => { setShowImportModal(false); if(fileInputRef.current) fileInputRef.current.click(); };
 
             const handleSaveLink = () => {
                 onSaveConfig({ ...config, googleSheetUrl: tempLink });
@@ -892,6 +907,17 @@
                     });
                 }
             }
+            
+            const dayPriority = { 'AVUI': 1, 'DEMÀ': 2, 'DISSABTE': 3, 'DIUMENGE': 4 };
+            activeReminders.sort((a, b) => {
+                const pA = dayPriority[a.day] || 5;
+                const pB = dayPriority[b.day] || 5;
+                if (pA !== pB) return pA - pB;
+                if (!a.time && !b.time) return 0;
+                if (!a.time) return -1;
+                if (!b.time) return 1;
+                return a.time.localeCompare(b.time);
+            });
 
             const nowForUI = new Date();
             const isWeekendNow = nowForUI.getDay() === 0 || nowForUI.getDay() === 6;
@@ -946,6 +972,7 @@
                              <button onClick={() => setShowGlobalRemindersModal(true)} className="p-2 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg flex items-center gap-1 transition-colors mr-2" title="Tots els Recordatoris"><Icons.Bell size={18}/></button>
                              <button onClick={() => setShowBackupModal(true)} className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg flex items-center gap-1 transition-colors mr-2" title="Protecció de Dades"><Icons.Shield size={18}/></button>
                              <button onClick={() => setShowResetModal(true)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 transition-colors mr-4" title="Reiniciar"><Icons.Trash size={18}/></button>
+                             <button onClick={() => setShowInfoModal(true)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium"><Icons.FileJson /> Guardar</button>
                              <button onClick={handleImportClick} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex gap-2 items-center text-gray-700 font-medium cursor-pointer"><Icons.ArrowRight /> Carregar</button>
                              <input type="file" className="hidden" ref={fileInputRef} onChange={onImport} accept=".json"/>
                             <button onClick={goToConfig} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><Icons.Settings /></button>
@@ -1207,22 +1234,41 @@
                     )}
 
                     {showResetModal && ReactDOM.createPortal(
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in p-4">
-                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-red-500">
-                                <h3 className="text-xl font-bold text-red-600 mb-2 flex items-center gap-2"><Icons.AlertTriangle /> Eliminar Agenda</h3>
-                                <p className="text-gray-700 mb-6 text-sm font-medium">Estàs a punt d'eliminar totes les dades de l'agenda docent. Aquesta acció no es pot desfer.</p>
-                                
-                                <div className="flex flex-col gap-3">
-                                    <button onClick={() => { onExport(); }} className="w-full px-4 py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold hover:bg-blue-100 flex items-center justify-center gap-2 transition-colors shadow-sm">
-                                        <Icons.Download size={18} /> Descarregar backup
-                                    </button>
-                                    
-                                    <div className="flex justify-end gap-2 mt-3 pt-4 border-t border-gray-100">
-                                        <button onClick={() => setShowResetModal(false)} className="px-5 py-2.5 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel·lar</button>
-                                        <button onClick={() => { onReset(); setShowResetModal(false); }} className="px-5 py-2.5 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 flex items-center gap-2 transition-colors shadow-sm">
-                                            <Icons.Trash size={16} /> Eliminar tot
-                                        </button>
-                                    </div>
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl border-t-4 border-red-500">
+                                <h3 className="text-lg font-bold text-red-600 mb-2">Atenció! Zona de perill</h3>
+                                <p className="text-gray-600 mb-6 text-sm">Segur que vols eliminar tota la informació? Aquest botó està pensat per reiniciar l'agenda per al proper curs.</p>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowResetModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={() => { onReset(); setShowResetModal(false); }} className="px-4 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700">Sí, eliminar tot</button>
+                                </div>
+                            </div>
+                        </div>, document.body
+                    )}
+
+                    {showInfoModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
+                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.FileJson /> Còpia de Seguretat</h3>
+                                <p className="text-gray-600 mb-4 text-sm">Aquest botó descarregarà un arxiu <b>.json</b> al teu ordinador.</p>
+                                <ul className="list-disc list-inside text-xs text-gray-500 mb-6 space-y-1"><li>L'aplicació ja guarda automàticament les dades al navegador.</li><li>Fes servir aquesta opció per moure les dades a un altre dispositiu.</li><li>O per guardar una còpia de seguretat externa.</li></ul>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowInfoModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={() => { setShowInfoModal(false); onExport(); }} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Entesos, descarregar</button>
+                                </div>
+                            </div>
+                        </div>, document.body
+                    )}
+
+                    {showImportModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-green-500">
+                                <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Icons.ArrowRight /> Carregar Còpia</h3>
+                                <p className="text-gray-600 mb-4 text-sm">Aquesta opció serveix per <b>restaurar</b> una còpia de seguretat que tinguis guardada al teu ordinador (arxiu .json).</p>
+                                <p className="text-gray-600 text-sm mb-6">Això substituirà les dades actuals per les de l'arxiu.</p>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={confirmImport} className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700">Seleccionar Arxiu</button>
                                 </div>
                             </div>
                         </div>, document.body
@@ -1739,7 +1785,13 @@
             };
 
             const handleSave = () => {
-                onSave(dateStr, localReminders);
+                const sorted = [...localReminders].sort((a, b) => {
+                    if (!a.time && !b.time) return 0;
+                    if (!a.time) return -1;
+                    if (!b.time) return 1;
+                    return a.time.localeCompare(b.time);
+                });
+                onSave(dateStr, sorted);
                 onClose();
             };
 
@@ -1808,15 +1860,30 @@
             const [newTime, setNewTime] = useState("");
 
             const allRems = [];
+            const todayStr = getLocalISODate(new Date());
             Object.entries(reminders || {}).forEach(([dateStr, rems]) => {
-                rems.forEach(r => allRems.push({ ...r, dateStr }));
+                if (dateStr >= todayStr) {
+                    rems.forEach(r => allRems.push({ ...r, dateStr }));
+                }
             });
-            allRems.sort((a, b) => new Date(a.dateStr) - new Date(b.dateStr));
+            allRems.sort((a, b) => {
+                if (a.dateStr !== b.dateStr) return new Date(a.dateStr) - new Date(b.dateStr);
+                if (!a.time && !b.time) return 0;
+                if (!a.time) return -1;
+                if (!b.time) return 1;
+                return a.time.localeCompare(b.time);
+            });
 
             const handleAdd = () => {
                 if (newDate && newText.trim()) {
                     const existing = reminders[newDate] || [];
-                    onSaveReminder(newDate, [...existing, { text: newText.trim(), time: newTime }]);
+                    const updated = [...existing, { text: newText.trim(), time: newTime }].sort((a, b) => {
+                        if (!a.time && !b.time) return 0;
+                        if (!a.time) return -1;
+                        if (!b.time) return 1;
+                        return a.time.localeCompare(b.time);
+                    });
+                    onSaveReminder(newDate, updated);
                     setNewText("");
                     setNewTime("");
                 }
@@ -2274,7 +2341,7 @@
                 const htmlRows = generateHTML(true); 
                 const payload = {
                     action: 'SYNC_TABLE',
-                    curs: window.stripClassLetter(exportConfig.curs),
+                    curs: stripClassLetter(exportConfig.curs),
                     ut: exportConfig.ut.trim(),
                     fase: exportConfig.fase,
                     html: htmlRows,
@@ -2336,9 +2403,10 @@
                             {/* Fila de dies fixada a dalt */}
                             {viewDays.map((d, i) => {
                                 const dateStr = addDays(weekId, i);
+                                const isToday = dateStr === getLocalISODate(new Date());
                                 const hasReminder = reminders && reminders[dateStr] && reminders[dateStr].length > 0;
                                 return (
-                                    <div key={i} className="sticky top-0 z-20 p-3 border-r border-b border-gray-200 bg-gray-50 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group">
+                                    <div key={i} className={`sticky top-0 z-20 p-3 border-r border-b text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group ${isToday ? `bg-${theme}-100 text-${theme}-800 font-extrabold border-${theme}-300 shadow-inner` : 'border-gray-200 bg-gray-50 text-gray-700 font-bold'}`}>
                                         {d} {parseInt(dateStr.split('-')[2])}
                                         <button 
                                             onClick={() => setActiveDayNotepad({ dayIndex: i })}
@@ -2396,14 +2464,15 @@
                                         const cid = globalClassId || extraClassId;
                                         const isExtraClass = !!extraClassId;
                                         
-                                        // Comprovació de si la classe ja ha passat
+                                        // Comprovació de si la classe ja ha passat o si és avui
                                         const now = new Date();
                                         const dateStr = addDays(weekId, d);
+                                        const isToday = dateStr === getLocalISODate(new Date());
                                         const [y, m, day] = dateStr.split('-');
                                         const cellEndTime = new Date(y, m - 1, day, slot.endH, slot.endM, 0);
                                         const isPast = now > cellEndTime;
 
-                                        if (!cid) return <div key={d} className={`border-r border-b border-gray-100 ${isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50/30'}`}></div>;
+                                        if (!cid) return <div key={d} className={`border-r border-b border-gray-100 ${isPast ? 'bg-gray-100 opacity-60' : (isToday ? `bg-${theme}-50/30` : 'bg-gray-50/30')}`}></div>;
                                         
                                         const cinfo = config.classes.find(c => c.id === cid) || { name: "Extra", color: "bg-gray-100 text-gray-800 border-gray-300" };
                                         const key = `${d}-${slot.id}`;
@@ -2414,8 +2483,10 @@
                                         const is2h = config.durations?.[key] === 2 && !isExtraClass;
                                         const hasContent = data.materials?.trim() || data.notes?.trim() || data.links?.length > 0;
 
-                                        let cellBgClass = isZzz ? 'session-cancelled' : `bg-white hover:bg-${theme}-50/10`;
-                                        if (isPast && !isZzz) cellBgClass += ' bg-gray-100 opacity-60'; // Efecte de passat
+                                        let cellBgClass = isZzz ? 'session-cancelled' : (isToday ? `bg-${theme}-50/50 hover:bg-${theme}-100/60` : `bg-white hover:bg-${theme}-50/10`);
+                                        if (isPast && !isZzz) {
+                                            cellBgClass = isToday ? `bg-${theme}-50/30 opacity-75` : 'bg-gray-100 opacity-60';
+                                        }
 
                                         return (
                                             <div key={d} style={is2h ? { gridRow: 'span 2' } : {}} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
@@ -2538,7 +2609,7 @@
                                         setExportClassId(e.target.value);
                                         const selectedC = config.classes.find(c => c.id === e.target.value);
                                         if (selectedC) {
-                                            setExportConfig({...exportConfig, curs: window.stripClassLetter(selectedC.name)});
+                                            setExportConfig({...exportConfig, curs: stripClassLetter(selectedC.name)});
                                         }
                                     }}>
                                         <option value="">-- Totes les classes --</option>
@@ -2690,7 +2761,7 @@
             const [future, setFuture] = useState([]);
             const [reviewMode, setReviewMode] = useState(false);
             const [showExportModal, setShowExportModal] = useState(false);
-            const [exportConfig, setExportConfig] = useState({ curs: classInfo ? window.stripClassLetter(classInfo.name) : "", ut: "", fase: "FASE DE PREPARACIÓ" });
+            const [exportConfig, setExportConfig] = useState({ curs: classInfo ? stripClassLetter(classInfo.name) : "", ut: "", fase: "FASE DE PREPARACIÓ" });
             const [exportInterval, setExportInterval] = useState("");
             const [selectedUTId, setSelectedUTId] = useState("");
 
@@ -2889,7 +2960,7 @@
                 } else if (action === 'alert_menu') {
                     const tasks = getTasks(wId, d, s);
                     const idx = tasks.findIndex(t => t === task);
-                    setPendingActionTask({ wId, d, s, cid, idx, task });
+                    setPendingActionTask({ wId, d, s, idx, task });
                 }
             };
 
@@ -2992,6 +3063,9 @@
                 let targetSession = null;
 
                 if (targetType === 'next_same' || targetType === 'next_other') {
+                    const currentIdx = allClassSessions.findIndex(sess => sess.weekId === copySource.weekId && sess.dayIndex === copySource.day && sess.slot.id === copySource.slot);
+                    for (let i = currentIdx + 1; i < allClassSessions.length; i++) {
+                        if (targetType === 'next_same' || targetType === 'next_other') {
                     const currentIdx = allClassSessions.findIndex(sess => sess.weekId === copySource.weekId && sess.dayIndex === copySource.day && sess.slot.id === copySource.slot);
                     for (let i = currentIdx + 1; i < allClassSessions.length; i++) {
                         if (!allClassSessions[i].isZzz && !allClassSessions[i].isHoliday) {
