@@ -293,17 +293,28 @@
             const timestamp = now.toLocaleDateString('ca-ES') + ' a les ' + now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'});
             const backupId = "backup_" + Date.now();
 
+            console.log("Classes a guardar:", data.length);
+            console.log("Backup ID:", backupId);
+
             const backupObj = {
                 id: backupId,
                 timestamp: timestamp,
                 tipus: tipus,
-                dades: JSON.stringify(data), 
-                timeMs: Date.now()
+                timeMs: Date.now(),
+                totalClasses: data.length
             };
 
             try {
                 const docRef = doc(db, "avaluapro_backups", currentUser.uid, "backups", backupId);
                 await setDoc(docRef, backupObj);
+                
+                const savePromises = data.map((classe) => {
+                    const classId = classe.id || "class_" + Date.now() + Math.floor(Math.random() * 1000);
+                    classe.id = classId;
+                    const classRef = doc(db, "avaluapro_backups", currentUser.uid, "backups", backupId, "classes", classId);
+                    return setDoc(classRef, classe);
+                });
+                await Promise.all(savePromises);
                 
                 await window.netejarBackupsAntics();
                 return true;
@@ -342,11 +353,7 @@
                 
                 const backups = [];
                 snap.forEach(docSnap => {
-                    const b = docSnap.data();
-                    backups.push({
-                        ...b,
-                        dades: typeof b.dades === 'string' ? JSON.parse(b.dades) : b.dades
-                    });
+                    backups.push(docSnap.data());
                 });
                 return backups;
             } catch (error) {
@@ -361,16 +368,31 @@
             const backups = await window.loadBackups();
             const backupToRestore = backups.find(b => b.id === backupId);
             
-            if (!backupToRestore || !backupToRestore.dades) {
+            if (!backupToRestore) {
                 alert("Error: No s'ha trobat el backup o les dades estan corruptes.");
                 return;
             }
 
             if (confirm(`⚠️ ATENCIÓ: Segur que vols restaurar el backup del ${backupToRestore.timestamp}? \nAixò substituirà TOTES les dades actuals i es farà un guardat immediat.`)) {
-                await window.createAvaluaproBackupCloud(window.loadedDades, "pre-restore");
-                window.loadedDades = backupToRestore.dades; 
                 try {
-                    await window.guardarDades(backupToRestore.dades);
+                    await window.createAvaluaproBackupCloud(window.loadedDades, "pre-restore");
+                    
+                    const classesSnap = await getDocs(collection(db, "avaluapro_backups", currentUser.uid, "backups", backupId, "classes"));
+                    const classesToRestore = [];
+                    classesSnap.forEach(doc => classesToRestore.push(doc.data()));
+                    
+                    let dadesFinals = classesToRestore;
+                    if (classesToRestore.length === 0 && backupToRestore.dades) {
+                        dadesFinals = typeof backupToRestore.dades === 'string' ? JSON.parse(backupToRestore.dades) : backupToRestore.dades;
+                    }
+                    
+                    if (!dadesFinals || dadesFinals.length === 0) {
+                        alert("Error: No hi ha dades al backup per restaurar.");
+                        return;
+                    }
+
+                    window.loadedDades = dadesFinals; 
+                    await window.guardarDades(dadesFinals);
                     alert("Dades restaurades correctament. L'aplicació es recarregarà.");
                     window.location.reload();
                 } catch(e) {
@@ -402,17 +424,30 @@
                 });
         };
 
-        window.descarregarBackupIndividual = function(backupId) {
-            window.loadBackups().then(backups => {
+        window.descarregarBackupIndividual = async function(backupId) {
+            if (!currentUser) return;
+            try {
+                const backups = await window.loadBackups();
                 const backup = backups.find(b => b.id === backupId);
                 if (backup) {
+                    const classesSnap = await getDocs(collection(db, "avaluapro_backups", currentUser.uid, "backups", backupId, "classes"));
+                    const classesToRestore = [];
+                    classesSnap.forEach(doc => classesToRestore.push(doc.data()));
+                    
+                    let dadesFinals = classesToRestore;
+                    if (classesToRestore.length === 0 && backup.dades) {
+                        dadesFinals = typeof backup.dades === 'string' ? JSON.parse(backup.dades) : backup.dades;
+                    }
+
                     const now = new Date();
                     const dateStr = window.getLocalYYYYMMDD(now);
                     const timeStr = now.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
                     const filename = `AvaluaproBackup_${dateStr}_${timeStr}.json`;
-                    window.downloadBackupJSON(JSON.stringify(backup.dades), filename);
+                    window.downloadBackupJSON(JSON.stringify(dadesFinals), filename);
                 }
-            });
+            } catch(e) {
+                console.error("Error descarregant el backup:", e);
+            }
         };
 
         setInterval(() => {
