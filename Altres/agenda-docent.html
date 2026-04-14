@@ -2292,7 +2292,7 @@
                 return html;
             };
 
-            const handleExportToProgramacio = () => {
+           const handleExportToProgramacio = () => {
                 const htmlRows = generateHTML(true); 
                 const payload = {
                     action: 'SYNC_TABLE',
@@ -2303,7 +2303,8 @@
                     mode: 'append',
                     timestamp: Date.now()
                 };
-                localStorage.setItem('cfn_sync_payload', JSON.stringify(payload));
+                // Canvi: Guardem a la memòria RAM (window) per evitar el QuotaExceededError
+                window.pendingSyncPayload = payload;
                 window.open('https://marcpcasals.github.io/MarcBook/Altres/programador.html', '_blank');
                 setShowExportModal(false);
             };
@@ -3117,7 +3118,8 @@
                     mode: 'append',
                     timestamp: Date.now()
                 };
-                localStorage.setItem('cfn_sync_payload', JSON.stringify(payload));
+                // Canvi: Guardem a la memòria RAM global en comptes del localStorage
+                window.pendingSyncPayload = payload;
                 
                 const targetUrl = config.googleSheetUrl || 'https://marcpcasals.github.io/MarcBook/Altres/programador.html';
                 window.open(targetUrl, '_blank');
@@ -3422,9 +3424,12 @@
             useEffect(() => {
                 const handleMessage = (event) => {
                     if (event.data && event.data.action === 'PROGRAMACIO_READY') {
-                        const payloadStr = localStorage.getItem('cfn_sync_payload');
-                        if (payloadStr && event.source) {
-                            event.source.postMessage(JSON.parse(payloadStr), "*");
+                        // Canvi: Llegir directament de la memòria RAM en comptes del localStorage
+                        const payload = window.pendingSyncPayload;
+                        if (payload && event.source) {
+                            event.source.postMessage(payload, "*");
+                            // Opcionalment, netegem la variable un cop enviada per alliberar memòria
+                            window.pendingSyncPayload = null;
                         }
                     }
                 };
