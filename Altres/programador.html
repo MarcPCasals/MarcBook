@@ -24,7 +24,7 @@
         
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #fff7ed; /* Fons taronja molt suau, estil agenda docent */
+            background-color: #fff7ed;
             color: #374151;
         }
 
@@ -53,11 +53,11 @@
             -moz-appearance: textfield;
         }
 
-        .phase-header-0 { background-color: #d1fae5; color: #065f46; border-left: 4px solid #059669; } /* Verd */
-        .phase-header-1 { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; } /* Blau */
-        .phase-header-2 { background-color: #fef3c7; color: #92400e; border-left: 4px solid #d97706; } /* Groc */
-        .phase-header-3 { background-color: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; } /* Vermell */
-        .phase-header-4 { background-color: #f3e8ff; color: #6b21a8; border-left: 4px solid #9333ea; } /* Lila */
+        .phase-header-0 { background-color: #d1fae5; color: #065f46; border-left: 4px solid #059669; }
+        .phase-header-1 { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; }
+        .phase-header-2 { background-color: #fef3c7; color: #92400e; border-left: 4px solid #d97706; }
+        .phase-header-3 { background-color: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+        .phase-header-4 { background-color: #f3e8ff; color: #6b21a8; border-left: 4px solid #9333ea; }
     </style>
 </head>
 <body>
@@ -92,6 +92,7 @@
         window.isSaving = false;
         window.CURRENT_VERSION = 1;
         window.lastBackupDataStr = null;
+        window.dadesImportades = false; // Flag UNIFICAT per protegir les dades importades
 
         // Funció Hash per Checksums de seguretat
         window.generateChecksum = function(obj) {
@@ -100,9 +101,9 @@
             for (let i = 0; i < str.length; i++) {
                 const char = str.charCodeAt(i);
                 hash = ((hash << 5) - hash) + char;
-                hash = hash & hash; // Converteix a 32bit integer
+                hash = hash & hash;
             }
-            return hash.toString(16); // Hex string signature
+            return hash.toString(16);
         };
 
         window.login = async function() {
@@ -133,18 +134,16 @@
                 const backupsSnap = await getDocs(backupsQuery);
                 
                 if (backupsSnap.size > 20) {
-                    console.log(`S'han trobat ${backupsSnap.size} backups en revisar. Eliminant els més antics per mantenir el límit de 20...`);
+                    console.log(`S'han trobat ${backupsSnap.size} backups en revisar. Eliminant els més antics...`);
                     let count = 0;
                     const deletePromises = [];
                     backupsSnap.forEach((docSnap) => {
                         count++;
                         if (count > 20) {
                             deletePromises.push(deleteDoc(docSnap.ref));
-                            console.log(`Eliminant backup antic: ${docSnap.id}`);
                         }
                     });
                     await Promise.all(deletePromises);
-                    console.log("Neteja de backups antics completada correctament.");
                 }
             } catch(e) {
                 console.error("Error netejant backups antics de Firebase", e);
@@ -164,7 +163,6 @@
                 return;
             }
 
-            // Validacions estructurals precises en lloc de JSON.length
             const countElements = (d) => {
                 if (!d || !d.courses) return { c: 0, s: 0 };
                 let courses = d.courses.length;
@@ -176,15 +174,12 @@
             if (window.lastFirebaseData && window.lastFirebaseData.courses) {
                 const oldCounts = countElements(window.lastFirebaseData);
                 const newCounts = countElements(dades);
-                
-                // Si perdem absolutament tots els cursos quan n'hi havia, aturem
                 if (oldCounts.courses > 0 && newCounts.courses === 0) {
                     console.warn("Guardat cancel·lat: prevenció de buidat total estructural detectat.");
                     return;
                 }
             }
 
-            // Anti-concurrència absoluta
             if (window.isSaving) {
                 console.log("S'ha interceptat una escriptura concurrent. Ometent guardat simultani.");
                 return;
@@ -203,24 +198,15 @@
         }
 
         window.forcarBackupNuvol = async function(dades) {
-            if (!window.isDataLoaded) {
-                console.warn("Backup cancel·lat: Firebase no carregat");
-                return false;
-            }
+            if (!window.isDataLoaded) return false;
             if (!window.currentUser) return false;
 
-            // Evitar backups innecessaris si l'estat és idèntic
             const dadesStr = JSON.stringify(dades);
-            if (window.lastBackupDataStr === dadesStr) {
-                console.log("Backup innecessari: les dades actuals ja són idèntiques a l'últim backup.");
-                return true;
-            }
+            if (window.lastBackupDataStr === dadesStr) return true;
 
             try {
-                console.log("Forçant creació de backup manual al núvol...");
                 const timestamp = Date.now();
                 const backupRef = doc(db, "programador_backups", window.currentUser.uid, "backups", String(timestamp));
-                
                 const checksum = window.generateChecksum(dades);
 
                 await setDoc(backupRef, { 
@@ -231,8 +217,6 @@
                     checksum: checksum,
                     version: window.CURRENT_VERSION
                 });
-                console.log(`Backup manual completat amb integritat: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
-                
                 window.lastBackupDataStr = dadesStr;
                 await netejarBackupsAntics();
                 return true;
@@ -243,23 +227,15 @@
         }
 
         window.crearBackupAutomaticDiari = async function(dades) {
-            if (!window.isDataLoaded) {
-                console.warn("Backup automàtic cancel·lat: Firebase no carregat");
-                return false;
-            }
+            if (!window.isDataLoaded) return false;
             if (!window.currentUser) return false;
 
             const dadesStr = JSON.stringify(dades);
-            if (window.lastBackupDataStr === dadesStr) {
-                console.log("Backup automàtic innecessari: no hi ha hagut canvis.");
-                return true;
-            }
+            if (window.lastBackupDataStr === dadesStr) return true;
 
             try {
-                console.log("Iniciant creació de backup automàtic al núvol (23:59)...");
                 const timestamp = Date.now();
                 const backupRef = doc(db, "programador_backups", window.currentUser.uid, "backups", String(timestamp));
-                
                 const checksum = window.generateChecksum(dades);
 
                 await setDoc(backupRef, { 
@@ -270,13 +246,10 @@
                     checksum: checksum,
                     version: window.CURRENT_VERSION
                 });
-                console.log(`Backup automàtic diari creat correctament a: programador_backups/${window.currentUser.uid}/backups/${timestamp}`);
-                
                 window.lastBackupDataStr = dadesStr;
                 await netejarBackupsAntics();
                 return true;
             } catch(e) { 
-                console.error("Error creant backup automàtic a Firebase:", e); 
                 return false;
             }
         }
@@ -284,23 +257,36 @@
         window.loadBackups = async function() {
             if (!window.currentUser) return [];
             try {
-                console.log("Carregant llista de backups des de la subcol·lecció de Firebase...");
                 const backupsQuery = query(collection(db, "programador_backups", window.currentUser.uid, "backups"), orderBy("id", "desc"));
                 const backupsSnap = await getDocs(backupsQuery);
                 let history = [];
-                backupsSnap.forEach((docSnap) => {
-                    history.push(docSnap.data());
-                });
-                console.log(`Trobat(s) ${history.length} backup(s) de recuperació.`);
+                backupsSnap.forEach((docSnap) => history.push(docSnap.data()));
                 return history;
-            } catch(e) { console.error("Error carregant backups de Firebase", e); }
+            } catch(e) { console.error("Error carregant backups", e); }
             return [];
         }
 
         async function carregarDades() {
             if (!window.currentUser) return;
+            
+            // PROTECCIÓ: Avortem si hi ha una importació en curs de l'Agenda
+            if (window.dadesImportades) {
+                console.warn("⚠️ Càrrega de Firebase AVORTADA: S'ha detectat una importació de l'Agenda en curs.");
+                window.isDataLoaded = true; // Perquè l'App funcioni
+                if (window.inicialitzarDades) window.inicialitzarDades({ isImport: true });
+                return;
+            }
+
             console.log("Iniciant càrrega de dades des de Firebase...");
             const snap = await getDoc(doc(db, "programador_docent", window.currentUser.uid));
+
+            // Segona comprovació post-await per seguretat extrema
+            if (window.dadesImportades) {
+                console.warn("⚠️ Càrrega de Firebase AVORTADA post-await: S'ha detectat una importació.");
+                window.isDataLoaded = true;
+                if (window.inicialitzarDades) window.inicialitzarDades({ isImport: true });
+                return;
+            }
 
             window.isDataLoaded = true;
 
@@ -308,15 +294,10 @@
                 const dades = snap.data();
                 console.log("Dades carregades correctament.");
                 window.lastFirebaseData = dades;
-
-                if (window.inicialitzarDades) {
-                    window.inicialitzarDades(dades);
-                }
+                if (window.inicialitzarDades) window.inicialitzarDades(dades);
             } else {
                 console.log("Document no trobat. Inicialitzant en blanc per a nou usuari.");
-                if (window.inicialitzarDades) {
-                    window.inicialitzarDades(null);
-                }
+                if (window.inicialitzarDades) window.inicialitzarDades(null);
             }
         }
     </script>
@@ -376,7 +357,6 @@
                             } else if (!newS.activities) {
                                 newS.activities = [];
                             } else {
-                                // Migració de propietats noves a activitats existents i neteja de "•"
                                 newS.activities = newS.activities.map(a => ({
                                     ...a,
                                     text: (a.text || '').replace(/^•\s*/, ''),
@@ -470,7 +450,22 @@
             // Setup the bridge with Firebase auth and data
             useEffect(() => {
                 window.inicialitzarDades = (dadesRebudes) => {
+                    // Això desbloqueja el guardat automàtic de React (useEffect)
                     hasLoadedRef.current = true;
+
+                    // Protecció: Si s'ha fet una importació, prioritzem les dades locals i forcem guardat al núvol
+                    if (window.dadesImportades || (dadesRebudes && dadesRebudes.isImport)) {
+                        console.log("Càrrega de Firebase omesa perquè s'acaben d'importar dades. Forçant guardat al núvol de les dades importades...");
+                        // Extreu les dades importades actuals de React i les envia a Firebase
+                        setData(currentData => {
+                            if (window.guardarDades && window.currentUser) {
+                                window.guardarDades({ courses: currentData });
+                            }
+                            return currentData;
+                        });
+                        return;
+                    }
+
                     if (dadesRebudes && dadesRebudes.courses && dadesRebudes.courses.length > 0) {
                         const migrated = migrateData(dadesRebudes.courses);
                         setData(migrated);
@@ -499,7 +494,6 @@
             useEffect(() => {
                 const interval = setInterval(() => {
                     const now = new Date();
-                    // Limitació estricta a menys de 5 segons per evitar repetició dins el mateix minut
                     if (now.getHours() === 23 && now.getMinutes() === 59 && now.getSeconds() < 5) {
                         const today = now.toISOString().split('T')[0];
                         const lastAutoBackup = localStorage.getItem('lastAutoBackupDate');
@@ -516,7 +510,7 @@
                             }
                         }
                     }
-                }, 1000); // Bat de segon per precisió absoluta
+                }, 1000);
                 return () => clearInterval(interval);
             }, [data]);
 
@@ -525,7 +519,6 @@
                 if (window.currentUser && hasLoadedRef.current && window.isDataLoaded) {
                     generateLocalBackup({ courses: data });
                     
-                    // Throttle: Guardem només si l'usuari ha deixat d'escriure durant 2 segons
                     if (saveTimeoutRef.current) {
                         clearTimeout(saveTimeoutRef.current);
                     }
@@ -563,7 +556,6 @@
                     a.download = window.latestBackupFilename;
                     a.click();
                     URL.revokeObjectURL(url);
-                    console.log("Còpia de seguretat local descarregada: " + window.latestBackupFilename);
                 } else {
                     const date = new Date();
                     const pad = (n) => n.toString().padStart(2, '0');
@@ -575,7 +567,6 @@
                     a.download = filename;
                     a.click();
                     URL.revokeObjectURL(url);
-                    console.log("Còpia de seguretat local descarregada: " + filename);
                 }
                 showToast("Còpia de seguretat local descarregada");
             };
@@ -605,7 +596,6 @@
                 setShowHistoryModal(true);
             };
 
-            // Restauració Segura i Garantida
             const restoreFromBackupSafe = async (backupId) => {
                 const bk = backups.find(b => b.id === backupId);
                 if (!bk || !bk.dades || !bk.dades.courses) {
@@ -613,13 +603,11 @@
                     return;
                 }
 
-                // Avís de versions antigues
                 if (bk.version !== window.CURRENT_VERSION) {
                     console.warn(`Versió antiga detectada al backup: v${bk.version || 'undefined'}`);
                     showToast("Avís: Restaurant una versió antiga del format de dades.");
                 }
 
-                // Checksum d'Integritat (Només si existeix al backup prèviament creat)
                 if (bk.checksum && window.generateChecksum) {
                     const calculatedHash = window.generateChecksum(bk.dades);
                     if (calculatedHash !== bk.checksum) {
@@ -632,13 +620,11 @@
                 if (confirm("Segur que vols restaurar aquesta còpia? Aquesta acció sobreescriurà les dades actuals i no es pot desfer.")) {
                     console.log("Iniciant cicle de restauració segura...");
                     
-                    // Backup Pre-Restauració
                     showToast("Protegint l'estat actual al núvol abans de restaurar...");
                     if (window.forcarBackupNuvol) {
                         await window.forcarBackupNuvol({ courses: data });
                     }
 
-                    // Recuperació de Dades
                     const migrated = migrateData(bk.dades.courses);
                     setData(migrated);
                     setActiveCourseId(migrated[0]?.id);
@@ -646,7 +632,6 @@
                         setActiveUnitId(migrated[0].units[0].id);
                     }
                     
-                    // Forçar el guardat primari al moment sense esperar el throttle de 2 segons
                     if (window.guardarDades) {
                         await window.guardarDades({ courses: migrated });
                     }
@@ -676,13 +661,9 @@
             // --- SINCRONITZACIÓ AMB AGENDA (POSTMESSAGE I LOCALSTORAGE) ---
             useEffect(() => {
                 const processarDadesAgenda = (payload) => {
-                    if (!payload || !payload.html) {
-                        console.warn("Import cancel·lat per evitar pèrdua de dades: dades buides", payload);
-                        return;
-                    }
+                    if (!payload || !payload.html) return;
                     console.log("DADES IMPORTADES DES DE L'AGENDA:", payload);
 
-                    // Analitzar l'HTML i convertir-lo en l'estructura de dades de React
                     const parser = new DOMParser();
                     const doc = parser.parseFromString('<table>' + payload.html + '</table>', 'text/html');
                     const rows = doc.querySelectorAll('tr');
@@ -702,7 +683,6 @@
                     rows.forEach(row => {
                         const cells = row.querySelectorAll('td');
                         if (cells.length >= 3) {
-                            // Parsejar Activitats
                             const actDivs = cells[0].querySelectorAll('div');
                             const activities = [];
                             if (actDivs.length > 0) {
@@ -715,7 +695,6 @@
                                 if (parsed.text || parsed.time) activities.push({ id: generateId(), text: parsed.text, detail: '', time: parsed.time, challengeResponse: '', expanded: false });
                             }
 
-                            // Parsejar Materials i Enllaços
                             const materials = [];
                             const contentCol1 = cells[1].innerHTML;
                             const splitParts = contentCol1.split(/<b>Enllaços:<\/b>/i);
@@ -730,7 +709,6 @@
                                 materials.push({ id: generateId(), name: a.textContent.trim(), url: a.href });
                             });
 
-                            // Parsejar Comentaris
                             const commentsHtml = cells[2].innerHTML.replace(/<br\s*[\/]?>/gi, '\n');
                             const comments = parser.parseFromString(commentsHtml, 'text/html').body.textContent.trim();
 
@@ -744,22 +722,17 @@
                         }
                     });
 
-                    if (newSessions.length === 0) {
-                        console.warn("L'HTML no contenia sessions vàlides per importar.");
-                        return;
-                    }
+                    if (newSessions.length === 0) return;
 
                     setData(prevData => {
                         let newData = JSON.parse(JSON.stringify(prevData)); 
                         
-                        // 1. Cercar o crear el Curs sol·licitat
                         let course = newData.find(c => c.name.trim().toLowerCase() === (payload.curs || "").trim().toLowerCase());
                         if (!course) {
                             course = { id: generateId(), name: payload.curs || "Nou Curs Importat", units: [] };
                             newData.push(course);
                         }
                         
-                        // 2. Cercar o crear la UT sol·licitada
                         let unit = course.units.find(u => u.title.trim().toLowerCase() === (payload.ut || "").trim().toLowerCase());
                         if (!unit) {
                             unit = { 
@@ -774,14 +747,11 @@
                             course.units.push(unit);
                         }
 
-                        // 3. Cercar la Fase
                         let phase = unit.phases.find(p => p.name.trim().toLowerCase() === (payload.fase || "").trim().toLowerCase());
-                        if (!phase) phase = unit.phases[0]; // Si no troba la fase exacta, es col·locarà a la primera
+                        if (!phase) phase = unit.phases[0];
 
-                        // 4. Afegir les noves sessions a la fase (s'apilaran correctament abans del botó d'afegir sense esborrar res)
                         phase.sessions.push(...newSessions);
 
-                        // Actualitzar les pestanyes actives automàticament per portar-te al lloc on s'han importat
                         setTimeout(() => {
                             setActiveCourseId(course.id);
                             setActiveUnitId(unit.id);
@@ -792,7 +762,6 @@
                     });
                 };
 
-                // Escoltar missatges de tipus postMessage
                 const handleMessage = (event) => {
                     const originValid = event.origin.includes("marcpcasals.github.io") || 
                                         event.origin.includes("localhost") || 
@@ -800,24 +769,27 @@
                     if (!originValid && event.origin !== window.location.origin) return;
                     
                     if (event.data && event.data.action === 'SYNC_TABLE') {
+                        window.dadesImportades = true;
+                        console.log("📥 Importació detectada per PostMessage. Bloquejant inicialització de Firebase...");
                         processarDadesAgenda(event.data);
                     }
                 };
                 window.addEventListener("message", handleMessage);
 
-                // Intents d'obrir per localStorage
                 const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
                 if (savedPayloadStr) {
                     try {
+                        window.dadesImportades = true;
+                        console.log("📥 Importació detectada per LocalStorage. Bloquejant inicialització de Firebase...");
                         const savedPayload = JSON.parse(savedPayloadStr);
                         processarDadesAgenda(savedPayload);
                         localStorage.removeItem('cfn_sync_payload'); 
                     } catch(e) {
                         console.error("Error processant dades del localStorage:", e);
+                        window.dadesImportades = false;
                     }
                 }
 
-                // Neteja
                 return () => window.removeEventListener("message", handleMessage);
             }, []);
 
@@ -968,7 +940,6 @@
                             
                             let draggedSession = null;
                             
-                            // Extreure la sessió origen
                             const newPhases = unit.phases.map(phase => {
                                 const sessionIndex = phase.sessions.findIndex(s => s.id === draggedSessionId);
                                 if (sessionIndex > -1) {
@@ -982,7 +953,6 @@
                             
                             if (!draggedSession) return unit;
                             
-                            // Inserir-la en el lloc destí
                             const finalPhases = newPhases.map(phase => {
                                 const targetIndex = phase.sessions.findIndex(s => s.id === targetSessionId);
                                 if (targetIndex > -1) {
@@ -1184,7 +1154,6 @@
                 setActiveUnitId(newUnitId);
             };
 
-            // Mètode d'exportació XLSX utilitzant SheetJS
             const executeExportXLSX = () => {
                 const targetCourse = data.find(c => c.id === exportCourseId);
                 const targetUnit = targetCourse?.units.find(u => u.id === exportUnitId);
@@ -1214,7 +1183,6 @@
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Programació");
                 
-                // Generar nom del fitxer netejat
                 const safeCourseName = targetCourse.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 const safeUnitName = targetUnit.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 
@@ -1296,7 +1264,6 @@
                 const newSessions = pasteRows.filter(r => r.some(c => c.trim() !== '')).map(cols => {
                     return {
                         id: generateId(),
-                        // Netejar les viñetes copiades prèviament al fer l'split
                         activities: cols[1] ? cols[1].split('\n').filter(x=>x.trim()).map(a => ({ id: generateId(), text: a.trim().replace(/^•\s*/, ''), detail: "", time: "", challengeResponse: "", expanded: false })) : [],
                         materials: cols[2] ? cols[2].split('\n').filter(x=>x.trim()).map(m => ({ id: generateId(), name: m.trim(), url: "" })) : [],
                         comments: cols[3] || "",
@@ -1319,7 +1286,6 @@
                 showToast("Dades importades a la taula de forma segura.");
             };
 
-            // 2. SISTEMA D’IMPORTACIÓ SEGUR (MERGE INTEL·LIGENT)
             const handleImportJSON = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -1350,14 +1316,12 @@
                                         if (!existingUnit) {
                                             existingCourse.units.push(importedUnit);
                                         } else {
-                                            // Actualitzar sense esborrar el que ja hi ha
                                             existingUnit.title = importedUnit.title || existingUnit.title;
                                             importedUnit.phases.forEach(importedPhase => {
                                                 let existingPhase = existingUnit.phases.find(p => p.id === importedPhase.id || p.name.toLowerCase() === importedPhase.name.toLowerCase());
                                                 if (!existingPhase) {
                                                     existingUnit.phases.push(importedPhase);
                                                 } else {
-                                                    // Merge sessions sense eliminar les anteriors
                                                     if (importedPhase.sessions && importedPhase.sessions.length > 0) {
                                                         existingPhase.sessions.push(...importedPhase.sessions);
                                                     }
@@ -1379,7 +1343,6 @@
                 e.target.value = null;
             };
 
-            // Pre-càlcul absolutament robust de tots els números de sessió per la vista actual
             const sessionNumbers = {};
             if (activeUnit) {
                 let sessionCounter = 1;
@@ -1452,7 +1415,6 @@
                                         <IconUpload /> <span className="ml-2">Carregar JSON</span>
                                     </button>
 
-                                    {/* BOTONS CLARS A LA UI: 9 */}
                                     <button 
                                         onClick={downloadLocalBackup} 
                                         className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200 shadow-sm" title="Descarregar còpia local"
@@ -1835,7 +1797,7 @@
                                                                                     className="mb-2 last:mb-0 group relative transition-all"
                                                                                     draggable
                                                                                     onDragStart={(e) => {
-                                                                                        e.stopPropagation(); // Evitar arrossegar tota la fila
+                                                                                        e.stopPropagation();
                                                                                         e.dataTransfer.setData('activity/plain', act.id);
                                                                                         e.currentTarget.style.opacity = '0.5';
                                                                                     }}
@@ -1904,7 +1866,6 @@
                                                                                                     className="text-sm text-gray-800 w-full leading-relaxed placeholder-gray-400" 
                                                                                                 />
                                                                                                 
-                                                                                                {/* Resposta al Repte Adaptada (Transparent) */}
                                                                                                 <div className={`transition-all duration-300 rounded border flex flex-col p-2 ${act.challengeResponse && act.challengeResponse.trim() !== '' ? 'border-green-500 bg-transparent' : 'border-gray-200 bg-transparent hover:border-gray-300'}`}>
                                                                                                     <span className="font-bold text-sm text-gray-800 mb-1">Resposta a repte:</span>
                                                                                                     <AutoTextarea
@@ -1925,7 +1886,6 @@
                                                                         </button>
                                                                     </td>
                                                                     
-                                                                    {/* Hack de CSS (h-[1px] a la taula, h-full al div interior) */}
                                                                     <td className="p-0 align-top border-r border-gray-200 relative h-[1px]">
                                                                         <div className="h-full w-full overflow-y-auto custom-scroll p-3 flex flex-col">
                                                                             <ul className="space-y-2">
@@ -2008,7 +1968,6 @@
                                                     </React.Fragment>
                                                 ))}
                                                 
-                                                {/* Botó per afegir nova fase al final de la taula */}
                                                 <tr className="bg-white">
                                                     <td colSpan="5" className="p-4 text-center border-t border-gray-200">
                                                         <button 
@@ -2034,7 +1993,7 @@
                         )}
                     </main>
 
-                    {/* Modal per Enganxar des de l'Excel (Existent) */}
+                    {/* Modal per Enganxar des de l'Excel */}
                     {showPasteModal && (
                         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
                             <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-5xl">
@@ -2171,7 +2130,6 @@
     </script>
     <script>
     document.addEventListener("DOMContentLoaded", function() {
-        // Si s'ha obert des de l'Agenda mitjançant un script de finestres vinculades, enviem avís de retorn
         if (window.opener) {
             window.opener.postMessage({ action: 'PROGRAMACIO_READY' }, "*");
         }
