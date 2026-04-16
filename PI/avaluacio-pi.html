@@ -319,15 +319,22 @@
                                 <button onclick="toggleExpandFeedback()" class="text-slate-400 hover:text-indigo-600 text-xs font-medium flex items-center gap-1 transition" title="Ampliar a pantalla completa per escriure còmodament"><i id="expandIcon" class="fas fa-expand"></i> Ampliar</button>
                             </div>
                             
-                            <!-- Botons edició híbrida i Frases Ràpides -->
+                            <!-- Eines i Botons -->
                             <div class="flex flex-wrap gap-1 mb-2 items-center relative shrink-0">
+                                
+                                <!-- Eines de Text Natiu (Markdown) -->
+                                <div class="flex items-center gap-1 bg-slate-100 rounded p-0.5 border border-slate-200 mr-1">
+                                    <button onclick="formatText('bold')" class="text-xs w-6 h-6 flex items-center justify-center text-slate-700 hover:bg-white hover:shadow-sm rounded transition" title="Negreta (Afegeix **)"><i class="fas fa-bold"></i></button>
+                                    <button onclick="formatText('italic')" class="text-xs w-6 h-6 flex items-center justify-center text-slate-700 hover:bg-white hover:shadow-sm rounded transition" title="Cursiva (Afegeix *)"><i class="fas fa-italic"></i></button>
+                                </div>
+
                                 <button onclick="modifyFeedback('concret')" class="text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 px-2 py-1.5 rounded transition shadow-sm" title="Afegir exemples">➕ Més concret</button>
                                 <button onclick="modifyFeedback('exigent')" class="text-[10px] font-bold bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-700 px-2 py-1.5 rounded transition shadow-sm" title="Endurir to">🎯 Més exigent</button>
                                 <button onclick="modifyFeedback('simplificar')" class="text-[10px] font-bold bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-2 py-1.5 rounded transition shadow-sm" title="Frases curtes">✂️ Simplificar</button>
                                 <button onclick="modifyFeedback('pedagogic')" class="text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 px-2 py-1.5 rounded transition shadow-sm" title="Aportació de docent">💬 Pedagògic</button>
                                 
                                 <!-- Botó Frases Ràpides -->
-                                <div class="relative ml-auto">
+                                <div class="relative ml-auto mt-1 sm:mt-0">
                                     <button id="quickPhrasesBtn" onclick="toggleQuickPhrasesMenu()" class="text-[10px] font-bold bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-2 py-1.5 rounded transition shadow-sm flex items-center gap-1" title="Afegeix comentaris ràpids al feedback">
                                         <i class="fas fa-comment-dots text-indigo-500"></i> Frases ràpides
                                     </button>
@@ -346,7 +353,8 @@
                                     </div>
                                 </div>
                             </div>
-                            <textarea id="feedbackOutput" class="w-full h-80 p-3 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 font-mono leading-relaxed" spellcheck="false"></textarea>
+                            <textarea id="feedbackOutput" class="w-full h-80 p-3 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 font-sans leading-relaxed" spellcheck="false" placeholder="L'avaluació es generarà aquí de forma automàtica. Pots modificar aquest text lliurement, fes servir **negreta** o *cursiva* per donar èmfasi..."></textarea>
+                            <p class="text-[10px] text-slate-400 mt-1 italic"><i class="fas fa-info-circle"></i> Els asteriscs de **negreta** i *cursiva* es transformaran correctament a l'exportar el PDF.</p>
                         </div>
                         <div class="grid grid-cols-2 gap-3 shrink-0">
                             <button onclick="copyFeedback()" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition flex justify-center items-center gap-2 text-sm font-semibold shadow-sm"><i class="fas fa-copy"></i> Copiar</button>
@@ -380,7 +388,7 @@
         <div id="printRubricContainer"></div>
         <div class="mt-8 pt-6 border-t-2 border-slate-200">
             <h3 class="text-md font-bold uppercase text-slate-800 mb-4">Comentaris i Observacions</h3>
-            <div id="printFeedback" class="whitespace-pre-wrap text-justify font-serif text-sm text-black leading-relaxed bg-slate-50 p-4 rounded border border-slate-100"></div>
+            <div id="printFeedback" class="whitespace-pre-wrap text-justify font-sans text-sm text-black leading-relaxed bg-slate-50 p-4 rounded border border-slate-100"></div>
         </div>
     </div>
 
@@ -756,13 +764,14 @@
             } else sugEl.innerText = '';
         }
 
-        // FUNCIÓ CLAU DE PARSEIG DE LES EDICIONS PER BLOCS
+        // FUNCIÓ CLAU DE PARSEIG DE LES EDICIONS PER BLOCS AMB SUPORT PER NEGRETA MARKDOWN
         function parseFeedbackEdits(text) {
             const active = getActive();
             if (!active.sectionEdits) active.sectionEdits = {};
 
             rubricData.forEach(cat => {
-                const regex = new RegExp(`🔹 \\[${cat.title}\\]:[\\s\\S]*?(?=🔹 \\\[|⚠️ PUNTS D'ATENCIÓ|Ànims amb la recta final|$)`, 'g');
+                const titleEscaped = cat.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(?:\\*\\*)?🔹 \\\[${titleEscaped}\\\][\\s\\S]*?(?=(?:\\*\\*)?🔹 \\\[|\\*\\*⚠️ Aspectes|Espero que aquests|Ànims amb la recta|$)`, 'g');
                 const match = text.match(regex);
 
                 if (match && match[0]) {
@@ -775,7 +784,7 @@
             const active = getActive();
             if (!active.sectionEdits) active.sectionEdits = {};
             
-            let autoText = `Hola ${active.nom || "Alumne"},\n\nAquí tens la correcció de la teva memòria del PI. He revisat el treball a fons i aquests són els punts clau:\n\n`;
+            let autoText = `Hola ${active.nom || "Alumne"},\n\nHe estat revisant amb atenció la teva memòria del Projecte Integrador. A continuació et detallo la meva valoració dels aspectes més destacats:\n\n`;
             
             rubricData.forEach(cat => {
                 const score = calculateCategoryScore(cat.id);
@@ -783,9 +792,8 @@
                     const letter = LEVELS[score];
                     const fb = cat.feedback[score];
                     
-                    let blockText = `🔹 [${cat.title}]: Nivell ${letter}\n${fb}`;
+                    let blockText = `**🔹 [${cat.title}]: Nivell ${letter}**\n${fb}`;
                     
-                    // Substituïm el bloc sencer si el docent ja l'ha editat prèviament
                     if (active.sectionEdits[cat.title]) {
                         blockText = active.sectionEdits[cat.title];
                     }
@@ -795,21 +803,50 @@
             });
             
             if (active.checklist.length > 0) {
-                autoText += `⚠️ PUNTS D'ATENCIÓ (Checklist):\n`;
+                autoText += `**⚠️ Aspectes de format a revisar:**\n`;
                 active.checklist.forEach(id => {
                     const item = checklistData.find(i => i.id === id);
                     if(item) autoText += `- ${item.advice}\n`;
                 });
                 autoText += `\n`;
             } else if (!autoText.includes('🔹')) {
-                autoText += "Utilitza la rúbrica per començar a generar els comentaris.\n\n";
+                autoText += "Comença a fer clic a la rúbrica per generar l'avaluació...\n\n";
             }
             
-            autoText += `Ànims amb la recta final, ${active.nom || "Alumne"}!`;
+            autoText += `Espero que aquests comentaris et serveixin per seguir aprenent i millorant. Ànims amb la recta final, ${active.nom || "Alumne"}!`;
 
             active.feedback = autoText;
             document.getElementById('feedbackOutput').value = autoText;
             
+            saveData(); syncPrintData();
+        }
+
+        // --- SISTEMA D'EDICIÓ DE TEXT (Markdown) ---
+        function formatText(style) {
+            const textarea = document.getElementById('feedbackOutput');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const val = textarea.value;
+            const selectedText = val.substring(start, end);
+            
+            let wrapper = style === 'bold' ? '**' : '*';
+            let newText = val.substring(0, start) + wrapper + selectedText + wrapper + val.substring(end);
+            
+            textarea.value = newText;
+            
+            if (start === end) {
+                textarea.selectionStart = start + wrapper.length;
+                textarea.selectionEnd = start + wrapper.length;
+            } else {
+                textarea.selectionStart = start;
+                textarea.selectionEnd = end + wrapper.length * 2;
+            }
+            
+            textarea.focus();
+            
+            const active = getActive();
+            active.feedback = newText;
+            parseFeedbackEdits(newText);
             saveData(); syncPrintData();
         }
 
@@ -882,7 +919,7 @@
             
             const active = getActive();
             active.feedback = newText;
-            parseFeedbackEdits(newText); // Guardem les edicions que hagi fet el document insertant aquesta frase al bloc
+            parseFeedbackEdits(newText); 
             saveData(); syncPrintData();
             
             toggleQuickPhrasesMenu();
@@ -979,20 +1016,20 @@
                 showToast("Exemples afegits");
             } else if (action === 'exigent') {
                 text = text.replace(/correcta/g, "bàsica però millorable").replace(/S'entén perfectament/g, "S'entén, però és molt descriptiu");
-                if (!text.includes("⚠️ Com a punt")) text += "\n\n⚠️ Com a punt de millora crítica: Cal aprofundir molt més en l'anàlisi i l'autocrítica.";
+                if (!text.includes("⚠️ Com a punt")) text += "\n\n**⚠️ Com a punt de millora crítica:** Cal aprofundir molt més en l'anàlisi i l'autocrítica.";
                 showToast("Llenguatge endurit");
             } else if (action === 'simplificar') {
                 text = text.replace(/Per arribar a l'excel·lència, /g, "").replace(/Enhorabona per la cura en els detalls./g, "Bona feina.");
                 showToast("Text simplificat");
             } else if (action === 'pedagogic') {
-                if (!text.includes("🌱 Perspectiva")) text += "\n\n🌱 Perspectiva d'aprenentatge: Recorda que l'objectiu no és només fer un treball, sinó aprendre a planificar-te i avaluar el teu esforç.";
+                if (!text.includes("🌱 Perspectiva")) text += "\n\n*🌱 Perspectiva d'aprenentatge: Recorda que l'objectiu no és només fer un treball, sinó aprendre a planificar-te i avaluar el teu esforç.*";
                 showToast("Reforç afegit");
             }
             
             active.feedback = text; 
             document.getElementById('feedbackOutput').value = text;
             
-            parseFeedbackEdits(text); // Guardem les modificacions híbrides generades
+            parseFeedbackEdits(text); 
             saveData(); syncPrintData();
         }
 
@@ -1033,7 +1070,6 @@
                 getActive().notaFinal = e.target.value; saveData(); document.getElementById('printFinalGrade').innerText = e.target.value;
             });
             
-            // INPUT DEL FEEDBACK: Guardem i parsegem els canvis immediatament
             document.getElementById('feedbackOutput').addEventListener('input', (e) => {
                 const active = getActive();
                 const text = e.target.value;
@@ -1043,7 +1079,6 @@
             });
         }
 
-        // Tanca menús només si el clic és realment fora
         document.addEventListener('click', function(event) {
             const menu = document.getElementById('quickPhrasesMenu'), btn = document.getElementById('quickPhrasesBtn');
             if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !btn.contains(event.target)) {
@@ -1052,7 +1087,6 @@
                 }
             }
             
-            // Tancar feedback fullscreen
             const box = document.getElementById('feedbackBox');
             if (isFeedbackExpanded && event.target.id === 'feedbackBackdrop') {
                 toggleExpandFeedback();
@@ -1064,7 +1098,14 @@
             const active = getActive();
             document.getElementById('printName').innerText = active.nom || 'Alumne/a';
             document.getElementById('printFinalGrade').innerText = active.notaFinal || '-';
-            document.getElementById('printFeedback').innerText = active.feedback || '';
+            
+            // Format Markdown cap a HTML només per al PDF
+            let fbText = active.feedback || '';
+            fbText = fbText.replace(/</g, "&lt;").replace(/>/g, "&gt;"); 
+            fbText = fbText.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
+            fbText = fbText.replace(/\*([\s\S]*?)\*/g, '<em>$1</em>');
+            fbText = fbText.replace(/\n/g, '<br>');
+            document.getElementById('printFeedback').innerHTML = fbText;
             
             // Toggle Nota Global al PDF
             const gradeBox = document.getElementById('printGradeBox');
@@ -1089,7 +1130,6 @@
             container.innerHTML = html;
         }
 
-        // Promesa encapsulada per poder iterar seqüencialment
         function generateSinglePDFPromise(nameStr) {
             return new Promise((resolve, reject) => {
                 syncPrintData();
@@ -1167,7 +1207,6 @@
         function copyFeedback() { document.getElementById("feedbackOutput").select(); document.execCommand('copy'); showToast("Text del feedback copiat!"); }
         function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.className = "show"; setTimeout(() => t.className = "", 3000); }
         
-        // Modals genèrics
         function openResetModal() { document.getElementById('customModal').style.display = 'flex'; }
         function closeModal() { document.getElementById('customModal').style.display = 'none'; }
         function confirmReset() {
