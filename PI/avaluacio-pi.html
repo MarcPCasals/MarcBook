@@ -263,15 +263,22 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Avís de bloqueig de rúbrica -->
+                <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm flex items-start gap-3">
+                    <i class="fas fa-exclamation-circle text-amber-500 mt-0.5"></i>
+                    <p class="text-sm text-amber-800 leading-relaxed">
+                        <strong class="font-bold">Avís:</strong> Si vols afegir comentaris personals al feedback, cal haver clicat a totes les cel·les d'un mateix criteri abans. Si no, la secció es bloquejarà per protegir els teus canvis i el feedback automàtic ja no es reescriurà.
+                    </p>
+                </div>
                 
                 <!-- Rubric Container -->
                 <div id="rubricContainer" class="space-y-8"></div>
             </div>
 
             <!-- Sidebar -->
-            <div class="xl:col-span-1 space-y-6">
-                <!-- El sticky parent ha de poder canviar el z-index dinàmicament per superar el backdrop -->
-                <div class="sticky top-24 space-y-6" id="sidebarStickyWrapper">
+            <div class="xl:col-span-1">
+                <div class="sticky top-24 space-y-6 max-h-[calc(100vh-7rem)] overflow-y-auto no-scrollbar pb-6" id="sidebarStickyWrapper">
                     <!-- Score Summary -->
                     <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                         <h2 class="text-lg font-bold text-slate-800 mb-4">Resum</h2>
@@ -300,7 +307,7 @@
                     <!-- Checklist intel·ligent unificada -->
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <h2 class="text-sm font-bold text-rose-600 mb-3 uppercase tracking-wide flex items-center gap-2"><i class="fas fa-clipboard-check"></i> Errors Freqüents</h2>
-                        <div id="suggestionsContainer"></div> <!-- Deixem l'ID actiu però buit, per respectar restriccions -->
+                        <div id="suggestionsContainer"></div> 
                         <div id="checklistContainer" class="flex flex-col border-t border-slate-100 pt-2"></div>
                     </div>
 
@@ -505,9 +512,8 @@
         let appData = {
             alumnes: [],
             activeId: null,
-            showGradePdf: true // Configuració global pel PDF
+            showGradePdf: true 
         };
-        let isUserEditing = false;
         let isFeedbackExpanded = false;
         let activeQuickPhraseCategory = null; 
 
@@ -554,11 +560,10 @@
         function createStudent(silent = false) {
             const newStudent = {
                 id: 'stu_' + Date.now() + Math.floor(Math.random() * 1000),
-                nom: '', projecte: '', state: {}, checklist: [], notaFinal: '', feedback: ''
+                nom: '', projecte: '', state: {}, checklist: [], notaFinal: '', feedback: '', sectionEdits: {}
             };
             appData.alumnes.push(newStudent);
             appData.activeId = newStudent.id;
-            isUserEditing = false;
             if (!silent) {
                 saveData(); updateFullUI(); showToast("Nou alumne creat");
             }
@@ -566,7 +571,6 @@
 
         function switchStudent(id) {
             appData.activeId = id;
-            isUserEditing = false;
             saveData();
             updateFullUI();
         }
@@ -593,7 +597,7 @@
                 names.forEach(n => {
                     appData.alumnes.push({
                         id: 'stu_' + Date.now() + Math.floor(Math.random() * 10000),
-                        nom: n, projecte: '', state: {}, checklist: [], notaFinal: '', feedback: ''
+                        nom: n, projecte: '', state: {}, checklist: [], notaFinal: '', feedback: '', sectionEdits: {}
                     });
                 });
                 appData.activeId = appData.alumnes[appData.alumnes.length - 1].id;
@@ -680,9 +684,13 @@
             if (!active.state[catId]) active.state[catId] = {};
             if (active.state[catId][rowIdx] === level) delete active.state[catId][rowIdx];
             else active.state[catId][rowIdx] = level;
-            saveData(); updateUI(catId); updateSummary(); updateChecklistSuggestions();
+            
+            saveData(); 
+            updateUI(catId); 
+            updateSummary(); 
+            updateChecklistSuggestions();
             renderQuickPhrases(); 
-            isUserEditing = false; generateFeedback();
+            generateFeedback(); 
         }
 
         function updateUI(catId) {
@@ -748,23 +756,60 @@
             } else sugEl.innerText = '';
         }
 
+        // FUNCIÓ CLAU DE PARSEIG DE LES EDICIONS PER BLOCS
+        function parseFeedbackEdits(text) {
+            const active = getActive();
+            if (!active.sectionEdits) active.sectionEdits = {};
+
+            rubricData.forEach(cat => {
+                const regex = new RegExp(`🔹 \\[${cat.title}\\]:[\\s\\S]*?(?=🔹 \\\[|⚠️ PUNTS D'ATENCIÓ|Ànims amb la recta final|$)`, 'g');
+                const match = text.match(regex);
+
+                if (match && match[0]) {
+                    active.sectionEdits[cat.title] = match[0].trim();
+                }
+            });
+        }
+
         function generateFeedback() {
             const active = getActive();
-            let text = `Hola ${active.nom || "Alumne"},\n\nAquí tens la correcció de la teva memòria del PI. He revisat el treball a fons i aquests són els punts clau:\n\n`;
+            if (!active.sectionEdits) active.sectionEdits = {};
+            
+            let autoText = `Hola ${active.nom || "Alumne"},\n\nAquí tens la correcció de la teva memòria del PI. He revisat el treball a fons i aquests són els punts clau:\n\n`;
+            
             rubricData.forEach(cat => {
                 const score = calculateCategoryScore(cat.id);
-                if (score) text += `🔹 [${cat.title}]: Nivell ${LEVELS[score]}\n${cat.feedback[score]}\n\n`;
+                if (score) {
+                    const letter = LEVELS[score];
+                    const fb = cat.feedback[score];
+                    
+                    let blockText = `🔹 [${cat.title}]: Nivell ${letter}\n${fb}`;
+                    
+                    // Substituïm el bloc sencer si el docent ja l'ha editat prèviament
+                    if (active.sectionEdits[cat.title]) {
+                        blockText = active.sectionEdits[cat.title];
+                    }
+                    
+                    autoText += blockText + "\n\n";
+                }
             });
+            
             if (active.checklist.length > 0) {
-                text += `⚠️ PUNTS D'ATENCIÓ (Checklist):\n`;
+                autoText += `⚠️ PUNTS D'ATENCIÓ (Checklist):\n`;
                 active.checklist.forEach(id => {
                     const item = checklistData.find(i => i.id === id);
-                    if(item) text += `- ${item.advice}\n`;
+                    if(item) autoText += `- ${item.advice}\n`;
                 });
-            } else if (!text.includes('🔹')) text += "Utilitza la rúbrica per començar a generar els comentaris.";
-            text += `\nÀnims amb la recta final, ${active.nom || "Alumne"}!`;
-            active.feedback = text;
-            document.getElementById('feedbackOutput').value = text;
+                autoText += `\n`;
+            } else if (!autoText.includes('🔹')) {
+                autoText += "Utilitza la rúbrica per començar a generar els comentaris.\n\n";
+            }
+            
+            autoText += `Ànims amb la recta final, ${active.nom || "Alumne"}!`;
+
+            active.feedback = autoText;
+            document.getElementById('feedbackOutput').value = autoText;
+            
             saveData(); syncPrintData();
         }
 
@@ -828,11 +873,17 @@
             let toInsert = text;
             if (start > 0 && val.charAt(start - 1) !== ' ' && val.charAt(start - 1) !== '\n') toInsert = ' ' + toInsert;
             if (end < val.length && val.charAt(end) !== ' ' && val.charAt(end) !== '\n') toInsert = toInsert + ' ';
-            textarea.value = val.substring(0, start) + toInsert + val.substring(end);
+            
+            const newText = val.substring(0, start) + toInsert + val.substring(end);
+            textarea.value = newText;
             textarea.selectionStart = textarea.selectionEnd = start + toInsert.length;
             
             textarea.focus();
-            isUserEditing = true; getActive().feedback = textarea.value; saveData(); syncPrintData();
+            
+            const active = getActive();
+            active.feedback = newText;
+            parseFeedbackEdits(newText); // Guardem les edicions que hagi fet el document insertant aquesta frase al bloc
+            saveData(); syncPrintData();
             
             toggleQuickPhrasesMenu();
             activeQuickPhraseCategory = null; 
@@ -848,15 +899,14 @@
             let sug = [];
             if (active && active.state) {
                 const s = active.state;
-                // Anàlisi precís per filera d'avaluació (índex 0 a 3)
                 if(s['format']) {
-                    if(s['format'][1] && s['format'][1] <= 2) sug.push('justificat'); // Normativa
-                    if(s['format'][2] && s['format'][2] <= 2) { sug.push('index'); sug.push('portada'); } // Estructura
-                    if(s['format'][3] && s['format'][3] <= 2) sug.push('peusfoto'); // Imatges
+                    if(s['format'][1] && s['format'][1] <= 2) sug.push('justificat'); 
+                    if(s['format'][2] && s['format'][2] <= 2) { sug.push('index'); sug.push('portada'); } 
+                    if(s['format'][3] && s['format'][3] <= 2) sug.push('peusfoto'); 
                 }
                 if(s['process']) {
-                    if(s['process'][1] && s['process'][1] <= 2) sug.push('llista'); // Relat
-                    if(s['process'][2] && s['process'][2] <= 2) sug.push('totbe'); // Dificultats
+                    if(s['process'][1] && s['process'][1] <= 2) sug.push('llista'); 
+                    if(s['process'][2] && s['process'][2] <= 2) sug.push('totbe'); 
                 }
                 if(s['language']) {
                     if((s['language'][0] && s['language'][0] <= 2) || (s['language'][1] && s['language'][1] <= 2)) sug.push('bibliografia');
@@ -904,7 +954,10 @@
             const active = getActive();
             const idx = active.checklist.indexOf(id);
             if(idx > -1) active.checklist.splice(idx, 1); else active.checklist.push(id);
-            saveData(); updateChecklistSuggestions(); isUserEditing = false; generateFeedback();
+            
+            saveData(); 
+            updateChecklistSuggestions(); 
+            generateFeedback();
         }
 
         function updateChecklistSuggestions() {
@@ -918,7 +971,6 @@
             const active = getActive();
             let text = active.feedback;
             if(!text || !text.includes('🔹')) { showToast("Genera primer el feedback"); return; }
-            isUserEditing = true;
 
             if (action === 'concret') {
                 text = text.replace(/errors de format/g, "errors de format (com marges desiguals o text no justificat)");
@@ -936,7 +988,11 @@
                 if (!text.includes("🌱 Perspectiva")) text += "\n\n🌱 Perspectiva d'aprenentatge: Recorda que l'objectiu no és només fer un treball, sinó aprendre a planificar-te i avaluar el teu esforç.";
                 showToast("Reforç afegit");
             }
-            active.feedback = text; document.getElementById('feedbackOutput').value = text;
+            
+            active.feedback = text; 
+            document.getElementById('feedbackOutput').value = text;
+            
+            parseFeedbackEdits(text); // Guardem les modificacions híbrides generades
             saveData(); syncPrintData();
         }
 
@@ -970,14 +1026,20 @@
         function bindInputEvents() {
             document.getElementById('studentName').addEventListener('input', (e) => {
                 getActive().nom = e.target.value; saveData(); renderTabs();
-                if(!isUserEditing) generateFeedback();
+                generateFeedback();
             });
             document.getElementById('projectTitle').addEventListener('input', (e) => { getActive().projecte = e.target.value; saveData(); });
             document.getElementById('finalGradeInput').addEventListener('input', (e) => {
                 getActive().notaFinal = e.target.value; saveData(); document.getElementById('printFinalGrade').innerText = e.target.value;
             });
+            
+            // INPUT DEL FEEDBACK: Guardem i parsegem els canvis immediatament
             document.getElementById('feedbackOutput').addEventListener('input', (e) => {
-                isUserEditing = true; getActive().feedback = e.target.value; saveData(); syncPrintData();
+                const active = getActive();
+                const text = e.target.value;
+                active.feedback = text;
+                parseFeedbackEdits(text);
+                saveData(); syncPrintData();
             });
         }
 
@@ -1016,7 +1078,11 @@
                     <table class="pdf-rubric-table"><tr><th style="width:15%">Aspecte</th><th style="width:21%">A - Expert</th><th style="width:21%">B - Avançat</th><th style="width:21%">C - Aprenent</th><th style="width:21%">D - Novell</th></tr>`;
                 cat.rows.forEach((row, rIdx) => {
                     const selectedLvl = active.state[cat.id] ? active.state[cat.id][rIdx] : null;
-                    html += `<tr><td class="row-title">${row.title}</td><td class="${selectedLvl===4?'selected-A':''}">${row.values[4]}</td><td class="${selectedLvl===3?'selected-B':''}">${row.values[3]}</td><td class="${selectedLvl===2?'selected-C':''}">${row.values[2]}</td><td class="${selectedLvl===1?'selected-D':''}">${row.values[1]}</td></tr>`;
+                    const sA = (appData.showGradePdf && selectedLvl === 4) ? 'selected-A' : '';
+                    const sB = (appData.showGradePdf && selectedLvl === 3) ? 'selected-B' : '';
+                    const sC = (appData.showGradePdf && selectedLvl === 2) ? 'selected-C' : '';
+                    const sD = (appData.showGradePdf && selectedLvl === 1) ? 'selected-D' : '';
+                    html += `<tr><td class="row-title">${row.title}</td><td class="${sA}">${row.values[4]}</td><td class="${sB}">${row.values[3]}</td><td class="${sC}">${row.values[2]}</td><td class="${sD}">${row.values[1]}</td></tr>`;
                 });
                 html += `</table></div>`;
             });
@@ -1106,8 +1172,8 @@
         function closeModal() { document.getElementById('customModal').style.display = 'none'; }
         function confirmReset() {
             const active = getActive();
-            active.state = {}; active.checklist = []; active.nom = ''; active.projecte = ''; active.notaFinal = ''; active.feedback = '';
-            isUserEditing = false; saveData(); updateFullUI(); closeModal(); showToast("Dades reiniciades");
+            active.state = {}; active.checklist = []; active.nom = ''; active.projecte = ''; active.notaFinal = ''; active.feedback = ''; active.sectionEdits = {};
+            saveData(); updateFullUI(); closeModal(); showToast("Dades reiniciades");
         }
         
         function openResetAppModal() { document.getElementById('resetAppModal').style.display = 'flex'; }
