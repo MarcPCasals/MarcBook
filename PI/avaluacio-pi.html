@@ -219,7 +219,7 @@
                 </div>
                 <div class="flex flex-wrap items-center justify-center gap-4 md:gap-5 text-sm">
                     <div class="text-center md:text-right text-xs opacity-80 hidden lg:block">
-                        <p>Creat per <span class="font-bold text-white border-b border-orange-300">Marc Pérez Casals</span></p>
+                        <p>Creat per <span class="font-bold text-white border-b border-orange-300">Marc Pérez</span></p>
                     </div>
                     <div class="h-4 w-px bg-indigo-600 hidden md:block"></div>
                     <button onclick="downloadAllPDFs()" class="flex items-center gap-2 hover:text-orange-200 text-orange-300 transition font-bold" title="Exportar tota la classe alhora">
@@ -297,11 +297,11 @@
                         </div>
                     </div>
 
-                    <!-- Checklist -->
+                    <!-- Checklist intel·ligent unificada -->
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <h2 class="text-sm font-bold text-rose-600 mb-3 uppercase tracking-wide flex items-center gap-2"><i class="fas fa-clipboard-check"></i> Errors Freqüents</h2>
-                        <div id="suggestionsContainer"></div>
-                        <div id="checklistContainer" class="space-y-2 border-t border-slate-100 pt-3"></div>
+                        <div id="suggestionsContainer"></div> <!-- Deixem l'ID actiu però buit, per respectar restriccions -->
+                        <div id="checklistContainer" class="flex flex-col border-t border-slate-100 pt-2"></div>
                     </div>
 
                     <!-- Output & Actions -->
@@ -509,7 +509,7 @@
         };
         let isUserEditing = false;
         let isFeedbackExpanded = false;
-        let activeQuickPhraseCategory = null; // Controla quina categoria de l'acordió està oberta
+        let activeQuickPhraseCategory = null; 
 
         // --- INICIALITZACIÓ I PERSISTÈNCIA ---
         function init() {
@@ -550,7 +550,7 @@
             setTimeout(() => { ind.classList.add('opacity-0'); }, 2500);
         }
 
-        // --- GESTIÓ D'ALUMNES (CREACIÓ INDIVIDUAL I MASSIVA) ---
+        // --- GESTIÓ D'ALUMNES ---
         function createStudent(silent = false) {
             const newStudent = {
                 id: 'stu_' + Date.now() + Math.floor(Math.random() * 1000),
@@ -616,9 +616,6 @@
 
             renderTabs();
             rubricData.forEach(c => updateUI(c.id));
-            document.querySelectorAll('input[id^="check-"]').forEach(cb => {
-                cb.checked = active.checklist.includes(cb.id.replace('check-', ''));
-            });
 
             updateSummary();
             updateChecklistSuggestions();
@@ -837,21 +834,70 @@
             textarea.focus();
             isUserEditing = true; getActive().feedback = textarea.value; saveData(); syncPrintData();
             
-            // Autotancar el menú només quan s'insereix la frase
             toggleQuickPhrasesMenu();
             activeQuickPhraseCategory = null; 
             renderQuickPhrases();
         }
 
-        // --- CHECKLIST ---
+        // --- CHECKLIST INTELLIGENT UNIFICADA ---
         function renderChecklist() {
             const container = document.getElementById('checklistContainer');
-            container.innerHTML = checklistData.map(item => `
-                <label class="flex items-center gap-3 p-2 hover:bg-rose-50 rounded cursor-pointer transition">
-                    <input type="checkbox" id="check-${item.id}" onchange="toggleChecklist('${item.id}')" class="w-4 h-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded">
+            if(!container) return;
+            
+            const active = getActive();
+            let sug = [];
+            if (active && active.state) {
+                const s = active.state;
+                // Anàlisi precís per filera d'avaluació (índex 0 a 3)
+                if(s['format']) {
+                    if(s['format'][1] && s['format'][1] <= 2) sug.push('justificat'); // Normativa
+                    if(s['format'][2] && s['format'][2] <= 2) { sug.push('index'); sug.push('portada'); } // Estructura
+                    if(s['format'][3] && s['format'][3] <= 2) sug.push('peusfoto'); // Imatges
+                }
+                if(s['process']) {
+                    if(s['process'][1] && s['process'][1] <= 2) sug.push('llista'); // Relat
+                    if(s['process'][2] && s['process'][2] <= 2) sug.push('totbe'); // Dificultats
+                }
+                if(s['language']) {
+                    if((s['language'][0] && s['language'][0] <= 2) || (s['language'][1] && s['language'][1] <= 2)) sug.push('bibliografia');
+                }
+            }
+            
+            const suggestedItems = checklistData.filter(item => sug.includes(item.id));
+            const normalItems = checklistData.filter(item => !sug.includes(item.id));
+
+            let html = '';
+            
+            if (suggestedItems.length > 0) {
+                html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 mt-1 flex items-center gap-1"><i class="fas fa-lightbulb text-yellow-500"></i> Suggerits per a l'alumne</div>`;
+                html += suggestedItems.map(item => {
+                    const isChecked = active && active.checklist.includes(item.id);
+                    const bgClass = isChecked ? "bg-rose-50 border-rose-200" : "bg-yellow-50 hover:bg-yellow-100 border-yellow-200 shadow-sm";
+                    return `
+                    <label class="flex items-center p-2 mb-1.5 rounded border cursor-pointer transition ${bgClass}">
+                        <input type="checkbox" id="check-${item.id}" onchange="toggleChecklist('${item.id}')" class="w-4 h-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded mr-3" ${isChecked ? 'checked' : ''}>
+                        <span class="text-sm text-slate-700 font-medium">${item.label}</span>
+                    </label>
+                    `;
+                }).join('');
+                
+                if (normalItems.length > 0) {
+                     html += `<div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 mt-4">Altres errors</div>`;
+                }
+            }
+            
+            html += normalItems.map(item => {
+                const isChecked = active && active.checklist.includes(item.id);
+                const bgClass = isChecked ? "bg-rose-50 border-rose-200" : "border-transparent hover:bg-gray-50";
+                return `
+                <label class="flex items-center p-2 mb-1.5 rounded border cursor-pointer transition ${bgClass}">
+                    <input type="checkbox" id="check-${item.id}" onchange="toggleChecklist('${item.id}')" class="w-4 h-4 text-rose-600 focus:ring-rose-500 border-gray-300 rounded mr-3" ${isChecked ? 'checked' : ''}>
                     <span class="text-sm text-slate-700 font-medium">${item.label}</span>
                 </label>
-            `).join('');
+                `;
+            }).join('');
+
+            container.innerHTML = html;
         }
 
         function toggleChecklist(id) {
@@ -862,22 +908,9 @@
         }
 
         function updateChecklistSuggestions() {
-            const active = getActive();
-            let sug = new Set();
-            if(active.state['format']) { const v = Object.values(active.state['format']); if(v.some(x=>x<=2)) {sug.add('justificat');sug.add('peusfoto');sug.add('index');sug.add('portada');} }
-            if(active.state['process']) { const v = Object.values(active.state['process']); if(v.some(x=>x<=2)) {sug.add('totbe');sug.add('llista');} }
-            if(active.state['language']) { const v = Object.values(active.state['language']); if(v.some(x=>x<=2)) sug.add('bibliografia'); }
-            
-            const toSuggest = Array.from(sug).filter(id => !active.checklist.includes(id));
-            const c = document.getElementById('suggestionsContainer');
-            if(toSuggest.length > 0) {
-                let html = '<div class="text-xs text-slate-500 mb-2 font-medium">💡 Suggeriments:</div><div class="flex flex-wrap gap-2 mb-3">';
-                toSuggest.forEach(id => {
-                    const item = checklistData.find(i => i.id === id);
-                    if(item) html += `<button onclick="document.getElementById('check-${id}').click()" class="bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-1 rounded text-xs hover:bg-yellow-100 transition shadow-sm flex items-center gap-1"><i class="fas fa-plus opacity-50"></i> ${item.label}</button>`;
-                });
-                c.innerHTML = html + '</div>';
-            } else c.innerHTML = '';
+            renderChecklist();
+            const suggContainer = document.getElementById('suggestionsContainer');
+            if (suggContainer) suggContainer.innerHTML = '';
         }
 
         // --- EXTRAS DE FEEDBACK ---
@@ -912,14 +945,13 @@
             const box = document.getElementById('feedbackBox');
             const icon = document.getElementById('expandIcon');
             const backdrop = document.getElementById('feedbackBackdrop');
-            const stickyParent = document.getElementById('sidebarStickyWrapper'); // Pescador del contenidor sticky
+            const stickyParent = document.getElementById('sidebarStickyWrapper'); 
 
             if (isFeedbackExpanded) {
-                if(stickyParent) stickyParent.style.zIndex = '10000'; // Superar el z-index del backdrop (9998)
+                if(stickyParent) stickyParent.style.zIndex = '10000'; 
                 box.classList.add('expanded-feedback');
                 backdrop.classList.add('show');
                 icon.className = "fas fa-compress";
-                // Donem un lleuger delay perquè el CSS es renderitzi abans de posar el focus i es pugui escriure immediatament
                 setTimeout(() => document.getElementById('feedbackOutput').focus(), 50);
             } else {
                 if(stickyParent) stickyParent.style.zIndex = '';
@@ -953,8 +985,6 @@
         document.addEventListener('click', function(event) {
             const menu = document.getElementById('quickPhrasesMenu'), btn = document.getElementById('quickPhrasesBtn');
             if (menu && !menu.classList.contains('hidden') && !menu.contains(event.target) && !btn.contains(event.target)) {
-                // Comprovació clau: Només tanquem si l'element clicat encara és al DOM 
-                // (així evitem tancar el menú per error quan javascript recrea l'acordió).
                 if (document.body.contains(event.target)) {
                     menu.classList.add('hidden');
                 }
@@ -1022,9 +1052,9 @@
                         console.error(err);
                         printView.style.display = 'none';
                         mainView.style.display = 'block';
-                        resolve(); // Resol igualment per no trencar bucles
+                        resolve(); 
                     });
-                }, 400); // Marge segur
+                }, 400); 
             });
         }
 
@@ -1046,12 +1076,11 @@
             
             for (let i = 0; i < appData.alumnes.length; i++) {
                 const alumne = appData.alumnes[i];
-                switchStudent(alumne.id); // Canvia l'alumne a la UI i a SyncData
+                switchStudent(alumne.id); 
                 const fileName = alumne.nom ? alumne.nom : `Alumne_${i+1}`;
                 await generateSinglePDFPromise(fileName);
             }
             
-            // Tornem a l'estat original
             switchStudent(originalActiveId);
             showToast("Tots els PDFs han estat descarregats!");
         }
@@ -1085,7 +1114,7 @@
         function closeResetAppModal() { document.getElementById('resetAppModal').style.display = 'none'; }
         function confirmResetApp() {
             localStorage.removeItem('avaluacioPI_data_v2');
-            location.reload(); // Mètode més net per reiniciar tota l'aplicació completament
+            location.reload(); 
         }
 
         init();
