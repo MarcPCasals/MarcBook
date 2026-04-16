@@ -225,6 +225,11 @@
                     <button onclick="downloadAllPDFs()" class="flex items-center gap-2 hover:text-orange-200 text-orange-300 transition font-bold" title="Exportar tota la classe alhora">
                         <i class="fas fa-file-archive"></i> <span>Tots els PDFs</span>
                     </button>
+                    
+                    <!-- Botó importar i input ocult -->
+                    <button onclick="document.getElementById('importJSONInput').click()" class="flex items-center gap-2 hover:text-indigo-200 transition font-medium" title="Carregar dades des d'un arxiu JSON"><i class="fas fa-upload"></i> <span class="hidden sm:inline">Importar</span></button>
+                    <input type="file" id="importJSONInput" accept=".json" class="hidden" onchange="importJSON(event)">
+                    
                     <button onclick="exportJSON()" class="flex items-center gap-2 hover:text-indigo-200 transition font-medium"><i class="fas fa-download"></i> <span class="hidden sm:inline">Backup</span></button>
                     <button onclick="copySourceCode()" class="flex items-center gap-2 hover:text-indigo-200 transition font-medium"><i class="fas fa-code"></i> <span class="hidden sm:inline">Clonar</span></button>
                     <div class="h-4 w-px bg-indigo-600"></div>
@@ -247,7 +252,7 @@
                 <!-- Student Info -->
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-semibold text-slate-700 flex items-center gap-2"><i class="fas fa-user-graduate"></i> Dades de l'Alumne Actiu</h2>
+                        <h2 class="text-lg font-semibold text-slate-700 flex items-center gap-2"><i class="fas fa-user-graduate"></i> Dades de l'Alumne</h2>
                         <button onclick="openResetModal()" class="text-xs font-bold text-red-500 hover:text-red-700 transition flex items-center gap-1 bg-red-50 px-2 py-1.5 rounded border border-red-100 shadow-sm" title="Esborra la informació només d'aquest alumne">
                             <i class="fas fa-rotate-left"></i> <span class="hidden sm:inline">Reiniciar Alumne</span>
                         </button>
@@ -555,6 +560,39 @@
         function saveData() {
             localStorage.setItem('avaluacioPI_data_v2', JSON.stringify(appData));
             showAutosaveIndicator();
+        }
+        
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (importedData && Array.isArray(importedData.alumnes)) {
+                        if (!confirm("Vols sobreescriure les dades actuals amb l'arxiu importat? Aquesta acció no es pot desfer.")) {
+                            event.target.value = '';
+                            return;
+                        }
+                        appData = importedData;
+                        
+                        if(appData.showGradePdf === undefined) appData.showGradePdf = true;
+                        
+                        saveData();
+                        updateFullUI();
+                        document.getElementById('showGradePdfCheckbox').checked = appData.showGradePdf;
+                        showToast("Dades importades correctament");
+                    } else {
+                        showToast("Error: L'arxiu JSON no té el format correcte.");
+                    }
+                } catch (error) {
+                    console.error(error);
+                    showToast("Error llegint l'arxiu JSON");
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
         }
 
         function showAutosaveIndicator() {
