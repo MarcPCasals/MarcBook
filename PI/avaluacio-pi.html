@@ -519,7 +519,7 @@
                         1: "La manca d’evidències gràfiques fa que el procés sigui difícil de creure. Sense fotos o captures de la teva feina real, no es pot valorar el teu progrés. És obligatori documentar visualment cada etapa del projecte."
                     }
                 },
-                categoryClosing: "El teu procés de treball reflecteix un nivell [NIVELL]. Punt fort: La teva capacitat per [INDICADOR MILLOR]. Petit suggeriment: Per al proper lliurament, intenta que el procés no només expliqui què has fet, sinó que serveixi per demostrar com has après a resoldre problemes de forma autònoma. Continua amb aquesta empenta!",
+                categoryClosing: "El teu procés de treball reflecteix un nivell [NIVELL]. Punt fort: La teva capacitat per [INDICADOR MILLOR]. Petit suggeriment: Per al proper lliurament, intenta que el procés no només expliqui què has fet, sinó que serveixi per demostrar com has aprofundit en la resolució de problemes de forma autònoma. Continua amb aquesta empenta!",
                 feedback: {
                     4: "La millor part del treball. Has documentat el procés de manera excel·lent, mostrant no només els encerts sinó també com has superat els obstacles. La planificació i les evidències demostren gran autonomia.",
                     3: "Bona explicació del procés. S'entén perfectament què has fet. Per millorar, aprofundeix més en el 'com' vas resoldre els problemes concrets i assegura't que la planificació tingui un format més visual.",
@@ -684,8 +684,19 @@
         }
 
         function saveData() {
-            localStorage.setItem('avaluacioPI_data_v2', JSON.stringify(appData));
-            showAutosaveIndicator();
+            try {
+                localStorage.setItem('avaluacioPI_data_v2', JSON.stringify(appData));
+                showAutosaveIndicator();
+            } catch (e) {
+                console.error("Error desant dades al localStorage:", e);
+                // Si l'error és per limitació de quota (memòria plena del navegador)
+                if (e.name === 'QuotaExceededError' || e.code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                    if (!window.quotaAlertShown) {
+                        alert("⚠️ LÍMIT DE MEMÒRIA ASSOLIT ⚠️\n\nEl navegador no permet desar més informació (habitual a partir de 5-6 alumnes complets). \n\nPAS 1: Descarrega els PDFs dels alumnes ja avaluats.\nPAS 2: Fes clic a 'Esborrar Tot' (a dalt a la dreta) per netejar la memòria i continuar treballant amb nous alumnes.\n\nFins que no netegis l'espai, no podràs clicar noves celes ni guardar canvis.");
+                        window.quotaAlertShown = true;
+                    }
+                }
+            }
         }
         
         function importJSON(event) {
@@ -928,20 +939,38 @@
             } else sugEl.innerText = '';
         }
 
-        // FUNCIÓ CLAU DE PARSEIG DE LES EDICIONS PER BLOCS AMB SUPORT PER NEGRETA MARKDOWN
+        // FUNCIÓ CLAU DE PARSEIG DE LES EDICIONS PER BLOCS SEGURA MITJANÇANT .split()
         function parseFeedbackEdits(text) {
             const active = getActive();
             if (!active.sectionEdits) active.sectionEdits = {};
 
-            rubricData.forEach(cat => {
-                const titleEscaped = cat.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`(?:\\*\\*)?🔹 \\\[${titleEscaped}\\\][\\s\\S]*?(?=(?:\\*\\*)?🔹 \\\[|\\*\\*⚠️ Aspectes|Espero que aquests|Ànims amb la recta|$)`, 'g');
-                const match = text.match(regex);
+            // Trobem tots els títols vàlids de la rúbrica
+            const validTitles = rubricData.map(c => c.title);
 
-                if (match && match[0]) {
-                    active.sectionEdits[cat.title] = match[0].trim();
+            // Dividim el text utilitzant els marcadors de categoria per evitar encavallaments
+            const blocks = text.split(/(?:\*\*)?🔹 \[([^\]]+)\]/g);
+
+            // blocks[0] és el text abans de qualsevol categoria
+            for (let i = 1; i < blocks.length; i += 2) {
+                const catTitle = blocks[i];
+                let content = blocks[i + 1] || "";
+
+                if (validTitles.includes(catTitle)) {
+                    // Tallem el text abans dels marcadors de final generals per evitar que s'empassin extres
+                    const endMarkers = ["**⚠️ Aspectes", "Espero que aquests", "Ànims amb la recta"];
+                    let minIdx = content.length;
+                    for (const marker of endMarkers) {
+                        const markerIdx = content.indexOf(marker);
+                        if (markerIdx !== -1 && markerIdx < minIdx) {
+                            minIdx = markerIdx;
+                        }
+                    }
+                    content = content.substring(0, minIdx);
+
+                    // Reconstruïm i desem el bloc sencer tal com es mostrarà
+                    active.sectionEdits[catTitle] = `**🔹 [${catTitle}]${content}`.trimEnd();
                 }
-            });
+            }
         }
 
         function generateFeedback() {
