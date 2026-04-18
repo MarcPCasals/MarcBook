@@ -92,7 +92,6 @@
         window.isSaving = false;
         window.CURRENT_VERSION = 1;
         window.lastBackupDataStr = null;
-        window.dadesImportades = false; // Flag UNIFICAT per protegir les dades importades
 
         // Funció Hash per Checksums de seguretat
         window.generateChecksum = function(obj) {
@@ -269,24 +268,8 @@
         async function carregarDades() {
             if (!window.currentUser) return;
             
-            // PROTECCIÓ: Avortem si hi ha una importació en curs de l'Agenda
-            if (window.dadesImportades) {
-                console.warn("⚠️ Càrrega de Firebase AVORTADA: S'ha detectat una importació de l'Agenda en curs.");
-                window.isDataLoaded = true; // Perquè l'App funcioni
-                if (window.inicialitzarDades) window.inicialitzarDades({ isImport: true });
-                return;
-            }
-
             console.log("Iniciant càrrega de dades des de Firebase...");
             const snap = await getDoc(doc(db, "programador_docent", window.currentUser.uid));
-
-            // Segona comprovació post-await per seguretat extrema
-            if (window.dadesImportades) {
-                console.warn("⚠️ Càrrega de Firebase AVORTADA post-await: S'ha detectat una importació.");
-                window.isDataLoaded = true;
-                if (window.inicialitzarDades) window.inicialitzarDades({ isImport: true });
-                return;
-            }
 
             window.isDataLoaded = true;
 
@@ -452,19 +435,6 @@
                 window.inicialitzarDades = (dadesRebudes) => {
                     // Això desbloqueja el guardat automàtic de React (useEffect)
                     hasLoadedRef.current = true;
-
-                    // Protecció: Si s'ha fet una importació, prioritzem les dades locals i forcem guardat al núvol
-                    if (window.dadesImportades || (dadesRebudes && dadesRebudes.isImport)) {
-                        console.log("Càrrega de Firebase omesa perquè s'acaben d'importar dades. Forçant guardat al núvol de les dades importades...");
-                        // Extreu les dades importades actuals de React i les envia a Firebase
-                        setData(currentData => {
-                            if (window.guardarDades && window.currentUser) {
-                                window.guardarDades({ courses: currentData });
-                            }
-                            return currentData;
-                        });
-                        return;
-                    }
 
                     if (dadesRebudes && dadesRebudes.courses && dadesRebudes.courses.length > 0) {
                         const migrated = migrateData(dadesRebudes.courses);
@@ -769,26 +739,37 @@
                     if (!originValid && event.origin !== window.location.origin) return;
                     
                     if (event.data && event.data.action === 'SYNC_TABLE') {
-                        window.dadesImportades = true;
-                        console.log("📥 Importació detectada per PostMessage. Bloquejant inicialització de Firebase...");
-                        processarDadesAgenda(event.data);
+                        console.log("📥 Importació detectada per PostMessage.");
+                        if (hasLoadedRef.current) {
+                            processarDadesAgenda(event.data);
+                        } else {
+                            localStorage.setItem('cfn_sync_payload', JSON.stringify(event.data));
+                        }
                     }
                 };
                 window.addEventListener("message", handleMessage);
 
-                const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
-                if (savedPayloadStr) {
-                    try {
-                        window.dadesImportades = true;
-                        console.log("📥 Importació detectada per LocalStorage. Bloquejant inicialització de Firebase...");
-                        const savedPayload = JSON.parse(savedPayloadStr);
-                        processarDadesAgenda(savedPayload);
-                        localStorage.removeItem('cfn_sync_payload'); 
-                    } catch(e) {
-                        console.error("Error processant dades del localStorage:", e);
-                        window.dadesImportades = false;
+                let attempts = 0;
+                const checkAndImport = () => {
+                    if (hasLoadedRef.current || attempts > 20) {
+                        const savedPayloadStr = localStorage.getItem('cfn_sync_payload');
+                        if (savedPayloadStr) {
+                            try {
+                                console.log("📥 Importació processada. Fusionant amb dades existents...");
+                                const savedPayload = JSON.parse(savedPayloadStr);
+                                processarDadesAgenda(savedPayload);
+                                localStorage.removeItem('cfn_sync_payload'); 
+                            } catch(e) {
+                                console.error("Error processant dades del localStorage:", e);
+                            }
+                        }
+                    } else {
+                        attempts++;
+                        setTimeout(checkAndImport, 250);
                     }
-                }
+                };
+                
+                checkAndImport();
 
                 return () => window.removeEventListener("message", handleMessage);
             }, []);
@@ -1780,7 +1761,7 @@
                                                                             {totalSessionTime > 0 && (
                                                                                 <div className="text-sm text-red-600 font-bold mt-1 text-center" title="Temps total de la sessió">
                                                                                     {totalSessionTime}'
-                                                                                </div>
+                                                                            </div>
                                                                             )}
                                                                             <button onClick={() => deleteSession(activeCourse.id, activeUnit.id, phase.id, session.id)} className="mt-2 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover/session:opacity-100" title="Eliminar sessió">
                                                                                 <IconTrash />
