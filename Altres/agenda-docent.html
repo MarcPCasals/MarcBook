@@ -3738,30 +3738,32 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
                 return () => window.removeEventListener("message", handleMessage);
             }, []);
 
-            // --- INICIALITZACIÓ PRINCIPAL ---
+           // --- INICIALITZACIÓ PRINCIPAL ---
             useEffect(() => {
-                const loadData = () => {
+                const clearOldLocalStorage = () => {
+                    if (localStorage.getItem('agenda_data')) {
+                        localStorage.removeItem('agenda_data');
+                        console.log("LocalStorage netejat correctament");
+                    }
+                };
+
+                const loadLocalUI = () => {
                     try {
-                        const saved = localStorage.getItem('agenda_data');
-                        if (saved) {
-                            const parsed = JSON.parse(saved);
-                            if (parsed.config) setConfig(parsed.config);
-                            if (parsed.weeksData) setWeeksData(parsed.weeksData);
-                            if (parsed.radar) setRadar(parsed.radar);
-                            if (parsed.holidayWeeks) setHolidayWeeks(parsed.holidayWeeks);
-                            if (parsed.reminders) setReminders(parsed.reminders);
-                            
-                            window.currentAgendaData = saved;
-                            if (parsed.config?.classes?.length > 0) {
-                                setView('dashboard');
-                            } else {
-                                setView('config');
+                        clearOldLocalStorage(); // Forcem la neteja de l'antic
+                        
+                        // Només carreguem preferències visuals lleugeres
+                        const savedConfig = localStorage.getItem('agenda_config');
+                        if (savedConfig) {
+                            const parsedUI = JSON.parse(savedConfig);
+                            if (parsedUI.theme) {
+                                setConfig(prev => ({ ...prev, theme: parsedUI.theme }));
                             }
-                        } else {
-                            setView('config');
                         }
+                        
+                        // Si no hi ha Firebase, assumim que estem a configuració inicial
+                        setView('config');
                     } catch (e) {
-                        console.error("Error carregant dades", e);
+                        console.error("Error carregant dades locals", e);
                         setView('config');
                     }
                     
@@ -3769,46 +3771,44 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
                     if (loader) loader.style.display = 'none';
                 };
 
-                // Esperem que Firebase estigui llest o carreguem local
+                const applyCloudData = (parsed) => {
+                    if (parsed.config) setConfig(parsed.config);
+                    if (parsed.weeksData) setWeeksData(parsed.weeksData);
+                    if (parsed.radar) setRadar(parsed.radar);
+                    if (parsed.holidayWeeks) setHolidayWeeks(parsed.holidayWeeks);
+                    if (parsed.reminders) setReminders(parsed.reminders);
+                    window.currentAgendaData = JSON.stringify(parsed);
+                    setView(parsed.config?.classes?.length > 0 ? 'dashboard' : 'config');
+                    
+                    clearOldLocalStorage(); // Doble seguretat: netegem quan confirmem que hi ha núvol
+                };
+
+                // Esperem que Firebase estigui llest
                 if (window.firebaseInitialized) {
                     if (window.cloudAgendaData) {
-                        const parsed = window.cloudAgendaData;
-                        if (parsed.config) setConfig(parsed.config);
-                        if (parsed.weeksData) setWeeksData(parsed.weeksData);
-                        if (parsed.radar) setRadar(parsed.radar);
-                        if (parsed.holidayWeeks) setHolidayWeeks(parsed.holidayWeeks);
-                        if (parsed.reminders) setReminders(parsed.reminders);
-                        window.currentAgendaData = JSON.stringify(parsed);
-                        setView(parsed.config?.classes?.length > 0 ? 'dashboard' : 'config');
+                        applyCloudData(window.cloudAgendaData);
                         const loader = document.getElementById('app-loader');
                         if (loader) loader.style.display = 'none';
                     } else {
-                        loadData();
+                        loadLocalUI();
                     }
                 } else {
                     window.addEventListener('firebaseReady', () => {
                         if (window.cloudAgendaData) {
-                            const parsed = window.cloudAgendaData;
-                            if (parsed.config) setConfig(parsed.config);
-                            if (parsed.weeksData) setWeeksData(parsed.weeksData);
-                            if (parsed.radar) setRadar(parsed.radar);
-                            if (parsed.holidayWeeks) setHolidayWeeks(parsed.holidayWeeks);
-                            if (parsed.reminders) setReminders(parsed.reminders);
-                            window.currentAgendaData = JSON.stringify(parsed);
-                            setView(parsed.config?.classes?.length > 0 ? 'dashboard' : 'config');
+                            applyCloudData(window.cloudAgendaData);
                         } else {
-                            loadData();
+                            loadLocalUI();
                         }
                         const loader = document.getElementById('app-loader');
                         if (loader) loader.style.display = 'none';
                     });
                     
                     // Fallback de seguretat
-                    setTimeout(loadData, 2000);
+                    setTimeout(loadLocalUI, 2000);
                 }
             }, []);
 
-            // --- FUNCIÓ DE GUARDAT ANTI-CRASH (QuotaExceededError FIX) ---
+            // --- FUNCIÓ DE GUARDAT LLEUGERA (LOCAL) I COMPLETA (NÚVOL) ---
             const saveData = (newConfig, newWeeks, newRadar, newHolidays, newReminders) => {
                 const dataToSave = { 
                     config: newConfig || config, 
@@ -3817,17 +3817,19 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
                     holidayWeeks: newHolidays || holidayWeeks,
                     reminders: newReminders || reminders
                 };
-                const dataStr = JSON.stringify(dataToSave);
                 
+                // 1. Guardar NOMÉS preferències visuals a localStorage (Poc pes)
                 try {
-                    localStorage.setItem('agenda_data', dataStr);
+                    localStorage.setItem('agenda_config', JSON.stringify({
+                        theme: dataToSave.config.theme,
+                        lastView: view
+                    }));
                 } catch (e) {
-                    console.error("⚠️ Error d'emmagatzematge:", e);
-                    if (e.name === 'QuotaExceededError' || e.code === 22) {
-                        alert("⚠️ MEMÒRIA LOCAL PLENA!\nNo s'han pogut guardar les dades al teu navegador perquè has superat el límit.\nLes dades es guardaran al núvol (Firebase) si tens la sessió iniciada, però et recomanem exportar un Backup (.json) o eliminar setmanes molt antigues.");
-                    }
+                    console.error("⚠️ Error guardant preferències a localStorage:", e);
                 }
 
+                // 2. Tota la càrrega pesada s'envia a Firebase en segon pla
+                const dataStr = JSON.stringify(dataToSave);
                 window.currentAgendaData = dataStr;
                 if (window.saveAgendaToCloud) window.saveAgendaToCloud(dataStr);
             };
@@ -3891,7 +3893,8 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
             };
 
             const handleReset = () => {
-                localStorage.removeItem('agenda_data');
+                localStorage.removeItem('agenda_config');
+                localStorage.removeItem('agenda_data'); // Doble comprovació per assegurar-nos
                 if (window.currentUser && window.firebaseDb) {
                     window.setDoc(window.doc(window.firebaseDb, "agenda_docent", window.currentUser.uid), {});
                 }
