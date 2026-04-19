@@ -269,10 +269,9 @@
       }
 
       // FUNCIONS CLOUD ADAPTADES A NOVA ARQUITECTURA
-      window.saveAgendaToCloud = async (dataStr) => {
-          if (!window.currentUser) return;
-          try {
-              const dataObj = JSON.parse(dataStr);
+      window.saveAgendaToCloud = async (dataObj) => {
+    if (!window.currentUser) return;
+    try {
               const { config, weeksData, radar, holidayWeeks, reminders } = dataObj;
               const userId = window.currentUser.uid;
 
@@ -288,11 +287,13 @@
               if (weeksData && Object.keys(weeksData).length > 0) {
                   console.log("Guardant setmanes al núvol:", Object.keys(weeksData).length);
                   for (const weekId in weeksData) {
-                      await setDoc(
-                          doc(db, "agenda_docent_weeks", userId, "weeks", weekId),
-                          weeksData[weekId]
-                      );
-                  }
+    if (!weeksData[weekId]) continue;
+
+    await setDoc(
+        doc(db, "agenda_docent_weeks", userId, "weeks", weekId),
+        weeksData[weekId]
+    );
+}
               }
           } catch(e) { console.error("Firebase save error", e); }
       };
@@ -3645,9 +3646,28 @@
                         newWeeksData[wId][cellKey].tasks = newTasks.slice(0, 10);
                         
                         if (pSess.materials) {
-                            const existingMats = newWeeksData[wId][cellKey].materials || "";
-                            newWeeksData[wId][cellKey].materials = existingMats ? `${existingMats}\n${pSess.materials}` : pSess.materials;
-                        }
+    const existingMats = newWeeksData[wId][cellKey].materials || "";
+
+    let newMats = "";
+
+    if (Array.isArray(pSess.materials)) {
+        newMats = pSess.materials
+            .map(m => {
+                if (typeof m === "string") return m;
+                if (m.name && m.url) return `${m.name} (${m.url})`;
+                if (m.name) return m.name;
+                return "";
+            })
+            .filter(Boolean)
+            .join("\n");
+    } else {
+        newMats = pSess.materials;
+    }
+
+    newWeeksData[wId][cellKey].materials = existingMats
+        ? `${existingMats}\n${newMats}`
+        : newMats;
+}
 
                         placed = true;
                         agendaIndex++;
@@ -3836,9 +3856,14 @@
                 }
 
                 // 2. Tota la càrrega pesada s'envia a Firebase en segon pla
-                const dataStr = JSON.stringify(dataToSave);
-                window.currentAgendaData = dataStr;
-                if (window.saveAgendaToCloud) window.saveAgendaToCloud(dataStr);
+                if (window.saveAgendaToCloud) {
+    window.saveAgendaToCloud({
+        config: dataToSave.config,
+        weeksData: dataToSave.weeksData,
+        radar: dataToSave.radar,
+        reminders: dataToSave.reminders
+    });
+}
             };
 
             const handleSaveConfig = (newConfig) => {
