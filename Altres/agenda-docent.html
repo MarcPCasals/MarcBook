@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agenda Docent</title>
     
+    <script>
+        // TRICK: Interceptem missatges des del primer instant (evita la pèrdua si React triga a carregar)
+        window.earlyImportData = null;
+        window.addEventListener('message', function(event) {
+            let data = event.data;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch(e) {}
+            }
+            if (data && data.type === 'FROM_PROGRAMADOR') {
+                console.log("📥 [Early Listener] Missatge atrapat abans que React estigui llest!", data);
+                window.earlyImportData = data;
+            }
+        });
+    </script>
+
     <!-- Estils CSS (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -3421,7 +3436,7 @@
                                         type="text" 
                                         className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
                                         placeholder="Ex: 1-5 (Deixa buit per exportar-ho tot)" 
-                                        value={exportInterval} 
+                                        value={exportInterval}
                                         onChange={(e) => setExportInterval(e.target.value)}
                                     />
                                 </div>
@@ -3460,13 +3475,98 @@
                                 </div>
 
                                 <div className="flex justify-end gap-2 mt-2">
-                                    <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar i Tancar
-                                        </button>
-                                </div>
-
-                                <div className="flex justify-end gap-2 mt-2">
                                     <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar i Tancar</button>
                                 </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+                    
+                    {pendingActionTask && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 fade-in">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                                <h3 className="text-lg font-bold mb-4">Què ha passat amb l'activitat?</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={() => executePendingAction('skipped')} className="p-4 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 font-bold flex flex-col items-center">
+                                        <span className="text-2xl mb-2">❌</span>
+                                        No feta
+                                        <span className="text-xs font-normal mt-1 text-center">(Es tatxa i es mou a la propera amb icona 🔴)</span>
+                                    </button>
+                                    <button onClick={() => executePendingAction('unfinished')} className="p-4 bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 font-bold flex flex-col items-center">
+                                        <span className="text-2xl mb-2">🚧</span>
+                                        Inacabada
+                                        <span className="text-xs font-normal mt-1 text-center">(Es subratlla i es mou a la propera amb icona ⚠️)</span>
+                                    </button>
+                                </div>
+                                <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {showAddClassModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddClassModal(false)}></div>
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative animate-in zoom-in duration-200">
+                                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                        <Icons.Plus className="text-blue-500"/> Afegir Classe Extra
+                                    </h3>
+                                    <button onClick={() => setShowAddClassModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </div>
+                                <div className="space-y-4 mb-6">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dia</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.day} onChange={e => setNewExtra({...newExtra, day: parseInt(e.target.value)})}>
+                                            {WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hora</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.slot} onChange={e => setNewExtra({...newExtra, slot: parseInt(e.target.value)})}>
+                                            {TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Grup / Classe</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.classId} onChange={e => setNewExtra({...newExtra, classId: e.target.value})}>
+                                            <option value="">Selecciona grup...</option>
+                                            {config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowAddClassModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={handleAddExtraClass} disabled={!newExtra.classId} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 disabled:opacity-50">Afegir</button>
+                                </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {showCopyModal && copySource && ReactDOM.createPortal(
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 fade-in">
+                            <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500">
+                                <h3 className="text-xl font-bold mb-4 flex gap-2 text-blue-800"><Icons.Copy /> Copiar Sessió</h3>
+                                <div className="space-y-3">
+                                    <button onClick={() => executeCopy('next_same')} className="w-full text-left px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 font-semibold text-blue-800 transition-colors">1. Enganxar a la propera sessió d'aquest grup</button>
+                                    <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase">2. Enganxar a propera sessió de:</p>
+                                        <div className="flex gap-2">
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetClassId} onChange={(e) => setTargetClassId(e.target.value)}><option value="">Selecciona grup...</option>{config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                                            <button onClick={() => executeCopy('next_other')} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Enganxar</button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
+                                        <div className="flex gap-2 mb-2">
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                                        </div>
+                                        <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">Enganxar Aquí</button>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2 mt-4"><button onClick={() => setShowCopyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button></div>
                             </div>
                         </div>,
                         document.body
@@ -3636,10 +3736,37 @@
 
             useEffect(() => {
                 const handleMessage = (event) => {
-                    if (!event.data || event.data.type !== 'FROM_PROGRAMADOR') return;
-                    console.log("📥 Dades rebudes del Programador:", event.data);
-                    setPendingImportData(event.data);
+                    // Mirem si hi ha dades guardades pel listener inicial (trick)
+                    if (window.earlyImportData) {
+                        console.log("📥 Carregant dades pendents del listener inicial:", window.earlyImportData);
+                        setPendingImportData(window.earlyImportData);
+                        window.earlyImportData = null; // Ho netegem perquè no salti en bucle
+                        return;
+                    }
+
+                    let data = event.data;
+                    
+                    // Si arriba en string, mirem de parsejar-ho a JSON de forma segura
+                    if (typeof data === 'string') {
+                        try {
+                            data = JSON.parse(data);
+                        } catch (e) {
+                            return; // No és un JSON vàlid
+                        }
+                    }
+
+                    if (!data || data.type !== 'FROM_PROGRAMADOR') return;
+                    console.log("📥 Dades rebudes del Programador (en calent):", data);
+                    setPendingImportData(data);
                 };
+
+                // Comprovem just al muntar per si el listener inicial ja té dades
+                if (window.earlyImportData) {
+                    console.log("📥 Carregant dades pendents del listener inicial:", window.earlyImportData);
+                    setPendingImportData(window.earlyImportData);
+                    window.earlyImportData = null;
+                }
+
                 window.addEventListener('message', handleMessage);
                 return () => window.removeEventListener('message', handleMessage);
             }, []);
