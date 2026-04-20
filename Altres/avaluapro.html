@@ -630,6 +630,14 @@
                 { id: generateUUID(), name: "C4: Comunicació", color: "blue", criteria: [{id: generateUUID(), name: "Criteri 1", indicators: [{id: generateUUID(), name: "IA 1", description: ""}]}] }
             ];
         };
+        
+        const createUTStructure = (semesterNum, competencies) => {
+            return [
+                { id: `UT${semesterNum * 2 - 1}`, name: `UT${semesterNum * 2 - 1}`, competencies: competencies },
+                { id: `UT${semesterNum * 2}`, name: `UT${semesterNum * 2}`, competencies: [] },
+                { id: `TRANS${semesterNum}`, name: "Transversals", competencies: createTransversalStructure() }
+            ];
+        };
 
         const calculateGrade = (marks) => {
             if (!marks || marks.length === 0) return '';
@@ -849,6 +857,26 @@
             );
         };
 
+        const HighStudentsModal = ({ isOpen, onClose, students }) => {
+            if (!isOpen) return null;
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Alumnes amb Assoliment Alt" size="md">
+                    <div className="space-y-3">
+                        <p className="text-sm text-gray-600 mb-4">Llista d'alumnes amb una mitjana global superior a 2.5.</p>
+                        {students && students.length > 0 ? students.map(s => (
+                            <div key={s.id} className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 font-bold flex justify-between items-center">
+                                <span>{s.name}</span>
+                                <span className="bg-green-200 text-green-900 px-3 py-1 rounded-lg shadow-sm">{s.finalAvg.toFixed(2)}</span>
+                            </div>
+                        )) : <p className="text-gray-500 text-center py-4 font-bold">No hi ha alumnes amb assoliment alt.</p>}
+                        <div className="flex justify-end pt-4 mt-2 border-t">
+                            <button onClick={onClose} className="px-6 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow">Tancar</button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
         const ChartComponent = ({ type, data, options, className }) => {
             const canvasRef = useRef(null);
             const chartRef = useRef(null);
@@ -991,18 +1019,21 @@
                 const createSemesterStructure = () => {
                     return competencies.map((c, idx) => ({
                         ...c,
+                        id: generateUUID(), // Ensure unique ID per instance
                         color: COMP_COLORS_ORDER[idx % COMP_COLORS_ORDER.length],
-                        criteria: c.criteria.map(crit => ({ ...crit, indicators: [{id: generateUUID(), name: "IA 1", description: ""}] }))
+                        criteria: c.criteria.map(crit => ({ 
+                            ...crit, 
+                            id: generateUUID(), // Ensure unique ID per instance
+                            indicators: [{id: generateUUID(), name: "IA 1", description: ""}] 
+                        }))
                     }));
                 };
                 
                 const newClass = { 
                     id: generateUUID(), name: className, color: classColor, seatingChartMain: "",
                     semesters: [
-                        { id: "S1", name: "1r Semestre", isActive: true, competencies: createSemesterStructure() },
-                        { id: "S2", name: "2n Semestre", isActive: false, competencies: createSemesterStructure() },
-                        { id: "T1", name: "Transversals 1", isActive: false, competencies: createTransversalStructure() },
-                        { id: "T2", name: "Transversals 2", isActive: false, competencies: createTransversalStructure() }
+                        { id: "S1", name: "1r Semestre", isActive: true, uts: createUTStructure(1, createSemesterStructure()) },
+                        { id: "S2", name: "2n Semestre", isActive: false, uts: createUTStructure(2, createSemesterStructure()) }
                     ], 
                     students: [], halfGroups: []
                 };
@@ -1187,6 +1218,32 @@
                         newClass.color = classColor;
                         newClass.seatingChartMain = "";
                         newClass.students = [];
+                        
+                        // Assignar nous UUIDs a l'estructura copiada perquè les notes siguin independents
+                        if (newClass.semesters) {
+                            newClass.semesters.forEach(sem => {
+                                if (sem.uts) {
+                                    sem.uts.forEach(ut => {
+                                        if (ut.competencies) {
+                                            ut.competencies.forEach(comp => {
+                                                comp.id = generateUUID();
+                                                if (comp.criteria) {
+                                                    comp.criteria.forEach(crit => {
+                                                        crit.id = generateUUID();
+                                                        if (crit.indicators) {
+                                                            crit.indicators.forEach(ind => {
+                                                                ind.id = generateUUID();
+                                                            });
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                        
                         onCreate(newClass);
                     }
                     onClose();
@@ -1482,6 +1539,14 @@
                 setGridData(newGrid);
             };
 
+            const handleCopyData = () => {
+                const header = ["Alumne", ...iList.map(ind => ind.name)].join("\t");
+                const rows = sList.map((s, r) => [s.name, ...gridData[r]].join("\t"));
+                const text = [header, ...rows].join("\n");
+                navigator.clipboard.writeText(text);
+                alert("Taula copiada al porta-retalls per enganxar a Excel.");
+            };
+
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Importació Massiva des d'Excel" size="xl">
                     <div className="flex flex-col h-[70vh]">
@@ -1500,7 +1565,7 @@
                                 <thead className="sticky top-0 bg-gray-200 z-10 shadow-sm">
                                     <tr>
                                         <th className="p-2 border sticky left-0 bg-gray-200 z-20 min-w-[180px] text-left">Alumne</th>
-                                        {iList.map(ind => <th key={ind.id} className="p-2 border min-w-[60px] text-center font-bold text-gray-700">{ind.name}</th>)}
+                                        {iList.map(ind => <th key={ind.id} className="p-2 border min-w-[60px] text-center font-bold text-gray-700" title={ind.parentNames}>{ind.name}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white">
@@ -1517,7 +1582,8 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div className="flex justify-end pt-4 shrink-0 mt-2">
+                        <div className="flex justify-between pt-4 shrink-0 mt-2">
+                            <button onClick={handleCopyData} className="bg-white text-gray-700 border border-gray-300 px-6 py-3 rounded-lg font-bold hover:bg-gray-50 shadow-sm flex items-center gap-2"><Icon name="copy" /> Copiar Taula a l'apapapers</button>
                             <button onClick={() => { onImport(gridData); onClose(); }} className="bg-brand-500 text-white px-8 py-3 rounded-lg font-bold hover:bg-brand-600 shadow-md">Desar Importació a la Taula Principal</button>
                         </div>
                     </div>
@@ -1525,12 +1591,26 @@
             );
         };
 
-        const CopyTableModal = ({ isOpen, onClose, classes, currentClassId, currentSemester, onCopy }) => {
+        const CopyTableModal = ({ isOpen, onClose, classes, currentClassId, currentSemId, currentUTId, currentUT, onCopy }) => {
             if (!isOpen) return null;
-            const [targetClassId, setTargetClassId] = useState("");
+            const [targetClassId, setTargetClassId] = useState(currentClassId || "");
+            const [targetSemId, setTargetSemId] = useState(currentSemId || "");
+            const [targetUTSelected, setTargetUTSelected] = useState("");
             const [selectedCompetencies, setSelectedCompetencies] = useState([]);
             
+            useEffect(() => {
+                if (isOpen) {
+                    setTargetClassId(currentClassId || "");
+                    setTargetSemId(currentSemId || "");
+                    setTargetUTSelected("");
+                    setSelectedCompetencies([]);
+                }
+            }, [isOpen, currentClassId, currentSemId]);
+            
             const handleCheckbox = (compId) => setSelectedCompetencies(prev => prev.includes(compId) ? prev.filter(x => x !== compId) : [...prev, compId]);
+
+            const targetClass = classes.find(c => c.id === targetClassId);
+            const targetSem = targetClass?.semesters.find(s => s.id === targetSemId);
 
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Copiar Configuració de la Taula">
@@ -1538,21 +1618,39 @@
                         <div className="text-sm text-gray-700 bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3 items-start">
                             <Icon name="copy" className="text-blue-500 text-xl mt-1"/>
                             <div>
-                                <p className="mb-2">Aquesta eina copiarà l'estructura de les competències que triïs a una altra classe.</p>
-                                <p className="text-red-600 font-bold text-xs"><Icon name="triangle-exclamation" className="mr-1"/> Si la competència ja existeix al destí, <strong>sobreescriurà l'antiga</strong>.</p>
+                                <p className="mb-2">Aquesta eina copiarà l'estructura de les competències seleccionades a una altra Unitat de Treball.</p>
+                                <p className="text-red-600 font-bold text-xs"><Icon name="triangle-exclamation" className="mr-1"/> Es crearan <strong>noves instàncies</strong> d'aquestes competències per poder avaluar-les independentment.</p>
                             </div>
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Classe Destí</label>
-                            <select value={targetClassId} onChange={(e) => setTargetClassId(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
-                                <option value="">-- Selecciona la classe on vols copiar --</option>
-                                {(classes || []).filter(c => c.id !== currentClassId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            <select value={targetClassId} onChange={(e) => {setTargetClassId(e.target.value); setTargetSemId(""); setTargetUTSelected("");}} className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <option value="">-- Selecciona classe --</option>
+                                {(classes || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
+                        {targetClassId && (
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Semestre Destí</label>
+                                <select value={targetSemId} onChange={(e) => {setTargetSemId(e.target.value); setTargetUTSelected("");}} className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                    <option value="">-- Selecciona semestre --</option>
+                                    {(targetClass?.semesters || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        {targetSemId && (
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">UT Destí</label>
+                                <select value={targetUTSelected} onChange={(e) => setTargetUTSelected(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                    <option value="">-- Selecciona UT --</option>
+                                    {(targetSem?.uts || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                </select>
+                            </div>
+                        )}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Competències a copiar:</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Competències a copiar (des de {currentUT?.name}):</label>
                             <div className="max-h-48 overflow-y-auto border border-gray-200 p-2 rounded-lg bg-gray-50 space-y-1 custom-scroll">
-                                {(currentSemester?.competencies || []).map(comp => (
+                                {(currentUT?.competencies || []).map(comp => (
                                     <label key={comp.id} className="flex gap-3 p-3 bg-white border border-gray-100 rounded cursor-pointer hover:bg-blue-50 transition items-center shadow-sm">
                                         <input type="checkbox" className="w-4 h-4 text-brand-500" checked={selectedCompetencies.includes(comp.id)} onChange={() => handleCheckbox(comp.id)}/>
                                         <span className="font-bold text-gray-700">{comp.name}</span>
@@ -1561,22 +1659,22 @@
                             </div>
                         </div>
                         <div className="flex justify-end pt-4 border-t">
-                            <button onClick={() => { onCopy(targetClassId, selectedCompetencies); onClose(); }} disabled={!targetClassId || selectedCompetencies.length===0} className="px-6 py-3 bg-brand-500 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-brand-600 transition shadow">Executar Còpia</button>
+                            <button onClick={() => { onCopy(targetClassId, targetSemId, targetUTSelected, selectedCompetencies); onClose(); }} disabled={!targetClassId || !targetSemId || !targetUTSelected || selectedCompetencies.length===0} className="px-6 py-3 bg-brand-500 text-white rounded-lg font-bold disabled:opacity-50 hover:bg-brand-600 transition shadow">Executar Còpia</button>
                         </div>
                     </div>
                 </Modal>
             );
         };
 
-        const SemesterStatsModal = ({ isOpen, onClose, competencies, students }) => {
+        const UTStatsModal = ({ isOpen, onClose, competencies, students, utName }) => {
             if (!isOpen) return null;
             const cList = competencies ? competencies : [];
             const sList = students ? students : [];
 
             return (
-                <Modal isOpen={isOpen} onClose={onClose} title="Estadístiques Detallades del Semestre" size="lg">
+                <Modal isOpen={isOpen} onClose={onClose} title={`Estadístiques Detallades de: ${utName}`} size="lg">
                     <div className="space-y-6">
-                        {cList.length === 0 && <p className="text-gray-500 text-center py-8 font-bold text-lg">No hi ha competències per analitzar.</p>}
+                        {cList.length === 0 && <p className="text-gray-500 text-center py-8 font-bold text-lg">No hi ha competències per analitzar en aquesta UT.</p>}
                         {cList.map(comp => {
                             const styles = COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] ? COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] : COMP_COLORS_STYLES['blue'];
                             let sum = 0; let count = 0;
@@ -1641,28 +1739,33 @@
             if (improvement < -0.5) status = { text: "Regressió", color: "text-red-600", icon: "arrow-trend-down" };
 
             const compSummary = {}; 
+            const allUts = [];
+
             if (classData && classData.students && classData.semesters) {
                 const student = classData.students.find(s => s.id === studentId);
                 if (student) {
                     classData.semesters.forEach(sem => {
-                        if (sem.id === 'S1' || sem.id === 'S2') {
-                            if (sem.competencies) {
-                                sem.competencies.forEach(comp => {
-                                    if (!compSummary[comp.name]) compSummary[comp.name] = { S1: '-', S2: '-' };
-                                    let compMarks = [];
-                                    if (comp.criteria) {
-                                        comp.criteria.forEach(c => {
-                                            let critMarks = [];
-                                            if(c.indicators) c.indicators.forEach(i => { if(student.marks && student.marks[i.id]) critMarks.push(student.marks[i.id]); });
-                                            const cg = (student.marks && student.marks[`override_${c.id}`]) || calculateGrade(critMarks);
-                                            if (cg) compMarks.push(cg);
-                                        });
-                                    }
-                                    const fg = (student.marks && student.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
-                                    if (sem.id === 'S1') compSummary[comp.name].S1 = fg ? fg : '-';
-                                    if (sem.id === 'S2') compSummary[comp.name].S2 = fg ? fg : '-';
-                                });
-                            }
+                        if (sem.uts) {
+                            sem.uts.forEach(ut => {
+                                if (ut.id.startsWith('TRANS')) return; // Només considerem UTs regulars a l'evolució específica
+                                allUts.push(ut.id);
+                                if (ut.competencies) {
+                                    ut.competencies.forEach(comp => {
+                                        if (!compSummary[comp.name]) compSummary[comp.name] = {};
+                                        let compMarks = [];
+                                        if (comp.criteria) {
+                                            comp.criteria.forEach(c => {
+                                                let critMarks = [];
+                                                if(c.indicators) c.indicators.forEach(i => { if(student.marks && student.marks[i.id]) critMarks.push(student.marks[i.id]); });
+                                                const cg = (student.marks && student.marks[`override_${c.id}`]) || calculateGrade(critMarks);
+                                                if (cg) compMarks.push(cg);
+                                            });
+                                        }
+                                        const fg = (student.marks && student.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
+                                        compSummary[comp.name][ut.id] = fg ? fg : '-';
+                                    });
+                                }
+                            });
                         }
                     });
                 }
@@ -1677,28 +1780,43 @@
                         </div>
 
                         <div className="bg-white p-4 border rounded-xl shadow-sm">
-                            <h4 className="text-sm font-bold text-gray-700 mb-3 text-center uppercase tracking-wide border-b pb-2">Resum de Notes per Competències (Específiques)</h4>
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50 text-gray-600"><tr><th className="p-2 text-left">Competència</th><th className="p-2 text-center w-28 border-l border-white">1r Semestre</th><th className="p-2 text-center w-28 border-l border-white">2n Semestre</th></tr></thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {Object.keys(compSummary).map(cName => {
-                                        const grades = compSummary[cName];
-                                        return (
-                                            <tr key={cName}>
-                                                <td className="p-2 font-medium text-gray-800">{cName}</td>
-                                                <td className="p-2 text-center"><span className={`px-2 py-1 rounded font-bold text-sm shadow-sm border ${getGradeColor(grades.S1).replace('bg-','border-').split(' ')[2]} ${getGradeColor(grades.S1)}`}>{grades.S1}</span></td>
-                                                <td className="p-2 text-center"><span className={`px-2 py-1 rounded font-bold text-sm shadow-sm border ${getGradeColor(grades.S2).replace('bg-','border-').split(' ')[2]} ${getGradeColor(grades.S2)}`}>{grades.S2}</span></td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
+                            <h4 className="text-sm font-bold text-gray-700 mb-3 text-center uppercase tracking-wide border-b pb-2">Resum de Notes per Competències</h4>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 text-gray-600">
+                                        <tr>
+                                            <th className="p-2 text-left">Competència</th>
+                                            {allUts.map(utId => (
+                                                <th key={utId} className="p-2 text-center border-l border-white min-w-[80px]">{utId}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {Object.keys(compSummary).map(cName => {
+                                            const grades = compSummary[cName];
+                                            return (
+                                                <tr key={cName}>
+                                                    <td className="p-2 font-medium text-gray-800">{cName}</td>
+                                                    {allUts.map(utId => {
+                                                        const grade = grades[utId] || '-';
+                                                        return (
+                                                            <td key={utId} className="p-2 text-center border-l border-gray-50">
+                                                                <span className={`px-2 py-1 rounded font-bold text-xs shadow-sm border ${getGradeColor(grade).replace('bg-','border-').split(' ')[2]} ${getGradeColor(grade)}`}>{grade}</span>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="bg-white p-4 border rounded-xl shadow-sm">
-                                <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Trajectòria Temporal</h4>
-                                <ChartComponent className="h-64" type="line" data={{ labels: history.map((_,i)=>`Evidència ${i+1}`), datasets:[{label:'Mitjana Acumulada', data:history, borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.1)', fill:true, tension:0.3, pointRadius: 5}] }} options={{scales:{y:{min:1, max:4}}, plugins: { legend: { display: false } }}} />
+                                <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Trajectòria Temporal (Per UT avaluada)</h4>
+                                <ChartComponent className="h-64" type="line" data={{ labels: history.map((_,i)=>`Moment ${i+1}`), datasets:[{label:'Mitjana Acumulada', data:history, borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.1)', fill:true, tension:0.3, pointRadius: 5}] }} options={{scales:{y:{min:1, max:4}}, plugins: { legend: { display: false } }}} />
                             </div>
                             <div className="bg-white p-4 border rounded-xl shadow-sm">
                                 <h4 className="text-sm font-bold text-gray-700 mb-4 text-center uppercase tracking-wide">Inici vs Final</h4>
@@ -1721,40 +1839,50 @@
             const radarData = [];
             let globalAvgNum = 0;
             let globalAvgCount = 0;
+            const allUts = [];
             
             if (classData && classData.semesters) {
                 classData.semesters.forEach(sem => {
-                    if (sem.id === 'S1' || sem.id === 'S2') {
-                        if (sem.competencies) {
-                            sem.competencies.forEach(comp => {
-                                if (!compSummary[comp.name]) {
-                                    compSummary[comp.name] = { S1: '-', S2: '-', finalNum: 0 };
-                                    if (labels.indexOf(comp.name) === -1) labels.push(comp.name);
-                                }
-                                let compMarks = [];
-                                if (comp.criteria) {
-                                    comp.criteria.forEach(c => {
-                                        let critMarks = [];
-                                        if(c.indicators) c.indicators.forEach(i => { if(studentData.marks && studentData.marks[i.id]) critMarks.push(studentData.marks[i.id]); });
-                                        const cg = (studentData.marks && studentData.marks[`override_${c.id}`]) || calculateGrade(critMarks);
-                                        if (cg) compMarks.push(cg);
-                                    });
-                                }
-                                const fg = (studentData.marks && studentData.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
-                                if (sem.id === 'S1') compSummary[comp.name].S1 = fg ? fg : '-';
-                                if (sem.id === 'S2') compSummary[comp.name].S2 = fg ? fg : '-';
-                                if (fg) {
-                                    compSummary[comp.name].finalNum = getNumericFromGrade(fg);
-                                    globalAvgNum += getNumericFromGrade(fg);
-                                    globalAvgCount++;
-                                }
-                            });
-                        }
+                    if (sem.uts) {
+                        sem.uts.forEach(ut => {
+                            if (ut.id.startsWith('TRANS')) return; // Només UTs per la nota mitjana estricta
+                            allUts.push(ut.id);
+                            if (ut.competencies) {
+                                ut.competencies.forEach(comp => {
+                                    if (!compSummary[comp.name]) {
+                                        compSummary[comp.name] = { finalNum: 0, finalCount: 0 };
+                                        if (labels.indexOf(comp.name) === -1) labels.push(comp.name);
+                                    }
+                                    let compMarks = [];
+                                    if (comp.criteria) {
+                                        comp.criteria.forEach(c => {
+                                            let critMarks = [];
+                                            if(c.indicators) c.indicators.forEach(i => { if(studentData.marks && studentData.marks[i.id]) critMarks.push(studentData.marks[i.id]); });
+                                            const cg = (studentData.marks && studentData.marks[`override_${c.id}`]) || calculateGrade(critMarks);
+                                            if (cg) compMarks.push(cg);
+                                        });
+                                    }
+                                    const fg = (studentData.marks && studentData.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
+                                    compSummary[comp.name][ut.id] = fg ? fg : '-';
+                                    if (fg) {
+                                        compSummary[comp.name].finalNum += getNumericFromGrade(fg);
+                                        compSummary[comp.name].finalCount++;
+                                    }
+                                });
+                            }
+                        });
                     }
                 });
             }
 
-            labels.forEach(l => radarData.push(compSummary[l].finalNum || 0));
+            labels.forEach(l => {
+                const avgNum = compSummary[l].finalCount > 0 ? compSummary[l].finalNum / compSummary[l].finalCount : 0;
+                radarData.push(avgNum);
+                if (avgNum > 0) {
+                    globalAvgNum += avgNum;
+                    globalAvgCount++;
+                }
+            });
             const totalAvg = globalAvgCount > 0 ? getGradeFromNumeric(globalAvgNum/globalAvgCount) : '-';
 
             const handleDownloadPDF = () => {
@@ -1815,11 +1943,10 @@
                                 <div className="grid grid-cols-2 gap-6 items-center">
                                     <div>
                                         <table className="w-full text-sm">
-                                            <thead className="bg-gray-100 text-gray-600"><tr><th className="p-2 text-left">Competència</th><th className="p-2 text-center w-16">Nota Final</th></tr></thead>
+                                            <thead className="bg-gray-100 text-gray-600"><tr><th className="p-2 text-left">Competència</th><th className="p-2 text-center w-16">Mitjana</th></tr></thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {labels.map(cName => {
-                                                    const fNum = compSummary[cName].finalNum;
-                                                    const grade = fNum > 0 ? getGradeFromNumeric(fNum) : '-';
+                                                {labels.map((cName, idx) => {
+                                                    const grade = radarData[idx] > 0 ? getGradeFromNumeric(radarData[idx]) : '-';
                                                     return (
                                                         <tr key={cName}>
                                                             <td className="p-2 font-medium text-gray-700">{cName}</td>
@@ -1893,6 +2020,7 @@
 
             const [activeClassId, setActiveClassId] = useState(null);
             const [activeTab, setActiveTab] = useState('S1'); 
+            const [activeUTTab, setActiveUTTab] = useState('');
             const [activeHalfGroupFilter, setActiveHalfGroupFilter] = useState("");
             
             const [showResetModal, setShowResetModal] = useState(false);
@@ -1907,15 +2035,30 @@
             const [showStudentProfile, setShowStudentProfile] = useState(null); 
             const [showGlobalNotes, setShowGlobalNotes] = useState(false);
             const [showCopyTable, setShowCopyTable] = useState(false);
-            const [showSemesterStats, setShowSemesterStats] = useState(false);
+            const [showUTStats, setShowUTStats] = useState(false);
             const [showBulkImport, setShowBulkImport] = useState(false);
             const [showStudentEvoModal, setShowStudentEvoModal] = useState(null);
             const [editingIndicatorDesc, setEditingIndicatorDesc] = useState(null); 
             const [showRiskModal, setShowRiskModal] = useState(null);
+            const [showHighModal, setShowHighModal] = useState(null);
             const [isFilterOpen, setIsFilterOpen] = useState(false);
             const filterRef = useRef(null);
             const [visibleCompetencies, setVisibleCompetencies] = useState({});
             const [expandedComps, setExpandedComps] = useState({});
+
+            // Effect to manage default UT when changing Semester tab
+            useEffect(() => {
+                if (!activeClassId || !classes) return;
+                const cls = classes.find(c => c.id === activeClassId);
+                if (!cls || !cls.semesters) return;
+                
+                const currentSem = cls.semesters.find(s => s.id === activeTab);
+                if (currentSem && currentSem.uts && currentSem.uts.length > 0) {
+                    if (!currentSem.uts.some(u => u.id === activeUTTab)) {
+                        setActiveUTTab(currentSem.uts[0].id);
+                    }
+                }
+            }, [activeTab, activeClassId, classes, activeUTTab]);
 
             useEffect(() => {
                 const handleClickOutside = (e) => {
@@ -1936,21 +2079,37 @@
                         initialData = parsed.map(cls => {
                             let newCls = {...cls};
                             if (newCls.seatingChartMain === undefined) newCls.seatingChartMain = "";
-                            if (!newCls.semesters || !Array.isArray(newCls.semesters)) {
-                                newCls.semesters = [
-                                    { id: 'S1', name: '1r Semestre', isActive: true, competencies: newCls.competencies ? newCls.competencies : [] },
-                                    { id: 'S2', name: '2n Semestre', isActive: false, competencies: [] },
-                                    { id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() },
-                                    { id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() }
-                                ];
-                            } else {
-                                let hasT1 = false; let hasT2 = false;
-                                newCls.semesters.forEach(s => { if (s.id === 'T1') hasT1 = true; if (s.id === 'T2') hasT2 = true; });
-                                if (!hasT1) newCls.semesters.push({ id: 'T1', name: 'Transversals 1', isActive: false, competencies: createTransversalStructure() });
-                                if (!hasT2) newCls.semesters.push({ id: 'T2', name: 'Transversals 2', isActive: false, competencies: createTransversalStructure() });
-                            }
                             if (!newCls.students) newCls.students = [];
                             if (!newCls.halfGroups) newCls.halfGroups = [];
+                            
+                            if (!newCls.semesters || !Array.isArray(newCls.semesters) || newCls.semesters.length === 0) {
+                                newCls.semesters = [
+                                    { id: 'S1', name: '1r Semestre', isActive: true, uts: createUTStructure(1, []) },
+                                    { id: 'S2', name: '2n Semestre', isActive: false, uts: createUTStructure(2, []) }
+                                ];
+                            } else {
+                                // MIGRACIÓ A NOU MODEL DE DADES (UTs)
+                                const hasUts = newCls.semesters[0] && newCls.semesters[0].uts !== undefined;
+                                if (!hasUts) {
+                                    const oldS1 = newCls.semesters.find(s => s.id === 'S1')?.competencies || [];
+                                    const oldS2 = newCls.semesters.find(s => s.id === 'S2')?.competencies || [];
+                                    const oldT1 = newCls.semesters.find(s => s.id === 'T1')?.competencies || [];
+                                    const oldT2 = newCls.semesters.find(s => s.id === 'T2')?.competencies || [];
+                                    
+                                    newCls.semesters = [
+                                        { id: 'S1', name: '1r Semestre', isActive: true, uts: [
+                                            { id: 'UT1', name: 'UT1', competencies: oldS1 },
+                                            { id: 'UT2', name: 'UT2', competencies: [] },
+                                            { id: 'TRANS1', name: 'Transversals', competencies: oldT1 }
+                                        ]},
+                                        { id: 'S2', name: '2n Semestre', isActive: false, uts: [
+                                            { id: 'UT3', name: 'UT3', competencies: oldS2 },
+                                            { id: 'UT4', name: 'UT4', competencies: [] },
+                                            { id: 'TRANS2', name: 'Transversals', competencies: oldT2 }
+                                        ]}
+                                    ];
+                                }
+                            }
                             return newCls;
                         });
                     } catch(e) { initialData = []; }
@@ -1960,6 +2119,9 @@
                     setHistory([initialData]); 
                     setHistoryIndex(0);
                     setActiveClassId(initialData.length > 0 ? initialData[0].id : null);
+                    if (initialData.length > 0 && initialData[0].semesters[0]?.uts?.[0]) {
+                        setActiveUTTab(initialData[0].semesters[0].uts[0].id);
+                    }
                     setHasLoadedFromFirebase(true);
                     setIsReady(true);
                 };
@@ -2065,12 +2227,16 @@
 
             const isGlobalView = activeTab === 'GLOBAL';
             let currentSemester = null;
+            let currentUT = null;
             if (currentClass && currentClass.semesters) {
                 const foundSem = currentClass.semesters.find(s => s.id === activeTab);
-                if (foundSem) currentSemester = foundSem;
+                if (foundSem) {
+                    currentSemester = foundSem;
+                    currentUT = foundSem.uts?.find(u => u.id === activeUTTab) || foundSem.uts?.[0];
+                }
             }
 
-            const activeCompetencies = currentSemester && currentSemester.competencies ? currentSemester.competencies : [];
+            const activeCompetencies = currentUT && currentUT.competencies ? currentUT.competencies : [];
             const visibleCompsList = activeCompetencies.filter(c => { 
                 const visibleSet = visibleCompetencies[activeClassId]; 
                 if (!visibleSet || visibleSet.length === 0) return true;
@@ -2102,13 +2268,17 @@
                     
                     if (c.semesters) {
                         c.semesters.forEach(sem => {
-                            if (sem.competencies) {
-                                sem.competencies.forEach(comp => {
-                                    if (comp.criteria) {
-                                        comp.criteria.forEach(crit => {
-                                            if (crit.indicators && crit.indicators.some(i => i.id === iid)) {
-                                                parentCritId = crit.id;
-                                                parentCompId = comp.id;
+                            if (sem.uts) {
+                                sem.uts.forEach(ut => {
+                                    if (ut.competencies) {
+                                        ut.competencies.forEach(comp => {
+                                            if (comp.criteria) {
+                                                comp.criteria.forEach(crit => {
+                                                    if (crit.indicators && crit.indicators.some(i => i.id === iid)) {
+                                                        parentCritId = crit.id;
+                                                        parentCompId = comp.id;
+                                                    }
+                                                });
                                             }
                                         });
                                     }
@@ -2130,36 +2300,29 @@
                 }));
             };
             
-            const renameItem = (type, itemId, parentId, grandParentId) => {
+            const renameItem = (type, itemId) => {
                 const newName = prompt("Nou nom:"); 
                 if (!newName || newName.trim() === "") return;
                 
                 const newClasses = classes.map(c => { 
                     if (c.id !== activeClassId) return c; 
                     
-                    if (type === 'comp') {
-                        let oldName = "";
-                        const currentSem = c.semesters.find(s => s.id === activeTab);
-                        if (currentSem && currentSem.competencies) {
-                            const compTarget = currentSem.competencies.find(x => x.id === itemId);
-                            if (compTarget) oldName = compTarget.name;
-                        }
-
-                        return {
-                            ...c,
-                            semesters: c.semesters.map(s => ({
-                                ...s,
-                                competencies: (s.competencies ? s.competencies : []).map(x => (x.id === itemId || (oldName !== "" && x.name === oldName)) ? { ...x, name: newName } : x)
-                            }))
-                        };
-                    }
-                    
                     return { ...c, semesters: c.semesters.map(s => { 
                         if (s.id !== activeTab) return s; 
-                        return {...s, competencies: s.competencies.map(comp => { 
-                            if(type === 'crit') return {...comp, criteria: comp.criteria.map(x => x.id===itemId ? {...x, name:newName} : x)}; 
-                            if(type === 'ind') return {...comp, criteria: comp.criteria.map(crit => ({...crit, indicators: crit.indicators.map(x => x.id===itemId ? {...x, name:newName} : x)}))}; 
-                            return comp; 
+                        return { ...s, uts: s.uts.map(u => {
+                            if (u.id !== activeUTTab) return u;
+                            let newComps = [...(u.competencies || [])];
+                            
+                            if (type === 'comp') {
+                                newComps = newComps.map(x => x.id === itemId ? { ...x, name: newName } : x);
+                            } else {
+                                newComps = newComps.map(comp => { 
+                                    if(type === 'crit') return {...comp, criteria: (comp.criteria || []).map(x => x.id===itemId ? {...x, name:newName} : x)}; 
+                                    if(type === 'ind') return {...comp, criteria: (comp.criteria || []).map(crit => ({...crit, indicators: (crit.indicators || []).map(x => x.id===itemId ? {...x, name:newName} : x)}))}; 
+                                    return comp; 
+                                });
+                            }
+                            return { ...u, competencies: newComps };
                         })}; 
                     })}; 
                 });
@@ -2172,12 +2335,21 @@
                     if (c.id !== activeClassId) return c; 
                     return { ...c, semesters: c.semesters.map(s => { 
                         if (s.id !== activeTab) return s; 
-                        if(type === 'comp') return {...s, competencies: s.competencies.filter(x => x.id !== itemId)}; 
-                        return {...s, competencies: s.competencies.map(comp => { 
-                            if(type === 'crit' && comp.id === parentId) return {...comp, criteria: (comp.criteria || []).filter(x => x.id !== itemId)}; 
-                            if(type === 'ind' && comp.id === grandParentId) return {...comp, criteria: (comp.criteria || []).map(crit => crit.id === parentId ? {...crit, indicators: (crit.indicators || []).filter(x => x.id !== itemId)} : crit)}; 
-                            return comp; 
-                        })}; 
+                        return { ...s, uts: s.uts.map(u => {
+                            if (u.id !== activeUTTab) return u;
+                            let newComps = [...(u.competencies || [])];
+                            
+                            if(type === 'comp') {
+                                newComps = newComps.filter(x => x.id !== itemId);
+                            } else {
+                                newComps = newComps.map(comp => { 
+                                    if(type === 'crit' && comp.id === parentId) return {...comp, criteria: (comp.criteria || []).filter(x => x.id !== itemId)}; 
+                                    if(type === 'ind' && comp.id === grandParentId) return {...comp, criteria: (comp.criteria || []).map(crit => crit.id === parentId ? {...crit, indicators: (crit.indicators || []).filter(x => x.id !== itemId)} : crit)}; 
+                                    return comp; 
+                                });
+                            }
+                            return { ...u, competencies: newComps };
+                        })};
                     })}; 
                 });
                 updateClasses(newClasses);
@@ -2194,45 +2366,63 @@
                     if (c.id !== activeClassId) return c; 
                     return { ...c, semesters: c.semesters.map(s => { 
                         if (s.id !== activeTab) return s; 
-                        if(type === 'comp') { 
-                            const color = COMP_COLORS_ORDER[s.competencies.length % COMP_COLORS_ORDER.length]; 
-                            return {...s, competencies: [...s.competencies, {id:generateUUID(), name: name, color: color, criteria:[]}]}; 
-                        } 
-                        return {...s, competencies: s.competencies.map(comp => { 
-                            if(type === 'crit' && comp.id === parentId) return {...comp, criteria: [...(comp.criteria || []), {id:generateUUID(), name: name, indicators:[{id:generateUUID(), name: "IA 1", description: ""}]}]}; 
-                            if(type === 'ind' && comp.id === grandParentId) return {...comp, criteria: (comp.criteria || []).map(crit => crit.id === parentId ? {...crit, indicators: [...(crit.indicators || []), {id:generateUUID(), name: name, description: ""}]} : crit)}; 
-                            return comp; 
-                        })}; 
+                        return { ...s, uts: s.uts.map(u => {
+                            if (u.id !== activeUTTab) return u;
+                            let newComps = [...(u.competencies || [])];
+                            
+                            if(type === 'comp') { 
+                                const color = COMP_COLORS_ORDER[newComps.length % COMP_COLORS_ORDER.length]; 
+                                newComps.push({id:generateUUID(), name: name, color: color, criteria:[]});
+                            } else {
+                                newComps = newComps.map(comp => { 
+                                    if(type === 'crit' && comp.id === parentId) return {...comp, criteria: [...(comp.criteria || []), {id:generateUUID(), name: name, indicators:[{id:generateUUID(), name: "IA 1", description: ""}]}]}; 
+                                    if(type === 'ind' && comp.id === grandParentId) return {...comp, criteria: (comp.criteria || []).map(crit => crit.id === parentId ? {...crit, indicators: [...(crit.indicators || []), {id:generateUUID(), name: name, description: ""}]} : crit)}; 
+                                    return comp; 
+                                });
+                            }
+                            return { ...u, competencies: newComps };
+                        })};
                     })}; 
                 });
                 updateClasses(newClasses);
             };
             
-            const handleCopyTable = (targetId, compIds) => {
-                const sourceComps = currentSemester.competencies.filter(c => compIds.includes(c.id));
+            const handleCopyTable = (targetClassId, targetSemId, targetUTId, compIds) => {
+                const sourceComps = currentUT.competencies.filter(c => compIds.includes(c.id));
+                // Clonar amb nous UUIDs per poder avaluar per separat
                 const clonedComps = sourceComps.map(c => ({ 
                     ...c, id: generateUUID(), criteria: (c.criteria || []).map(k => ({ ...k, id: generateUUID(), indicators: (k.indicators || []).map(i => ({ ...i, id: generateUUID() })) })) 
                 }));
 
                 const newClasses = classes.map(c => { 
-                    if (c.id !== targetId) return c; 
+                    if (c.id !== targetClassId) return c; 
                     return { ...c, semesters: c.semesters.map(s => { 
-                        if (s.id !== activeTab) return s; 
-                        let newComps = [...(s.competencies || [])]; 
-                        clonedComps.forEach(clone => { 
-                            const idx = newComps.findIndex(nc => nc.name === clone.name); 
-                            if (idx !== -1) newComps[idx] = clone; else newComps.push(clone); 
-                        }); 
-                        return { ...s, competencies: newComps }; 
+                        if (s.id !== targetSemId) return s; 
+                        return { ...s, uts: s.uts.map(u => {
+                            if (u.id !== targetUTId) return u;
+                            let newComps = [...(u.competencies || [])]; 
+                            clonedComps.forEach(clone => { 
+                                const idx = newComps.findIndex(nc => nc.name === clone.name); 
+                                if (idx !== -1) newComps[idx] = clone; else newComps.push(clone); 
+                            }); 
+                            return { ...u, competencies: newComps };
+                        })};
                     }) }; 
                 });
                 updateClasses(newClasses);
+                
+                // Actualitzar visibilitat perquè es mostrin immediatament
+                setVisibleCompetencies(prev => {
+                    if (!prev[targetClassId]) return prev;
+                    return { ...prev, [targetClassId]: [...prev[targetClassId], ...clonedComps.map(c => c.id)] };
+                });
+                
                 alert("Estructura copiada amb èxit!");
             };
 
             const getFlatIndicators = (comps) => {
                 let list = [];
-                comps.forEach(c => { if(c.criteria) c.criteria.forEach(crit => { if(crit.indicators) crit.indicators.forEach(i => list.push(i)); }); });
+                comps.forEach(c => { if(c.criteria) c.criteria.forEach(crit => { if(crit.indicators) crit.indicators.forEach(i => { list.push({...i, parentNames: `${c.name} > ${crit.name}`}) }); }); });
                 return list;
             };
 
@@ -2257,13 +2447,19 @@
                             if(s.id !== activeTab) return s;
                             return {
                                 ...s,
-                                competencies: s.competencies.map(comp => {
-                                    if(comp.id !== compId) return comp;
+                                uts: s.uts.map(u => {
+                                    if(u.id !== activeUTTab) return u;
                                     return {
-                                        ...comp,
-                                        criteria: (comp.criteria || []).map(crit => {
-                                            if(crit.id !== critId) return crit;
-                                            return { ...crit, indicators: (crit.indicators || []).map(ind => ind.id !== id ? ind : {...ind, description: desc}) }
+                                        ...u,
+                                        competencies: u.competencies.map(comp => {
+                                            if(comp.id !== compId) return comp;
+                                            return {
+                                                ...comp,
+                                                criteria: (comp.criteria || []).map(crit => {
+                                                    if(crit.id !== critId) return crit;
+                                                    return { ...crit, indicators: (crit.indicators || []).map(ind => ind.id !== id ? ind : {...ind, description: desc}) }
+                                                })
+                                            }
                                         })
                                     }
                                 })
@@ -2310,60 +2506,76 @@
                 }
                 const wb = window.XLSX.utils.book_new(); 
                 window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(d), currentClass.name.substring(0,31)); 
-                window.XLSX.writeFile(wb, `avaluacio_${currentClass.name}.xlsx`); 
-            };
-
-            const handleExportJSON = () => {
-                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(JSON.stringify(classes));
-                const linkElement = document.createElement('a');
-                linkElement.setAttribute('href', dataUri);
-                linkElement.setAttribute('download', `avaluapro_backup_${new Date().toISOString().slice(0,10)}.json`);
-                linkElement.click();
+                window.XLSX.writeFile(wb, `avaluacio_${currentClass.name}_${currentUT?.name||''}.xlsx`); 
             };
 
             const handleImportJSON = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                if (!confirm("Atenció: En carregar aquest arxiu se sobreescriurà l'estat actual i es guardarà al núvol. Estàs segur?")) { e.target.value = null; return; }
                 const reader = new FileReader();
-                reader.onload = (ev) => {
+                reader.onload = (event) => {
                     try {
-                        const parsed = JSON.parse(ev.target.result);
-                        if (Array.isArray(parsed)) window.inicialitzarDades(parsed); else alert("L'arxiu no té un format vàlid per a AvaluaPro.");
-                    } catch (err) { alert("Error llegint l'arxiu JSON."); }
+                        const parsed = JSON.parse(event.target.result);
+                        if (Array.isArray(parsed)) {
+                            // Aprofitem la funció global d'inicialització perquè passi el procés de migració 
+                            // i desa la informació correctament evitant errors d'estructures antigues.
+                            window.inicialitzarDades(parsed);
+                            alert("Dades importades i adaptades correctament des del fitxer JSON.");
+                        } else {
+                            alert("El format del fitxer no és vàlid. Es requereix un Array de classes.");
+                        }
+                    } catch (error) {
+                        console.error("Error llegint JSON:", error);
+                        alert("S'ha produït un error en llegir el fitxer JSON. És possible que estigui corrupte.");
+                    }
+                    e.target.value = null; // Resetejar l'input per poder tornar a importar
                 };
                 reader.readAsText(file);
-                e.target.value = null; 
             };
 
             const renderGlobalDashboard = () => { 
                 if (!currentClass || !currentClass.semesters) return <div className="p-10 text-center text-gray-500 font-bold text-xl">Sense dades suficients.</div>;
                 
-                const studentStats = {}; const criteriaStats = { S1: {}, S2: {} }; const compStats = {};
-                const semesterCounts = { S1: {A:0,B:0,C:0,D:0}, S2: {A:0,B:0,C:0,D:0} };
-                const semesterCompCounts = { S1: {}, S2: {} }; const progressMap = []; 
+                const studentStats = {}; 
+                const criteriaStats = {}; // { 'UT1': { 'Comp Name': [ { name: critName, counts: {A,B,C,D} } ] } }
+                const compStats = {}; // Global per Comp Name
+                const utCounts = {}; // { 'UT1': {A,B,C,D}, 'UT2': ... }
+                const utCompCounts = {}; // { 'UT1': { 'Comp Name': {A,B,C,D} } }
+                const progressMap = []; 
+                const allUtsOrder = []; // Per mantenir l'ordre temporal de les UTs
+                const allCompNames = new Set(); // Llista global de noms de competències
 
                 try {
+                    // Pre-processament d'estructures
                     currentClass.semesters.forEach(sem => {
-                        if (sem.id !== 'S1' && sem.id !== 'S2') return;
-                        if (sem.competencies) sem.competencies.forEach(comp => { if(!compStats[comp.name]) compStats[comp.name] = { name: comp.name, grades: [], color: comp.color }; });
-                        if(!semesterCompCounts[sem.id]) semesterCompCounts[sem.id] = {};
-                        Object.keys(compStats).forEach(cName => { if(!semesterCompCounts[sem.id][cName]) semesterCompCounts[sem.id][cName] = { A:0, B:0, C:0, D:0 }; });
-                        if(!semesterCounts[sem.id]) semesterCounts[sem.id] = {A:0,B:0,C:0,D:0};
-                        
-                        if (sem.competencies) {
-                            sem.competencies.forEach(comp => {
-                                if(!criteriaStats[sem.id][comp.name]) criteriaStats[sem.id][comp.name] = [];
-                                if(comp.criteria) {
-                                    comp.criteria.forEach(crit => {
-                                        let cStats = { name: crit.name, compName: comp.name, counts: {A:0,B:0,C:0,D:0} };
-                                        (currentClass.students || []).forEach(s => {
-                                            let marks = []; 
-                                            if(crit.indicators) crit.indicators.forEach(i => { if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); });
-                                            const g = (s.marks && s.marks[`override_${crit.id}`]) || calculateGrade(marks);
-                                            if(g && g !== 'NA') cStats.counts[g]++;
-                                        });
-                                        criteriaStats[sem.id][comp.name].push(cStats);
+                        if (sem.uts) {
+                            sem.uts.forEach(ut => {
+                                if (ut.id.startsWith('TRANS')) return; // IGNORAR TRANSVERSALS DE LES ESTADÍSTIQUES (Només taula de notes)
+                                
+                                allUtsOrder.push(ut.id);
+                                utCounts[ut.id] = {A:0,B:0,C:0,D:0};
+                                utCompCounts[ut.id] = {};
+                                criteriaStats[ut.id] = {};
+                                
+                                if (ut.competencies) {
+                                    ut.competencies.forEach(comp => {
+                                        allCompNames.add(comp.name);
+                                        if(!compStats[comp.name]) compStats[comp.name] = { name: comp.name, grades: [], color: comp.color };
+                                        if(!utCompCounts[ut.id][comp.name]) utCompCounts[ut.id][comp.name] = { A:0, B:0, C:0, D:0 };
+                                        if(!criteriaStats[ut.id][comp.name]) criteriaStats[ut.id][comp.name] = [];
+                                        
+                                        if(comp.criteria) {
+                                            comp.criteria.forEach(crit => {
+                                                let cStats = { name: crit.name, compName: comp.name, counts: {A:0,B:0,C:0,D:0} };
+                                                (currentClass.students || []).forEach(s => {
+                                                    let marks = []; 
+                                                    if(crit.indicators) crit.indicators.forEach(i => { if(s.marks && s.marks[i.id]) marks.push(s.marks[i.id]); });
+                                                    const g = (s.marks && s.marks[`override_${crit.id}`]) || calculateGrade(marks);
+                                                    if(g && g !== 'NA') cStats.counts[g]++;
+                                                });
+                                                criteriaStats[ut.id][comp.name].push(cStats);
+                                            });
+                                        }
                                     });
                                 }
                             });
@@ -2371,75 +2583,85 @@
                     });
 
                     let assolit = 0; let proces = 0; let noAssolit = 0;
-                    let riskStudentsList = []; let attentionStudentsList = [];
+                    let riskStudentsList = []; let attentionStudentsList = []; let highStudentsList = [];
 
                     (currentClass.students || []).forEach(s => {
                         studentStats[s.id] = { name: s.name, timePoints: [], radarFirst: {}, radarLast: {}, finalAvg: 0, studentId: s.id };
                         let allG = [];
                         
-                        currentClass.semesters.forEach(sem => {
-                            if (sem.id !== 'S1' && sem.id !== 'S2') return;
-                            let semG = [];
-                            if (sem.competencies) {
-                                sem.competencies.forEach(comp => {
-                                    let compMarks = []; 
-                                    if(comp.criteria) {
-                                        comp.criteria.forEach(c => {
-                                            let critMarks = [];
-                                            if(c.indicators) c.indicators.forEach(i => { if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); }); 
-                                            const cg = (s.marks && s.marks[`override_${c.id}`]) || calculateGrade(critMarks);
-                                            if (cg) compMarks.push(cg);
+                        allUtsOrder.forEach(utId => {
+                            let utG = [];
+                            currentClass.semesters.forEach(sem => {
+                                if (sem.uts) {
+                                    const ut = sem.uts.find(u => u.id === utId);
+                                    if (ut && ut.competencies) {
+                                        ut.competencies.forEach(comp => {
+                                            let compMarks = []; 
+                                            if(comp.criteria) {
+                                                comp.criteria.forEach(c => {
+                                                    let critMarks = [];
+                                                    if(c.indicators) c.indicators.forEach(i => { if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); }); 
+                                                    const cg = (s.marks && s.marks[`override_${c.id}`]) || calculateGrade(critMarks);
+                                                    if (cg) compMarks.push(cg);
+                                                });
+                                            }
+                                            
+                                            const finalCompGrade = (s.marks && s.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
+                                            if(finalCompGrade) { 
+                                                const n = getNumericFromGrade(finalCompGrade); 
+                                                allG.push(n); utG.push(n); 
+                                                if(!studentStats[s.id].radarFirst[comp.name]) studentStats[s.id].radarFirst[comp.name] = n; 
+                                                studentStats[s.id].radarLast[comp.name] = n; 
+                                                compStats[comp.name].grades.push(n);
+
+                                                let displayGrade = finalCompGrade === 'NA' ? 'D' : finalCompGrade; 
+                                                if (['A', 'B', 'C', 'D'].includes(displayGrade)) {
+                                                    utCounts[utId][displayGrade]++;
+                                                    utCompCounts[utId][comp.name][displayGrade]++;
+                                                }
+                                            }
                                         });
                                     }
-                                    
-                                    const finalCompGrade = (s.marks && s.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
-                                    if(finalCompGrade) { 
-                                        const n = getNumericFromGrade(finalCompGrade); 
-                                        allG.push(n); semG.push(n); 
-                                        if(!studentStats[s.id].radarFirst[comp.name]) studentStats[s.id].radarFirst[comp.name] = n; 
-                                        studentStats[s.id].radarLast[comp.name] = n; 
-                                        compStats[comp.name].grades.push(n);
-
-                                        let displayGrade = finalCompGrade === 'NA' ? 'D' : finalCompGrade; 
-                                        if (['A', 'B', 'C', 'D'].includes(displayGrade)) {
-                                            semesterCounts[sem.id][displayGrade]++;
-                                            semesterCompCounts[sem.id][comp.name][displayGrade]++;
-                                        }
-                                    }
-                                });
-                            }
-                            if(semG.length > 0) studentStats[s.id].timePoints.push(semG.reduce((a,b)=>a+b,0)/semG.length);
+                                }
+                            });
+                            // Si hi ha hagut notes en aquesta UT, ho guardem com a timePoint evolutiu
+                            if(utG.length > 0) studentStats[s.id].timePoints.push(utG.reduce((a,b)=>a+b,0)/utG.length);
                         });
                         
                         const finalAvg = allG.length ? allG.reduce((a,b)=>a+b,0)/allG.length : 0;
                         studentStats[s.id].finalAvg = finalAvg;
 
-                        if (finalAvg >= 2.5) assolit++;
+                        if (finalAvg >= 2.5) { assolit++; highStudentsList.push({ id: s.id, name: s.name, finalAvg }); }
                         else if (finalAvg > 1.5) { proces++; attentionStudentsList.push({ id: s.id, name: s.name, finalAvg }); }
                         else if (finalAvg > 0) { noAssolit++; riskStudentsList.push({ id: s.id, name: s.name, finalAvg }); }
                     });
 
-                    currentClass.semesters.forEach(sem => {
-                        if (sem.id !== 'S1' && sem.id !== 'S2') return;
-                        let semSum = 0; let semCount = 0;
-                        if (sem.competencies) {
-                            sem.competencies.forEach(comp => {
-                                (currentClass.students || []).forEach(s => {
-                                    let compMarks = []; 
-                                    if(comp.criteria) {
-                                        comp.criteria.forEach(c => {
-                                            let critMarks = [];
-                                            if(c.indicators) c.indicators.forEach(i => { if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); }); 
-                                            const cg = (s.marks && s.marks[`override_${c.id}`]) || calculateGrade(critMarks);
-                                            if (cg) compMarks.push(cg);
+                    // Calculem la mitjana global de la classe per cada UT per a progressMap
+                    allUtsOrder.forEach(utId => {
+                        let utSum = 0; let utCount = 0;
+                        currentClass.semesters.forEach(sem => {
+                            if (sem.uts) {
+                                const ut = sem.uts.find(u => u.id === utId);
+                                if (ut && ut.competencies) {
+                                    ut.competencies.forEach(comp => {
+                                        (currentClass.students || []).forEach(s => {
+                                            let compMarks = []; 
+                                            if(comp.criteria) {
+                                                comp.criteria.forEach(c => {
+                                                    let critMarks = [];
+                                                    if(c.indicators) c.indicators.forEach(i => { if(s.marks && s.marks[i.id]) critMarks.push(s.marks[i.id]); }); 
+                                                    const cg = (s.marks && s.marks[`override_${c.id}`]) || calculateGrade(critMarks);
+                                                    if (cg) compMarks.push(cg);
+                                                });
+                                            }
+                                            const fg = (s.marks && s.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
+                                            if (fg) { utSum += getNumericFromGrade(fg); utCount++; }
                                         });
-                                    }
-                                    const fg = (s.marks && s.marks[`override_${comp.id}`]) || calculateGrade(compMarks);
-                                    if (fg) { semSum += getNumericFromGrade(fg); semCount++; }
-                                });
-                            });
-                        }
-                        if (semCount > 0) progressMap.push(semSum / semCount);
+                                    });
+                                }
+                            }
+                        });
+                        if (utCount > 0) progressMap.push(utSum / utCount);
                     });
 
                     Object.keys(compStats).forEach(k => {
@@ -2458,27 +2680,22 @@
                     let iecgExplanation = "Nivells similars en totes les competències.";
                     if (worstComp && bestComp && range > 0.5) iecgExplanation = `Desequilibri de ${range.toFixed(2)} punts entre la més alta (${bestComp.name}: ${bestComp.avg.toFixed(2)}) i la més baixa (${worstComp.name}: ${worstComp.avg.toFixed(2)}).`;
 
-                    let compNamesSet = [];
-                    currentClass.semesters.forEach(sem => {
-                        if (sem.id === 'S1' || sem.id === 'S2') {
-                            if(sem.competencies) sem.competencies.forEach(c => { if (!compNamesSet.includes(c.name)) compNamesSet.push(c.name); });
-                        }
-                    });
-
                     const stats = { 
-                        studentStats, criteriaStats, compStats, bestComp, worstComp, semesterCounts, semesterCompCounts,
+                        studentStats, criteriaStats, compStats, bestComp, worstComp, utCounts, utCompCounts,
                         iecg: { range, level: iecgLevel }, iecgExplanation, progressMap, 
-                        achievement: { assolit, proces, noAssolit, total: assolit+proces+noAssolit, riskStudents: riskStudentsList, attentionStudents: attentionStudentsList },
-                        allCompNames: compNamesSet
+                        achievement: { assolit, proces, noAssolit, total: assolit+proces+noAssolit, riskStudents: riskStudentsList, highStudents: highStudentsList, attentionStudents: attentionStudentsList },
+                        allCompNames: Array.from(allCompNames),
+                        allUtsOrder
                     };
 
                     const handleToggleComp = (name) => setExpandedComps(prev => ({...prev, [name]: !prev[name]})); 
 
                     return (
                         <div className="p-6 space-y-6 pb-20">
+                            {/* BLOC 1: COMPARATIVA DE NOTES */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icon name="scale-balanced" className="text-blue-500"/> Comparativa de Notes per Competències (1r vs 2n Semestre)</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icon name="scale-balanced" className="text-blue-500"/> Comparativa de Notes per Unitat de Treball (UT)</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     {['A', 'B', 'C', 'D'].map(grade => {
                                         const styleClass = getGradeColor(grade);
                                         const [bgLight, textDark, borderClass] = styleClass.split(' '); 
@@ -2486,16 +2703,18 @@
                                         return (
                                             <div key={grade} className={`rounded-xl border-2 ${borderClass} bg-white shadow-sm overflow-hidden flex flex-col`}>
                                                 <div className={`${bgLight} ${textDark} text-center py-3 border-b ${borderClass}`}><div className="text-3xl font-black">{grade}</div></div>
-                                                <div className="flex-1 grid grid-cols-2 divide-x divide-gray-100">
-                                                    {['S1', 'S2'].map((semId, i) => {
-                                                        const totalForGrade = stats.semesterCounts[semId] ? stats.semesterCounts[semId][grade] : 0;
+                                                <div className="flex-1 flex flex-row overflow-x-auto custom-scroll divide-x divide-gray-100">
+                                                    {stats.allUtsOrder.map((utId, i) => {
+                                                        const totalForGrade = stats.utCounts[utId] ? stats.utCounts[utId][grade] : 0;
+                                                        // Ocultar UTs sense notes per a aquesta nota
+                                                        if (totalForGrade === 0 && !stats.utCounts[utId]) return null;
                                                         return (
-                                                            <div key={semId} className="p-3 bg-gray-50/50 hover:bg-gray-50 transition">
-                                                                <div className="text-center font-bold text-gray-700 border-b border-gray-200 pb-1 mb-2">{i===0 ? '1r Sem' : '2n Sem'} ({totalForGrade})</div>
+                                                            <div key={utId} className="p-3 bg-gray-50/50 hover:bg-gray-50 transition min-w-[120px] flex-1">
+                                                                <div className="text-center font-bold text-gray-700 border-b border-gray-200 pb-1 mb-2">{utId} ({totalForGrade})</div>
                                                                 <div className="space-y-1.5 mt-2">
-                                                                    {stats.semesterCompCounts[semId] && Object.keys(stats.semesterCompCounts[semId]).map(cName => {
-                                                                        const counts = stats.semesterCompCounts[semId][cName];
-                                                                        if (counts[grade] > 0) return (<div key={cName} className="flex justify-between text-[11px] items-center pb-1 border-b border-gray-100 last:border-0"><span className="text-gray-600 font-medium pr-2 text-left">{cName}</span><span className={`font-bold px-1.5 rounded ${bgLight} ${textDark}`}>{counts[grade]}</span></div>);
+                                                                    {stats.utCompCounts[utId] && Object.keys(stats.utCompCounts[utId]).map(cName => {
+                                                                        const counts = stats.utCompCounts[utId][cName];
+                                                                        if (counts[grade] > 0) return (<div key={cName} className="flex justify-between text-[11px] items-center pb-1 border-b border-gray-100 last:border-0"><span className="text-gray-600 font-medium pr-2 text-left truncate">{cName}</span><span className={`font-bold px-1.5 rounded ${bgLight} ${textDark}`}>{counts[grade]}</span></div>);
                                                                         return null;
                                                                     })}
                                                                     {totalForGrade === 0 && <div className="text-center text-xs text-gray-400 py-2">-</div>}
@@ -2510,18 +2729,27 @@
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 overflow-hidden">
-                                <div className="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center">
+                            {/* BLOC 2: DIAGNÒSTIC GLOBAL */}
+                            <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 relative z-10">
+                                <div className="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center rounded-t-2xl">
                                     <div><h3 className="font-bold text-xl">Diagnòstic Global de Classe</h3><p className="text-sm opacity-90">En què he d’intervenir? El grup avança equilibradament?</p></div>
                                     <Icon name="stethoscope" className="text-3xl opacity-50"/>
                                 </div>
                                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
-                                        <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Equilibri Competencial</h4>
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center relative group">
+                                        <div className="flex justify-between">
+                                            <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Equilibri Competencial</h4>
+                                            <Icon name="circle-info" className="text-gray-400 text-sm cursor-pointer hover:text-gray-600" />
+                                        </div>
                                         <div className="text-2xl font-black text-gray-800">{stats.iecg.level.split(' ')[0]}</div>
                                         <div className="text-sm font-bold text-gray-600 mb-3">{stats.iecg.level.substring(2)}</div>
                                         <div className="w-full bg-gray-200 rounded-full h-2 mb-2"><div className="h-2 rounded-full bg-blue-500" style={{width: `${Math.min(100, stats.iecg.range*25)}%`, backgroundColor: stats.iecg.range > 1.5 ? '#ef4444' : stats.iecg.range > 0.8 ? '#f97316' : '#22c55e'}}></div></div>
                                         <p className="text-xs text-gray-500 font-medium leading-tight">{stats.iecgExplanation}</p>
+                                        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 bg-gray-800 text-white text-xs p-3 rounded-lg shadow-xl z-[60] pointer-events-none">
+                                            Aquesta targeta mesura la desviació de notes entre competències de la matèria.<br/><br/>
+                                            Com més equilibrades, més a prop del valor ideal (verd). Si hi ha una gran diferència de nota entre la millor competència i la pitjor, la barra pujarà (vermell) assenyalant un desequilibri formatiu.
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+                                        </div>
                                     </div>
                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
                                         <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Tendència Global</h4>
@@ -2532,7 +2760,9 @@
                                         <h4 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Nivells d'Assoliment</h4>
                                         <div className="flex h-24 items-center justify-center relative"><ChartComponent type="doughnut" className="h-full w-full" data={{labels: ['Assolit', 'Procés', 'No'], datasets: [{ data: [stats.achievement.assolit, stats.achievement.proces, stats.achievement.noAssolit], backgroundColor: ['#22c55e', '#eab308', '#ef4444'], borderWidth: 0 }]}} options={{ cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }}/><div className="absolute text-center z-10 flex flex-col items-center justify-center"><span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-none">Total</span><span className="font-black text-2xl text-gray-700 leading-tight">{stats.achievement.total}</span></div></div>
                                         <div className="flex justify-between items-center text-xs font-bold mt-3 px-2">
-                                            <span className="text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 shadow-sm">High: {stats.achievement.total > 0 ? Math.round(stats.achievement.assolit/stats.achievement.total*100) : 0}%</span>
+                                            <button onClick={() => setShowHighModal(stats.achievement.highStudents)} className="text-green-600 bg-green-50 px-2 py-1 rounded border border-transparent hover:border-green-200 hover:bg-green-100 transition shadow-sm cursor-pointer">
+                                                High: {stats.achievement.total > 0 ? Math.round(stats.achievement.assolit/stats.achievement.total*100) : 0}%
+                                            </button>
                                             <button onClick={() => setShowRiskModal(stats.achievement.riskStudents)} className="text-red-600 bg-red-50 px-2 py-1 rounded border border-transparent hover:border-red-200 hover:bg-red-100 transition shadow-sm cursor-pointer">
                                                 Risc: {stats.achievement.total > 0 ? Math.round(stats.achievement.noAssolit/stats.achievement.total*100) : 0}%
                                             </button>
@@ -2547,6 +2777,7 @@
                                 </div>
                             </div>
 
+                            {/* BLOC 3: EVOLUCIÓ INDIVIDUAL I ANÀLISI */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
                                     <div className="flex justify-between items-center mb-6">
@@ -2616,13 +2847,21 @@
                                 </div>
                             </div>
 
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            {/* BLOC 4: DISTRIBUCIÓ PER CRITERIS */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 w-full col-span-full block">
                                 <h3 className="font-bold text-xl text-gray-800 mb-6"><Icon name="layer-group" className="text-orange-500 mr-2"/> Distribució per Criteris d'Avaluació</h3>
                                 <div className="space-y-4">
                                     {stats.allCompNames.map(compName => {
                                         const compInfo = stats.compStats[compName];
                                         const styles = compInfo ? COMP_COLORS_STYLES[compInfo.color ? compInfo.color : 'blue'] : COMP_COLORS_STYLES['gray'];
                                         
+                                        // Càlcul del nombre màxim de criteris per aquesta competència per crear les columnes de la taula
+                                        let maxCriteria = 0;
+                                        stats.allUtsOrder.forEach(utId => {
+                                            const crits = stats.criteriaStats[utId]?.[compName] || [];
+                                            if (crits.length > maxCriteria) maxCriteria = crits.length;
+                                        });
+
                                         return (
                                             <div key={compName} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                                                 <button onClick={() => handleToggleComp(compName)} className={`w-full flex justify-between items-center p-4 transition ${expandedComps[compName] ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'}`}>
@@ -2630,24 +2869,45 @@
                                                     <div className="flex items-center gap-4"><Icon name={expandedComps[compName] ? "chevron-up" : "chevron-down"} className="text-gray-400"/></div>
                                                 </button>
                                                 {expandedComps[compName] && (
-                                                    <div className="flex flex-col lg:flex-row gap-6 p-6 border-t border-gray-200 animate-fade-in bg-gray-50/50">
-                                                        {currentClass.semesters.filter(sem => sem.id === 'S1' || sem.id === 'S2').map((sem, sIdx) => (
-                                                            <div key={sem.id} className="flex-1 w-full lg:w-1/2">
-                                                                <h5 className="font-bold text-gray-600 border-b border-gray-300 pb-2 mb-4 uppercase tracking-wider text-sm">{sem.name}</h5>
-                                                                <div className="space-y-3">
-                                                                    {stats.criteriaStats[sem.id] && stats.criteriaStats[sem.id][compName] && stats.criteriaStats[sem.id][compName].map((c,i)=>(
-                                                                        <div key={i} className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow transition">
-                                                                            <div className="font-bold text-gray-800 mb-3 line-clamp-2 h-10 leading-tight text-sm" title={c.name}>{c.name}</div>
-                                                                            <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 mb-2">
-                                                                                <div style={{width:`${c.counts.A/(stats.achievement.total||1)*100}%`}} className="bg-green-500"/><div style={{width:`${c.counts.B/(stats.achievement.total||1)*100}%`}} className="bg-blue-500"/><div style={{width:`${c.counts.C/(stats.achievement.total||1)*100}%`}} className="bg-yellow-500"/><div style={{width:`${c.counts.D/(stats.achievement.total||1)*100}%`}} className="bg-red-500"/>
-                                                                            </div>
-                                                                            <div className="flex justify-between text-xs font-bold mt-2"><span className="text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">Excel·lents: {c.counts.A}</span><span className="text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">Suspesos: {c.counts.D}</span></div>
-                                                                        </div>
-                                                                    ))}
-                                                                    {(!stats.criteriaStats[sem.id] || !stats.criteriaStats[sem.id][compName] || stats.criteriaStats[sem.id][compName].length === 0) && <p className="text-sm text-gray-400 italic text-center py-4">Sense criteris avaluats en aquest semestre.</p>}
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                                    <div className="p-6 border-t border-gray-200 animate-fade-in bg-gray-50/50 overflow-x-auto custom-scroll w-full">
+                                                        {maxCriteria === 0 ? (
+                                                            <p className="text-sm text-gray-400 italic text-center py-4">Sense criteris avaluats per a aquesta competència.</p>
+                                                        ) : (
+                                                            <table className="w-full text-sm text-left table-auto">
+                                                                <thead className="bg-gray-100 text-gray-600">
+                                                                    <tr>
+                                                                        <th className="p-3 font-bold uppercase tracking-wider text-xs">Moment (UT)</th>
+                                                                        {Array.from({length: maxCriteria}).map((_, i) => (
+                                                                            <th key={i} className="p-3 font-bold uppercase tracking-wider text-xs border-l border-gray-200">Criteri {i+1}</th>
+                                                                        ))}
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-gray-200 bg-white">
+                                                                    {stats.allUtsOrder.map(utId => {
+                                                                        const crits = stats.criteriaStats[utId]?.[compName] || [];
+                                                                        if (crits.length === 0) return null;
+                                                                        return (
+                                                                            <tr key={utId} className="hover:bg-gray-50 transition-colors">
+                                                                                <td className="p-3 font-bold text-gray-800 align-top break-words">{utId}</td>
+                                                                                {Array.from({length: maxCriteria}).map((_, i) => {
+                                                                                    const c = crits[i];
+                                                                                    if (!c) return <td key={i} className="p-3 border-l border-gray-100 bg-gray-50/30 align-top"><span className="text-gray-300 italic text-xs">-</span></td>;
+                                                                                    return (
+                                                                                        <td key={i} className="p-3 border-l border-gray-100 align-top min-w-[200px] flex-1">
+                                                                                            <div className="font-bold text-xs mb-2 line-clamp-2 h-8 leading-tight" title={c.name}>{c.name}</div>
+                                                                                            <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 mb-2 shadow-inner">
+                                                                                                <div style={{width:`${c.counts.A/(stats.achievement.total||1)*100}%`}} className="bg-green-500"/><div style={{width:`${c.counts.B/(stats.achievement.total||1)*100}%`}} className="bg-blue-500"/><div style={{width:`${c.counts.C/(stats.achievement.total||1)*100}%`}} className="bg-yellow-500"/><div style={{width:`${c.counts.D/(stats.achievement.total||1)*100}%`}} className="bg-red-500"/>
+                                                                                            </div>
+                                                                                            <div className="flex justify-between text-[10px] font-bold mt-1 opacity-80"><span className="text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-100">Exc: {c.counts.A}</span><span className="text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Susp: {c.counts.D}</span></div>
+                                                                                        </td>
+                                                                                    )
+                                                                                })}
+                                                                            </tr>
+                                                                        )
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -2658,17 +2918,28 @@
                         </div>
                     );
                 } catch(e) {
+                    console.error(e);
                     return <div className="p-10 text-center text-red-500 font-bold text-xl">Error carregant estadístiques. Si us plau recarrega la pàgina.</div>;
                 }
             };
 
             const renderSpreadsheet = () => {
                 if (!currentClass) return <div className="p-10 text-center text-gray-500 font-bold text-xl">Selecciona o crea una classe per començar.</div>;
+                if (!currentUT) return <div className="p-10 text-center text-gray-500 font-bold text-xl">Configuració d'UTs invàlida per a aquest semestre.</div>;
                 
                 const filteredStudents = (currentClass.students || []).filter(s => !activeHalfGroupFilter || s.halfGroup === activeHalfGroupFilter);
 
                 return (
                     <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 flex flex-col h-full">
+                        {/* Sub-Pestanyes de les UTs del semestre */}
+                        <div className="bg-gray-100 px-4 py-2 flex gap-2 border-b border-gray-200 shadow-inner overflow-x-auto hide-scrollbar shrink-0">
+                            {currentSemester.uts.map(ut => (
+                                <button key={ut.id} onClick={() => setActiveUTTab(ut.id)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${activeUTTab === ut.id ? 'bg-white text-brand-600 shadow-sm border border-gray-200' : 'text-gray-500 hover:bg-gray-200'}`}>
+                                    {ut.name}
+                                </button>
+                            ))}
+                        </div>
+
                         <div className="p-3 bg-gray-50 border-b flex flex-wrap justify-between items-center shrink-0 z-[60] relative gap-2">
                             <div className="flex items-center space-x-2">
                                 <button onClick={() => setIsEditingStructure(!isEditingStructure)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 ${isEditingStructure ? 'bg-orange-100 text-orange-700 shadow-inner' : 'bg-white text-gray-600 border hover:bg-gray-50 shadow-sm'}`}><Icon name={isEditingStructure ? "lock" : "pen-to-square"} />{isEditingStructure ? "Bloquejar Taula" : "Editar Taula"}</button>
@@ -2727,7 +2998,7 @@
                                             const styles = COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] ? COMP_COLORS_STYLES[comp.color ? comp.color : 'blue'] : COMP_COLORS_STYLES['blue'];
                                             return (
                                                 <th key={comp.id} colSpan={totalCols} className={`p-3 text-center border-b border-r font-black min-w-[220px] text-lg ${styles.text} relative group border-t-4 shadow-sm`} style={{backgroundColor: styles.light, borderColor: styles.border, borderTopColor: styles.header.replace('bg-','') }}>
-                                                    <span onClick={() => isEditingStructure && renameItem('comp', comp.id, null, null)} className={isEditingStructure ? "cursor-pointer hover:underline border-b border-dashed" : ""}>{comp.name}</span>
+                                                    <span onClick={() => isEditingStructure && renameItem('comp', comp.id)} className={isEditingStructure ? "cursor-pointer hover:underline border-b border-dashed" : ""}>{comp.name}</span>
                                                     {isEditingStructure && (
                                                         <div className="absolute top-2 right-2 flex gap-1">
                                                             <button onClick={() => deleteItem('comp', comp.id, null, null)} className="text-red-500 bg-white/60 hover:bg-white rounded w-7 h-7 flex items-center justify-center shadow-sm transition"><Icon name="trash"/></button>
@@ -2745,7 +3016,7 @@
                                                 <React.Fragment key={comp.id}>
                                                     {(comp.criteria ? comp.criteria : []).map(crit => (
                                                         <th key={crit.id} colSpan={(crit.indicators ? crit.indicators.length : 0) + 1} className="p-2 text-center border-b border-r font-bold text-xs uppercase relative group shadow-sm" style={{backgroundColor: styles.light, borderColor: styles.border}}>
-                                                            <span onClick={() => isEditingStructure && renameItem('crit', crit.id, null, null)} className={`block py-1 ${isEditingStructure ? "cursor-pointer hover:underline border-b border-dashed" : ""}`}>{crit.name}</span>
+                                                            <span onClick={() => isEditingStructure && renameItem('crit', crit.id)} className={`block py-1 ${isEditingStructure ? "cursor-pointer hover:underline border-b border-dashed" : ""}`}>{crit.name}</span>
                                                             {isEditingStructure && (
                                                                 <div className="absolute top-1 right-1 flex gap-1">
                                                                     <button onClick={() => deleteItem('crit', crit.id, comp.id, null)} className="text-red-500 bg-white rounded-full w-5 h-5 opacity-0 group-hover:opacity-100 shadow-sm transition"><Icon name="xmark"/></button>
@@ -2767,7 +3038,7 @@
                                                         {(crit.indicators ? crit.indicators : []).map(ind => (
                                                             <th key={ind.id} className="p-0 border-b border-r bg-white font-medium text-gray-600 min-w-[5rem] w-24 text-center text-xs group/ind hover:bg-gray-50 transition z-10 relative">
                                                                 <div className="w-full h-full p-2 flex items-center justify-center relative">
-                                                                    <span onClick={() => isEditingStructure && renameItem('ind', ind.id, null, null)} className={`block truncate max-w-[80%] ${isEditingStructure ? 'cursor-pointer hover:text-brand-600 border-b border-dashed border-brand-300 pb-0.5' : ''}`} title={ind.name}>{ind.name}</span>
+                                                                    <span onClick={() => isEditingStructure && renameItem('ind', ind.id)} className={`block truncate max-w-[80%] ${isEditingStructure ? 'cursor-pointer hover:text-brand-600 border-b border-dashed border-brand-300 pb-0.5' : ''}`} title={ind.name}>{ind.name}</span>
                                                                     <button onClick={() => setEditingIndicatorDesc({id: ind.id, compId: comp.id, critId: crit.id, currentDesc: ind.description ? ind.description : ""})} className="ml-1 text-gray-400 hover:text-blue-500 focus:outline-none shrink-0" title="Informació / Descripció"><Icon name="circle-info" className="text-[10px]" /></button>
                                                                     {isEditingStructure && (<button onClick={() => deleteItem('ind', ind.id, crit.id, comp.id)} className="absolute -top-2 -right-2 text-white bg-red-500 rounded-full w-4 h-4 text-[8px] flex items-center justify-center opacity-0 group-hover/ind:opacity-100 shadow z-20"><Icon name="xmark"/></button>)}
                                                                 </div>
@@ -2900,12 +3171,13 @@
                         <StudentNotesModal isOpen={!!showStudentNotes} onClose={() => setShowStudentNotes(null)} student={showStudentNotes} onSave={updateStudentNotes} onOpenProfile={(s) => { setShowStudentNotes(null); setShowStudentProfile(s); }} />
                         <StudentProfileModal isOpen={!!showStudentProfile} onClose={() => setShowStudentProfile(null)} studentData={showStudentProfile} classData={currentClass} onSaveNotes={updateStudentNotes} />
                         <GlobalNotesModal isOpen={showGlobalNotes} onClose={() => setShowGlobalNotes(false)} students={currentClass?.students} />
-                        <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemester={currentSemester} onCopy={handleCopyTable} />
-                        <SemesterStatsModal isOpen={showSemesterStats} onClose={() => setShowSemesterStats(false)} competencies={currentSemester?.competencies} students={currentClass?.students} />
+                        <CopyTableModal isOpen={showCopyTable} onClose={() => setShowCopyTable(false)} classes={classes} currentClassId={activeClassId} currentSemId={activeTab} currentUTId={activeUTTab} currentUT={currentUT} onCopy={handleCopyTable} />
+                        <UTStatsModal isOpen={showUTStats} onClose={() => setShowUTStats(false)} competencies={currentUT?.competencies} students={currentClass?.students} utName={currentUT?.name} />
                         <BulkImportModal isOpen={showBulkImport} onClose={() => setShowBulkImport(false)} students={currentClass?.students} indicators={getFlatIndicators(visibleCompsList)} onImport={handleBulkImportSave} />
                         <IndicatorDescModal isOpen={!!editingIndicatorDesc} onClose={() => setEditingIndicatorDesc(null)} data={editingIndicatorDesc} onSave={saveIndicatorDescription} />
                         <StudentEvolutionModal isOpen={!!showStudentEvoModal} onClose={() => setShowStudentEvoModal(null)} studentData={showStudentEvoModal} classData={currentClass} />
                         <RiskStudentsModal isOpen={!!showRiskModal} onClose={() => setShowRiskModal(null)} students={showRiskModal} />
+                        <HighStudentsModal isOpen={!!showHighModal} onClose={() => setShowHighModal(null)} students={showHighModal} />
                         <ResetCourseModal isOpen={showResetModal} onClose={() => setShowResetModal(false)} onBackup={handleBackupBeforeReset} onConfirm={handleConfirmReset} />
                         <CloudBackupModal isOpen={showCloudBackupModal} onClose={() => setShowCloudBackupModal(false)} currentData={classes} />
 
@@ -2956,8 +3228,8 @@
                                             <Icon name="chart-pie" /> Dashboard Global
                                         </button>
                                         {activeTab !== 'GLOBAL' && (
-                                            <button onClick={() => setShowSemesterStats(true)} className="px-4 py-2 mb-1 text-xs font-bold text-gray-500 hover:text-brand-600 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 transition ml-2 flex items-center gap-2 whitespace-nowrap">
-                                                <Icon name="chart-simple" /> Estadístiques
+                                            <button onClick={() => setShowUTStats(true)} className="px-4 py-2 mb-1 text-xs font-bold text-gray-500 hover:text-brand-600 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 transition ml-2 flex items-center gap-2 whitespace-nowrap">
+                                                <Icon name="chart-simple" /> Estadístiques de la UT
                                             </button>
                                         )}
                                     </div>
@@ -2967,7 +3239,7 @@
                                                 {renderGlobalDashboard()}
                                             </div>
                                         ) : (
-                                            <div className="flex-1 p-6 h-full overflow-hidden flex flex-col">
+                                            <div className="flex-1 h-full overflow-hidden flex flex-col">
                                                 {renderSpreadsheet()}
                                             </div>
                                         )}
