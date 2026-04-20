@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agenda Docent</title>
     
+    <script>
+        // TRICK: Interceptem missatges des del primer instant (evita la pèrdua si React triga a carregar)
+        window.earlyImportData = null;
+        window.addEventListener('message', function(event) {
+            let data = event.data;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch(e) {}
+            }
+            if (data && data.type === 'FROM_PROGRAMADOR') {
+                console.log("📥 [Early Listener] Missatge atrapat abans que React estigui llest!", data);
+                window.earlyImportData = data;
+            }
+        });
+    </script>
+
     <!-- Estils CSS (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -269,10 +284,9 @@
       }
 
       // FUNCIONS CLOUD ADAPTADES A NOVA ARQUITECTURA
-      window.saveAgendaToCloud = async (dataStr) => {
-          if (!window.currentUser) return;
-          try {
-              const dataObj = JSON.parse(dataStr);
+      window.saveAgendaToCloud = async (dataObj) => {
+    if (!window.currentUser) return;
+    try {
               const { config, weeksData, radar, holidayWeeks, reminders } = dataObj;
               const userId = window.currentUser.uid;
 
@@ -288,11 +302,13 @@
               if (weeksData && Object.keys(weeksData).length > 0) {
                   console.log("Guardant setmanes al núvol:", Object.keys(weeksData).length);
                   for (const weekId in weeksData) {
-                      await setDoc(
-                          doc(db, "agenda_docent_weeks", userId, "weeks", weekId),
-                          weeksData[weekId]
-                      );
-                  }
+    if (!weeksData[weekId]) continue;
+
+    await setDoc(
+        doc(db, "agenda_docent_weeks", userId, "weeks", weekId),
+        weeksData[weekId]
+    );
+}
               }
           } catch(e) { console.error("Firebase save error", e); }
       };
@@ -3482,16 +3498,51 @@
                                 <div className="grid grid-cols-2 gap-4">
                                     <button onClick={() => executePendingAction('skipped')} className="p-4 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 font-bold flex flex-col items-center transition-colors">
                                         <span className="text-2xl mb-2">❌</span>
-                                        No feta
-                                        <span className="text-xs font-normal mt-1 text-center">(Es tatxa i es mou a la propera amb icona 🔴)</span>
-                                    </button>
-                                    <button onClick={() => executePendingAction('unfinished')} className="p-4 bg-orange-50 text-orange-700 border border-orange-200 rounded hover:bg-orange-100 font-bold flex flex-col items-center transition-colors">
-                                        <span className="text-2xl mb-2">🚧</span>
                                         Inacabada
                                         <span className="text-xs font-normal mt-1 text-center">(Es subratlla i es mou a la propera amb icona ⚠️)</span>
                                     </button>
                                 </div>
                                 <button onClick={() => setPendingActionTask(null)} className="mt-4 w-full py-2 text-gray-500 hover:bg-gray-100 rounded transition-colors">Cancel·lar</button>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {showAddClassModal && ReactDOM.createPortal(
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddClassModal(false)}></div>
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative animate-in zoom-in duration-200">
+                                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                        <Icons.Plus className="text-blue-500"/> Afegir Classe Extra
+                                    </h3>
+                                    <button onClick={() => setShowAddClassModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </div>
+                                <div className="space-y-4 mb-6">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dia</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.day} onChange={e => setNewExtra({...newExtra, day: parseInt(e.target.value)})}>
+                                            {WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hora</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.slot} onChange={e => setNewExtra({...newExtra, slot: parseInt(e.target.value)})}>
+                                            {TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Grup / Classe</label>
+                                        <select className="w-full border p-2 rounded" value={newExtra.classId} onChange={e => setNewExtra({...newExtra, classId: e.target.value})}>
+                                            <option value="">Selecciona grup...</option>
+                                            {config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowAddClassModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                                    <button onClick={handleAddExtraClass} disabled={!newExtra.classId} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 disabled:opacity-50">Afegir</button>
+                                </div>
                             </div>
                         </div>,
                         document.body
@@ -3516,10 +3567,10 @@
                                             <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
                                             <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                                         </div>
-                                        <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 transition-colors">Enganxar Aquí</button>
+                                        <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">Enganxar Aquí</button>
                                     </div>
                                 </div>
-                                <div className="flex justify-end gap-2 mt-4"><button onClick={() => setShowCopyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded transition-colors">Cancel·lar</button></div>
+                                <div className="flex justify-end gap-2 mt-4"><button onClick={() => setShowCopyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button></div>
                             </div>
                         </div>,
                         document.body
@@ -3529,168 +3580,199 @@
         };
 
         const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfirm, onClose }) => {
-            const [selectedClassId, setSelectedClassId] = useState("");
-            const [selectedUT, setSelectedUT] = useState("");
+            const [selectedClasses, setSelectedClasses] = useState([]);
+            const [startUT, setStartUT] = useState("");
 
             useEffect(() => {
                 if (data.courseName) {
-                    const cleanCourse = data.courseName.toLowerCase().replace(/[^a-z0-9]/g, '');
-name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanCourse) || cleanCourse.includes(c.name.toLowerCase().replace(/[^a-z0-9]/g, '')));
-                    if (found) setSelectedClassId(found.id);
+                    const normalizedIncoming = stripClassLetter(data.courseName).toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const matchedClass = config.classes.find(c => {
+                        const normalizedExisting = stripClassLetter(c.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+                        return normalizedExisting === normalizedIncoming;
+                    });
+                    
+                    if (matchedClass) {
+                        setSelectedClasses([matchedClass.id]);
+                    } else if (config.classes.length > 0) {
+                        setSelectedClasses([config.classes[0].id]);
+                    }
+                } else if (config.classes.length > 0) {
+                    setSelectedClasses([config.classes[0].id]);
                 }
-                if (!selectedClassId && config.classes.length > 0) {
-                    setSelectedClassId(config.classes[0].id);
-                }
-            }, [data, config]);
+            }, [data.courseName, config.classes]);
 
-            const handleProcess = () => {
-                if (!selectedClassId) return alert("Selecciona una classe destí");
+            const handleClassToggle = (classId) => {
+                setSelectedClasses(prev => 
+                    prev.includes(classId) 
+                        ? prev.filter(id => id !== classId)
+                        : [...prev, classId]
+                );
+            };
+
+            const processImport = () => {
+                if (selectedClasses.length === 0) {
+                    alert("Selecciona almenys una classe per importar les dades.");
+                    return;
+                }
 
                 let newWeeksData = JSON.parse(JSON.stringify(weeksData));
-                let totalInserted = 0;
-                let totalMissing = 0;
+                let inserted = 0;
+                let missing = 0;
 
                 const allWeeks = generateAllWeeks(config.schoolYear);
-                
-                let startDate = new Date(config.schoolYear, 8, 1);
-                let endDate = new Date(parseInt(config.schoolYear) + 1, 6, 15);
-                
-                if (selectedUT) {
-                     const targetUT = config.utDates.find(u => u.id === selectedUT);
-                     if (targetUT) {
-                         endDate = new Date(targetUT.date);
-                         endDate.setHours(23, 59, 59, 999);
-                         const sortedUTs = [...config.utDates].sort((a,b) => new Date(a.date) - new Date(b.date));
-                         const utIndex = sortedUTs.findIndex(ut => ut.id === targetUT.id);
-                         if (utIndex > 0) startDate = new Date(sortedUTs[utIndex - 1].date);
-                     }
+                allWeeks.sort((a, b) => a.startDate - b.startDate);
+
+                let utStartDate = null;
+                if (startUT) {
+                    const utIndex = config.utDates.findIndex(ut => ut.id === startUT);
+                    if (utIndex > 0) {
+                        utStartDate = new Date(config.utDates[utIndex - 1].date);
+                    } else {
+                        utStartDate = new Date(config.schoolYear, 8, 1);
+                    }
                 }
 
-                let classSessions = [];
-                allWeeks.forEach(w => {
-                    const isHoliday = holidayWeeks?.includes(w.id);
-                    for (let d = 0; d < 5; d++) {
-                        for (let s = 0; s < TIME_SLOTS.length; s++) {
-                            const slot = TIME_SLOTS[s];
-                            if (slot.type === 'break') continue;
-                            
-                            const isGlobal = config.schedule[d]?.[slot.id] === selectedClassId;
-                            const isExtra = newWeeksData[w.id]?.extraClasses?.[d]?.[slot.id] === selectedClassId;
-                            
-                            if (isGlobal || isExtra) {
-                                const prevSlot = TIME_SLOTS[s - 1];
-                                const isCovered = prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === selectedClassId;
-                                if (isCovered) continue;
+                selectedClasses.forEach(classId => {
+                    let currentSessionIndex = 0;
+                    const sessionsToImport = data.sessions || [];
 
-                                const dateStr = addDays(w.id, d);
-                                const [y, m, day] = dateStr.split('-');
-                                const sessionDate = new Date(y, m - 1, day, 12, 0, 0);
+                    allWeeks.forEach(w => {
+                        if (utStartDate && new Date(w.endDate) < utStartDate) return;
+                        if (holidayWeeks?.includes(w.id)) return;
+                        if (!newWeeksData[w.id]) newWeeksData[w.id] = {};
+                        
+                        for (let d = 0; d < 5; d++) {
+                            for (let s = 0; s < TIME_SLOTS.length; s++) {
+                                const slot = TIME_SLOTS[s];
+                                if (slot.type === 'break') continue;
+                                
+                                const isGlobal = config.schedule[d]?.[slot.id] === classId;
+                                const isExtra = newWeeksData[w.id].extraClasses?.[d]?.[slot.id] === classId;
+                                
+                                if (isGlobal || isExtra) {
+                                    const prevSlot = TIME_SLOTS[s - 1];
+                                    const isCovered = prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                                    if (isCovered) continue;
 
-                                if (sessionDate >= startDate && sessionDate <= endDate) {
-                                    const cellData = newWeeksData[w.id]?.[`${d}-${slot.id}`] || {};
-                                    classSessions.push({
-                                        weekId: w.id,
-                                        dayIndex: d,
-                                        slotId: slot.id,
-                                        isHoliday: isHoliday,
-                                        isZzz: cellData.status === 'zzz',
-                                        tasks: cellData.tasks || []
-                                    });
+                                    const cellKey = `${d}-${slot.id}`;
+                                    const cellData = newWeeksData[w.id][cellKey] || {};
+                                    
+                                    if (cellData.status === 'zzz') continue;
+
+                                    const hasExistingTasks = cellData.tasks && cellData.tasks.some(t => t.text && t.text.trim() !== '');
+                                    
+                                    if (!hasExistingTasks && currentSessionIndex < sessionsToImport.length) {
+                                        const pSess = sessionsToImport[currentSessionIndex];
+                                        const parsedTime = parseInt(pSess.time) || null;
+
+                                        const formattedTasks = pSess.tasks ? pSess.tasks.map(t => ({
+                                            text: t.text || t,
+                                            time: t.time || "",
+                                            status: null
+                                        })) : [];
+
+                                        while (formattedTasks.length < 3) formattedTasks.push({text: "", time: "", status: null});
+
+                                        newWeeksData[w.id][cellKey] = {
+                                            ...newWeeksData[w.id][cellKey],
+                                            tasks: formattedTasks.slice(0, 3) 
+                                        };
+
+                                        if (parsedTime) {
+                                            newWeeksData[w.id][cellKey].tasks[0].time = parsedTime.toString();
+                                        }
+
+                                        if (pSess.materials) {
+                                            const materialsText = typeof pSess.materials === "string" ? pSess.materials : "";
+                                            const existingMats = newWeeksData[w.id][cellKey].materials || "";
+                                            newWeeksData[w.id][cellKey].materials = existingMats ? `${existingMats}\n${materialsText}` : materialsText;
+                                        }
+
+                                        if (pSess.links && Array.isArray(pSess.links)) {
+                                            const existingLinks = newWeeksData[w.id][cellKey].links || [];
+                                            newWeeksData[w.id][cellKey].links = [
+                                                ...existingLinks,
+                                                ...pSess.links.map(l => ({
+                                                    title: l.title || "",
+                                                    url: l.url || ""
+                                                }))
+                                            ];
+                                        }
+                                        
+                                        inserted++;
+                                        currentSessionIndex++;
+                                    }
                                 }
                             }
                         }
+                    });
+                    
+                    if (currentSessionIndex < sessionsToImport.length) {
+                        missing += (sessionsToImport.length - currentSessionIndex);
                     }
                 });
 
-                let agendaIndex = 0;
-                const progSessions = data.sessions;
-
-                for (let i = 0; i < progSessions.length; i++) {
-                    const pSess = progSessions[i];
-                    let placed = false;
-
-                    while (agendaIndex < classSessions.length) {
-                        const sess = classSessions[agendaIndex];
-                        
-                        // LÒGICA CLAU: Comprovem si la sessió ja té text escrit prèviament
-                        const hasExistingText = sess.tasks.some(t => t && t.text && t.text.trim() !== '');
-
-                        // Saltem si és festiu, si està cancel·lada (zzz), o si JA TÉ TEXT (evitem sobreescriure)
-                        if (sess.isHoliday || sess.isZzz || hasExistingText) {
-                            agendaIndex++;
-                            continue;
-                        }
-
-                        // Hem trobat un forat buit real!
-                        const wId = sess.weekId;
-                        const cellKey = `${sess.dayIndex}-${sess.slotId}`;
-                        
-                        if (!newWeeksData[wId]) newWeeksData[wId] = {};
-                        if (!newWeeksData[wId][cellKey]) newWeeksData[wId][cellKey] = {};
-                        
-                        const newTasks = [];
-                        if (pSess.activities && pSess.activities.length > 0) {
-                             pSess.activities.forEach(act => {
-                                 if (typeof act === 'string') newTasks.push({ text: act, time: "", status: null });
-                                 else newTasks.push({ text: act.title || act.name || act.text || "", time: act.duration || act.time || "", status: null });
-                             });
-                        }
-                        while (newTasks.length < 3) newTasks.push({ text: "", time: "", status: null });
-                        newWeeksData[wId][cellKey].tasks = newTasks.slice(0, 10);
-                        
-                        if (pSess.materials) {
-                            const existingMats = newWeeksData[wId][cellKey].materials || "";
-                            newWeeksData[wId][cellKey].materials = existingMats ? `${existingMats}\n${pSess.materials}` : pSess.materials;
-                        }
-
-                        placed = true;
-                        agendaIndex++;
-                        totalInserted++;
-                        break; 
-                    }
-
-                    if (!placed) {
-                        totalMissing++;
-                    }
-                }
-
-                onConfirm(newWeeksData, totalInserted, totalMissing);
+                onConfirm(newWeeksData, inserted, missing);
             };
 
             return (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative animate-in zoom-in duration-200">
-                        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                            <Icons.Download className="text-blue-500"/> Confirmar Importació
-                        </h3>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] fade-in">
+                    <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl border-t-4 border-blue-500 max-h-[90vh] flex flex-col">
+                        <div className="shrink-0">
+                            <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-blue-800">
+                                <Icons.Download /> Importar Programació
+                            </h3>
+                            <div className="bg-blue-50 text-blue-800 p-3 rounded-lg mb-4 text-sm border border-blue-100">
+                                S'han rebut <strong>{data.sessions?.length || 0} sessions</strong> de Programador Docent per a la unitat <strong>{data.utName || 'Sense nom'}</strong>.
+                            </div>
+                        </div>
                         
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-6 text-sm text-blue-800">
-                            <p className="mb-2">S'han rebut <b>{data.sessions.length} sessions</b> del programador.</p>
-                            <p>Aquest assistent col·locarà les sessions <b>només als espais buits</b> (dies on no tinguis res escrit encara), respectant els festius i les classes cancel·lades.</p>
-                        </div>
-
-                        <div className="space-y-4 mb-6">
+                        <div className="flex-1 overflow-y-auto custom-scroll pr-2 space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">A quina classe ho importem?</label>
-                                <select className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500" value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}>
-                                    <option value="">Selecciona la classe...</option>
-                                    {config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">1. Selecciona les classes de destí:</label>
+                                <div className="space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                    {config.classes.length === 0 ? (
+                                        <p className="text-sm text-gray-500 italic">No tens classes configurades.</p>
+                                    ) : (
+                                        config.classes.map(c => (
+                                            <label key={c.id} className="flex items-center gap-2 cursor-pointer p-1 hover:bg-white rounded transition-colors">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    checked={selectedClasses.includes(c.id)}
+                                                    onChange={() => handleClassToggle(c.id)}
+                                                />
+                                                <span className="text-sm font-medium text-gray-800">{c.name}</span>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
                             </div>
+                            
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">A partir de quina Unitat (Opcional)?</label>
-                                <select className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500" value={selectedUT} onChange={e => setSelectedUT(e.target.value)}>
-                                    <option value="">Des del dia d'avui / Inici de curs</option>
-                                    {config.utDates?.map(ut => <option key={ut.id} value={ut.id}>{ut.name}</option>)}
+                                <label className="block text-sm font-bold text-gray-700 mb-2">2. A partir de quina UT vols començar? (Opcional)</label>
+                                <select 
+                                    className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                                    value={startUT}
+                                    onChange={(e) => setStartUT(e.target.value)}
+                                >
+                                    <option value="">Des del principi del curs / espais buits</option>
+                                    {config.utDates && config.utDates.sort((a,b) => new Date(a.date) - new Date(b.date)).map(ut => (
+                                        <option key={ut.id} value={ut.id}>A partir de {ut.name} (Iniciant després de la UT anterior)</option>
+                                    ))}
                                 </select>
+                                <p className="text-xs text-gray-500 mt-2">Les sessions s'inseriran només als espais buits, saltant festius i classes anul·lades.</p>
                             </div>
                         </div>
-
-                        <div className="flex justify-end gap-2">
-                            <button onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-medium">Cancel·lar</button>
-                            <button onClick={handleProcess} disabled={!selectedClassId} className="px-5 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                                Importar a l'Agenda
+                        
+                        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100 shrink-0">
+                            <button onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded transition-colors">Cancel·lar</button>
+                            <button 
+                                onClick={processImport} 
+                                disabled={selectedClasses.length === 0}
+                                className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50"
+                            >
+                                Importar Sessions
                             </button>
                         </div>
                     </div>
@@ -3699,239 +3781,173 @@ name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanCourse) || cleanCours
         };
 
         const App = () => {
-            const [view, setView] = useState('dashboard');
-            const [config, setConfig] = useState({
-                teacherName: "",
-                schoolYear: new Date().getFullYear().toString(),
-                theme: "orange",
-                classes: [],
-                schedule: {},
-                durations: {},
-                utDates: [],
-                classMaterials: {},
-                googleSheetUrl: "",
-                taskTrackingUrl: ""
-            });
+            const [config, setConfig] = useState(null);
             const [weeksData, setWeeksData] = useState({});
             const [radar, setRadar] = useState([]);
             const [holidayWeeks, setHolidayWeeks] = useState([]);
             const [reminders, setReminders] = useState({});
+            
+            const [view, setView] = useState('dashboard');
             const [currentWeekId, setCurrentWeekId] = useState(null);
             const [selectedClassId, setSelectedClassId] = useState(null);
+
             const [pendingImportData, setPendingImportData] = useState(null);
 
-            // --- RECEPTOR NOU I ROBUST DEL PROGRAMADOR ---
+            useEffect(() => {
+                const handleFirebaseReady = () => {
+                    const el = document.getElementById('app-loader');
+                    if (el) el.style.opacity = '0';
+                    setTimeout(() => { if (el) el.style.display = 'none'; }, 500);
+
+                    if (window.cloudAgendaData) {
+                        setConfig(window.cloudAgendaData.config || { teacherName: "", schoolYear: new Date().getFullYear(), theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [] });
+                        setWeeksData(window.cloudAgendaData.weeksData || {});
+                        setRadar(window.cloudAgendaData.radar || []);
+                        setHolidayWeeks(window.cloudAgendaData.holidayWeeks || []);
+                        setReminders(window.cloudAgendaData.reminders || {});
+                    } else {
+                        setConfig({ teacherName: "", schoolYear: new Date().getFullYear(), theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [] });
+                    }
+                };
+
+                if (window.firebaseInitialized) handleFirebaseReady();
+                else window.addEventListener('firebaseReady', handleFirebaseReady);
+                
+                return () => window.removeEventListener('firebaseReady', handleFirebaseReady);
+            }, []);
+
             useEffect(() => {
                 const handleMessage = (event) => {
-                    if (!event.data || event.data.type !== "PROGRAMADOR_TO_AGENDA") return;
-                    console.log("📥 REBUT DEL PROGRAMADOR:", event.data);
-                    
-                    if (!event.data.sessions || event.data.sessions.length === 0) {
-                        alert("⚠️ S'han rebut dades, però no hi ha cap sessió per importar.");
+                    // Mirem si hi ha dades guardades pel listener inicial (trick)
+                    if (window.earlyImportData) {
+                        console.log("📥 Carregant dades pendents del listener inicial:", window.earlyImportData);
+                        setPendingImportData(window.earlyImportData);
+                        window.earlyImportData = null; // Ho netegem perquè no salti en bucle
                         return;
                     }
 
-                    // Guardem les dades rebudes i obrim el modal d'importació per decidir
-                    setPendingImportData(event.data);
-                };
-
-                window.addEventListener("message", handleMessage);
-                return () => window.removeEventListener("message", handleMessage);
-            }, []);
-
-            // --- INICIALITZACIÓ PRINCIPAL ---
-            useEffect(() => {
-                const clearOldLocalStorage = () => {
-                    if (localStorage.getItem('agenda_data')) {
-                        localStorage.removeItem('agenda_data');
-                        console.log("LocalStorage netejat correctament");
-                    }
-                };
-
-                const loadLocalUI = () => {
-                    try {
-                        clearOldLocalStorage(); // Forcem la neteja de l'antic
-                        
-                        // Només carreguem preferències visuals lleugeres
-                        const savedConfig = localStorage.getItem('agenda_config');
-                        if (savedConfig) {
-                            const parsedUI = JSON.parse(savedConfig);
-                            if (parsedUI.theme) {
-                                setConfig(prev => ({ ...prev, theme: parsedUI.theme }));
-                            }
+                    let data = event.data;
+                    
+                    // Si arriba en string, mirem de parsejar-ho a JSON de forma segura
+                    if (typeof data === 'string') {
+                        try {
+                            data = JSON.parse(data);
+                        } catch (e) {
+                            return; // No és un JSON vàlid
                         }
-                        
-                        // Si no hi ha Firebase, assumim que estem a configuració inicial
-                        setView('config');
-                    } catch (e) {
-                        console.error("Error carregant dades locals", e);
-                        setView('config');
                     }
-                    
-                    const loader = document.getElementById('app-loader');
-                    if (loader) loader.style.display = 'none';
+
+                    if (!data || data.type !== 'FROM_PROGRAMADOR') return;
+                    console.log("📥 Dades rebudes del Programador (en calent):", data);
+                    setPendingImportData(data);
                 };
 
-                const applyCloudData = (parsed) => {
-                    if (parsed.config) setConfig(parsed.config);
-                    if (parsed.weeksData) setWeeksData(parsed.weeksData);
-                    if (parsed.radar) setRadar(parsed.radar);
-                    if (parsed.holidayWeeks) setHolidayWeeks(parsed.holidayWeeks);
-                    if (parsed.reminders) setReminders(parsed.reminders);
-                    window.currentAgendaData = JSON.stringify(parsed);
-                    setView(parsed.config?.classes?.length > 0 ? 'dashboard' : 'config');
-                    
-                    clearOldLocalStorage(); // Doble seguretat: netegem quan confirmem que hi ha núvol
-                };
-
-                // Esperem que Firebase estigui llest
-                if (window.firebaseInitialized) {
-                    if (window.cloudAgendaData) {
-                        applyCloudData(window.cloudAgendaData);
-                        const loader = document.getElementById('app-loader');
-                        if (loader) loader.style.display = 'none';
-                    } else {
-                        loadLocalUI();
-                    }
-                } else {
-                    window.addEventListener('firebaseReady', () => {
-                        if (window.cloudAgendaData) {
-                            applyCloudData(window.cloudAgendaData);
-                        } else {
-                            loadLocalUI();
-                        }
-                        const loader = document.getElementById('app-loader');
-                        if (loader) loader.style.display = 'none';
-                    });
-                    
-                    // Fallback de seguretat
-                    setTimeout(loadLocalUI, 2000);
-                }
-            }, []);
-
-            // --- FUNCIÓ DE GUARDAT LLEUGERA (LOCAL) I COMPLETA (NÚVOL) ---
-            const saveData = (newConfig, newWeeks, newRadar, newHolidays, newReminders) => {
-                const dataToSave = { 
-                    config: newConfig || config, 
-                    weeksData: newWeeks || weeksData,
-                    radar: newRadar || radar,
-                    holidayWeeks: newHolidays || holidayWeeks,
-                    reminders: newReminders || reminders
-                };
-                
-                // 1. Guardar NOMÉS preferències visuals a localStorage (Poc pes)
-                try {
-                    localStorage.setItem('agenda_config', JSON.stringify({
-                        theme: dataToSave.config.theme,
-                        lastView: view
-                    }));
-                } catch (e) {
-                    console.error("⚠️ Error guardant preferències a localStorage:", e);
+                // Comprovem just al muntar per si el listener inicial ja té dades
+                if (window.earlyImportData) {
+                    console.log("📥 Carregant dades pendents del listener inicial:", window.earlyImportData);
+                    setPendingImportData(window.earlyImportData);
+                    window.earlyImportData = null;
                 }
 
-                // 2. Tota la càrrega pesada s'envia a Firebase en segon pla
-                const dataStr = JSON.stringify(dataToSave);
-                window.currentAgendaData = dataStr;
-                if (window.saveAgendaToCloud) window.saveAgendaToCloud(dataStr);
+                window.addEventListener('message', handleMessage);
+                return () => window.removeEventListener('message', handleMessage);
+            }, []);
+
+            const saveData = async (c, w, r, h, rems) => {
+                if (!window.firebaseInitialized || !window.currentUser) return;
+                window.currentAgendaData = JSON.stringify({ config: c, weeksData: w, radar: r, holidayWeeks: h, reminders: rems });
+                await window.saveAgendaToCloud({ config: c, weeksData: w, radar: r, holidayWeeks: h, reminders: rems });
             };
 
-            const handleSaveConfig = (newConfig) => {
+            const handleConfigSave = (newConfig) => {
                 setConfig(newConfig);
                 saveData(newConfig, weeksData, radar, holidayWeeks, reminders);
-                setView('dashboard');
+                if (view === 'config') setView('dashboard');
             };
 
-            const handleUpdateWeekData = (wId, wData) => {
-                const newWeeks = { ...weeksData, [wId]: wData };
-                setWeeksData(newWeeks);
-                saveData(config, newWeeks, radar, holidayWeeks, reminders);
+            const handleUpdateWeekData = (weekId, newData) => {
+                const newWeeksData = { ...weeksData, [weekId]: newData };
+                setWeeksData(newWeeksData);
+                saveData(config, newWeeksData, radar, holidayWeeks, reminders);
             };
 
-            const handleToggleHoliday = (wId) => {
-                const newHolidays = holidayWeeks.includes(wId) 
-                    ? holidayWeeks.filter(id => id !== wId)
-                    : [...holidayWeeks, wId];
+            const handleToggleHoliday = (weekId) => {
+                const newHolidays = holidayWeeks.includes(weekId) 
+                    ? holidayWeeks.filter(id => id !== weekId)
+                    : [...holidayWeeks, weekId];
                 setHolidayWeeks(newHolidays);
                 saveData(config, weeksData, radar, newHolidays, reminders);
             };
 
-            const handleSaveReminder = (dateStr, updatedReminders) => {
-                const newReminders = { ...reminders, [dateStr]: updatedReminders };
-                if (updatedReminders.length === 0) delete newReminders[dateStr];
-                setReminders(newReminders);
-                saveData(config, weeksData, radar, holidayWeeks, newReminders);
+            const handleSaveReminder = (dateStr, newReminders) => {
+                const newRems = { ...reminders, [dateStr]: newReminders };
+                if (newReminders.length === 0) delete newRems[dateStr];
+                setReminders(newRems);
+                saveData(config, weeksData, radar, holidayWeeks, newRems);
+            };
+
+            const handleSelectWeek = (weekId) => {
+                setCurrentWeekId(weekId);
+                setView('planner');
+            };
+
+            const handleSelectClassView = (classId) => {
+                setSelectedClassId(classId);
+                setView('class_planner');
+            };
+
+            const handleReset = () => {
+                setConfig({ teacherName: "", schoolYear: new Date().getFullYear(), theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [] });
+                setWeeksData({});
+                setRadar([]);
+                setHolidayWeeks([]);
+                setReminders({});
+                saveData({ teacherName: "", schoolYear: new Date().getFullYear(), theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [] }, {}, [], [], {});
+                setView('config');
             };
 
             const handleExport = () => {
                 const dataStr = JSON.stringify({ config, weeksData, radar, holidayWeeks, reminders });
-                window.downloadBackupJSON(dataStr, `AgendaDocent_${window.getLocalYYYYMMDD(new Date())}.json`);
+                window.downloadBackupJSON(dataStr, 'AgendaDocent_Backup.json');
             };
 
             const handleImport = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (event) => {
+                reader.onload = (evt) => {
                     try {
-                        const parsed = JSON.parse(event.target.result);
-                        if (parsed.config && parsed.weeksData) {
-                            setConfig(parsed.config);
-                            setWeeksData(parsed.weeksData);
-                            setRadar(parsed.radar || []);
-                            setHolidayWeeks(parsed.holidayWeeks || []);
-                            setReminders(parsed.reminders || {});
-                            saveData(parsed.config, parsed.weeksData, parsed.radar, parsed.holidayWeeks, parsed.reminders);
-                            alert("✅ Dades importades correctament!");
-                            setView('dashboard');
-                        } else {
-                            alert("❌ Format d'arxiu incorrecte.");
-                        }
-                    } catch (err) {
-                        alert("❌ Error llegint l'arxiu.");
+                        const imported = JSON.parse(evt.target.result);
+                        setConfig(imported.config || { teacherName: "", schoolYear: new Date().getFullYear(), theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [] });
+                        setWeeksData(imported.weeksData || {});
+                        setRadar(imported.radar || []);
+                        setHolidayWeeks(imported.holidayWeeks || []);
+                        setReminders(imported.reminders || {});
+                        saveData(imported.config, imported.weeksData, imported.radar, imported.holidayWeeks, imported.reminders);
+                        alert("✅ Dades importades correctament!");
+                    } catch(err) {
+                        alert("❌ Error llegint l'arxiu. Comprova que sigui un backup vàlid.");
                     }
                 };
                 reader.readAsText(file);
             };
 
-            const handleReset = () => {
-                localStorage.removeItem('agenda_config');
-                localStorage.removeItem('agenda_data'); // Doble comprovació per assegurar-nos
-                if (window.currentUser && window.firebaseDb) {
-                    window.setDoc(window.doc(window.firebaseDb, "agenda_docent", window.currentUser.uid), {});
-                }
-                setConfig({
-                    teacherName: "", schoolYear: new Date().getFullYear().toString(), theme: "orange",
-                    classes: [], schedule: {}, durations: {}, utDates: [], classMaterials: {}, googleSheetUrl: "", taskTrackingUrl: ""
-                });
-                setWeeksData({});
-                setRadar([]);
-                setHolidayWeeks([]);
-                setReminders({});
-                window.currentAgendaData = null;
-                setView('config');
-            };
+            if (!config) return null;
 
-            // També actualitzem les dades quan canvia el radar
-            useEffect(() => {
-                if (radar.length > 0) saveData(config, weeksData, radar, holidayWeeks, reminders);
-            }, [radar]);
-
-            const handleSelectClassView = (cId) => {
-                setSelectedClassId(cId);
-                setView('class_planner');
-            };
+            if (config.classes.length === 0 && view !== 'config') {
+                return <ConfigScreen config={config} onSave={handleConfigSave} />;
+            }
 
             return (
-                <div className={`min-h-screen bg-${config.theme || 'orange'}-50/30 transition-colors duration-300 relative`}>
-                    {view === 'config' && <ConfigScreen config={config} onSave={handleSaveConfig} />}
+                <div className="min-h-screen relative pb-10">
+                    {view === 'config' && <ConfigScreen config={config} onSave={handleConfigSave} />}
                     
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={setRadar} onSelectWeek={(id) => { setCurrentWeekId(id); setView('planner'); }} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={handleSaveConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} onSaveReminder={handleSaveReminder} weeksData={weeksData} />}
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={(r) => { setRadar(r); saveData(config, weeksData, r, holidayWeeks, reminders); }} onSelectWeek={handleSelectWeek} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={(c) => { setConfig(c); saveData(c, weeksData, radar, holidayWeeks, reminders); }} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} onSaveReminder={handleSaveReminder} weeksData={weeksData} />}
                     
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={handleSaveConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => { const newR = [...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }]; setRadar(newR); saveData(config, weeksData, newR, holidayWeeks, reminders); }} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                     
-                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={handleSaveConfig} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={setConfig} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => { const newR = [...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }]; setRadar(newR); saveData(config, weeksData, newR, holidayWeeks, reminders); }} reminders={reminders} onSaveReminder={handleSaveReminder} />}
 
-                    {/* MODAL D'IMPORTACIÓ INTEL·LIGENT (S'activa al rebre el postMessage) */}
                     {pendingImportData && (
                         <IntelligentImportModal 
                             data={pendingImportData}
@@ -3943,7 +3959,7 @@ name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanCourse) || cleanCours
                                 saveData(config, newWeeksData, radar, holidayWeeks, reminders);
                                 setPendingImportData(null);
                                 if (missing > 0) {
-                                    alert(`⚠️ Atenció: S'han importat ${inserted} sessions, però no hi ha hagut espai per a ${missing} sessions.\n\nS'han col·locat només als espais buits (sense text) per no sobreescriure la teva feina. Cerca més endavant al calendari!`);
+                                    alert(`⚠️ Atenció: S'han importat ${inserted} sessions, però no hi ha hagut espai per a ${missing} sessions.\n\nS'han col·locat només als espais buits (sense text) per no sobreescriure la teva feina.`);
                                 } else {
                                     alert(`✅ Èxit! S'han importat les ${inserted} sessions perfectament als espais lliures.`);
                                 }
