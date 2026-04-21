@@ -3612,6 +3612,55 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
                     const pSess = progSessions[i];
                     let placed = false;
 
+                    console.log("Sessió rebuda del Programador:", pSess);
+
+                    const parsedTasks = Array.isArray(pSess.activities)
+                      ? pSess.activities.map(raw => {
+                          const str = String(raw || "").trim();
+                          const match = str.match(/^(\d+)'\s*(.*)$/);
+
+                          if (match) {
+                            return {
+                              time: match[1],
+                              text: match[2].trim(),
+                              status: null
+                            };
+                          }
+
+                          return {
+                            time: "",
+                            text: str,
+                            status: null
+                          };
+                        })
+                      : [{ text: "", time: "", status: null }];
+
+                    console.log("Tasks parsejades:", parsedTasks);
+
+                    const plainMaterials = [];
+                    const linksData = [];
+
+                    if (Array.isArray(pSess.materials)) {
+                      pSess.materials.forEach(raw => {
+                        const str = String(raw || "").trim();
+                        const match = str.match(/^(.*?)\s*\((https?:\/\/.*?)\)$/);
+
+                        if (match) {
+                          linksData.push({
+                            title: match[1].trim(),
+                            url: match[2].trim()
+                          });
+                        } else if (str) {
+                          plainMaterials.push(str);
+                        }
+                      });
+                    }
+
+                    const materialsText = plainMaterials.join("\n");
+
+                    console.log("Materials plans:", plainMaterials);
+                    console.log("Links parsejats:", linksData);
+
                     while (agendaIndex < classSessions.length) {
                         const sess = classSessions[agendaIndex];
                         
@@ -3629,39 +3678,16 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
                         const cellKey = `${sess.dayIndex}-${sess.slotId}`;
                         
                         if (!newWeeksData[wId]) newWeeksData[wId] = {};
-                        if (!newWeeksData[wId][cellKey]) newWeeksData[wId][cellKey] = {};
                         
-                        const newTasks = [];
-                        if (pSess.activities && pSess.activities.length > 0) {
-                             pSess.activities.forEach(act => {
-                                 if (typeof act === 'string') {
-                                     newTasks.push({ text: act, time: "", status: null });
-                                 } else {
-                                     const taskText = act.text || act.description || act.title || act.name || "";
-                                     const taskTime = act.time || act.duration || "";
-                                     newTasks.push({ text: taskText, time: taskTime, status: null });
-                                 }
-                             });
-                        } else if (pSess.description || pSess.text) {
-                            const taskText = pSess.text || pSess.description || "";
-                            const taskTime = pSess.time || pSess.duration || "";
-                            if (taskText) newTasks.push({ text: taskText, time: taskTime, status: null });
-                        }
-                        
-                        while (newTasks.length < 3) newTasks.push({ text: "", time: "", status: null });
-                        newWeeksData[wId][cellKey].tasks = newTasks.slice(0, 10);
-                        
-                        if (pSess.materials && typeof pSess.materials === 'string') {
-                            const existingMats = newWeeksData[wId][cellKey].materials || "";
-                            newWeeksData[wId][cellKey].materials = existingMats
-                            ? existingMats + "\n" + pSess.materials 
-                             : pSess.materials;
-                        }
-                        
-                        if (pSess.links && Array.isArray(pSess.links)) {
-                            const existingLinks = newWeeksData[wId][cellKey].links || [];
-                            newWeeksData[wId][cellKey].links = [...existingLinks, ...pSess.links];
-                        }
+                        const finalTasks = [...parsedTasks];
+                        while (finalTasks.length < 3) finalTasks.push({ text: "", time: "", status: null });
+
+                        newWeeksData[wId][cellKey] = {
+                          ...(newWeeksData[wId][cellKey] || {}),
+                          tasks: finalTasks,
+                          materials: materialsText,
+                          links: linksData
+                        };
 
                         totalInserted++;
                         placed = true;
@@ -3693,24 +3719,31 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
                         <div className="space-y-4 mb-6">
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">On vols importar aquestes sessions?</label>
-                                <select className="w-full border p-2 rounded bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none" value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}>
+                                <select className="w-full border p<select 
+                                    className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none" 
+                                    value={selectedClassId} 
+                                    onChange={e => setSelectedClassId(e.target.value)}
+                                >
+                                    <option value="">Selecciona grup...</option>
                                     {config.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Limitar l'abast a una UT (Opcional)</label>
-                                <select className="w-full border p-2 rounded bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none" value={selectedUT} onChange={e => setSelectedUT(e.target.value)}>
-                                    <option value="">Tot el curs (des de l'inici)</option>
-                                    {(config.utDates || []).map(ut => <option key={ut.id} value={ut.id}>{ut.name} (fins {new Date(ut.date).toLocaleDateString()})</option>)}
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">A partir de quina UT? (Opcional)</label>
+                                <select 
+                                    className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none" 
+                                    value={selectedUT} 
+                                    onChange={e => setSelectedUT(e.target.value)}
+                                >
+                                    <option value="">Des del principi del curs</option>
+                                    {(config.utDates || []).map(ut => <option key={ut.id} value={ut.id}>{ut.name}</option>)}
                                 </select>
                             </div>
                         </div>
 
                         <div className="flex justify-end gap-2">
-                            <button onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-medium">Cancel·lar</button>
-                            <button onClick={handleProcess} className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow-sm flex gap-2 items-center">
-                                Importar Ara <Icons.ArrowRight size={16}/>
-                            </button>
+                            <button onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel·lar</button>
+                            <button onClick={handleProcess} className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700">Importar Ara</button>
                         </div>
                     </div>
                 </div>
@@ -3718,73 +3751,59 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
         };
 
         const App = () => {
-            const [view, setView] = useState('loading'); 
+            const [view, setView] = useState('dashboard');
+            const [currentWeekId, setCurrentWeekId] = useState(null);
+            const [selectedClassId, setSelectedClassId] = useState(null);
+            
+            // Estat Global
             const [config, setConfig] = useState(null);
             const [weeksData, setWeeksData] = useState({});
             const [radar, setRadar] = useState([]);
             const [holidayWeeks, setHolidayWeeks] = useState([]);
             const [reminders, setReminders] = useState({});
             
-            const [currentWeekId, setCurrentWeekId] = useState(getLocalISODate(new Date()));
-            const [selectedClassId, setSelectedClassId] = useState(null);
+            const [isLoaded, setIsLoaded] = useState(false);
             const [pendingImportData, setPendingImportData] = useState(null);
 
+            // Carregar dades inicials
             useEffect(() => {
-                const handleFirebaseReady = () => {
-                    const cloudData = window.cloudAgendaData;
-                    if (cloudData && Object.keys(cloudData.config).length > 0) {
-                        setConfig(cloudData.config);
-                        setWeeksData(cloudData.weeksData || {});
-                        setRadar(cloudData.radar || []);
-                        setHolidayWeeks(cloudData.holidayWeeks || []);
-                        setReminders(cloudData.reminders || {});
-                        
-                        window.currentAgendaData = JSON.stringify(cloudData);
-                        setView('dashboard');
-                        document.getElementById('app-loader').style.display = 'none';
+                const loadData = () => {
+                    const localData = window.cloudAgendaData;
+                    if (localData) {
+                        setConfig(localData.config || { teacherName: "", schoolYear: new Date().getFullYear(), classes: [], schedule: {}, utDates: [], classMaterials: {} });
+                        setWeeksData(localData.weeksData || {});
+                        setRadar(localData.radar || []);
+                        setHolidayWeeks(localData.holidayWeeks || []);
+                        setReminders(localData.reminders || {});
                     } else {
-                        setView('config');
-                        document.getElementById('app-loader').style.display = 'none';
+                        setConfig({ teacherName: "", schoolYear: new Date().getFullYear(), classes: [], schedule: {}, utDates: [], classMaterials: {} });
                     }
-                };
-
-                if (window.firebaseInitialized) handleFirebaseReady();
-                else window.addEventListener('firebaseReady', handleFirebaseReady);
-
-                const handleMessage = (event) => {
-                    // CANVI APLICAT: FER EL RECEPTOR ROBUST
-                    const actionType = event.data?.action || event.data?.type;
+                    setIsLoaded(true);
+                    const loader = document.getElementById('app-loader');
+                    if (loader) loader.style.display = 'none';
                     
-                    // Acceptem els dos tipus d'acció per màxima compatibilitat
-                    if (actionType === 'IMPORT_AGENDA' || actionType === 'PROGRAMADOR_TO_AGENDA') {
-                        console.log("📥 Missatge rebut:", event.data);
-                        
-                        const incoming = event.data?.payload ?? event.data;
-                        let normalizedPayload = null;
+                    window.currentAgendaData = JSON.stringify(localData || {});
+                    window.createAgendaBackup(true); // Backup inicial silenciós
+                };
 
-                        if (Array.isArray(incoming)) {
-                            // Format A: Array directe de sessions
-                            normalizedPayload = { sessions: incoming, courseName: "", utName: "" };
-                        } else if (incoming && Array.isArray(incoming.sessions)) {
-                            // Format B: Objecte amb metadata i sessions
-                            normalizedPayload = incoming;
-                        }
-                        
-                        if (normalizedPayload) {
-                            console.log("📥 Payload normalitzat:", normalizedPayload);
-                            console.log("📥 Sessions rebudes:", normalizedPayload.sessions);
-                            setPendingImportData(normalizedPayload);
-                        } else {
-                            console.warn("⚠️ Format de dades d'importació no reconegut:", event.data);
-                        }
+                if (window.firebaseInitialized) {
+                    loadData();
+                } else {
+                    window.addEventListener('firebaseReady', loadData);
+                    return () => window.removeEventListener('firebaseReady', loadData);
+                }
+            }, []);
+
+            // Escoltar missatges (postMessage) de l'altre artefacte
+            useEffect(() => {
+                const handleMessage = (event) => {
+                    if (event.data && event.data.action === 'IMPORT_AGENDA') {
+                        console.log("Dades rebudes per importar:", event.data.payload);
+                        setPendingImportData(event.data.payload);
                     }
                 };
-                window.addEventListener('message', handleMessage);
-
-                return () => {
-                    window.removeEventListener('firebaseReady', handleFirebaseReady);
-                    window.removeEventListener('message', handleMessage);
-                };
+                window.addEventListener("message", handleMessage);
+                return () => window.removeEventListener("message", handleMessage);
             }, []);
 
             const saveData = (newConfig, newWeeksData, newRadar, newHolidays, newReminders) => {
@@ -3797,108 +3816,99 @@ const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfi
                 };
                 
                 window.currentAgendaData = JSON.stringify(dataToSave);
+                window.saveAgendaToCloud(dataToSave);
                 
-                if (window.currentUser) {
-                    window.saveAgendaToCloud(dataToSave);
-                } else {
-                    alert("⚠️ No s'ha pogut guardar al núvol perquè no has iniciat sessió.");
+                // Creem backup silenciós després de canvis importants
+                if (Math.random() < 0.1) { // 10% de probabilitat de crear backup silenciós extra
+                    window.createAgendaBackup(true, 'Còpia automàtica');
                 }
             };
 
             const handleSaveConfig = (newConfig) => {
                 setConfig(newConfig);
                 saveData(newConfig, weeksData, radar, holidayWeeks, reminders);
-                setView('dashboard');
-                
-                // Forçar creació de backup automàtic
-                setTimeout(() => window.createAgendaBackup(true, 'Canvi de configuració'), 1000);
+                if (view === 'config') setView('dashboard');
             };
 
-            const handleUpdateWeekData = (weekId, newData) => {
-                const newWeeksData = { ...weeksData, [weekId]: newData };
+            const handleUpdateWeekData = (wId, newData) => {
+                const newWeeksData = { ...weeksData, [wId]: newData };
                 setWeeksData(newWeeksData);
                 saveData(config, newWeeksData, radar, holidayWeeks, reminders);
             };
 
-            const handleToggleHoliday = (weekId) => {
-                let newHolidays = [...(holidayWeeks || [])];
-                if (newHolidays.includes(weekId)) newHolidays = newHolidays.filter(id => id !== weekId);
-                else newHolidays.push(weekId);
-                
+            const handleToggleHoliday = (wId) => {
+                const newHolidays = holidayWeeks.includes(wId) 
+                    ? holidayWeeks.filter(id => id !== wId)
+                    : [...holidayWeeks, wId];
                 setHolidayWeeks(newHolidays);
                 saveData(config, weeksData, radar, newHolidays, reminders);
             };
 
-            const handleSaveReminder = (dateStr, newDayReminders) => {
-                const newReminders = { ...reminders };
-                if (newDayReminders.length === 0) delete newReminders[dateStr];
-                else newReminders[dateStr] = newDayReminders;
-                
+            const handleSaveReminder = (dateStr, updatedReminders) => {
+                const newReminders = { ...reminders, [dateStr]: updatedReminders };
+                if (updatedReminders.length === 0) delete newReminders[dateStr];
                 setReminders(newReminders);
                 saveData(config, weeksData, radar, holidayWeeks, newReminders);
             };
 
-            const handleSelectWeek = (weekId) => { setCurrentWeekId(weekId); setView('planner'); };
-            const handleSelectClassView = (classId) => { setSelectedClassId(classId); setView('class_planner'); };
-
+            const handleSelectWeek = (wId) => { setCurrentWeekId(wId); setView('planner'); };
+            const handleSelectClassView = (cId) => { setSelectedClassId(cId); setView('class_planner'); };
+            
             const handleExport = () => {
-                const dataStr = JSON.stringify({ config, weeksData, radar, holidayWeeks, reminders });
-                const d = new Date();
-                const safeTime = d.toLocaleTimeString('ca-ES', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '');
-                window.downloadBackupJSON(dataStr, `AgendaDocent_${window.getLocalYYYYMMDD(d)}_${safeTime}.json`);
+                window.createAgendaBackup(false, 'Còpia exportada manualment', true);
             };
-
+            
             const handleImport = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = (evt) => {
                     try {
-                        const importedData = JSON.parse(e.target.result);
-                        if (importedData.config) {
-                            if (confirm("⚠️ Atenció: Estàs a punt de sobreescriure TOTA la teva agenda actual amb l'arxiu importat. Segur que vols continuar?")) {
-                                setConfig(importedData.config);
-                                setWeeksData(importedData.weeksData || {});
-                                setRadar(importedData.radar || []);
-                                setHolidayWeeks(importedData.holidayWeeks || []);
-                                setReminders(importedData.reminders || {});
-                                saveData(importedData.config, importedData.weeksData || {}, importedData.radar || [], importedData.holidayWeeks || [], importedData.reminders || {});
-                                alert("Agenda importada correctament!");
-                            }
-                        } else alert("Format d'arxiu invàlid.");
-                    } catch(err) { alert("Error al llegir l'arxiu."); }
+                        const imported = JSON.parse(evt.target.result);
+                        if (imported.config && imported.weeksData) {
+                            setConfig(imported.config);
+                            setWeeksData(imported.weeksData);
+                            setRadar(imported.radar || []);
+                            setHolidayWeeks(imported.holidayWeeks || []);
+                            setReminders(imported.reminders || {});
+                            saveData(imported.config, imported.weeksData, imported.radar || [], imported.holidayWeeks || [], imported.reminders || {});
+                            alert("Dades importades correctament!");
+                            setView('dashboard');
+                        } else {
+                            alert("Format d'arxiu invàlid.");
+                        }
+                    } catch(err) {
+                        alert("Error llegint l'arxiu.");
+                    }
                 };
                 reader.readAsText(file);
             };
 
             const handleReset = () => {
-                if (confirm("ESTÀS SEGUR? Això eliminarà tota la teva agenda actual.")) {
-                    setConfig(null);
-                    setWeeksData({});
-                    setRadar([]);
-                    setHolidayWeeks([]);
-                    setReminders({});
-                    window.currentAgendaData = null;
-                    if(window.currentUser) {
-                        window.setDoc(window.doc(window.firebaseDb, "agenda_docent", window.currentUser.uid), {});
-                    }
-                    setView('config');
-                }
+                const emptyWeeks = {};
+                setWeeksData(emptyWeeks);
+                setRadar([]);
+                setHolidayWeeks([]);
+                setReminders({});
+                saveData(config, emptyWeeks, [], [], {});
+                alert("Agenda buidada. Configuració mantinguda.");
             };
 
-            if (view === 'loading') return null; 
+            if (!isLoaded) return null;
+
+            if (view === 'config' || (!config.teacherName && config.classes.length === 0)) {
+                return <ConfigScreen config={config} onSave={handleSaveConfig} />;
+            }
 
             return (
-                <div className={`min-h-screen font-sans ${config?.theme ? `bg-${APP_THEMES[config.theme].bg}` : 'bg-orange-50'} transition-colors duration-500`}>
-                    {view === 'config' && <ConfigScreen config={config || { teacherName: "", schoolYear: new Date().getFullYear(), classes: [], schedule: {}, theme: 'orange', durations: {}, utDates: [] }} onSave={handleSaveConfig} />}
+                <div className={`min-h-screen ${config.theme ? `bg-${APP_THEMES[config.theme].primary}-50/30` : ''}`}>
+                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={(r) => { setRadar(r); saveData(config, weeksData, r, holidayWeeks, reminders); }} onSelectWeek={handleSelectWeek} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={handleSaveConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} onSaveReminder={handleSaveReminder} weeksData={weeksData} />}
                     
-                    {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={(r) => { setRadar(r); saveData(config, weeksData, r, holidayWeeks, reminders); }} onSelectWeek={handleSelectWeek} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} onSaveReminder={handleSaveReminder} weeksData={weeksData} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => { const newRadar = [...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }]; setRadar(newRadar); saveData(config, weeksData, newRadar, holidayWeeks, reminders); }} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
                     
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
-                    
-                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={setConfig} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} reminders={reminders} onSaveReminder={handleSaveReminder} />}
-                    
-                    {/* MODAL IMPORTACIÓ INTEL·LIGENT (S'activa al rebre el postMessage) */}
+                    {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={handleSaveConfig} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => { const newRadar = [...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }]; setRadar(newRadar); saveData(config, weeksData, newRadar, holidayWeeks, reminders); }} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+
+                    {/* MODAL D'IMPORTACIÓ INTEL·LIGENT (S'activa al rebre el postMessage) */}
                     {pendingImportData && (
                         <IntelligentImportModal 
                             data={pendingImportData}
