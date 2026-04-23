@@ -3243,7 +3243,7 @@
                             for (let d = (wIdx === startIndex ? fromDayIndex : 0); d < 5; d++) {
                                 for (let s = 0; s < TIME_SLOTS.length; s++) {
                                     if (wIdx === startIndex && d === fromDayIndex && s < fromSlotId) continue;
-                                    
+
                                     const slot = TIME_SLOTS[s];
                                     if (slot.type === 'break') continue;
 
@@ -3256,7 +3256,7 @@
 
                                         const sessionTasks = cellData.tasks || [];
                                         const hasContent = sessionTasks.some(t => t.text.trim() !== '') || cellData.notes || cellData.materials;
-                                        
+
                                         if (!hasContent) {
                                             return { weekId: w.id, day: d, slot: slot.id };
                                         }
@@ -3279,63 +3279,34 @@
                     let currentSearchDay = 0;
                     let currentSearchSlot = 0;
 
+                    // === LECTURA DIRECTA DES DEL JSON — sense DOMParser ni regex ===
                     data.sessions.forEach(session => {
                         const target = findNextEmptySession(targetClassId, currentSearchWeek, currentSearchDay, currentSearchSlot);
-                        
+
                         if (target) {
-                            // --- PARSE ACTIVITIES ---
-                            const tasks = Array.isArray(session.activities)
-                              ? session.activities.map(raw => {
-                                  const str = String(raw || "").trim();
-                                  const match = str.match(/^(\d+)'\s*(.*)$/);
+                            const activitiesArr = Array.isArray(session.activities) ? session.activities : [];
+                            const materialsArr  = Array.isArray(session.materials)  ? session.materials  : [];
 
-                                  if (match) {
-                                    return {
-                                      time: match[1],
-                                      text: match[2].trim(),
-                                      status: null
-                                    };
-                                  }
-
-                                  return {
-                                    time: "",
-                                    text: str,
-                                    status: null
-                                  };
-                                })
-                              : [{ text: "", time: "", status: null }];
-
-                            // --- PARSE MATERIALS + LINKS ---
-                            const plainMaterials = [];
-                            const linksData = [];
-
-                            if (Array.isArray(session.materials)) {
-                              session.materials.forEach(raw => {
-                                const str = String(raw || "").trim();
-                                const match = str.match(/^(.*?)\s*\((https?:\/\/.*?)\)$/);
-
-                                if (match) {
-                                  linksData.push({
-                                    title: match[1].trim(),
-                                    url: match[2].trim()
-                                  });
-                                } else if (str) {
-                                  plainMaterials.push(str);
-                                }
-                              });
-                            }
-
-                            const materialsText = plainMaterials.join("\n");
-                            
-                            // Debug
-                            console.log("Tasks:", tasks);
-                            console.log("Materials:", materialsText);
-                            console.log("Links:", linksData);
-
+                            // activities → tasks (accés directe als camps, sense parsing)
+                            const tasks = activitiesArr.map(a => ({
+                                text: a?.text || "",
+                                time: a?.time != null && a.time !== "" ? String(a.time) : "",
+                                status: null
+                            }));
                             while (tasks.length < 3) tasks.push({ text: "", time: "", status: null });
 
+                            // materials → links (els que tenen url) + materials text (la resta)
+                            const linksData = materialsArr
+                                .filter(m => m && m.url)
+                                .map(m => ({ title: m.name || m.url, url: m.url }));
+
+                            const materialsText = materialsArr
+                                .filter(m => m && !m.url && m.name)
+                                .map(m => m.name)
+                                .join("\n");
+
                             if (!newWeeksData[target.weekId]) newWeeksData[target.weekId] = {};
-                            
+
                             newWeeksData[target.weekId][`${target.day}-${target.slot}`] = {
                                 tasks: tasks,
                                 materials: materialsText,

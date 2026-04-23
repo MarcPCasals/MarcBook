@@ -638,65 +638,22 @@
             // --- SINCRONITZACIÓ AMB AGENDA (POSTMESSAGE I LOCALSTORAGE) ---
             useEffect(() => {
                 const processarDadesAgenda = (payload) => {
-                    if (!payload || !payload.html) return;
-                    console.log("DADES IMPORTADES DES DE L'AGENDA:", payload);
+                    if (!payload || !payload.payload || !Array.isArray(payload.payload.sessions)) return;
+                    console.log("DADES IMPORTADES DES DE L'AGENDA (JSON):", payload);
 
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString('<table>' + payload.html + '</table>', 'text/html');
-                    const rows = doc.querySelectorAll('tr');
+                    const { curs, ut, sessions } = payload.payload;
                     const newSessions = [];
 
-                    const parseActivityText = (rawText) => {
-                        let text = rawText.trim().replace(/^•\s*/, '');
-                        let time = '';
-                        const timeMatch = text.match(/\[(\d+)'\]\s*/);
-                        if (timeMatch) {
-                            time = timeMatch[1];
-                            text = text.replace(timeMatch[0], '');
-                        }
-                        return { text: text.trim(), time };
-                    };
-
-                    rows.forEach(row => {
-                        const cells = row.querySelectorAll('td');
-                        if (cells.length >= 3) {
-                            const actDivs = cells[0].querySelectorAll('div');
-                            const activities = [];
-                            if (actDivs.length > 0) {
-                                actDivs.forEach(div => {
-                                    const parsed = parseActivityText(div.textContent);
-                                    if (parsed.text || parsed.time) activities.push({ id: generateId(), text: parsed.text, detail: '', time: parsed.time, challengeResponse: '', expanded: false });
-                                });
-                            } else {
-                                const parsed = parseActivityText(cells[0].textContent);
-                                if (parsed.text || parsed.time) activities.push({ id: generateId(), text: parsed.text, detail: '', time: parsed.time, challengeResponse: '', expanded: false });
-                            }
-
-                            const materials = [];
-                            const contentCol1 = cells[1].innerHTML;
-                            const splitParts = contentCol1.split(/<b>Enllaços:<\/b>/i);
-                            const textMaterials = splitParts[0].replace(/<br\s*[\/]?>/gi, '\n');
-                            const matDoc = parser.parseFromString(textMaterials, 'text/html');
-                            matDoc.body.textContent.split('\n').forEach(line => {
-                                if (line.trim()) materials.push({ id: generateId(), name: line.trim(), url: "" });
-                            });
-
-                            const links = cells[1].querySelectorAll('a');
-                            links.forEach(a => {
-                                materials.push({ id: generateId(), name: a.textContent.trim(), url: a.href });
-                            });
-
-                            const commentsHtml = cells[2].innerHTML.replace(/<br\s*[\/]?>/gi, '\n');
-                            const comments = parser.parseFromString(commentsHtml, 'text/html').body.textContent.trim();
-
-                            newSessions.push({
-                                id: generateId(),
-                                activities: activities,
-                                materials: materials,
-                                comments: comments,
-                                completed: false
-                            });
-                        }
+                    // === LECTURA DIRECTA DEL JSON — sense parsing de HTML ===
+                    sessions.forEach(session => {
+                        const newSession = {
+                            id: session.id || generateId(),
+                            activities: Array.isArray(session.activities) ? session.activities : [],
+                            materials: Array.isArray(session.materials) ? session.materials : [],
+                            comments: session.comments || "",
+                            completed: session.completed || false
+                        };
+                        newSessions.push(newSession);
                     });
 
                     if (newSessions.length === 0) return;
@@ -704,17 +661,17 @@
                     setData(prevData => {
                         let newData = JSON.parse(JSON.stringify(prevData)); 
                         
-                        let course = newData.find(c => c.name.trim().toLowerCase() === (payload.curs || "").trim().toLowerCase());
+                        let course = newData.find(c => c.name.trim().toLowerCase() === (curs || "").trim().toLowerCase());
                         if (!course) {
-                            course = { id: generateId(), name: payload.curs || "Nou Curs Importat", units: [] };
+                            course = { id: generateId(), name: curs || "Nou Curs Importat", units: [] };
                             newData.push(course);
                         }
                         
-                        let unit = course.units.find(u => u.title.trim().toLowerCase() === (payload.ut || "").trim().toLowerCase());
+                        let unit = course.units.find(u => u.title.trim().toLowerCase() === (ut || "").trim().toLowerCase());
                         if (!unit) {
                             unit = { 
                                 id: generateId(), 
-                                title: payload.ut || "Nova UT", 
+                                title: ut || "Nova UT", 
                                 transversalMaterials: [],
                                 phases: [
                                     { id: generateId(), name: 'FASE DE PREPARACIÓ', collapsed: false, sessions: [] },
@@ -725,8 +682,7 @@
                             course.units.push(unit);
                         }
 
-                        let phase = unit.phases.find(p => p.name.trim().toLowerCase() === (payload.fase || "").trim().toLowerCase());
-                        if (!phase) phase = unit.phases[0];
+                        let phase = unit.phases[0];
 
                         phase.sessions.push(...newSessions);
 
@@ -746,8 +702,8 @@
                                         event.origin.includes("127.0.0.1");
                     if (!originValid && event.origin !== window.location.origin) return;
                     
-                    if (event.data && event.data.action === 'SYNC_TABLE') {
-                        console.log("📥 Importació detectada per PostMessage.");
+                    if (event.data && event.data.action === 'IMPORT_SESSIONS') {
+                        console.log("📥 Importació detectada per PostMessage (JSON).");
                         if (hasLoadedRef.current) {
                             processarDadesAgenda(event.data);
                         } else {
@@ -1184,15 +1140,15 @@
             const executeSendToAgenda = () => {
                 const targetCourse = data.find(c => c.id === agendaExportConfig.courseId);
                 const targetUnit = targetCourse?.units.find(u => u.id === agendaExportConfig.unitId);
-                
+
                 if (!targetCourse || !targetUnit) return;
-                
+
                 const targetUrl = agendaUrl || 'https://marcpcasals.github.io/MarcBook/Altres/agenda.html';
                 if (!targetUrl || !agendaUrl) {
                     alert("Configura primer l'URL de la teva Agenda Docent a la part superior dreta abans d'enviar.");
                     return;
                 }
-                
+
                 const targetClassesArray = agendaExportConfig.targetClasses.split(',').map(s => s.trim()).filter(Boolean);
                 if (targetClassesArray.length === 0) {
                     alert("Si us plau, especifica almenys una classe destinatària.");
@@ -1201,7 +1157,7 @@
 
                 let minSess = 1;
                 let maxSess = 999;
-                
+
                 if (agendaExportConfig.range !== "totes") {
                     const parts = agendaExportConfig.range.split('-');
                     if (parts.length === 2) {
@@ -1212,7 +1168,8 @@
                         maxSess = parseInt(agendaExportConfig.range) || 999;
                     }
                 }
-                
+
+                // === DADES JSON DIRECTES — sense HTML, sense flattening ===
                 const sessionsToExport = [];
                 let globalSessionCounter = 1;
 
@@ -1221,39 +1178,45 @@
                         if (globalSessionCounter >= minSess && globalSessionCounter <= maxSess) {
                             sessionsToExport.push({
                                 sessionNumber: globalSessionCounter,
-                                activities: s.activities.map(a => `${a.time ? a.time + "'" : ""} ${a.text}`.trim()),
-                                materials: s.materials.map(m => m.name + (m.url ? ` (${m.url})` : ""))
+                                id: s.id,
+                                activities: s.activities,   // [{ id, text, detail, time, challengeResponse, expanded }]
+                                materials: s.materials,     // [{ id, name, url }]
+                                comments: s.comments,
+                                completed: s.completed
                             });
                         }
                         globalSessionCounter++;
                     });
                 });
-                
+
                 if (sessionsToExport.length === 0) {
                     alert("No s'han trobat sessions per exportar en aquest rang.");
                     return;
                 }
 
-                const payload = {
-                    type: "PROGRAMADOR_TO_AGENDA",
-                    courseName: targetCourse.name,
-                    unitTitle: targetUnit.title,
-                    targetClasses: targetClassesArray,
-                    sessions: sessionsToExport
+                // Format que l'agenda ja escolta: { action: 'IMPORT_SESSIONS', payload: {...} }
+                const message = {
+                    action: 'IMPORT_SESSIONS',
+                    payload: {
+                        curs: targetCourse.name,
+                        ut: targetUnit.title,
+                        targetClasses: targetClassesArray,
+                        sessions: sessionsToExport
+                    }
                 };
 
-                console.log("ENVIANT AGENDA:", payload);
+                console.log("ENVIANT AGENDA (JSON):", message);
 
                 const agendaWindow = window.open(targetUrl, "_blank");
-                
+
                 setTimeout(() => {
                     if (agendaWindow) {
-                        agendaWindow.postMessage(payload, "*");
+                        agendaWindow.postMessage(message, "*");
                     } else {
                         alert("El navegador ha bloquejat la finestra emergent de l'Agenda. Si us plau, permet-la i torna a provar.");
                     }
                 }, 1000);
-                
+
                 setShowSendAgendaModal(false);
                 showToast("Enviant dades a l'Agenda...");
             };
