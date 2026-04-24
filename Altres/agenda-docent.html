@@ -2880,6 +2880,19 @@
             const classInfo = config.classes.find(c => c.id === classId);
             const theme = config.theme || 'orange';
 
+            // Guàrdia defensiva: si la classe no existeix, mostrar pantalla amb missatge en lloc de petar
+            if (!classInfo) {
+                return (
+                    <div className="max-w-3xl mx-auto p-6 mt-10">
+                        <div className="bg-white border border-red-200 rounded-xl p-6 shadow-sm">
+                            <h2 className="text-xl font-bold text-red-600 mb-2">Classe no trobada</h2>
+                            <p className="text-gray-600 mb-4">No s'ha pogut carregar la classe seleccionada. Potser s'ha esborrat o el seu identificador ha canviat.</p>
+                            <button onClick={onBack} className="px-4 py-2 bg-gray-800 text-white rounded font-bold hover:bg-gray-900 transition-colors">Tornar al Dashboard</button>
+                        </div>
+                    </div>
+                );
+            }
+
             const [history, setHistory] = useState([]);
             const [future, setFuture] = useState([]);
             const [reviewMode, setReviewMode] = useState(false);
@@ -3346,7 +3359,7 @@
                                 <button onClick={() => { onBack(); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Icons.ChevronLeft /></button>
                                 <div>
                                     <h2 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                                        <div className={`w-3 h-3 rounded-full ${classInfo?.color.split(' ')[0] || 'bg-gray-400'}`}></div>
+                                        <div className={`w-3 h-3 rounded-full ${(classInfo && classInfo.color) ? classInfo.color.split(' ')[0] : 'bg-gray-400'}`}></div>
                                         <span className="hidden sm:inline">Programació:</span> {classInfo?.name || 'Classe'}
                                     </h2>
                                 </div>
@@ -3389,7 +3402,11 @@
                                                 const isHoliday = sess.isHoliday;
                                                 const tasks = getTasks(sess.weekId, sess.dayIndex, sess.slot.id);
                                                 const totalTime = getTotalTime(sess.weekId, sess.dayIndex, sess.slot.id);
-                                                const hasContent = sess.data.materials?.trim() || sess.data.notes?.trim() || sess.data.links?.length > 0;
+                                                const sessData = sess.data || {};
+                                                const safeMaterials = typeof sessData.materials === 'string' ? sessData.materials : '';
+                                                const safeNotes = typeof sessData.notes === 'string' ? sessData.notes : '';
+                                                const safeLinks = Array.isArray(sessData.links) ? sessData.links : [];
+                                                const hasContent = safeMaterials.trim() || safeNotes.trim() || safeLinks.length > 0;
                                                 
                                                 let cellBgClass = isZzz || isHoliday ? 'session-cancelled' : `bg-white hover:bg-${theme}-50/10`;
                                                 if (sess.isPast && !isZzz && !isHoliday) cellBgClass += ' bg-gray-50 opacity-70';
@@ -3410,7 +3427,7 @@
                                                                 <div className="flex items-center gap-1 overflow-hidden">
                                                                     <span className="truncate">{classInfo?.name}</span>
                                                                     <button 
-                                                                        onClick={() => setActiveSessionNotepad({weekId: sess.weekId, dayIndex: sess.dayIndex, slotId: sess.slot.id, className: classInfo?.name, slotLabel: sess.slot.label, data: sess.data})} 
+                                                                        onClick={() => setActiveSessionNotepad({weekId: sess.weekId, dayIndex: sess.dayIndex, slotId: sess.slot.id, className: classInfo?.name, slotLabel: sess.slot.label, data: sessData})} 
                                                                         className={`p-0.5 rounded ml-1 transition-colors ${hasContent ? 'text-orange-500 hover:bg-orange-50' : 'text-inherit hover:bg-black/10'}`} 
                                                                         title={hasContent ? "Notes (amb contingut)" : "Notes de sessió"}
                                                                     >
@@ -3431,7 +3448,7 @@
                                                                             className="w-full h-full min-h-[80px] bg-transparent border-none resize-none text-center text-sm font-bold text-gray-600 focus:ring-0 focus:outline-none placeholder-gray-500"
                                                                             style={{ pointerEvents: 'auto' }}
                                                                             placeholder="Motiu (ex: Excursió)"
-                                                                            value={sess.data.zzzReason || ""}
+                                                                            value={sessData.zzzReason || ""}
                                                                             onChange={(e) => {
                                                                                 const wData = { ...(weeksData[sess.weekId] || {}) };
                                                                                 wData[`${sess.dayIndex}-${sess.slot.id}`] = { ...wData[`${sess.dayIndex}-${sess.slot.id}`], zzzReason: e.target.value };
@@ -3443,8 +3460,8 @@
                                                                     <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(sess.weekId, sess.dayIndex, sess.slot.id, t)} onAction={(task, action) => handleTaskAction(sess.weekId, sess.dayIndex, sess.slot.id, classId, task, action)} disabled={isZzz || isHoliday} theme={theme} />
                                                                 )}
                                                             </div>
-                                                            {(reviewMode || sess.data.review) && (
-                                                                <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={sess.data.review||""} onChange={(e)=>handleReviewChange(sess.weekId,sess.dayIndex,sess.slot.id,e.target.value)}></textarea>
+                                                            {(reviewMode || sessData.review) && (
+                                                                <textarea className="w-full text-sm p-1 border border-red-300 bg-red-50 text-red-800 rounded mt-1 resize-none h-16 shadow-inner" placeholder="Revisió..." value={sessData.review||""} onChange={(e)=>handleReviewChange(sess.weekId,sess.dayIndex,sess.slot.id,e.target.value)}></textarea>
                                                             )}
                                                         </div>
                                                     </div>
@@ -3670,18 +3687,28 @@
                 let newWeeksData = JSON.parse(JSON.stringify(currentWeeksData));
                 let inserted = 0;
                 let missing = 0;
+                const insertedCells = []; // per diagnòstic i missatge final
 
                 const allWeeks = generateAllWeeks(config.schoolYear);
                 let startDate = new Date(parseInt(config.schoolYear), 8, 1, 12, 0, 0);
                 let endDate = new Date(parseInt(config.schoolYear) + 1, 6, 15, 23, 59, 59, 999);
+                let utMatchedBy = 'cap (tot el curs)';
 
-                if (data.ut && Array.isArray(config.utDates)) {
-                    const normalizedUt = String(data.ut || "").toLowerCase().trim();
-                    const targetUT = config.utDates.find(u =>
-                        String(u.name || "").toLowerCase().trim() === normalizedUt ||
-                        String(u.name || "").toLowerCase().trim().includes(normalizedUt) ||
-                        normalizedUt.includes(String(u.name || "").toLowerCase().trim())
+                if (data.ut && Array.isArray(config.utDates) && config.utDates.length > 0) {
+                    const normalizedUt = String(data.ut || "").toLowerCase().trim().replace(/\s/g, '');
+                    // 1r: coincidència exacta (sense espais)
+                    let targetUT = config.utDates.find(u =>
+                        String(u.name || "").toLowerCase().trim().replace(/\s/g, '') === normalizedUt
                     );
+                    if (targetUT) utMatchedBy = `exacta amb "${targetUT.name}"`;
+                    // 2n: includes com a fallback només si no hi ha exacta
+                    if (!targetUT) {
+                        targetUT = config.utDates.find(u => {
+                            const n = String(u.name || "").toLowerCase().trim().replace(/\s/g, '');
+                            return n !== '' && (n.includes(normalizedUt) || normalizedUt.includes(n));
+                        });
+                        if (targetUT) utMatchedBy = `parcial amb "${targetUT.name}"`;
+                    }
                     if (targetUT && targetUT.date) {
                         endDate = new Date(targetUT.date);
                         endDate.setHours(23, 59, 59, 999);
@@ -3691,8 +3718,29 @@
                             startDate = new Date(sortedUTs[utIndex - 1].date);
                             startDate.setHours(0, 0, 0, 0);
                         }
+                    } else {
+                        // Cap UT coincideix: millor començar des de la setmana actual que des del setembre,
+                        // perquè si importes al mig del curs NO vols que se't col·loqui a setembre.
+                        const today = new Date();
+                        if (today > startDate) {
+                            startDate = new Date(today);
+                            startDate.setHours(0, 0, 0, 0);
+                            utMatchedBy = `cap (des d'avui ${startDate.toLocaleDateString('ca-ES')})`;
+                        }
+                    }
+                } else {
+                    // No hi ha config d'UTs: millor des d'avui que no pas des del setembre
+                    const today = new Date();
+                    if (today > startDate) {
+                        startDate = new Date(today);
+                        startDate.setHours(0, 0, 0, 0);
+                        utMatchedBy = `cap (des d'avui ${startDate.toLocaleDateString('ca-ES')})`;
                     }
                 }
+
+                const classNameLog = config.classes.find(c => c.id === classId)?.name || classId;
+                console.log(`[IMPORT] >> Classe "${classNameLog}": UT="${data.ut}" matchada per: ${utMatchedBy}`);
+                console.log(`[IMPORT] >>    Rang de dates: ${startDate.toLocaleDateString('ca-ES')} → ${endDate.toLocaleDateString('ca-ES')}`);
 
                 const classSessions = [];
                 allWeeks.forEach(w => {
@@ -3845,6 +3893,14 @@
                         if (currentCell.status === undefined) currentCell.status = null;
                         newWeeksData[wId][cellKey] = currentCell;
 
+                        insertedCells.push({
+                            weekId: wId,
+                            dayIndex: sess.dayIndex,
+                            slotId: sess.slotId,
+                            className: classNameLog
+                        });
+                        console.log(`[IMPORT]    · Sessió ${i+1}/${progSessions.length} col·locada a setmana ${wId}, dia ${sess.dayIndex}, slot ${sess.slotId}`);
+
                         placed = true;
                         agendaIndex++;
                         inserted++;
@@ -3853,10 +3909,11 @@
 
                     if (!placed) {
                         missing++;
+                        console.warn(`[IMPORT]    ! Sessió ${i+1}/${progSessions.length} NO ha trobat espai lliure`);
                     }
                 }
 
-                return { newWeeksData, inserted, missing };
+                return { newWeeksData, inserted, missing, insertedCells };
             };
 
             const handleProcess = () => {
@@ -3868,18 +3925,21 @@
                 setProcessing(true);
                 setTimeout(() => {
                     let totalInserted = 0, totalMissing = 0;
+                    let allInsertedCells = [];
                     let newWeeksData = JSON.parse(JSON.stringify(weeksData));
                     for (const classId of selectedClassIds) {
                         const result = processImportForClass(classId, newWeeksData);
                         newWeeksData = result.newWeeksData;
                         totalInserted += result.inserted;
                         totalMissing += result.missing;
+                        allInsertedCells = allInsertedCells.concat(result.insertedCells || []);
                         console.log(`[IMPORT] Classe ${config.classes.find(c => c.id === classId)?.name}: ${result.inserted} insertades, ${result.missing} sense espai`);
                     }
                     // Punt 7: logs de diagnòstic finals
                     console.log(`[IMPORT] TOTAL processat: ${totalInserted} sessions insertades, ${totalMissing} sense espai`);
                     console.log(`[IMPORT] Classes destí:`, selectedClassIds.map(id => config.classes.find(c => c.id === id)?.name));
-                    onConfirm(newWeeksData, totalInserted, totalMissing, selectedClassIds.length);
+                    console.log(`[IMPORT] Cel·les on s'han inserit les dades:`, allInsertedCells);
+                    onConfirm(newWeeksData, totalInserted, totalMissing, selectedClassIds.length, allInsertedCells);
                 }, 500);
             };
 
@@ -4151,16 +4211,37 @@
                             config={config}
                             weeksData={weeksData}
                             holidayWeeks={holidayWeeks}
-                            onConfirm={(newWeeksData, inserted, missing, classCount) => {
+                            onConfirm={(newWeeksData, inserted, missing, classCount, insertedCells) => {
                                 setWeeksData(newWeeksData);
                                 saveData(config, newWeeksData, radar, holidayWeeks, reminders);
                                 setPendingImportData(null);
-                                // Punt 8: missatge final més informatiu, inclou nombre de classes
+                                // Missatge final informatiu amb setmanes concretes afectades
                                 const classLabel = classCount > 1 ? ` a ${classCount} classes` : '';
+                                const cells = Array.isArray(insertedCells) ? insertedCells : [];
+                                const weekIds = [...new Set(cells.map(c => c.weekId))].sort();
+                                let weeksInfo = '';
+                                if (weekIds.length > 0) {
+                                    const firstWeek = weekIds[0];
+                                    const lastWeek = weekIds[weekIds.length - 1];
+                                    const formatW = (id) => {
+                                        const [y, m, d] = id.split('-');
+                                        return `${d}/${m}/${y}`;
+                                    };
+                                    if (weekIds.length === 1) {
+                                        weeksInfo = `\n\nS'han inserit a la setmana del ${formatW(firstWeek)}.`;
+                                    } else {
+                                        weeksInfo = `\n\nS'han inserit en ${weekIds.length} setmanes, des del ${formatW(firstWeek)} fins al ${formatW(lastWeek)}.`;
+                                    }
+                                }
                                 if (missing > 0) {
-                                    alert(`⚠️ Atenció: S'han importat ${inserted} sessions${classLabel}, però no hi ha hagut espai per a ${missing} sessions.\n\nS'han col·locat només als espais buits per no sobreescriure la teva feina. Cerca més endavant al calendari!`);
+                                    alert(`⚠️ Atenció: S'han importat ${inserted} sessions${classLabel}, però no hi ha hagut espai per a ${missing} sessions.\n\nS'han col·locat només als espais buits per no sobreescriure la teva feina.${weeksInfo}`);
                                 } else {
-                                    alert(`✅ Èxit! S'han importat les ${inserted} sessions${classLabel} perfectament als espais lliures.`);
+                                    alert(`✅ Èxit! S'han importat les ${inserted} sessions${classLabel} perfectament als espais lliures.${weeksInfo}`);
+                                }
+                                // Si hi ha una única setmana afectada, portar l'usuari directament allà
+                                if (weekIds.length === 1) {
+                                    setCurrentWeekId(weekIds[0]);
+                                    setView('planner');
                                 }
                             }}
                             onClose={() => setPendingImportData(null)}
