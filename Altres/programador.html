@@ -304,6 +304,7 @@
         const IconSend = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>;
         const IconDotsVertical = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>;
         const IconChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
+        const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>;
 
         // --- DADES INICIALS ---
         const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -442,6 +443,14 @@
                 localStorage.setItem('programacio_agenda_url', agendaUrl);
             }, [agendaUrl]);
 
+            useEffect(() => {
+                if (activeCourseId) localStorage.setItem('lastActiveCourseId', activeCourseId);
+            }, [activeCourseId]);
+
+            useEffect(() => {
+                if (activeUnitId) localStorage.setItem('lastActiveUnitId', activeUnitId);
+            }, [activeUnitId]);
+
             // Setup the bridge with Firebase auth and data
             useEffect(() => {
                 window.inicialitzarDades = (dadesRebudes) => {
@@ -451,10 +460,13 @@
                     if (dadesRebudes && dadesRebudes.courses && dadesRebudes.courses.length > 0) {
                         const migrated = migrateData(dadesRebudes.courses);
                         setData(migrated);
-                        setActiveCourseId(migrated[0]?.id);
-                        if(migrated[0]?.units && migrated[0].units.length > 0) {
-                            setActiveUnitId(migrated[0].units[0].id);
-                        }
+
+                        const savedCourseId = localStorage.getItem('lastActiveCourseId');
+                        const savedUnitId = localStorage.getItem('lastActiveUnitId');
+                        const restoredCourse = migrated.find(c => c.id === savedCourseId) || migrated[0];
+                        setActiveCourseId(restoredCourse?.id);
+                        const restoredUnit = restoredCourse?.units.find(u => u.id === savedUnitId) || restoredCourse?.units[0];
+                        if (restoredUnit) setActiveUnitId(restoredUnit.id);
                     } else {
                         if (window.loadBackups) {
                             window.loadBackups().then(bks => {
@@ -1776,12 +1788,10 @@
                                         <table className="w-full text-left border-collapse min-w-[1000px] table-fixed">
                                             <thead className="sticky top-0 z-20 bg-gray-50 shadow-sm">
                                                 <tr className="border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
-                                                    {/* Eliminada columna Accions, espai traslladat a Descripció (ara w-[50%]) */}
                                                     <th className="p-3 w-20 text-center font-semibold border-r border-gray-200">Sessió</th>
-                                                    <th className="p-3 w-[50%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
-                                                    <th className="p-3 w-[20%] font-semibold border-r border-gray-200">Materials</th>
-                                                    <th className="p-3 w-[20%] font-semibold border-r border-gray-200">Comentaris / Observacions</th>
-                                                    <th className="p-3 w-16 text-center font-semibold">Estat</th>
+                                                    <th className="p-3 w-[48%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
+                                                    <th className="p-3 w-[27%] font-semibold border-r border-gray-200">Materials</th>
+                                                    <th className="p-3 w-[25%] font-semibold">Comentaris / Observacions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1790,7 +1800,7 @@
                                                     if (completedCount > 0) {
                                                         return (
                                                             <tr className="bg-gray-100/80 border-b border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => setShowCompleted(!showCompleted)}>
-                                                                <td colSpan="5" className="p-2 text-center text-sm font-semibold text-gray-600">
+                                                                <td colSpan="4" className="p-2 text-center text-sm font-semibold text-gray-600">
                                                                     {showCompleted ? '▼ Ocultar sessions acabades' : `▶ Mostrar sessions acabades (${completedCount})`}
                                                                 </td>
                                                             </tr>
@@ -1802,7 +1812,7 @@
                                                 {activeUnit.phases.map((phase, pIndex) => (
                                                     <React.Fragment key={phase.id}>
                                                         <tr className={`border-b border-gray-200 ${`phase-header-${pIndex % 5}`}`}>
-                                                            <td colSpan="5" className="p-2">
+                                                            <td colSpan="4" className="p-2">
                                                                 <div className="flex items-center group">
                                                                     <button
                                                                         onClick={() => updatePhase(activeCourse.id, activeUnit.id, phase.id, 'collapsed', !phase.collapsed)}
@@ -1866,7 +1876,7 @@
                                                                 >
                                                                     
                                                                     <td className="p-2 align-top border-r border-gray-200 group/session relative">
-                                                                        <div className="flex flex-col items-center justify-start h-full mt-1">
+                                                                        <div className="flex flex-col items-center justify-start h-full mt-1 gap-0.5">
                                                                             <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing mb-1 opacity-0 group-hover/session:opacity-100 transition-opacity" title="Arrossega per moure la sessió">
                                                                                 <IconGripVertical />
                                                                             </span>
@@ -1876,9 +1886,16 @@
                                                                             {totalSessionTime > 0 && (
                                                                                 <div className="text-sm text-red-600 font-bold mt-1 text-center" title="Temps total de la sessió">
                                                                                     {totalSessionTime}'
-                                                                            </div>
+                                                                                </div>
                                                                             )}
-                                                                            <button onClick={() => deleteSession(activeCourse.id, activeUnit.id, phase.id, session.id)} className="mt-2 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover/session:opacity-100" title="Eliminar sessió">
+                                                                            <button
+                                                                                onClick={() => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'completed', !session.completed)}
+                                                                                className={`mt-1 p-1 rounded transition-colors ${session.completed ? 'text-green-600 bg-green-100 hover:bg-green-200' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`}
+                                                                                title={session.completed ? 'Marcar com a pendent' : 'Marcar com a feta'}
+                                                                            >
+                                                                                <IconCheck />
+                                                                            </button>
+                                                                            <button onClick={() => deleteSession(activeCourse.id, activeUnit.id, phase.id, session.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover/session:opacity-100" title="Eliminar sessió">
                                                                                 <IconTrash />
                                                                             </button>
                                                                         </div>
@@ -2026,24 +2043,15 @@
                                                                         </div>
                                                                     </td>
                                                                     
-                                                                    <td className="p-0 align-top border-r border-gray-200 h-[1px]">
-                                                                        <div className="max-h-[120px] w-full overflow-y-auto custom-scroll p-3 flex flex-col">
-                                                                            <AutoTextarea 
+                                                                    <td className="p-0 align-top">
+                                                                        <div className="p-3">
+                                                                            <textarea
                                                                                 value={session.comments}
-                                                                                onChange={(val) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', val)}
+                                                                                onChange={(e) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', e.target.value)}
                                                                                 placeholder="Notes d'aplicació..."
-                                                                                className={`text-sm italic flex-1 ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
+                                                                                className={`w-full min-h-[60px] max-h-[110px] text-sm italic resize-none outline-none bg-transparent overflow-y-auto custom-scroll ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
                                                                             />
                                                                         </div>
-                                                                    </td>
-
-                                                                    <td className="p-3 align-middle text-center">
-                                                                        <input 
-                                                                            type="checkbox" 
-                                                                            checked={session.completed}
-                                                                            onChange={(e) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'completed', e.target.checked)}
-                                                                            className="w-5 h-5 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer accent-green-600"
-                                                                        />
                                                                     </td>
                                                                 </tr>
                                                             );
@@ -2051,7 +2059,7 @@
 
                                                         {!phase.collapsed && (
                                                             <tr className="bg-gray-50/50">
-                                                                <td colSpan="5" className="p-2 text-center">
+                                                                <td colSpan="4" className="p-2 text-center">
                                                                     <button 
                                                                         onClick={() => addSession(activeCourse.id, activeUnit.id, phase.id)}
                                                                         className="inline-flex items-center px-3 py-1 text-sm text-gray-500 hover:text-orange-600 hover:bg-orange-100 rounded-full transition-colors font-medium"
@@ -2065,7 +2073,7 @@
                                                 ))}
                                                 
                                                 <tr className="bg-white">
-                                                    <td colSpan="5" className="p-4 text-center border-t border-gray-200">
+                                                    <td colSpan="4" className="p-4 text-center border-t border-gray-200">
                                                         <button 
                                                             onClick={() => addPhase(activeCourse.id, activeUnit.id)}
                                                             className="inline-flex items-center px-4 py-2 text-sm text-gray-500 border border-dashed border-gray-300 hover:border-orange-500 hover:text-orange-600 rounded-lg transition-colors font-medium bg-gray-50 hover:bg-orange-50"
