@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <!-- Meta tag configurat per evitar l'auto-zoom a l'iPad en fer focus -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>El laboratorio de rocas: Cuaderno de Modelización</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Patrick+Hand&display=swap');
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #fffaf5;
+            color: #334155;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3, .handwritten {
+            font-family: 'Patrick Hand', cursive;
+        }
+
+        /* Barra de desplaçament personalitzada */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #fdba74; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #fb923c; }
+
+        /* Classes d'animació */
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Estils d'input interactius i optimització iPad */
+        .interactive-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 2px dashed #fdba74;
+            font-family: 'Patrick Hand', cursive;
+            font-size: 1.125rem; /* ~18px per evitar auto-zoom iOS */
+            color: #1e293b;
+            padding: 4px 8px;
+            transition: all 0.3s ease;
+        }
+        .interactive-input:focus {
+            outline: none;
+            border-bottom-color: #f97316;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 4px 4px 0 0;
+        }
+
+        /* Estils de les targetes de fase */
+        .phase-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-bottom: 2rem;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .phase-card.active {
+            border-color: #f97316;
+            box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.2);
+        }
+        .phase-card.completed {
+            border-color: #22c55e;
+        }
+
+        /* Barra de Progrés interactiva */
+        .progress-step {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.875rem;
+            z-index: 10;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .progress-step:hover { transform: scale(1.15); }
+        
+        .progress-line {
+            height: 4px;
+            background-color: #e2e8f0;
+            flex-grow: 1;
+            margin: 0 -5px;
+            z-index: 0;
+            transition: all 0.3s ease;
+        }
+
+        /* Colors dels grups */
+        .bg-igneous { background-color: #fee2e2; border-color: #fca5a5; }
+        .text-igneous { color: #ef4444; }
+        .border-igneous { border-color: #ef4444; }
+
+        .bg-sedimentary { background-color: #fef3c7; border-color: #fde047; }
+        .text-sedimentary { color: #eab308; }
+        .border-sedimentary { border-color: #eab308; }
+
+        .bg-metamorphic { background-color: #f3e8ff; border-color: #d8b4fe; }
+        .text-metamorphic { color: #a855f7; }
+        .border-metamorphic { border-color: #a855f7; }
+
+        /* Targeta DNI */
+        .dni-card {
+            background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><g fill="%23f1f5f9" fill-opacity="0.4" fill-rule="evenodd"><circle cx="10" cy="10" r="2"/></g></svg>');
+        }
+
+        /* Àrea de dibuix - Bloqueig de scroll tàctil pel llenç */
+        .drawing-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 0.5rem;
+            background-color: #ffffff;
+            cursor: crosshair;
+            touch-action: none; 
+        }
+
+        /* Estils personalitzats d'Acordió */
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        details > summary::after { content: ' ▼'; font-size: 0.8em; float: right; color: #94a3b8; transition: transform 0.2s; }
+        details[open] > summary::after { transform: rotate(180deg); }
+    </style>
+</head>
+<body class="pb-20">
+
+    <!-- Modal d'Imatge Completa -->
+    <div id="imageModal" class="fixed inset-0 z-[100] bg-black/90 hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300" onclick="closeImageModal(event)">
+        <button class="absolute top-4 right-4 text-white text-3xl hover:text-orange-500 transition-colors z-50 p-2" onclick="closeImageModal(event)"><i class="fa-solid fa-times"></i></button>
+        <img id="modalImage" src="" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none" onclick="event.stopPropagation()">
+    </div>
+
+    <!-- Capçalera Fixa i Progrés -->
+    <header class="sticky top-0 bg-white/90 backdrop-blur-sm shadow-sm z-50 border-b border-gray-200">
+        <div class="max-w-4xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between mb-2">
+                <h1 class="text-2xl md:text-3xl font-bold text-slate-800">
+                    <i class="fa-solid fa-user-secret mr-2 text-orange-600"></i> EL LABORATORIO DE ROCAS
+                </h1>
+                <div class="text-sm font-semibold text-slate-500 flex items-center gap-4">
+                    <span><span id="currentPhaseLabel">Fase 0</span> / 7</span>
+                    <button onclick="clearData()" class="text-slate-300 hover:text-red-500 transition-colors text-lg" title="Borrar datos guardados">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                    <button onclick="promptTeacherMode()" class="text-slate-300 hover:text-orange-600 transition-colors text-lg" title="Acceso Docente">
+                        <i class="fa-solid fa-lock"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Barra de Progrés com a Índex -->
+            <div class="flex items-center justify-between px-2" id="progressBar">
+                <div class="progress-step bg-orange-600 text-white shadow-sm" id="step0" onclick="goToPhase(0)">0</div>
+                <div class="progress-line" id="line1"></div>
+                <div class="progress-step bg-slate-200 text-slate-500" id="step1" onclick="goToPhase(1)">1</div>
+                <div class="progress-line" id="line2"></div>
+                <div class="progress-step bg-slate-200 text-slate-500" id="step2" onclick="goToPhase(2)">2</div>
+                <div class="progress-line" id="line3"></div>
+                <div class="progress-step bg-slate-200 text-slate-500" id="step3" onclick="goToPhase(3)">3</div>
+                <div class="progress-line" id="line4"></div>
+                <div class="progress-step bg-slate-200 text-slate-500" id="step4" onclick="goToPhase(4)">4</div>
+                <div class="progress-line" id="line5"></div>
+                <div class="progress-step bg-slate-200 text-slate-500" id="step5" onclick="goToPhase(5)">5</div>
+                <div class="progress-line" id="line6"></div>
+                <div class="progress-step bg-slate-200 text-slate-500" id="step6" onclick="goToPhase(6)">6</div>
+                <div class="progress-line" id="line7"></div>
+                <div class="progress-step bg-slate-200 text-slate-500" id="step7" onclick="goToPhase(7)">7</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 mt-8">
+        
+        <!-- Capçalera Intro -->
+        <div class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-lg mb-8 fade-in">
+            <p class="text-orange-900 font-medium text-lg">
+                Tienes 6 rocas misteriosas en tu mesa. Primero deberás identificarlas usando el manual y descubrir sus propiedades clave. Después, agruparlas y descubrir las leyes geológicas que gobiernan nuestro planeta.
+            </p>
+            <div class="mt-4 flex flex-col sm:flex-row gap-4">
+                <div class="flex-1">
+                    <label class="text-xs font-bold text-orange-400 uppercase tracking-wider">Investigador/a:</label>
+                    <input type="text" class="interactive-input text-lg" placeholder="Tu nombre..." id="studentName">
+                </div>
+                <div class="w-32">
+                    <label class="text-xs font-bold text-orange-400 uppercase tracking-wider">Fecha:</label>
+                    <input type="date" class="interactive-input text-lg font-sans" id="currentDate">
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- FASE 0: BANCO DE CARACTERÍSTICAS -->
+        <!-- ========================================== -->
+        <section id="phase0" class="phase-card active p-6 md:p-8 border-l-8 border-slate-800">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-slate-800 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">0</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">BANCO DE CARACTERÍSTICAS</h2>
+                <span class="ml-auto text-sm bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 5 min</span>
+            </div>
+            
+            <p class="text-slate-600 mb-4 italic">Lee atentamente el manual de laboratorio. Contiene todas las características que podrías encontrar en las muestras.</p>
+
+            <!-- Explicació de les Categories -->
+            <div class="bg-indigo-50/50 p-5 rounded-lg border border-indigo-100 mb-6 shadow-sm">
+                <h3 class="font-bold text-indigo-900 mb-3 text-lg"><i class="fa-solid fa-book-open text-orange-500 mr-2"></i> ¿Qué miramos para clasificar una roca?</h3>
+                <ul class="space-y-2 text-sm text-slate-700">
+                    <li><strong class="text-slate-900">🎨 A. Color:</strong> El tono general. A veces engaña, pero es la primera pista visual.</li>
+                    <li><strong class="text-slate-900">✨ B. Brillo:</strong> Cómo refleja la luz. ¿Parece cristal reflectante, metal oscuro, o es opaca y mate?</li>
+                    <li><strong class="text-slate-900">🔍 C. Textura y Grano:</strong> El tamaño y la forma de los "trozos" que la forman. ¿Se ven granos a simple vista?</li>
+                    <li><strong class="text-slate-900">🧱 D. Estructura:</strong> Cómo se rompe (¿en láminas, en curvas?) o si muestra capas horizontales claras.</li>
+                    <li><strong class="text-slate-900">💎 E. Composición:</strong> De qué está hecha internamente. ¿Ves cristales claros, oscuros o restos de fósiles?</li>
+                    <li><strong class="text-slate-900">🖐️ F. Propiedades Físicas:</strong> Lo que sientes. Requiere el tacto: peso, suavidad, dureza o si mancha.</li>
+                    <li><strong class="text-slate-900">🌋 G. Origen:</strong> Pistas visuales sobre cómo nació (enfriada como lava, aplastada por presión, o acumulada).</li>
+                </ul>
+            </div>
+            
+            <!-- Contenidor dinàmic del Banc de Dades -->
+            <div id="bank-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <!-- S'injecta per JS -->
+            </div>
+
+            <div class="bg-orange-50 rounded-lg p-5 border border-orange-200">
+                <label class="block font-bold text-orange-900 mb-2"><i class="fa-solid fa-lock mr-1"></i> Prueba de Acceso al Laboratorio</label>
+                <p class="text-sm text-orange-700 mb-3">Para desbloquear las fichas de identificación, demuestra que has consultado el banco: <strong>De todas las características del banco, ¿cuáles son las únicas que NO podrías observar mirando una foto, sino que necesitarías la roca en la mano? Anota sus códigos.</strong></p>
+                <div class="flex gap-2">
+                    <input type="text" id="access-input" class="p-2 border-2 border-orange-300 rounded font-bold text-center uppercase focus:ring-2 focus:ring-orange-500 outline-none w-full md:w-64" placeholder="Ej: A1, B2..." onkeyup="if(event.key === 'Enter') checkAccess()">
+                    <button onclick="checkAccess()" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded transition-colors whitespace-nowrap">Verificar</button>
+                </div>
+                <p id="access-error" class="text-red-500 text-sm font-bold mt-2 hidden">Código incorrecto. Revisa qué categoría requiere sopesar o tocar la roca.</p>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- FASE 1: IDENTIFICACIÓN DE ROCAS -->
+        <!-- ========================================== -->
+        <section id="phase1" class="phase-card p-6 md:p-8 hidden opacity-50 transition-opacity duration-500 border-l-8 border-orange-400">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-orange-400 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">1</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">ANÁLISIS DE MUESTRAS</h2>
+                <span class="ml-auto text-sm bg-orange-50 text-orange-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 20 min</span>
+            </div>
+            
+            <div class="bg-orange-50 border border-orange-200 p-4 rounded-lg mb-6 text-sm text-orange-800">
+                <p><strong>Instrucciones de Identificación:</strong></p>
+                <ul class="list-disc pl-5 mt-1 space-y-1">
+                    <li>Abre los desplegables de cada roca y marca (☑) las propiedades que observes. La opción seleccionada quedará fijada en el título.</li>
+                    <li>¡IMPORTANTE! Selecciona la <strong>estrella (☆)</strong> para marcar los <strong>rasgos diagnósticos clave</strong> de esa roca.</li>
+                    <li>Puedes hacer clic en la <strong>lupa</strong> de las imágenes para verlas en detalle.</li>
+                </ul>
+            </div>
+
+            <!-- Contenidor dinàmic de les Roques -->
+            <div id="rocks-container" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- S'injecta per JS -->
+            </div>
+
+            <div id="validation-feedback" class="mb-4 p-4 rounded-lg hidden font-bold text-center transition-all"></div>
+
+            <div class="flex justify-end">
+                <button onclick="validateRocks()" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-8 rounded-xl transition-colors shadow-lg flex items-center gap-2">
+                    Validar Identificaciones <i class="fa-solid fa-microscope"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- FASE 2: HIPÓTESIS INICIAL -->
+        <!-- ========================================== -->
+        <section id="phase2" class="phase-card p-6 md:p-8 hidden opacity-50 transition-opacity duration-500 border-l-8 border-slate-800">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-slate-800 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">2</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">TU HIPÓTESIS INICIAL</h2>
+                <span class="ml-auto text-sm bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 2 min</span>
+            </div>
+            
+            <p class="text-slate-600 mb-6 italic">¡Buen trabajo con el análisis! Ahora tienes muchos datos. Antes de empezar a comparar tus hallazgos, confía en tu intuición científica.</p>
+            
+            <div class="bg-slate-50 rounded-lg p-5 border border-slate-200">
+                <label class="block font-bold text-slate-700 mb-2">¿Crees que estas 6 rocas se pueden agrupar de alguna manera? ¿En qué te fijarías para hacer los grupos?</label>
+                <textarea id="p2-hyp" class="interactive-input w-full min-h-[100px] resize-y bg-white" placeholder="✍️ Escribe aquí tu hipótesis..." oninput="checkPhaseComplete(2)"></textarea>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button onclick="unlockPhase(3)" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2" id="btnNext2" disabled>
+                    Empezar a Comparar <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- FASE 3: OBSERVACIÓN LIBRE Y COMPARACIÓN -->
+        <!-- ========================================== -->
+        <section id="phase3" class="phase-card p-6 md:p-8 hidden opacity-50 transition-opacity duration-500 border-l-8 border-blue-500">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-blue-500 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">3</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">OBSERVACIÓN LIBRE Y COMPARACIÓN</h2>
+                <span class="ml-auto text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 15 min</span>
+            </div>
+            <p class="text-slate-600 mb-8 italic"><i class="fa-solid fa-circle-info text-blue-500"></i> Basándote en las identificaciones que acabas de hacer, busca patrones en las siguientes parejas.</p>
+
+            <!-- Pareja 1: ROJAS (Ígneas) -->
+            <div class="bg-igneous border-2 rounded-xl p-4 md:p-6 mb-8 shadow-sm">
+                <h3 class="text-xl font-bold text-igneous mb-4 border-b-2 border-red-200 pb-2">🔴 PAREJA 1: Obsidiana y Sienita</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white/80 rounded-lg p-4 text-center border border-red-100 flex flex-col items-center justify-center">
+                        <div class="relative group h-20 w-full mb-2">
+                            <img src="https://i.ibb.co/JR7vgv59/obsidiana.png" class="h-full w-full object-contain mix-blend-multiply">
+                            <button onclick="openImage('https://i.ibb.co/JR7vgv59/obsidiana.png')" class="absolute bottom-0 right-1/2 translate-x-1/2 bg-slate-800/60 hover:bg-orange-600 text-white p-2 rounded-full opacity-70 group-hover:opacity-100 transition-all z-20"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <h4 class="font-bold text-slate-700">ROCA A</h4>
+                        <p class="text-red-500 font-semibold">Obsidiana</p>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-4 shadow-sm border-2 border-red-300 relative z-10 md:-mx-4 flex flex-col justify-center">
+                        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow whitespace-nowrap">
+                            🤝 LO QUE COMPARTEN
+                        </div>
+                        <p class="text-sm font-bold text-slate-700 mb-2 mt-2">Escribe TRES cosas importantes en común:</p>
+                        <ol class="list-decimal list-inside space-y-2 text-slate-600 text-sm">
+                            <li><input type="text" id="p3-g1-c1" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                            <li><input type="text" id="p3-g1-c2" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                            <li><input type="text" id="p3-g1-c3" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-white/80 rounded-lg p-4 text-center border border-red-100 flex flex-col items-center justify-center">
+                        <div class="relative group h-20 w-full mb-2">
+                            <img src="https://i.ibb.co/FkC5SHTS/sientia.png" class="h-full w-full object-contain mix-blend-multiply">
+                            <button onclick="openImage('https://i.ibb.co/FkC5SHTS/sientia.png')" class="absolute bottom-0 right-1/2 translate-x-1/2 bg-slate-800/60 hover:bg-orange-600 text-white p-2 rounded-full opacity-70 group-hover:opacity-100 transition-all z-20"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <h4 class="font-bold text-slate-700">ROCA B</h4>
+                        <p class="text-red-500 font-semibold">Sienita</p>
+                    </div>
+                </div>
+
+                <div class="space-y-4 bg-white/60 p-4 rounded-lg">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">⚖️ La Discrepancia: <span class="font-normal text-sm">¿Qué tienen de diferente estas dos rocas que te hace dudar si van juntas?</span></label>
+                        <input type="text" id="p3-g1-diff" class="interactive-input bg-white" placeholder="✍️ Respuesta...">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">🏷️ Bautiza al grupo: <span class="font-normal text-sm">Si fueras el primero en descubrir este grupo, ¿qué nombre le pondrías?</span></label>
+                        <input type="text" class="interactive-input bg-white font-bold text-red-600" placeholder="✍️ Mi nombre para este grupo..." id="nameGroup1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pareja 2: AMARILLAS (Sedimentarias) -->
+            <div class="bg-sedimentary border-2 rounded-xl p-4 md:p-6 mb-8 shadow-sm">
+                <h3 class="text-xl font-bold text-sedimentary mb-4 border-b-2 border-yellow-200 pb-2">🟡 PAREJA 2: Hulla y Caliza</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white/80 rounded-lg p-4 text-center border border-yellow-100 flex flex-col items-center justify-center">
+                        <div class="relative group h-20 w-full mb-2">
+                            <img src="https://i.ibb.co/fzvc2Jr8/hulla.png" class="h-full w-full object-contain mix-blend-multiply">
+                            <button onclick="openImage('https://i.ibb.co/fzvc2Jr8/hulla.png')" class="absolute bottom-0 right-1/2 translate-x-1/2 bg-slate-800/60 hover:bg-orange-600 text-white p-2 rounded-full opacity-70 group-hover:opacity-100 transition-all z-20"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <h4 class="font-bold text-slate-700">ROCA A</h4>
+                        <p class="text-yellow-600 font-semibold">Hulla</p>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-4 shadow-sm border-2 border-yellow-400 relative z-10 md:-mx-4 flex flex-col justify-center">
+                        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow whitespace-nowrap">
+                            🤝 LO QUE COMPARTEN
+                        </div>
+                        <p class="text-sm font-bold text-slate-700 mb-2 mt-2">Escribe TRES cosas importantes en común:</p>
+                        <ol class="list-decimal list-inside space-y-2 text-slate-600 text-sm">
+                            <li><input type="text" id="p3-g2-c1" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                            <li><input type="text" id="p3-g2-c2" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                            <li><input type="text" id="p3-g2-c3" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-white/80 rounded-lg p-4 text-center border border-yellow-100 flex flex-col items-center justify-center">
+                        <div class="relative group h-20 w-full mb-2">
+                            <img src="https://i.ibb.co/PGSJ2Jkc/caliza.png" class="h-full w-full object-contain mix-blend-multiply">
+                            <button onclick="openImage('https://i.ibb.co/PGSJ2Jkc/caliza.png')" class="absolute bottom-0 right-1/2 translate-x-1/2 bg-slate-800/60 hover:bg-orange-600 text-white p-2 rounded-full opacity-70 group-hover:opacity-100 transition-all z-20"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <h4 class="font-bold text-slate-700">ROCA B</h4>
+                        <p class="text-yellow-600 font-semibold">Caliza</p>
+                    </div>
+                </div>
+
+                <div class="space-y-4 bg-white/60 p-4 rounded-lg">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">❗ La Excepción: <span class="font-normal text-sm">Hay un rasgo que puede aparecer en estas rocas y en NINGUNA OTRA. ¿Cuál es?</span></label>
+                        <input type="text" id="p3-g2-exc" class="interactive-input bg-white" placeholder="✍️ Respuesta...">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">🏷️ Bautiza al grupo:</label>
+                        <input type="text" class="interactive-input bg-white font-bold text-yellow-600" placeholder="✍️ Mi nombre para este grupo..." id="nameGroup2">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pareja 3: MORADAS (Metamórficas) -->
+            <div class="bg-metamorphic border-2 rounded-xl p-4 md:p-6 mb-8 shadow-sm">
+                <h3 class="text-xl font-bold text-metamorphic mb-4 border-b-2 border-purple-200 pb-2">🟣 PAREJA 3: Pizarra y Gneiss</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white/80 rounded-lg p-4 text-center border border-purple-100 flex flex-col items-center justify-center">
+                        <div class="relative group h-20 w-full mb-2">
+                            <img src="https://i.ibb.co/NdX6zj91/pizarra.png" class="h-full w-full object-contain mix-blend-multiply">
+                            <button onclick="openImage('https://i.ibb.co/NdX6zj91/pizarra.png')" class="absolute bottom-0 right-1/2 translate-x-1/2 bg-slate-800/60 hover:bg-orange-600 text-white p-2 rounded-full opacity-70 group-hover:opacity-100 transition-all z-20"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <h4 class="font-bold text-slate-700">ROCA A</h4>
+                        <p class="text-purple-600 font-semibold">Pizarra</p>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg p-4 shadow-sm border-2 border-purple-400 relative z-10 md:-mx-4 flex flex-col justify-center">
+                        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow whitespace-nowrap">
+                            🤝 LO QUE COMPARTEN
+                        </div>
+                        <p class="text-sm font-bold text-slate-700 mb-2 mt-2">Escribe TRES cosas importantes en común:</p>
+                        <ol class="list-decimal list-inside space-y-2 text-slate-600 text-sm">
+                            <li><input type="text" id="p3-g3-c1" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                            <li><input type="text" id="p3-g3-c2" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                            <li><input type="text" id="p3-g3-c3" class="interactive-input bg-transparent w-4/5" placeholder="..."></li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-white/80 rounded-lg p-4 text-center border border-purple-100 flex flex-col items-center justify-center">
+                        <div class="relative group h-20 w-full mb-2">
+                            <img src="https://i.ibb.co/jZ1MPJXJ/gneiss.png" class="h-full w-full object-contain mix-blend-multiply">
+                            <button onclick="openImage('https://i.ibb.co/jZ1MPJXJ/gneiss.png')" class="absolute bottom-0 right-1/2 translate-x-1/2 bg-slate-800/60 hover:bg-orange-600 text-white p-2 rounded-full opacity-70 group-hover:opacity-100 transition-all z-20"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <h4 class="font-bold text-slate-700">ROCA B</h4>
+                        <p class="text-purple-600 font-semibold">Gneiss</p>
+                    </div>
+                </div>
+
+                <div class="space-y-4 bg-white/60 p-4 rounded-lg">
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">👀 El Patrón visual: <span class="font-normal text-sm">¿Qué les pasa a los minerales o a los colores en estas rocas?</span></label>
+                        <input type="text" id="p3-g3-pat" class="interactive-input bg-white" placeholder="✍️ Respuesta...">
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1">🏷️ Bautiza al grupo:</label>
+                        <input type="text" class="interactive-input bg-white font-bold text-purple-600" placeholder="✍️ Mi nombre para este grupo..." id="nameGroup3">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="unlockPhase(4)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                    Confirmar Patrones <i class="fa-solid fa-check ml-2"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- FASE 4: CONSTRUCCIÓN DE LA REGLA -->
+        <!-- ========================================== -->
+        <section id="phase4" class="phase-card p-6 md:p-8 hidden opacity-50 transition-opacity duration-500 border-l-8 border-emerald-500">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-emerald-500 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">4</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">CONSTRUCCIÓN DE LA REGLA</h2>
+                <span class="ml-auto text-sm bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 10 min</span>
+            </div>
+            <p class="text-slate-600 mb-6 italic">Es hora de redactar tu propia ley científica. Explica con tus palabras qué define a cada grupo basándote en la Fase de Comparación.</p>
+
+            <!-- Grupo Rojo -->
+            <div class="mb-6 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                <div class="bg-slate-50 p-4 border-b border-slate-200">
+                    <h4 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-red-500 inline-block"></span> 
+                        EL GRUPO ROJO 
+                        <span class="text-sm font-normal text-slate-500 ml-2">(Las que llamaste: <span class="font-bold italic text-red-500 display-name-1"></span>)</span>
+                    </h4>
+                </div>
+                <div class="p-4 bg-white">
+                    <label class="block font-bold text-slate-700 mb-2">Escribe tu definición: <span class="font-normal text-sm italic">"Estas rocas se forman cuando... y se caracterizan por..."</span></label>
+                    <textarea id="p4-def1" class="interactive-input w-full min-h-[80px] resize-y mb-4" placeholder="✍️ Tu definición..."></textarea>
+                    
+                    <button onclick="toggleDefinition('def1')" class="text-sm text-emerald-600 font-bold hover:text-emerald-700 underline flex items-center gap-1">
+                        <i class="fa-solid fa-eye"></i> Revelar definición científica
+                    </button>
+                    
+                    <div id="def1" class="hidden mt-4 p-4 bg-slate-100 rounded-lg border-l-4 border-emerald-500">
+                        <p class="font-bold text-slate-800"><i class="fa-solid fa-flask text-emerald-600 mr-2"></i>ROCAS ÍGNEAS</p>
+                        <p class="text-slate-600 text-sm mt-1">Se forman al enfriarse magma o lava. No tienen láminas ni fósiles. Pueden tener cristales entrelazados (si el enfriamiento es lento) o ser un vidrio liso (si es muy rápido).</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grupo Amarillo -->
+            <div class="mb-6 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                <div class="bg-slate-50 p-4 border-b border-slate-200">
+                    <h4 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-yellow-400 inline-block"></span> 
+                        EL GRUPO AMARILLO 
+                        <span class="text-sm font-normal text-slate-500 ml-2">(Las que llamaste: <span class="font-bold italic text-yellow-500 display-name-2"></span>)</span>
+                    </h4>
+                </div>
+                <div class="p-4 bg-white">
+                    <label class="block font-bold text-slate-700 mb-2">Escribe tu definición:</label>
+                    <textarea id="p4-def2" class="interactive-input w-full min-h-[80px] resize-y mb-4" placeholder="✍️ Tu definición..."></textarea>
+                    
+                    <button onclick="toggleDefinition('def2')" class="text-sm text-emerald-600 font-bold hover:text-emerald-700 underline flex items-center gap-1">
+                        <i class="fa-solid fa-eye"></i> Revelar definición científica
+                    </button>
+                    
+                    <div id="def2" class="hidden mt-4 p-4 bg-slate-100 rounded-lg border-l-4 border-emerald-500">
+                        <p class="font-bold text-slate-800"><i class="fa-solid fa-flask text-emerald-600 mr-2"></i>ROCAS SEDIMENTARIAS</p>
+                        <p class="text-slate-600 text-sm mt-1">Se forman por la acumulación y compactación de fragmentos, sustancias disueltas o restos de seres vivos. Por eso, son las únicas que pueden presentar fósiles o estratos (capas).</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grupo Morado -->
+            <div class="mb-6 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                <div class="bg-slate-50 p-4 border-b border-slate-200">
+                    <h4 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-purple-500 inline-block"></span> 
+                        EL GRUPO MORADO 
+                        <span class="text-sm font-normal text-slate-500 ml-2">(Las que llamaste: <span class="font-bold italic text-purple-500 display-name-3"></span>)</span>
+                    </h4>
+                </div>
+                <div class="p-4 bg-white">
+                    <label class="block font-bold text-slate-700 mb-2">Escribe tu definición:</label>
+                    <textarea id="p4-def3" class="interactive-input w-full min-h-[80px] resize-y mb-4" placeholder="✍️ Tu definición..."></textarea>
+                    
+                    <button onclick="toggleDefinition('def3')" class="text-sm text-emerald-600 font-bold hover:text-emerald-700 underline flex items-center gap-1">
+                        <i class="fa-solid fa-eye"></i> Revelar definición científica
+                    </button>
+                    
+                    <div id="def3" class="hidden mt-4 p-4 bg-slate-100 rounded-lg border-l-4 border-emerald-500">
+                        <p class="font-bold text-slate-800"><i class="fa-solid fa-flask text-emerald-600 mr-2"></i>ROCAS METAMÓRFICAS</p>
+                        <p class="text-slate-600 text-sm mt-1">Se forman cuando otras rocas sufren grandes presiones o temperaturas sin llegar a fundirse. Sus minerales se reorganizan formando láminas o bandas orientadas (foliación).</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="unlockPhase(5)" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                    Avanzar al Diálogo <i class="fa-solid fa-comments ml-2"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- FASE 5: DIÁLOGO ENTRE IGUALES -->
+        <!-- ========================================== -->
+        <section id="phase5" class="phase-card p-6 md:p-8 hidden opacity-50 transition-opacity duration-500 border-l-8 border-orange-400">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-orange-400 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">5</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">DIÁLOGO ENTRE IGUALES</h2>
+                <span class="ml-auto text-sm bg-orange-50 text-orange-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 5 min</span>
+            </div>
+            
+            <div class="bg-orange-50 rounded-lg p-5 border border-orange-200 mb-6 flex gap-4">
+                <i class="fa-solid fa-users text-3xl text-orange-400"></i>
+                <div>
+                    <p class="font-bold text-slate-800">Instrucción:</p>
+                    <p class="text-slate-600 text-sm">Júntate con un compañero/a. Comparad vuestras definiciones de la Fase 4 y discutid las diferencias.</p>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-2">🤔 ¿En qué parte del modelo geológico no estáis de acuerdo?</label>
+                    <input type="text" id="p5-disagree" class="interactive-input w-full" placeholder="✍️ Respuesta...">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-2">💡 Anota una idea interesante o una palabra clave que haya usado tu compañero/a y tú no:</label>
+                    <input type="text" id="p5-idea" class="interactive-input w-full" placeholder="✍️ Respuesta...">
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-end">
+                <button onclick="unlockPhase(6)" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                    Crear DNIs <i class="fa-regular fa-id-card ml-2"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- FASE 6: CARNET DE IDENTIDAD -->
+        <!-- ========================================== -->
+        <section id="phase6" class="phase-card p-6 md:p-8 hidden opacity-50 transition-opacity duration-500 border-l-8 border-teal-500">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-teal-500 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">6</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">EL CARNET DE IDENTIDAD (DNI GEOLÓGICO)</h2>
+                <span class="ml-auto text-sm bg-teal-50 text-teal-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 10 min</span>
+            </div>
+            <p class="text-slate-600 mb-6 italic">Resume vuestro modelo final rellenando los DNI de los tres grandes grupos.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                <!-- DNI Igneas -->
+                <div class="dni-card bg-igneous border-2 border-igneous rounded-xl p-5 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Oficial</div>
+                    <h4 class="font-bold text-xl text-slate-800 mb-1 border-b-2 border-red-300 pb-2">🪪 ROCAS ÍGNEAS</h4>
+                    
+                    <div class="mt-4 space-y-3 text-sm">
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-red-500">Origen principal:</span>
+                            <input type="text" id="p6-o1" class="interactive-input bg-transparent !text-sm !p-0 !border-b-red-300" placeholder="...">
+                        </div>
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-red-500">Rasgo clave que NUNCA tienen:</span>
+                            <input type="text" id="p6-r1" class="interactive-input bg-transparent !text-sm !p-0 !border-b-red-300" placeholder="...">
+                        </div>
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-red-500">Ejemplos analizados:</span>
+                            <input type="text" id="p6-e1" class="interactive-input bg-transparent !text-sm !p-0 !border-b-red-300" value="Obsidiana, Sienita">
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <span class="font-bold text-slate-700 block text-xs uppercase text-red-500 mb-1">Dibuja cómo se forman:</span>
+                        <canvas id="canvas1" width="200" height="120" class="drawing-area w-full h-32 bg-white"></canvas>
+                        <div class="flex gap-2 mt-1">
+                            <button onclick="clearCanvas('canvas1')" class="text-xs text-slate-500 hover:text-red-500"><i class="fa-solid fa-eraser"></i> Borrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DNI Sedimentarias -->
+                <div class="dni-card bg-sedimentary border-2 border-sedimentary rounded-xl p-5 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Oficial</div>
+                    <h4 class="font-bold text-xl text-slate-800 mb-1 border-b-2 border-yellow-300 pb-2">🪪 R. SEDIMENTARIAS</h4>
+                    
+                    <div class="mt-4 space-y-3 text-sm">
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-yellow-600">Origen principal:</span>
+                            <input type="text" id="p6-o2" class="interactive-input bg-transparent !text-sm !p-0 !border-b-yellow-400" placeholder="...">
+                        </div>
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-yellow-600">Rasgo exclusivo (su superpoder):</span>
+                            <input type="text" id="p6-r2" class="interactive-input bg-transparent !text-sm !p-0 !border-b-yellow-400" placeholder="...">
+                        </div>
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-yellow-600">Ejemplos analizados:</span>
+                            <input type="text" id="p6-e2" class="interactive-input bg-transparent !text-sm !p-0 !border-b-yellow-400" value="Hulla, Caliza">
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <span class="font-bold text-slate-700 block text-xs uppercase text-yellow-600 mb-1">Dibuja cómo se forman:</span>
+                        <canvas id="canvas2" width="200" height="120" class="drawing-area w-full h-32 bg-white"></canvas>
+                        <div class="flex gap-2 mt-1">
+                            <button onclick="clearCanvas('canvas2')" class="text-xs text-slate-500 hover:text-yellow-600"><i class="fa-solid fa-eraser"></i> Borrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DNI Metamórficas -->
+                <div class="dni-card bg-metamorphic border-2 border-metamorphic rounded-xl p-5 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Oficial</div>
+                    <h4 class="font-bold text-xl text-slate-800 mb-1 border-b-2 border-purple-300 pb-2">🪪 R. METAMÓRFICAS</h4>
+                    
+                    <div class="mt-4 space-y-3 text-sm">
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-purple-600">Origen principal:</span>
+                            <input type="text" id="p6-o3" class="interactive-input bg-transparent !text-sm !p-0 !border-b-purple-300" placeholder="...">
+                        </div>
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-purple-600">Rasgo visual más claro:</span>
+                            <input type="text" id="p6-r3" class="interactive-input bg-transparent !text-sm !p-0 !border-b-purple-300" placeholder="...">
+                        </div>
+                        <div>
+                            <span class="font-bold text-slate-700 block text-xs uppercase text-purple-600">Ejemplos analizados:</span>
+                            <input type="text" id="p6-e3" class="interactive-input bg-transparent !text-sm !p-0 !border-b-purple-300" value="Pizarra, Gneiss">
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <span class="font-bold text-slate-700 block text-xs uppercase text-purple-600 mb-1">Dibuja cómo se forman:</span>
+                        <canvas id="canvas3" width="200" height="120" class="drawing-area w-full h-32 bg-white"></canvas>
+                        <div class="flex gap-2 mt-1">
+                            <button onclick="clearCanvas('canvas3')" class="text-xs text-slate-500 hover:text-purple-600"><i class="fa-solid fa-eraser"></i> Borrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-end">
+                <button onclick="unlockPhase(7)" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                    Afrontar el Reto Final <i class="fa-solid fa-mountain ml-2"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- FASE 7: EL RETO DEL EXPERTO -->
+        <!-- ========================================== -->
+        <section id="phase7" class="phase-card p-6 md:p-8 hidden opacity-50 transition-opacity duration-500 border-l-8 border-rose-500">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="bg-rose-500 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold">7</div>
+                <h2 class="text-2xl font-bold text-slate-800 m-0">EL RETO DEL EXPERTO (Transferencia)</h2>
+                <span class="ml-auto text-sm bg-rose-50 text-rose-600 px-3 py-1 rounded-full font-bold"><i class="fa-regular fa-clock"></i> 10 min</span>
+            </div>
+            
+            <p class="text-slate-600 mb-6 italic leading-relaxed">
+                Se te presentan 15 rocas nuevas que nunca has visto numeradas del 1 al 15. Usando el modelo que hemos construido en clase, clasifícalas en los tres grupos (SEDIMENTARIAS, ÍGNEAS, METAMÓRFICAS). Para cada una, anota: <br>
+                <strong>(1)</strong> a qué grupo crees que pertenece cada roca y <strong>(2)</strong> qué característica concreta te ha hecho decidirlo.
+            </p>
+            
+            <!-- Imatge de les 15 Roques amb opció de pantalla completa -->
+            <div class="mb-8 rounded-xl overflow-hidden border-2 border-slate-200 shadow-md relative group cursor-pointer" onclick="openImage('https://i.ibb.co/k2CqW48R/Rocas-reto.png')">
+                <img src="https://i.ibb.co/k2CqW48R/Rocas-reto.png" alt="Rocas reto" class="w-full h-auto object-cover">
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span class="text-white text-xl font-bold flex items-center gap-2"><i class="fa-solid fa-expand"></i> Ampliar</span>
+                </div>
+            </div>
+
+            <!-- Taula d'Avaluació -->
+            <div class="overflow-x-auto shadow-sm rounded-lg border border-slate-200 mb-6">
+                <table class="w-full bg-white text-sm text-left">
+                    <thead class="bg-slate-100 text-slate-700 uppercase">
+                        <tr>
+                            <th class="px-4 py-3 text-center font-bold w-12 border-b">#</th>
+                            <th class="px-4 py-3 font-bold w-[30%] border-b border-l border-slate-200">1. Grupo de Roca</th>
+                            <th class="px-4 py-3 font-bold border-b border-l border-slate-200">2. Característica concreta que te ha hecho decidirlo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="phase7-table-body">
+                        <!-- Fila 1 a 15 -->
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">1</td><td class="px-4 border-l"><select id="p7-sel-1" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-1" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">2</td><td class="px-4 border-l"><select id="p7-sel-2" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-2" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">3</td><td class="px-4 border-l"><select id="p7-sel-3" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-3" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">4</td><td class="px-4 border-l"><select id="p7-sel-4" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-4" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">5</td><td class="px-4 border-l"><select id="p7-sel-5" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-5" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">6</td><td class="px-4 border-l"><select id="p7-sel-6" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-6" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">7</td><td class="px-4 border-l"><select id="p7-sel-7" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-7" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">8</td><td class="px-4 border-l"><select id="p7-sel-8" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-8" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">9</td><td class="px-4 border-l"><select id="p7-sel-9" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-9" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">10</td><td class="px-4 border-l"><select id="p7-sel-10" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-10" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">11</td><td class="px-4 border-l"><select id="p7-sel-11" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-11" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">12</td><td class="px-4 border-l"><select id="p7-sel-12" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-12" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">13</td><td class="px-4 border-l"><select id="p7-sel-13" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-13" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">14</td><td class="px-4 border-l"><select id="p7-sel-14" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-14" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                        <tr class="border-b hover:bg-slate-50"><td class="px-4 py-3 text-center font-bold text-slate-400">15</td><td class="px-4 border-l"><select id="p7-sel-15" class="interactive-input !bg-transparent w-full text-sm"><option value="" disabled selected>Selecciona...</option><option value="Ígnea">Ígnea</option><option value="Sedimentaria">Sedimentaria</option><option value="Metamórfica">Metamórfica</option></select></td><td class="px-4 border-l"><input type="text" id="p7-txt-15" class="interactive-input w-full" placeholder="✍️"></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-8 flex justify-end">
+                <button onclick="finishLab()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-8 rounded-lg transition-colors text-lg shadow-lg">
+                    Completar Laboratorio <i class="fa-solid fa-flag-checkered ml-2"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- CUADERNO DE GEÓLOGO (METACOGNICIÓN) -->
+        <!-- ========================================== -->
+        <section id="metacognition" class="bg-amber-100 rounded-xl p-6 md:p-8 border-2 border-amber-300 shadow-inner mb-10 hidden fade-in handwritten">
+            <h2 class="text-3xl font-bold text-amber-900 mb-6 border-b-2 border-amber-300 pb-2"><i class="fa-solid fa-book-journal-whills mr-2"></i> 📓 MI CUADERNO DE GEÓLOGO (Metacognición)</h2>
+            <p class="text-amber-800 mb-6 text-xl">Reflexiona sobre cómo ha funcionado tu cerebro hoy.</p>
+            
+            <div class="space-y-6 text-xl">
+                <div>
+                    <label class="block font-bold text-amber-900 mb-1">💡 ¿Qué pista visual te ha resultado MÁS ÚTIL para clasificar las rocas hoy?</label>
+                    <input type="text" id="meta-1" class="interactive-input w-full !border-amber-400 !text-amber-900" placeholder="✍️ ...">
+                </div>
+                <div>
+                    <label class="block font-bold text-amber-900 mb-1">🚧 ¿Qué grupo de rocas te ha costado más trabajo entender o agrupar? ¿Por qué?</label>
+                    <input type="text" id="meta-2" class="interactive-input w-full !border-amber-400 !text-amber-900" placeholder="✍️ ...">
+                </div>
+                <div>
+                    <label class="block font-bold text-amber-900 mb-1">🔍 La próxima vez que tengas que analizar una roca nueva en la calle, ¿en qué será lo primero que te fijes?</label>
+                    <input type="text" id="meta-3" class="interactive-input w-full !border-amber-400 !text-amber-900" placeholder="✍️ ...">
+                </div>
+            </div>
+
+            <div class="mt-8 text-center">
+                <p class="text-amber-700 font-bold text-2xl">¡Buen trabajo, Geólogo/a!</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Gestió de l'Estat
+        let currentPhase = 0;
+        const totalPhases = 8;
+        let puntosPistas = 10;
+
+        // Models de Dades (Fase 0 i 1)
+        const bankData = {
+            'A': { title: '🎨 Color y Aspecto General', items: [
+                {id: 'A1', text: 'Color negro intenso y brillante'}, 
+                {id: 'A2', text: 'Color negro mate o apagado'},
+                {id: 'A3', text: 'Color blanco, crema o beige claro'}, 
+                {id: 'A4', text: 'Color gris oscuro o gris azulado'},
+                {id: 'A5', text: 'Colores mezclados rosados y blancos con puntos oscuros'}, 
+                {id: 'A6', text: 'Bandas alternas de colores claros y oscuros'}
+            ]},
+            'B': { title: '✨ Brillo', items: [
+                {id: 'B1', text: 'Brillo vítreo (parece cristal o vidrio)'}, 
+                {id: 'B2', text: 'Brillo satinado o sedoso suave'},
+                {id: 'B3', text: 'Brillo graso o submetálico'}, 
+                {id: 'B4', text: 'Sin brillo, aspecto mate'}, 
+                {id: 'B5', text: 'Brillo en algunos cristales concretos'}
+            ]},
+            'C': { title: '🔍 Textura y Grano', items: [
+                {id: 'C1', text: 'No se distinguen granos ni cristales a simple vista'}, 
+                {id: 'C2', text: 'Se distinguen cristales grandes entrelazados (>2 mm)'},
+                {id: 'C3', text: 'Se distinguen fragmentos o granos pegados entre sí'}, 
+                {id: 'C4', text: 'Aspecto de vidrio liso, sin granos'},
+                {id: 'C5', text: 'Textura en láminas finas paralelas (foliación)'}, 
+                {id: 'C6', text: 'Textura en bandas onduladas alternas (bandeado)'}
+            ]},
+            'D': { title: '🧱 Estructura y forma de romperse', items: [
+                {id: 'D1', text: 'Se rompe en láminas planas (exfoliación)'}, 
+                {id: 'D2', text: 'Se rompe en superficies curvas tipo concha (fractura concoidea)'},
+                {id: 'D3', text: 'Se rompe de forma irregular sin patrón claro'}, 
+                {id: 'D4', text: 'Presenta capas o estratos visibles'}, 
+                {id: 'D5', text: 'Bordes afilados al fracturarse'}
+            ]},
+            'E': { title: '💎 Composición visible', items: [
+                {id: 'E1', text: 'Composición homogénea (parece un solo material)'}, 
+                {id: 'E2', text: 'Composición heterogénea (se ven varios minerales o fragmentos)'},
+                {id: 'E3', text: 'Se distinguen cristales claros (blancos o rosados)'}, 
+                {id: 'E4', text: 'Se distinguen cristales oscuros (negros o muy oscuros)'},
+                {id: 'E5', text: 'Se observan cristales translúcidos o vítreos'}, 
+                {id: 'E6', text: 'Se observan fósiles o restos de seres vivos'}, 
+                {id: 'E7', text: 'Fragmentos de otras rocas cementados'}
+            ]},
+            'F': { title: '🖐️ Propiedades físicas', items: [
+                {id: 'F1', text: 'Sensación ligera al sopesarla'}, 
+                {id: 'F2', text: 'Sensación pesada y densa al sopesarla'},
+                {id: 'F3', text: 'Tacto áspero o rugoso'}, 
+                {id: 'F4', text: 'Tacto liso o suave'},
+                {id: 'F5', text: 'Mancha los dedos al tocarla'}, 
+                {id: 'F6', text: 'Aspecto quebradizo (parece que se rompe fácil)'}
+            ]},
+            'G': { title: '🌋 Indicios del origen', items: [
+                {id: 'G1', text: 'Sugiere que se enfrió desde un material fundido (lava/magma)'}, 
+                {id: 'G2', text: 'Sugiere acumulación de materiales unos sobre otros'},
+                {id: 'G3', text: 'Sugiere que ha sido transformada por presión (deformada)'}, 
+                {id: 'G4', text: 'Sugiere transformación por calor (recristalizada)'}, 
+                {id: 'G5', text: 'Aspecto orgánico (restos de plantas o animales)'}
+            ]}
+        };
+
+        const rocksInfo = [
+            { id: 'hulla', name: '1. Hulla', imgSrc: 'https://i.ibb.co/fzvc2Jr8/hulla.png', 
+              valid: ['A1', 'B3', 'C1', 'D4', 'E1', 'F1', 'F5', 'F6', 'G5'], stars: ['A1', 'F1', 'F5'] },
+            { id: 'obsidiana', name: '2. Obsidiana', imgSrc: 'https://i.ibb.co/JR7vgv59/obsidiana.png', 
+              valid: ['A1', 'B1', 'C4', 'D2', 'D5', 'E1', 'E5', 'F2', 'F4', 'G1'], stars: ['B1', 'C4', 'D2'] },
+            { id: 'pizarra', name: '3. Pizarra', imgSrc: 'https://i.ibb.co/NdX6zj91/pizarra.png', 
+              valid: ['A4', 'B2', 'B4', 'C1', 'C5', 'D1', 'E1', 'F2', 'F4', 'G3'], stars: ['C5', 'D1'] },
+            { id: 'gneiss', name: '4. Gneiss', imgSrc: 'https://i.ibb.co/jZ1MPJXJ/gneiss.png', 
+              valid: ['A6', 'B5', 'C2', 'C6', 'E2', 'E3', 'E4', 'F2', 'F3', 'G3', 'G4'], stars: ['A6', 'C6'] },
+            { id: 'caliza', name: '5. Caliza', imgSrc: 'https://i.ibb.co/PGSJ2Jkc/caliza.png', 
+              valid: ['A3', 'B4', 'C1', 'C3', 'D3', 'E1', 'E2', 'E6', 'F3', 'G2', 'G5'], stars: ['E6', 'F3', 'G2'] },
+            { id: 'sienita', name: '6. Sienita', imgSrc: 'https://i.ibb.co/FkC5SHTS/sientia.png', 
+              valid: ['A5', 'B5', 'C2', 'D3', 'E2', 'E3', 'E4', 'F2', 'F3', 'G1'], stars: ['A5', 'C2', 'G1'] }
+        ];
+
+        // Desa les seleccions a la Fase 1
+        const userSelections = {};
+        rocksInfo.forEach(r => userSelections[r.id] = { checks: [], stars: [] });
+
+        // Inicialització
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('currentDate').valueAsDate = new Date();
+            renderBank();
+            renderRocks();
+            setupNameSync();
+            setupCanvas('canvas1', '#ef4444'); 
+            setupCanvas('canvas2', '#eab308'); 
+            setupCanvas('canvas3', '#a855f7'); 
+
+            // Sistema de Desat Local
+            loadData();
+            document.addEventListener('input', saveData);
+            document.addEventListener('change', saveData);
+        });
+
+        // --- Funcions de Pantalla Completa ---
+        function openImage(src) {
+            const modal = document.getElementById('imageModal');
+            document.getElementById('modalImage').src = src;
+            modal.classList.remove('hidden');
+            void modal.offsetWidth; // Reflow
+            modal.classList.remove('opacity-0');
+        }
+
+        function closeImageModal(e) {
+            const modal = document.getElementById('imageModal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('modalImage').src = '';
+            }, 300);
+        }
+
+        // --- Sistema de Desat Local ---
+        function saveData() {
+            const state = {
+                phase: currentPhase,
+                userSelections: userSelections,
+                inputs: {}
+            };
+            document.querySelectorAll('input[type="text"], input[type="date"], textarea, select').forEach(el => {
+                if (el.id && el.id !== 'access-input') { // Evitem guardar claus mestres
+                    state.inputs[el.id] = el.value;
+                }
+            });
+            localStorage.setItem('rocasLabState', JSON.stringify(state));
+        }
+
+        function loadData() {
+            const data = localStorage.getItem('rocasLabState');
+            if (data) {
+                try {
+                    const state = JSON.parse(data);
+                    Object.assign(userSelections, state.userSelections);
+                    
+                    for (const [id, value] of Object.entries(state.inputs)) {
+                        const el = document.getElementById(id);
+                        if (el) el.value = value;
+                    }
+
+                    // Restaura Interfície Fase 1
+                    rocksInfo.forEach(rock => {
+                        const rData = userSelections[rock.id];
+                        rData.checks.forEach(optId => {
+                            const chk = document.getElementById(`chk-${rock.id}-${optId}`);
+                            if(chk) chk.checked = true;
+                            updateSummary(rock.id, optId.charAt(0), true);
+                        });
+                    });
+
+                    // Desbloqueja les fases adients silenciosament (sense scroll)
+                    if (state.phase > 0) {
+                        for(let i=1; i<=state.phase; i++) {
+                            unlockPhase(i, true);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error al carregar dades:", e);
+                }
+            }
+        }
+
+        function clearData() {
+            if (confirm("⚠️ ¿Estás seguro de que quieres borrar TODOS los datos de tu cuaderno? Esta acción no se puede deshacer.")) {
+                localStorage.removeItem('rocasLabState');
+                location.reload();
+            }
+        }
+
+        // --- Funcions de Renderitzat ---
+        function renderBank() {
+            const container = document.getElementById('bank-container');
+            let html = '';
+            for (const [key, data] of Object.entries(bankData)) {
+                html += `
+                <div class="bg-white border rounded-xl p-4 shadow-sm h-full hover:shadow-md transition">
+                    <h3 class="font-bold text-slate-800 border-b pb-2 mb-3">${data.title}</h3>
+                    <ul class="text-sm text-slate-600 space-y-1.5">
+                        ${data.items.map(i => `<li><strong>${i.id}.</strong> ${i.text}</li>`).join('')}
+                    </ul>
+                </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        function renderRocks() {
+            const container = document.getElementById('rocks-container');
+            let html = '';
+            rocksInfo.forEach(rock => {
+                html += `
+                <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm" id="rock-card-${rock.id}">
+                    <h3 class="font-bold text-lg text-slate-800 mb-3">${rock.name}</h3>
+                    <div class="h-40 bg-slate-50 rounded-lg mb-4 flex items-center justify-center border border-slate-200 overflow-hidden relative group p-2">
+                        <img src="${rock.imgSrc}" alt="${rock.name}" class="h-full w-full object-contain mix-blend-multiply">
+                        <button onclick="openImage('${rock.imgSrc}')" class="absolute bottom-2 right-2 bg-slate-800/60 hover:bg-orange-600 text-white p-2 md:p-3 rounded-full opacity-70 group-hover:opacity-100 transition-all z-20 shadow-md">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-2">`;
+                
+                for (const [catKey, catData] of Object.entries(bankData)) {
+                    html += `
+                    <details id="details-${rock.id}-${catKey}" class="bg-slate-50 border border-slate-200 rounded-lg group">
+                        <summary id="summary-${rock.id}-${catKey}" class="font-bold text-sm text-slate-700 cursor-pointer p-3 hover:bg-slate-100 transition-colors select-none rounded-lg">
+                            ${catData.title}
+                        </summary>
+                        <div class="p-3 pt-1 space-y-2 border-t border-slate-200">
+                            ${catData.items.map(opt => `
+                                <div class="flex items-start gap-2 text-xs text-slate-600">
+                                    <input type="checkbox" id="chk-${rock.id}-${opt.id}" class="mt-1 accent-orange-600 w-4 h-4 cursor-pointer" onchange="toggleCheck('${rock.id}', '${opt.id}')">
+                                    <label for="chk-${rock.id}-${opt.id}" class="flex-1 cursor-pointer pt-0.5 leading-snug">${opt.id}. ${opt.text}</label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </details>`;
+                }
+
+                html += `
+                    </div>
+                    <div class="mt-5 border-t border-slate-200 pt-4">
+                        <label class="block font-bold text-slate-700 text-sm mb-1">Tipo de Roca (Ígnea, Sedimentaria, Metamórfica):</label>
+                        <input type="text" id="type-${rock.id}" class="interactive-input text-sm font-bold text-orange-800" placeholder="✍️ Escribe aquí...">
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // --- Lògica d'Interacció Fase 0 i 1 ---
+        function promptTeacherMode() {
+            const code = prompt("🔒 Introduce el código de acceso docente:");
+            if (code === "2421") {
+                enableTeacherMode();
+            } else if (code !== null) {
+                alert("Código incorrecto.");
+            }
+        }
+
+        function pedirPista(parejaNum) {
+            if(puntosPistas <= 0) {
+                alert("No te quedan puntos de pista.");
+                return;
+            }
+            puntosPistas--;
+            document.getElementById('puntos-pista').innerText = puntosPistas;
+            
+            const pistas = {
+                1: "Fíjate en la categoría C y D. Una parece cristal y la otra tiene cristales entrelazados. ¿Qué dice esto de cómo se formaron (Cat. G)?",
+                2: "Mira la categoría G. Una de ellas está formada por restos de plantas, la otra puede tener restos fósiles (Cat. E).",
+                3: "Observa la categoría C y D. Fíjate cómo se ordenan los colores y los minerales. ¿Parecen aplastadas en una dirección (Cat. G)?"
+            };
+            
+            const pistaEl = document.getElementById(`pista-texto-${parejaNum}`);
+            pistaEl.innerHTML = `<i class="fa-solid fa-lightbulb text-yellow-500 mr-2"></i> <strong>Pista:</strong> ${pistas[parejaNum]}`;
+            pistaEl.classList.remove('hidden');
+            
+            const btn = document.getElementById(`btn-pista-${parejaNum}`);
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            saveData();
+        }
+
+        function checkAccess() {
+            const input = document.getElementById('access-input').value.trim().toUpperCase();
+            const err = document.getElementById('access-error');
+
+            if (/F/i.test(input)) {
+                err.classList.add('hidden');
+                unlockPhase(1);
+            } else {
+                err.classList.remove('hidden');
+            }
+        }
+
+        function updateSummary(rockId, catKey, isSilent = false) {
+            const catData = bankData[catKey];
+            const summaryEl = document.getElementById(`summary-${rockId}-${catKey}`);
+            const detailsEl = document.getElementById(`details-${rockId}-${catKey}`);
+            
+            const selectedIds = userSelections[rockId].checks.filter(id => id.startsWith(catKey));
+            
+            if (selectedIds.length > 0) {
+                const texts = selectedIds.map(id => {
+                    const opt = catData.items.find(i => i.id === id);
+                    const isStarred = userSelections[rockId].stars.includes(id);
+                    const starClass = isStarred ? 'text-yellow-500' : 'text-slate-300 hover:text-yellow-500';
+                    const starChar = isStarred ? '⭐' : '☆';
+
+                    return `
+                    <div class="bg-orange-100 px-2 py-1.5 rounded text-orange-900 border border-orange-200 text-xs font-normal mt-1 leading-tight flex items-center justify-between">
+                        <span class="mr-2 pr-2">${opt.id}. ${opt.text}</span>
+                        <button onclick="event.preventDefault(); event.stopPropagation(); toggleStar('${rockId}', '${id}');" class="${starClass} text-base focus:outline-none transition-colors" title="Marcar como rasgo diagnóstico">${starChar}</button>
+                    </div>`;
+                }).join('');
+                
+                summaryEl.innerHTML = `<span class="font-bold text-sm text-slate-700">${catData.title}</span> ${texts}`;
+                
+                // Tancar automàticament
+                if(!isSilent) detailsEl.open = false; 
+            } else {
+                summaryEl.innerHTML = `<span class="font-bold text-sm text-slate-700">${catData.title}</span>`;
+            }
+        }
+
+        function toggleCheck(rockId, optId, isSilent = false) {
+            const isChecked = document.getElementById(`chk-${rockId}-${optId}`).checked;
+            if (isChecked) {
+                if (!userSelections[rockId].checks.includes(optId)) userSelections[rockId].checks.push(optId);
+            } else {
+                userSelections[rockId].checks = userSelections[rockId].checks.filter(x => x !== optId);
+                userSelections[rockId].stars = userSelections[rockId].stars.filter(x => x !== optId);
+            }
+            updateSummary(rockId, optId.charAt(0), isSilent);
+            saveData();
+        }
+
+        function toggleStar(rockId, optId, isSilent = false) {
+            const chk = document.getElementById(`chk-${rockId}-${optId}`);
+            
+            if (!userSelections[rockId].stars.includes(optId)) {
+                if (!chk.checked) {
+                    chk.checked = true;
+                    if (!userSelections[rockId].checks.includes(optId)) userSelections[rockId].checks.push(optId);
+                }
+                userSelections[rockId].stars.push(optId);
+            } else {
+                userSelections[rockId].stars = userSelections[rockId].stars.filter(x => x !== optId);
+            }
+            updateSummary(rockId, optId.charAt(0), isSilent);
+            saveData();
+        }
+
+        function enableTeacherMode() {
+            document.getElementById('access-input').value = 'F1, F2, F3, F4, F5, F6 (DOCENTE)';
+            document.getElementById('access-input').disabled = true;
+
+            // --- FASE 1 (Hipótesis) ---
+            const p1Hyp1 = document.getElementById('p1-hyp1');
+            const p1Hyp2 = document.getElementById('p1-hyp2');
+            if(p1Hyp1) p1Hyp1.value = 'Me fijaría en si tiene granos, cristales o bandas, y en si tiene fósiles.';
+            if(p1Hyp2) p1Hyp2.value = 'Sí, se pueden agrupar en función de si tienen cristales visibles, capas formadas por acumulación, o si muestran bandas por haber sido aplastadas.';
+
+            // --- FASE 2 (Análisis) ---
+            rocksInfo.forEach(rock => {
+                rock.valid.forEach(optId => {
+                    const chk = document.getElementById(`chk-${rock.id}-${optId}`);
+                    if(chk && !chk.checked) {
+                        chk.checked = true;
+                        toggleCheck(rock.id, optId, true);
+                    }
+                });
+                
+                rock.stars.forEach(optId => {
+                    if(!userSelections[rock.id].stars.includes(optId)) {
+                        toggleStar(rock.id, optId, true);
+                    }
+                });
+
+                let rType = "";
+                if(["obsidiana", "sienita"].includes(rock.id)) rType = "Ígnea";
+                if(["hulla", "caliza"].includes(rock.id)) rType = "Sedimentaria";
+                if(["pizarra", "gneiss"].includes(rock.id)) rType = "Metamórfica";
+                const typeInput = document.getElementById(`type-${rock.id}`);
+                if(typeInput) typeInput.value = rType;
+            });
+
+            // --- FASE 3 ---
+            const p3Names = ['Rocas Magmáticas', 'Rocas Sedimentarias', 'Rocas Metamórficas'];
+            const p3Discrepancies = [
+                'La presencia de cristales grandes frente a una textura lisa/vítrea.',
+                'La presencia exclusiva de fósiles en una de ellas.',
+                'Los colores específicos de los minerales que las forman.'
+            ];
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`nameGroup${i}`).value = p3Names[i-1];
+                document.getElementById(`p3-g${i}-c1`).value = 'No tienen fósiles';
+                document.getElementById(`p3-g${i}-c2`).value = 'Son densas';
+                document.getElementById(`p3-g${i}-c3`).value = 'Aspecto rocoso';
+            }
+            document.getElementById('p3-g1-diff').value = p3Discrepancies[0];
+            document.getElementById('p3-g2-exc').value = p3Discrepancies[1];
+            document.getElementById('p3-g3-pat').value = p3Discrepancies[2];
+
+            // --- FASE 4 ---
+            const p4Defs = [
+                'Se forman por enfriamiento de material fundido. Nunca tienen capas ni fósiles.',
+                'Se forman por acumulación y compactación. Son las únicas que pueden tener fósiles.',
+                'Se forman por alta presión o temperatura. Presentan bandas o láminas alineadas.'
+            ];
+            for(let i = 1; i <= 3; i++) { document.getElementById(`p4-def${i}`).value = p4Defs[i-1]; }
+
+            // --- FASE 5 ---
+            document.getElementById('p5-disagree').value = 'En si todas las rocas con capas son siempre sedimentarias.';
+            document.getElementById('p5-idea').value = 'El concepto de "Foliación" para las capas aplastadas.';
+
+            // --- FASE 6 (DNIs) ---
+            const p6Origins = ['Enfriamiento de Magma', 'Acumulación y compactación', 'Presión y calor sin fundir'];
+            const p6Traits = ['Láminas y Fósiles', 'Presencia de fósiles', 'Bandeado y Foliación'];
+            for(let i = 1; i <= 3; i++) {
+                document.getElementById(`p6-o${i}`).value = p6Origins[i-1];
+                document.getElementById(`p6-r${i}`).value = p6Traits[i-1];
+            }
+
+            // --- FASE 7 (Excepciones) ---
+            const p7Mod = document.getElementById('p7-mod');
+            if(p7Mod) p7Mod.value = 'El modelo se mantiene pero matizado: las metamórficas pueden no tener bandas si son de un solo mineral (mármol), y las ígneas pueden ser ligeras si atrapan gas (pómez).';
+
+            // --- FASE 8 (15 Roques) ---
+            const p8Answers = [
+                {g: 'Metamórfica', c: 'C6, G3', r: 'Bandeado visible'},
+                {g: 'Sedimentaria', c: 'D4, G2', r: 'Restos acumulados'},
+                {g: 'Ígnea', c: 'C2, G1', r: 'Cristales entrelazados'},
+                {g: 'Sedimentaria', c: 'C3, G2', r: 'Capas y granos'},
+                {g: 'Metamórfica', c: 'C5, G3', r: 'Láminas finas aplastadas'},
+                {g: 'Ígnea', c: 'F1, G1', r: 'Poros volcánicos'},
+                {g: 'Sedimentaria', c: 'E7, G2', r: 'Conglomerado de piedras'},
+                {g: 'Ígnea', c: 'B1, C2', r: 'Cristales brillantes'},
+                {g: 'Metamórfica', c: 'E1, G4', r: 'Mármol recristalizado'},
+                {g: 'Ígnea', c: 'C1, G1', r: 'Color oscuro masivo'},
+                {g: 'Sedimentaria', c: 'E6, G5', r: 'Fósil evidente'},
+                {g: 'Metamórfica', c: 'C5, B2', r: 'Minerales planos alineados'},
+                {g: 'Ígnea', c: 'C4, D2', r: 'Vidrio volcánico liso'},
+                {g: 'Sedimentaria', c: 'C3, F3', r: 'Arena compactada'},
+                {g: 'Metamórfica', c: 'A6, C6', r: 'Bandeado extremo'}
+            ];
+            for (let i = 1; i <= 15; i++) {
+                const sel = document.getElementById(`p8-sel-${i}`);
+                const code = document.getElementById(`p8-code-${i}`);
+                const txt = document.getElementById(`p8-txt-${i}`);
+                if(sel) sel.value = p8Answers[i-1].g;
+                if(code) code.value = p8Answers[i-1].c;
+                if(txt) txt.value = p8Answers[i-1].r;
+            }
+
+            // --- Metacognició ---
+            document.getElementById('meta-1').value = 'Los cristales y si estaban ordenados o no.';
+            document.getElementById('meta-2').value = 'Las metamórficas, porque algunas no tienen las bandas tan claras.';
+            document.getElementById('meta-3').value = 'Mirar de cerca si tiene capas o cristales entrelazados.';
+
+            // Desbloqueja tot visualment
+            for(let i=1; i<=8; i++) {
+                unlockPhase(i, true);
+            }
+            const meta = document.getElementById('metacognition');
+            if (meta) meta.classList.remove('hidden');
+
+            const feedback = document.getElementById('validation-feedback');
+            feedback.innerHTML = '✨ MODO DOCENTE: Identificaciones pre-cargadas y fases desbloqueadas completamente.';
+            feedback.className = 'mb-4 p-4 rounded-lg font-bold text-center bg-purple-100 text-purple-800 border border-purple-300 block';
+            feedback.classList.remove('hidden');
+            
+            saveData();
+        }
+
+        function validateRocks() {
+            let allCorrect = true;
+            let errorsText = [];
+            let minorErrorsCount = 0;
+            let majorErrorsCount = 0;
+
+            rocksInfo.forEach(rock => {
+                const card = document.getElementById(`rock-card-${rock.id}`);
+                const studentData = userSelections[rock.id];
+                
+                const invalidSelections = studentData.checks.filter(x => !rock.valid.includes(x));
+                const missingStars = rock.stars.filter(x => !studentData.stars.includes(x));
+                const extraStars = studentData.stars.filter(x => !rock.stars.includes(x));
+
+                let rockState = 'green';
+                let errorMsg = `<strong>${rock.name}</strong>: `;
+
+                if (missingStars.length > 0 || extraStars.length > 0 || invalidSelections.length > 2) {
+                    rockState = 'red';
+                    majorErrorsCount++;
+                    if (missingStars.length > 0) errorMsg += `Faltan rasgos diagnósticos (★). `;
+                    if (extraStars.length > 0) errorMsg += `Hay rasgos con estrella que no son los clave. `;
+                    if (invalidSelections.length > 2) errorMsg += `Demasiadas propiedades incompatibles. `;
+                } else if (invalidSelections.length > 0) {
+                    rockState = 'yellow';
+                    minorErrorsCount++;
+                    errorMsg += `Bien identificados los rasgos clave, pero marcaste algunas propiedades adicionales cuestionables (${invalidSelections.join(', ')}). `;
+                }
+
+                if (rockState === 'red') {
+                    card.classList.add('border-red-400', 'ring-2', 'ring-red-200');
+                    card.classList.remove('border-green-400', 'ring-2', 'ring-green-200', 'border-slate-200', 'border-yellow-400', 'ring-yellow-200');
+                    errorsText.push(errorMsg);
+                    allCorrect = false;
+                } else if (rockState === 'yellow') {
+                    card.classList.add('border-yellow-400', 'ring-2', 'ring-yellow-200');
+                    card.classList.remove('border-green-400', 'ring-2', 'ring-green-200', 'border-slate-200', 'border-red-400', 'ring-red-200');
+                    errorsText.push(errorMsg);
+                } else {
+                    card.classList.remove('border-red-400', 'ring-2', 'ring-red-200', 'border-slate-200', 'border-yellow-400', 'ring-yellow-200');
+                    card.classList.add('border-green-400', 'ring-2', 'ring-green-200');
+                }
+            });
+
+            const feedback = document.getElementById('validation-feedback');
+            feedback.classList.remove('hidden');
+            
+            if (majorErrorsCount === 0 && minorErrorsCount <= 2) {
+                let extraMsg = minorErrorsCount > 0 ? `<br><span class="text-sm font-normal">Hubo ${minorErrorsCount} despistes menores, pero los rasgos clave son correctos.</span>` : '';
+                feedback.innerHTML = '✨ ¡Identificación Correcta! Has encontrado los rasgos clave. Puedes avanzar.' + extraMsg;
+                feedback.className = 'mb-4 p-4 rounded-lg font-bold text-center bg-green-100 text-green-800 border border-green-300';
+                unlockPhase(3);
+            } else {
+                feedback.innerHTML = '⚠️ Hay errores que debes corregir:<br>' + errorsText.join('<br>') + '<br><span class="text-sm font-normal mt-2 block">Revisa bien las opciones. Las estrellas (★) deben coincidir exactamente con los rasgos diagnósticos.</span>';
+                feedback.className = 'mb-4 p-4 rounded-lg text-left bg-red-50 text-red-800 border border-red-200 text-sm';
+            }
+        }
+
+        // --- Navegació General ---
+        function checkPhaseComplete(phaseNum) {
+            if (phaseNum === 1) {
+                const t1 = document.getElementById('p1-hyp1')?.value || '';
+                const t2 = document.getElementById('p1-hyp2')?.value || '';
+                const btn = document.getElementById('btnNext1');
+                if (btn) {
+                    btn.disabled = (t1.length < 10 || t2.length < 10);
+                    if (!btn.disabled) btn.classList.remove('opacity-50');
+                    else btn.classList.add('opacity-50');
+                }
+            }
+        }
+
+        function unlockPhase(phaseNum, isSilent = false) {
+            const currentSection = document.getElementById(`phase${phaseNum - 1}`);
+            if (currentSection) {
+                currentSection.classList.remove('active');
+                currentSection.classList.add('completed');
+            }
+            
+            const currentStep = document.getElementById(`step${phaseNum - 1}`);
+            if (currentStep) {
+                currentStep.classList.replace('bg-orange-600', 'bg-green-500');
+                currentStep.classList.replace('bg-slate-200', 'bg-green-500'); 
+                currentStep.classList.replace('text-slate-500', 'text-white');
+            }
+            const currentLine = document.getElementById(`line${phaseNum}`);
+            if (currentLine) {
+                currentLine.classList.add('bg-green-500');
+            }
+            
+            const nextStep = document.getElementById(`step${phaseNum}`);
+            if (nextStep) {
+                nextStep.classList.replace('bg-slate-200', 'bg-orange-600');
+                nextStep.classList.replace('text-slate-500', 'text-white');
+            }
+            
+            const nextSection = document.getElementById(`phase${phaseNum}`);
+            if (nextSection) {
+                nextSection.classList.remove('hidden');
+                void nextSection.offsetWidth;
+                nextSection.classList.remove('opacity-50');
+                nextSection.classList.add('active');
+                
+                document.getElementById('currentPhaseLabel').innerText = `Fase ${phaseNum}`;
+                
+                if (!isSilent) {
+                    nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                currentPhase = phaseNum;
+                saveData();
+            }
+        }
+
+        function goToPhase(targetPhase) {
+            const section = document.getElementById(`phase${targetPhase}`);
+            // Només salta si la secció no està oculta i ja s'ha activat abans (no té opacity-50 bloquejant)
+            if (section && !section.classList.contains('hidden') && !section.classList.contains('opacity-50')) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        function toggleDefinition(id) {
+            const el = document.getElementById(id);
+            el.classList.toggle('hidden');
+            el.classList.toggle('fade-in');
+        }
+
+        function setupNameSync() {
+            const syncName = (inputId, targetClass) => {
+                const el = document.getElementById(inputId);
+                if (el) {
+                    el.addEventListener('input', (e) => {
+                        const val = e.target.value || '...';
+                        document.querySelectorAll('.' + targetClass).forEach(el => el.innerText = val);
+                    });
+                }
+            };
+            syncName('nameGroup1', 'display-name-1');
+            syncName('nameGroup2', 'display-name-2');
+            syncName('nameGroup3', 'display-name-3');
+        }
+
+        function finishLab() {
+            const finalStep = document.getElementById('step8');
+            if (finalStep) finalStep.classList.replace('bg-orange-600', 'bg-green-500');
+            
+            const phase8 = document.getElementById('phase8');
+            if (phase8) {
+                phase8.classList.remove('active');
+                phase8.classList.add('completed');
+            }
+            
+            const meta = document.getElementById('metacognition');
+            if (meta) {
+                meta.classList.remove('hidden');
+                meta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // --- Àrea de Dibuix Llenç ---
+        function setupCanvas(canvasId, strokeColor) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = strokeColor;
+
+            const startDrawing = (e) => {
+                isDrawing = true;
+                draw(e);
+            };
+
+            const stopDrawing = () => {
+                isDrawing = false;
+                ctx.beginPath();
+            };
+
+            const draw = (e) => {
+                if (!isDrawing) return;
+                
+                let clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                let clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                
+                if(clientX === undefined) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const x = clientX - rect.left;
+                const y = clientY - rect.top;
+
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                if (e.cancelable) e.preventDefault();
+            };
+
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+
+            canvas.addEventListener('touchstart', startDrawing, {passive: false});
+            canvas.addEventListener('touchmove', draw, {passive: false});
+            canvas.addEventListener('touchend', stopDrawing);
+        }
+
+        function clearCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+    </script>
+</body>
+</html>
