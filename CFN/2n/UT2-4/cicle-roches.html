@@ -1,1 +1,2290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Modélisation du cycle des roches</title>
 
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- html2pdf para la exportación del PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #f5f5f4; /* stone-100 */
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            overflow-x: hidden;
+            touch-action: pan-y;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #e7e5e4; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #a8a29e; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #78716c; }
+
+        /* Animations */
+        .animate-fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px #16a34a, inset 0 0 5px #16a34a; border-color: #22c55e; }
+            50% { box-shadow: 0 0 20px #16a34a, inset 0 0 10px #16a34a; border-color: #4ade80; }
+            100% { box-shadow: 0 0 5px #16a34a, inset 0 0 5px #16a34a; border-color: #22c55e; }
+        }
+        .animate-glow { animation: glow 1.5s ease-out infinite; }
+
+        @keyframes neon-pulse {
+            0% { filter: drop-shadow(0 0 5px #2563eb) drop-shadow(0 0 15px #2563eb); stroke: #3b82f6; }
+            50% { filter: drop-shadow(0 0 10px #1d4ed8) drop-shadow(0 0 30px #1d4ed8); stroke: #2563eb; }
+            100% { filter: drop-shadow(0 0 5px #2563eb) drop-shadow(0 0 15px #2563eb); stroke: #3b82f6; }
+        }
+        .neon-path { animation: neon-pulse 2s infinite; stroke-width: 6; }
+
+        @keyframes teacher-pulse {
+            0% { filter: drop-shadow(0 0 5px #16a34a); stroke: #22c55e; }
+            50% { filter: drop-shadow(0 0 15px #15803d); stroke: #16a34a; }
+            100% { filter: drop-shadow(0 0 5px #16a34a); stroke: #22c55e; }
+        }
+        .teacher-path { animation: teacher-pulse 1.5s infinite; stroke-width: 6; stroke-dasharray: 10; animation-direction: reverse;}
+
+        @keyframes morph {
+            0% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+            50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+            100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+        }
+        .magma-blob {
+            animation: morph 3s ease-in-out infinite;
+            background: radial-gradient(circle at 30% 30%, #ff7e5f, #ea580c);
+        }
+
+        .path-line {
+            stroke-dasharray: 10;
+            animation: dash 20s linear infinite;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: -1000; }
+        }
+        
+        /* Agent Animations for Meteorización */
+        @keyframes rain-fall {
+            0% { transform: translateY(-50px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(150px); opacity: 0; }
+        }
+        @keyframes wind-blow {
+            0% { transform: translateX(-100px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateX(150px); opacity: 0; }
+        }
+        @keyframes roots-grow {
+            0% { stroke-dasharray: 100; stroke-dashoffset: 100; opacity: 1; }
+            80% { stroke-dashoffset: 0; opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        @keyframes particle-fly {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #78716c;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: particle-fly 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        /* PDF Styles */
+        .pdf-content { font-family: 'Helvetica', 'Arial', sans-serif !important; background: white; color: #1c1917; }
+        .pdf-content h2, .pdf-content h3, .pdf-content h4 { color: #1c1917; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- ICONS ---
+        const IconTeacher = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>;
+        const IconTrash = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        const IconCheck = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>;
+        const IconLock = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>;
+        const IconUnlock = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>;
+        const IconLightning = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>;
+        const IconChevronUp = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>;
+        const IconChevronDown = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
+        const IconExpand = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg>;
+
+        // --- UNIVERSAL UI COMPONENTS ---
+        const Button = ({ variant = 'primary', className = '', onClick, disabled, children, ...props }) => {
+            const base = "font-bold py-3 px-6 rounded-xl shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2 select-none disabled:opacity-50 disabled:active:scale-100 disabled:cursor-not-allowed";
+            const variants = {
+                primary: "bg-blue-600 hover:bg-blue-700 text-white shadow-md",
+                secondary: "bg-white hover:bg-stone-50 text-stone-800 border-2 border-stone-200",
+                ghost: "bg-transparent hover:bg-stone-100 text-stone-600 border-2 border-transparent hover:border-stone-200",
+                danger: "bg-red-500 hover:bg-red-600 text-white shadow-md",
+                success: "bg-green-600 hover:bg-green-700 text-white shadow-md",
+                warm: "bg-orange-600 hover:bg-orange-700 text-white shadow-md"
+            };
+            return <button onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} {...props}>{children}</button>;
+        };
+
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
+                    <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-xl w-full relative max-h-[90vh] overflow-y-auto custom-scroll" onClick={e => e.stopPropagation()}>
+                        {onClose && <button onClick={onClose} className="absolute -top-3 -right-3 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 font-bold shadow-lg hover:scale-105 transition-transform flex items-center justify-center z-50">✕</button>}
+                        {title && <h3 className="text-2xl font-bold mb-4 text-center text-stone-800">{title}</h3>}
+                        {children}
+                    </div>
+                </div>
+            );
+        };
+
+        const PhaseHeader = ({ title, subtitle, infoBox, onBack, onReset }) => (
+            <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-4 mb-4 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0 relative z-30 animate-fade-in">
+                <div className="flex-1 flex flex-col items-start text-left">
+                    {onBack && (
+                        <button onClick={onBack} className="text-stone-500 hover:text-stone-800 font-bold mb-2 flex items-center gap-1 text-sm bg-stone-100 px-3 py-1 rounded-lg transition-colors">
+                            ← Retour au menu
+                        </button>
+                    )}
+                    <h2 className="text-2xl font-black text-stone-800 flex items-center gap-2">{title}</h2>
+                    {subtitle && <p className="text-stone-600 font-medium text-sm mt-1">{subtitle}</p>}
+                </div>
+                <div className="flex items-center gap-4 flex-wrap justify-center">
+                    {infoBox}
+                    {onReset && (
+                        <button onClick={onReset} className="bg-stone-200 hover:bg-stone-300 text-stone-700 p-3 rounded-xl transition-colors shadow-sm" title="Réinitialiser">
+                            ⟲
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+
+        const AnalogyDropdown = ({ question, text, result }) => {
+            const [open, setOpen] = useState(false);
+            return (
+                <div className="bg-orange-50 rounded-xl border border-orange-200 shadow-inner overflow-hidden mt-4 transition-all">
+                    <button onClick={() => setOpen(!open)} className="w-full p-4 font-bold text-orange-800 text-sm flex items-center justify-between hover:bg-orange-100 transition-colors text-left">
+                        <span className="flex items-center gap-2">💡 Analogie : {question}</span>
+                        {open ? <IconChevronUp /> : <IconChevronDown />}
+                    </button>
+                    {open && (
+                        <div className="px-4 pb-4 text-orange-700 text-sm leading-relaxed border-t border-orange-100 pt-3 animate-fade-in bg-white/50">
+                            <p className="mb-2">{text}</p>
+                            <p className="font-bold text-orange-900">{result}</p>
+                        </div>
+                    )}
+                </div>
+            )
+        };
+
+        const SuccessModal = ({ isOpen, onClose, title = "Laboratoire Terminé !" }) => {
+            return (
+                <Modal isOpen={isOpen} onClose={onClose}>
+                    <div className="text-center p-4">
+                        <div className="text-6xl mb-4 animate-bounce">🎉</div>
+                        <h2 className="text-3xl font-black text-green-600 mb-2">{title}</h2>
+                        <p className="text-stone-600 font-medium mb-6">Vos données de réflexion ont été enregistrées avec succès.</p>
+                        <Button variant="success" onClick={onClose} className="mx-auto w-full text-lg">Continuer</Button>
+                    </div>
+                </Modal>
+            )
+        };
+
+        const autoResizeTextarea = (e) => {
+            e.target.style.height = 'auto';
+            e.target.style.height = (e.target.scrollHeight) + 'px';
+        };
+
+        // --- GLOBAL DATA ---
+        const INITIAL_PROGRESS = {
+            calor: false,
+            fusion: false,
+            enfriamiento: false,
+            meteorizacion: false,
+            compactacion: false,
+            diagrama: false,
+            retos: false,
+            reflections: {},
+            missionReflections: {},
+            diagramPlacedItems: {},
+            navMissionIdx: 0,
+            navHypotheses: [],
+            navIsSandbox: false,
+            navDifficulty: null,
+            hasDrawnHypothesis: false
+        };
+
+        const EXPERT_LABELS = {
+            'n_ignea': 'Roche Ignée',
+            'n_sedi': 'Roche Sédimentaire',
+            'n_meta': 'Roche Métamorphique',
+            'n_magma': 'Substance D',
+            'n_sedimento': 'Matériau E',
+            'e_sedimento_sedi': 'Processus 1',
+            'e_sedi_sedimento': 'Processus 2',
+            'e_magma_ignea': 'Processus 3',
+            'e_ignea_magma': 'Processus 4',
+            'e_sedi_meta': 'Processus 5',
+            'e_ignea_meta': 'Processus 6',
+            'e_meta_sedimento': 'Processus 7',
+            'e_meta_magma': 'Processus 8',
+            'e_ignea_sedimento': 'Processus 9'
+        };
+
+        const ITEMS_DIAGRAMA = [
+            { id: 'i_metamorfica', type: 'roca', label: 'Roche Métamorphique', color: 'bg-purple-100 border-purple-600 text-purple-900', def: 'Formée par l\'altération d\'autres roches sous l\'effet de la chaleur et de la pression.' },
+            { id: 'i_ignea', type: 'roca', label: 'Roche Ignée', color: 'bg-red-100 border-red-600 text-red-900', def: 'Formée par le refroidissement et la solidification du magma ou de la lave.' },
+            { id: 'i_sedimentaria', type: 'roca', label: 'Roche Sédimentaire', color: 'bg-amber-100 border-amber-600 text-amber-900', def: 'Formée par le compactage et la cimentation des sédiments.' },
+            { id: 'i_magma', type: 'roca', label: 'Magma / Lave', color: 'bg-orange-100 border-orange-600 text-orange-900 font-bold', def: 'Roche en fusion à l\'intérieur de la Terre (ou à l\'extérieur s\'il s\'agit de lave).' },
+            { id: 'i_sedimento', type: 'roca', label: 'Sédiments', color: 'bg-yellow-50 border-yellow-400 text-yellow-800', def: 'Fragments de roche créés par l\'altération et l\'érosion.' },
+            
+            { id: 'p_calor', type: 'proceso', label: 'Chaleur et Pression', icon: '🔥', image: 'https://i.ibb.co/PG4WPGzm/heat-pressure.png', gif: 'https://i.ibb.co/nsv6C6P6/heat-pressure.gif' },
+            { id: 'p_fusion', type: 'proceso', label: 'Fusion', icon: '🌋', image: 'https://i.ibb.co/gFvSYV5C/melting.png', gif: 'https://i.ibb.co/5WWmgYgj/melting.gif' },
+            { id: 'p_enfriamiento', type: 'proceso', label: 'Refroidissement', icon: '❄️', image: 'https://i.ibb.co/TBSd4cQF/cooling.png', gif: 'https://i.ibb.co/cKRCrJLF/cooling.gif' },
+            { id: 'p_meteorizacion', type: 'proceso', label: 'Altération et Érosion', icon: '🌧️', image: 'https://i.ibb.co/5xWBvnZ2/weather-erosion.png', gif: 'https://i.ibb.co/q33LWFkh/weather-erosion.gif' },
+            { id: 'p_compactacion', type: 'proceso', label: 'Compactage', icon: '🧱', image: 'https://i.ibb.co/Nd0dsLCv/compacting-cementing.png', gif: 'https://i.ibb.co/F4QLcL3g/compacting-cementing.gif' }
+        ];
+
+        const DIAGRAM_SOLUTION = {
+            'n_meta': 'i_metamorfica',
+            'n_ignea': 'i_ignea',
+            'n_sedi': 'i_sedimentaria',
+            'n_magma': 'i_magma',
+            'n_sedimento': 'i_sedimento',
+            'e_sedimento_sedi': 'p_compactacion',
+            'e_sedi_sedimento': 'p_meteorizacion',
+            'e_magma_ignea': 'p_enfriamiento',
+            'e_ignea_magma': 'p_fusion',
+            'e_sedi_meta': 'p_calor',
+            'e_ignea_meta': 'p_calor',
+            'e_meta_sedimento': 'p_meteorizacion',
+            'e_meta_magma': 'p_fusion',
+            'e_ignea_sedimento': 'p_meteorizacion'
+        };
+
+        const DIAGRAM_ADJACENCY = {
+            'n_sedi': { 'e_sedi_meta': 'n_meta', 'e_sedi_magma': 'n_magma', 'e_sedi_sedimento': 'n_sedimento' },
+            'n_ignea': { 'e_ignea_meta': 'n_meta', 'e_ignea_magma': 'n_magma', 'e_ignea_sedimento': 'n_sedimento' },
+            'n_meta': { 'e_meta_magma': 'n_magma', 'e_meta_sedimento': 'n_sedimento' },
+            'n_magma': { 'e_magma_ignea': 'n_ignea' },
+            'n_sedimento': { 'e_sedimento_sedi': 'n_sedi' }
+        };
+
+        // COORDENADES EXACTES (SVG 1200x800) ABAIXADES +40px per a visibilitat òptima, sense loop meta_meta
+        const DIAGRAM_LAYOUT = {
+            NODES: {
+                'n_meta': { cx: 600, cy: 160 },
+                'n_sedi': { cx: 220, cy: 400 },
+                'n_sedimento': { cx: 220, cy: 660 },
+                'n_ignea': { cx: 980, cy: 400 },
+                'n_magma': { cx: 980, cy: 660 }
+            },
+            EDGES: [
+                { id: 'e_sedimento_sedi', color: '#d97706', marker: 'arrow-amber', sx: 200, sy: 635, ex: 200, ey: 425, cx: 140, cy: 530 },
+                { id: 'e_sedi_sedimento', color: '#fbbf24', marker: 'arrow-yellow', sx: 240, sy: 425, ex: 240, ey: 635, cx: 300, cy: 530 },
+                { id: 'e_magma_ignea', color: '#ef4444', marker: 'arrow-red', sx: 960, sy: 635, ex: 960, ey: 425, cx: 900, cy: 530 },
+                { id: 'e_ignea_magma', color: '#ea580c', marker: 'arrow-orange', sx: 1000, sy: 425, ex: 1000, ey: 635, cx: 1060, cy: 530 },
+                { id: 'e_sedi_meta', color: '#9333ea', marker: 'arrow-purple', sx: 220, sy: 375, ex: 530, ey: 200, cx: 350, cy: 190 },
+                { id: 'e_ignea_meta', color: '#9333ea', marker: 'arrow-purple', sx: 980, sy: 375, ex: 670, ey: 200, cx: 850, cy: 190 },
+                { id: 'e_meta_sedimento', color: '#fbbf24', marker: 'arrow-yellow', sx: 580, sy: 225, ex: 270, ey: 635, cx: 400, cy: 440 },
+                { id: 'e_meta_magma', color: '#ea580c', marker: 'arrow-orange', sx: 620, sy: 225, ex: 930, ey: 635, cx: 800, cy: 440 },
+                { id: 'e_ignea_sedimento', color: '#fbbf24', marker: 'arrow-yellow', sx: 940, sy: 400, ex: 290, ey: 660, cx: 600, cy: 790 }
+            ]
+        };
+
+        const getEdgeMidpoint = (edge) => {
+            const x = 0.25 * edge.sx + 0.5 * edge.cx + 0.25 * edge.ex;
+            const y = 0.25 * edge.sy + 0.5 * edge.cy + 0.25 * edge.ey;
+            return { top: `${(y/800)*100}%`, left: `${(x/1200)*100}%` };
+        };
+
+        const getEdgeData = (edgeId) => ITEMS_DIAGRAMA.find(i => i.id === DIAGRAM_SOLUTION[edgeId] || i.id === edgeId);
+
+        // Imágenes Reales
+        const ROCK_IMAGES = {
+            'calor': { name: 'Ardoise', url: 'https://i.ibb.co/cSdmSZXf/pizarra.jpg', desc: 'Roches métamorphiques avec des bandes ou des couches dues à une pression extrême.' },
+            'fusion': { name: 'Magma Bouillant', url: 'https://i.ibb.co/b5ncq4xX/magma.jpg', desc: 'Ce n\'est pas encore une roche solide, mais c\'est l\'origine des roches ignées.' },
+            'enfriamiento': { name: 'Obsidienne (Volcanique)', url: 'https://i.ibb.co/fGKXwTCp/obsidiana.webp', desc: 'Verre lisse formé par un refroidissement très rapide.' },
+            'meteorizacion': { name: 'Argile', url: 'https://i.ibb.co/TD6Wh1dM/arcilla.jpg', desc: 'Sédiments meubles prêts à être transportés.' },
+            'compactacion': { name: 'Grès ou Conglomérat', url: 'https://images.unsplash.com/photo-1596706935749-30514936d6ed?auto=format&fit=crop&q=80&w=200', desc: 'Roches sédimentaires formées par lithification.' }
+        };
+
+        const ReflectionBox = ({ id, onSave, hideExample = false }) => {
+            const [text, setText] = useState("");
+            const [expanded, setExpanded] = useState(false);
+            const data = ROCK_IMAGES[id];
+            
+            return (
+                <div className="mt-4 bg-stone-50 border-2 border-stone-200 p-4 rounded-2xl animate-fade-in w-full shadow-inner">
+                    <Modal isOpen={expanded} onClose={() => setExpanded(false)} title={data?.name}>
+                        <img src={data?.url} alt={data?.name} className="w-full max-h-[60vh] object-contain rounded-lg shadow-inner" />
+                    </Modal>
+
+                    {!hideExample && data && (
+                        <div className="flex items-start gap-4 mb-4 bg-white p-3 rounded-xl border border-stone-100 shadow-sm cursor-pointer hover:bg-stone-50 transition-colors relative group" onClick={() => setExpanded(true)}>
+                            <div className="relative shrink-0">
+                                <img src={data.url} alt={data.name} className="w-16 h-16 rounded-lg object-cover border border-stone-300" />
+                                <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center rounded-lg text-white"><IconExpand/></div>
+                            </div>
+                            <div>
+                                <h4 className="font-black text-stone-800 text-sm">Exemple Réel : {data.name}</h4>
+                                <p className="text-xs text-stone-600 mt-1">{data.desc}</p>
+                            </div>
+                        </div>
+                    )}
+                    <label className="block text-sm font-bold text-stone-700 mb-2">Qu'as-tu compris de ce processus ? Explique-le à un(e) camarade en une phrase :</label>
+                    <textarea 
+                        value={text} 
+                        onChange={e => setText(e.target.value)} 
+                        onInput={autoResizeTextarea}
+                        className="w-full p-3 border-2 border-stone-300 rounded-xl text-sm focus:border-blue-500 focus:ring-0 outline-none transition-colors resize-none mb-3 overflow-hidden min-h-[80px]"
+                        placeholder="Écris ta réflexion..."
+                    ></textarea>
+                    <Button onClick={() => onSave(text)} disabled={text.trim().length < 5} variant="success" className="w-full text-sm py-2">Enregistrer et Continuer</Button>
+                </div>
+            );
+        };
+
+
+        // --- SUB-COMPONENTS (MINIGAMES) ---
+
+        // 1. Calor y Presión
+        const RetoCalor = ({ onComplete, teacherMode }) => {
+            const [depth, setDepth] = useState(0); 
+            const [time, setTime] = useState(0); 
+            const [showGif, setShowGif] = useState(false);
+            const [hasViewedGif, setHasViewedGif] = useState(false);
+            const [hasCompletedOnce, setHasCompletedOnce] = useState(false);
+            const isDone = depth >= 100;
+
+            useEffect(() => {
+                if (teacherMode) { setDepth(100); setHasViewedGif(true); }
+            }, [teacherMode]);
+
+            useEffect(() => {
+                setTime(Math.round((depth / 100) * 1000000));
+                if (isDone && !hasCompletedOnce) {
+                    setHasCompletedOnce(true);
+                }
+            }, [depth, isDone, hasCompletedOnce]);
+
+            return (
+                <div className="flex flex-col lg:flex-row gap-8 items-center justify-center p-4 h-full w-full max-w-5xl mx-auto">
+                    
+                    <div className="flex-1 w-full space-y-6 flex flex-col justify-center">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 relative">
+                            <h3 className="text-xl font-bold text-stone-800 mb-2">Chaleur et Pression</h3>
+                            <div className="absolute top-4 right-4 bg-stone-100 px-3 py-1 rounded-full text-xs font-bold text-stone-500 shadow-inner">
+                                ⏳ {time.toLocaleString()} ans
+                            </div>
+                            <p className="text-stone-600 text-sm leading-relaxed mb-4 mt-4">
+                                En raison des mouvements de la croûte, les roches sont souvent entraînées dans le sous-sol, où les températures augmentent considérablement à mesure qu'elles descendent. Entre 100 et 200 kilomètres sous la surface de la Terre, les températures sont suffisamment élevées pour faire fondre la plupart des roches. Cependant, avant d'atteindre le point de fusion, une roche peut subir des changements fondamentaux à l'état solide, passant d'un type à un autre sans fondre.
+                            </p>
+                            <p className="text-stone-600 text-sm leading-relaxed mb-4">
+                                Un autre facteur qui peut transformer les roches est la pression exercée par des tonnes d'autres roches au-dessus ; la <strong className="text-purple-600 underline">chaleur et la pression</strong> agissent souvent ensemble pour altérer les roches sous la surface de la Terre. Ce type de changement, résultant de l'augmentation de la température et de la pression, est appelé <strong className="text-purple-700">métamorphisme</strong>, et la roche qui en résulte est une <strong className="text-purple-700 font-bold">roche métamorphique</strong>.
+                            </p>
+                            
+                            <AnalogyDropdown 
+                                question="Qu'arrive-t-il à la pâte à biscuits quand tu la mets au four ?" 
+                                text="La chaleur du four produit des changements dans les ingrédients qui les font interagir et se combiner. Sans faire fondre la pâte, la chaleur la transforme en un produit complètement nouveau : un biscuit."
+                                result="Un processus similaire se produit avec les roches sous la surface de la Terre. Imagine que tu mets plusieurs biscuits les uns sur les autres et que tu les écrases avec tes mains. Si, en plus, il fait chaud, les couches fusionnent et se déforment. C'est ainsi que se forment les roches métamorphiques !"
+                            />
+
+                            <Button onClick={() => {setShowGif(true); setHasViewedGif(true);}} variant={hasViewedGif ? "secondary" : "primary"} className="w-full py-2 text-sm mt-4 animate-pulse">🎬 Voir l'Animation (OBLIGATOIRE)</Button>
+                        </div>
+                        
+                        {!hasCompletedOnce && (
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
+                                <label className="block text-sm font-bold text-stone-700 mb-2">Profondeur Lithosphérique : {depth} km</label>
+                                <input type="range" min="0" max="100" value={depth} onChange={(e) => setDepth(Number(e.target.value))} className="w-full h-4 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-orange-600"/>
+                            </div>
+                        )}
+                        
+                        {hasCompletedOnce && hasViewedGif && <ReflectionBox id="calor" onSave={onComplete} />}
+                    </div>
+                    
+                    <div className="relative w-64 h-80 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-64 h-64 bg-stone-100 rounded-full border-8 border-stone-300 flex items-center justify-center overflow-hidden shadow-inner">
+                            <div className="absolute right-4 top-4 bottom-4 w-4 bg-stone-200 rounded-full overflow-hidden border border-stone-300 z-20">
+                                <div className="absolute bottom-0 w-full bg-red-500 transition-all duration-300" style={{ height: `${depth}%` }}></div>
+                            </div>
+                            <div className="relative transition-all duration-300 z-10 w-full h-full flex items-center justify-center" style={{ 
+                                transform: `scaleY(${1 - (depth * 0.005)}) scaleX(${1 + (depth * 0.002)})`,
+                                filter: `saturate(${1 + (depth * 0.01)}) hue-rotate(${depth}deg)`
+                            }}>
+                                <div className="w-32 h-32 rounded-[40%] bg-stone-400 border-4 border-stone-600 flex flex-col justify-center gap-2 p-2 overflow-hidden shadow-inner relative" style={{ backgroundColor: `hsl(20, ${depth}%, ${60 - depth*0.2}%)` }}>
+                                    <div className="h-4 bg-stone-500/50 rounded-full w-full" style={{ transform: `rotate(${depth * 0.1}deg)` }}></div>
+                                    <div className="h-4 bg-stone-600/50 rounded-full w-4/5 ml-2" style={{ transform: `rotate(${-depth * 0.15}deg)` }}></div>
+                                    <div className="h-4 bg-stone-700/50 rounded-full w-full" style={{ transform: `rotate(${depth * 0.05}deg)` }}></div>
+                                    {isDone && (
+                                        <div className="absolute inset-0 z-30 animate-fade-in rounded-[40%]" style={{
+                                            backgroundImage: `linear-gradient(rgba(147, 51, 234, 0.6), rgba(147, 51, 234, 0.6)), url('https://i.ibb.co/cSdmSZXf/pizarra.jpg')`,
+                                            backgroundSize: 'cover',
+                                            mixBlendMode: 'multiply'
+                                        }}>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        {isDone && <div className="mt-6 text-purple-700 font-black text-xl text-center leading-tight bg-purple-100 border-2 border-purple-300 px-4 py-2 rounded-full shadow-md animate-fade-in">Roche Métamorphique !</div>}
+                    </div>
+
+                    <Modal isOpen={showGif} onClose={() => setShowGif(false)} title="Animation : Chaleur et Pression">
+                        <img src="https://i.ibb.co/nsv6C6P6/heat-pressure.gif" alt="Chaleur et Pression" className="w-full rounded-xl shadow-inner border border-stone-200" />
+                    </Modal>
+                </div>
+            );
+        };
+
+        // 2. Fusión
+        const RetoFusion = ({ onComplete, teacherMode }) => {
+            const [temp, setTemp] = useState(0);
+            const [time, setTime] = useState(0);
+            const [showGif, setShowGif] = useState(false);
+            const [hasViewedGif, setHasViewedGif] = useState(false);
+            const [hasCompletedOnce, setHasCompletedOnce] = useState(false);
+            const isDone = temp >= 1300;
+
+            useEffect(() => {
+                if (teacherMode) { setTemp(1300); setHasViewedGif(true); }
+            }, [teacherMode]);
+
+            useEffect(() => {
+                setTime(Math.round((temp / 1300) * 100000));
+                if (isDone && !hasCompletedOnce) {
+                    setHasCompletedOnce(true);
+                }
+            }, [temp, isDone, hasCompletedOnce]);
+
+            const getZoneInfo = () => {
+                if (temp < 400) return { label: 'Solide', color: 'text-stone-500' };
+                if (temp < 800) return { label: 'Déformation Visqueuse', color: 'text-orange-500' };
+                return { label: 'Fusion (Magma)', color: 'text-red-600' };
+            };
+
+            return (
+                <div className="flex flex-col lg:flex-row gap-8 items-center justify-center p-4 h-full w-full max-w-5xl mx-auto">
+                    
+                    <div className="flex-1 w-full space-y-6 flex flex-col justify-center">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 relative">
+                            <h3 className="text-xl font-bold text-stone-800 mb-2">Fusion</h3>
+                            <div className="absolute top-4 right-4 bg-stone-100 px-3 py-1 rounded-full text-xs font-bold text-stone-500 shadow-inner">
+                                ⏳ {time.toLocaleString()} ans
+                            </div>
+                            <p className="text-stone-600 text-sm leading-relaxed mb-4 mt-4">
+                                Il en va de même pour une roche lorsqu'elle est suffisamment chauffée. Bien sûr, il faut beaucoup de chaleur pour faire fondre une roche. Les températures élevées nécessaires ne se trouvent généralement que dans les profondeurs de la Terre. La roche est entraînée vers le bas par les mouvements de la croûte terrestre et devient de plus en plus chaude à mesure qu'elle descend. Il faut des températures comprises entre 600 et 1300 degrés Celsius pour <strong className="text-orange-600 underline">faire fondre</strong> une roche, la transformant en une substance appelée <strong className="text-red-600 font-bold">magma</strong> (roche en fusion).
+                            </p>
+                            
+                            <AnalogyDropdown 
+                                question="Qu'arrive-t-il à une barre de chocolat quand elle est très chauffée ?" 
+                                text="Il fond et passe à l'état liquide."
+                                result="De la même manière, les roches sous la surface subissent la chaleur du manteau et peuvent fondre complètement. C'est ainsi qu'est créé le magma bouillant !"
+                            />
+                            
+                            <Button onClick={() => {setShowGif(true); setHasViewedGif(true);}} variant={hasViewedGif ? "secondary" : "primary"} className="w-full py-2 text-sm mt-4 animate-pulse">🎬 Voir l'Animation (OBLIGATOIRE)</Button>
+                        </div>
+                        
+                        {!hasCompletedOnce && (
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-sm font-bold text-stone-700">Augmenter la Température</label>
+                                    <span className={`font-black text-xs ${getZoneInfo().color}`}>{temp}°C - {getZoneInfo().label}</span>
+                                </div>
+                                <input type="range" min="0" max="1300" value={temp} onChange={(e) => setTemp(Number(e.target.value))} className="w-full h-4 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-red-600"/>
+                            </div>
+                        )}
+
+                        {hasCompletedOnce && hasViewedGif && <ReflectionBox id="fusion" onSave={onComplete} />}
+                    </div>
+
+                    <div className="relative w-64 h-80 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-64 h-64 bg-stone-900 rounded-3xl border-8 border-stone-800 flex items-center justify-center overflow-hidden shadow-2xl">
+                            <div className={`transition-all duration-300 ease-linear flex items-center justify-center ${temp >= 800 ? 'magma-blob w-48 h-48' : 'w-32 h-32 rounded-lg bg-stone-400'}`}
+                                 style={{
+                                     backgroundColor: temp >= 800 ? 'transparent' : `hsl(20, ${Math.min(100, temp/10)}%, ${60 - temp*0.03}%)`,
+                                     boxShadow: temp > 400 ? `0 0 ${temp/20}px rgba(234, 88, 12, ${temp/1300})` : 'none',
+                                     transform: `scale(${1 + (temp/1300)*0.2})`
+                                 }}>
+                            </div>
+                        </div>
+                        {isDone && <div className="mt-6 text-red-700 font-black text-xl text-center leading-tight bg-red-100 border-2 border-red-300 px-4 py-2 rounded-full shadow-md animate-fade-in">Magma Bouillant !</div>}
+                    </div>
+
+                    <Modal isOpen={showGif} onClose={() => setShowGif(false)} title="Animation : Fusion">
+                        <img src="https://i.ibb.co/5WWmgYgj/melting.gif" alt="Fusion" className="w-full rounded-xl shadow-inner border border-stone-200" />
+                    </Modal>
+                </div>
+            );
+        };
+
+        // 3. Enfriamiento
+        const RetoEnfriamiento = ({ onComplete, teacherMode }) => {
+            const [magmaState, setMagmaState] = useState('center'); 
+            const [selected, setSelected] = useState(false);
+            const [time, setTime] = useState(0);
+            const [showGif, setShowGif] = useState(false);
+            const [hasViewedGif, setHasViewedGif] = useState(false);
+            const [hasCompletedOnce, setHasCompletedOnce] = useState(false);
+            const [isDone, setIsDone] = useState(false);
+            const timerRef = useRef(null);
+
+            useEffect(() => {
+                if (teacherMode) {
+                    setMagmaState('depth');
+                    setTime(50000);
+                    setIsDone(true);
+                    setHasViewedGif(true);
+                }
+            }, [teacherMode]);
+
+            useEffect(() => {
+                if (isDone && !hasCompletedOnce) {
+                    setHasCompletedOnce(true);
+                }
+            }, [isDone, hasCompletedOnce]);
+
+            const handleZoneTap = (zone) => {
+                if (selected && magmaState === 'center') {
+                    setMagmaState(zone);
+                    setSelected(false);
+                    
+                    let currentT = 0;
+                    const maxT = zone === 'depth' ? 50000 : 5; 
+                    const increment = maxT / 20; 
+
+                    timerRef.current = setInterval(() => {
+                        currentT += increment;
+                        if(currentT >= maxT) {
+                            clearInterval(timerRef.current);
+                            setTime(maxT);
+                            setIsDone(true);
+                        } else {
+                            setTime(Math.round(currentT));
+                        }
+                    }, 50);
+                }
+            };
+
+            return (
+                <div className="flex flex-col lg:flex-row gap-8 items-center justify-center p-4 h-full w-full max-w-5xl mx-auto">
+                    
+                    <div className="flex-1 w-full space-y-6 flex flex-col justify-center">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 relative">
+                            <h3 className="text-xl font-bold text-stone-800 mb-2">Refroidissement</h3>
+                            <div className="absolute top-4 right-4 bg-stone-100 px-3 py-1 rounded-full text-xs font-bold text-stone-500 shadow-inner">
+                                ⏳ {time.toLocaleString()} {magmaState === 'surface' ? 'jours' : 'ans'}
+                            </div>
+                            <p className="text-stone-600 text-sm leading-relaxed mb-4 mt-4">
+                                De manière similaire, le magma liquide devient également un solide — une roche — lorsqu'il <strong className="text-blue-600 underline">refroidit</strong>. Toute roche formée par le refroidissement du magma est une <strong className="text-red-700 font-bold">roche ignée</strong>. Le magma qui refroidit rapidement forme un type de roche ignée, et le magma qui refroidit lentement en forme un autre. Lorsque le magma remonte des profondeurs de la Terre et explose dans un volcan, il s'appelle lave et refroidit rapidement à la surface. La roche ainsi formée est appelée <strong className="text-red-600">roche ignée extrusive</strong>. Elle est extrudée, ou poussée, de l'intérieur de la Terre et refroidit à l'extérieur ou très près de la surface terrestre.
+                            </p>
+                            <p className="text-stone-600 text-sm leading-relaxed mb-4">
+                                Que se passe-t-il si le magma n'entre pas en éruption depuis un volcan, mais remonte lentement vers la surface terrestre pendant des centaines, des milliers ou même des millions d'années ? Ce magma refroidira également, mais à un rythme beaucoup plus lent que la lave en éruption d'un volcan. Le type de roche ainsi formé est appelé <strong className="text-red-800">roche ignée intrusive</strong>. Il s'introduit, ou est poussée, à l'intérieur de la Terre et refroidit sous la surface.
+                            </p>
+                            
+                            <AnalogyDropdown 
+                                question="Comment solidifie-t-on du chocolat fondu ?" 
+                                text="On le refroidit en le mettant au réfrigérateur jusqu'à ce qu'il se solidifie."
+                                result="Pareil avec le magma : s'il sort par un volcan, il refroidit très vite (Roche Volcanique). S'il reste à l'intérieur de la terre, cela prend des milliers d'années (Roche Plutonique)."
+                            />
+
+                            <Button onClick={() => {setShowGif(true); setHasViewedGif(true);}} variant={hasViewedGif ? "secondary" : "primary"} className="w-full py-2 text-sm mt-4 animate-pulse">🎬 Voir l'Animation (OBLIGATOIRE)</Button>
+                        </div>
+                        
+                        {!hasCompletedOnce ? (
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-blue-800 text-sm font-bold text-center animate-pulse shadow-sm">
+                                Touche le Magma central puis choisis une zone de refroidissement (surface ou profondeur).
+                            </div>
+                        ) : (
+                            hasViewedGif && <ReflectionBox id="enfriamiento" onSave={onComplete} />
+                        )}
+                    </div>
+
+                    <div className="relative w-80 h-96 bg-stone-300 rounded-xl border-4 border-stone-400 overflow-hidden flex flex-col shadow-inner shrink-0">
+                        <div onClick={() => handleZoneTap('surface')} className={`h-1/3 bg-sky-200 border-b-4 border-stone-500 relative cursor-pointer transition-colors ${selected ? 'hover:bg-sky-100 ring-inset ring-4 ring-blue-400' : ''}`}>
+                            <div className="absolute top-2 left-2 text-sky-800 font-bold text-xs bg-white/50 px-2 py-1 rounded shadow-sm">Surface (Rapide)</div>
+                            <div className="absolute bottom-0 w-full h-4 bg-green-500/50"></div>
+                        </div>
+                        
+                        <div onClick={() => handleZoneTap('depth')} className={`h-2/3 bg-stone-700 relative cursor-pointer transition-colors flex items-center justify-center ${selected ? 'hover:bg-stone-600 ring-inset ring-4 ring-orange-400' : ''}`}>
+                            <div className="absolute top-2 left-2 text-stone-300 font-bold text-xs bg-black/30 px-2 py-1 rounded shadow-sm">Profondeur (Lent)</div>
+                            
+                            <div 
+                                onClick={(e) => { e.stopPropagation(); if(magmaState==='center' && !isDone) setSelected(!selected); }}
+                                className={`absolute transition-all duration-1000 z-10 flex items-center justify-center ${!isDone ? 'cursor-pointer' : ''}
+                                    ${magmaState === 'center' ? 'w-24 h-24 bg-orange-600 rounded-[40%] animate-pulse shadow-[0_0_20px_#ea580c]' : ''}
+                                    ${magmaState === 'surface' ? 'top-10 left-1/2 -translate-x-1/2 w-16 h-16 bg-stone-800 rounded-lg shadow-lg' : ''}
+                                    ${magmaState === 'depth' ? 'bottom-10 left-1/2 -translate-x-1/2 w-28 h-28 bg-stone-400 rounded-3xl shadow-lg border-2 border-stone-500' : ''}
+                                    ${selected ? 'ring-4 ring-white ring-offset-2 ring-offset-orange-600' : ''}
+                                `}
+                                style={{ top: magmaState === 'center' ? '50%' : undefined, transform: magmaState === 'center' ? 'translate(-50%, -50%)' : 'translateX(-50%)' }}
+                            >
+                                {magmaState === 'center' && <span className="text-white font-bold text-sm">MAGMA</span>}
+                                {magmaState === 'surface' && <span className="text-white/80 font-bold text-[10px] text-center leading-tight">Volcanique</span>}
+                                {magmaState === 'depth' && (
+                                    <div className="w-full h-full relative p-2">
+                                        <div className="absolute top-2 left-2 w-4 h-4 bg-white/40 rounded-sm"></div>
+                                        <div className="absolute bottom-3 right-4 w-6 h-5 bg-black/20 rounded-sm"></div>
+                                        <div className="absolute top-6 right-2 w-3 h-3 bg-stone-600 rounded-sm"></div>
+                                        <span className="absolute inset-0 flex items-center justify-center text-stone-800 font-bold text-xs text-center leading-tight">Plutonique</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <Modal isOpen={showGif} onClose={() => setShowGif(false)} title="Animation : Refroidissement">
+                        <img src="https://i.ibb.co/cKRCrJLF/cooling.gif" alt="Refroidissement" className="w-full rounded-xl shadow-inner border border-stone-200" />
+                    </Modal>
+                </div>
+            );
+        };
+
+        // 4. Meteorización
+        const RetoMeteorizacion = ({ onComplete, teacherMode }) => {
+            const [time, setTime] = useState(0);
+            const [activeAgent, setActiveAgent] = useState(null);
+            const [particles, setParticles] = useState([]);
+            const [showGif, setShowGif] = useState(false);
+            const [hasViewedGif, setHasViewedGif] = useState(false);
+            const [hasCompletedOnce, setHasCompletedOnce] = useState(false);
+            
+            const rockSize = Math.max(0, 100 - (time / 1000000) * 100);
+            const isDone = time >= 1000000;
+
+            useEffect(() => {
+                if (teacherMode) { setTime(1000000); setHasViewedGif(true); }
+            }, [teacherMode]);
+
+            useEffect(() => {
+                if (isDone && !hasCompletedOnce) {
+                    setHasCompletedOnce(true);
+                }
+            }, [isDone, hasCompletedOnce]);
+
+            const handleAction = (agentType, agentColor) => {
+                if (isDone) return;
+                
+                setActiveAgent(agentType);
+                setTimeout(() => setActiveAgent(null), 800);
+
+                const newParticles = Array.from({length: 8}).map((_, i) => ({
+                    id: Date.now() + i,
+                    tx: (Math.random() - 0.5) * 200 + 'px',
+                    ty: (Math.random() - 0.5) * 200 - 50 + 'px',
+                    color: agentColor
+                }));
+                setParticles(prev => [...prev.slice(-30), ...newParticles]);
+                setTime(prev => Math.min(prev + 100000, 1000000));
+            };
+
+            return (
+                <div className="flex flex-col lg:flex-row gap-8 items-center justify-center p-4 h-full w-full max-w-5xl mx-auto">
+                    
+                    <div className="flex-1 w-full space-y-6 flex flex-col justify-center">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 relative">
+                            <h3 className="text-xl font-bold text-stone-800 mb-2">Altération et Érosion</h3>
+                            <div className="absolute top-4 right-4 bg-stone-100 px-3 py-1 rounded-full text-xs font-bold text-stone-500 shadow-inner">
+                                ⏳ {time.toLocaleString()} ans
+                            </div>
+                            <p className="text-stone-600 text-sm leading-relaxed mb-4 mt-4">
+                                Tous les objets à la surface de la Terre sont exposés au <strong className="text-sky-600 underline">vent</strong>, ainsi qu'à de nombreux autres éléments : l'<strong className="text-sky-600 underline">eau</strong>, le <strong className="text-sky-600 underline">soleil</strong>, les changements de température. Au fil du temps, ces facteurs usent les objets et les fragmentent. Les fragments qui en résultent sont appelés <strong className="text-amber-600 font-bold">sédiments</strong>. Les sédiments sont transportés par le vent et l'eau, finissant souvent loin de leur lieu d'origine. Ces processus de décomposition et de transport dus à l'exposition environnementale sont appelés <strong className="text-sky-600 underline">altération et érosion</strong>. L'altération et l'érosion affectent toutes les roches à la surface de la Terre.
+                            </p>
+                            
+                            <AnalogyDropdown 
+                                question="De quoi dépendent les pissenlits pour séparer leurs graines, les transporter et les déposer ailleurs ?" 
+                                text="Du vent."
+                                result="De la même manière, le climat brise les roches progressivement et emporte les petits morceaux (sédiments) vers d'autres endroits."
+                            />
+
+                            <Button onClick={() => {setShowGif(true); setHasViewedGif(true);}} variant={hasViewedGif ? "secondary" : "primary"} className="w-full py-2 text-sm mt-4 animate-pulse">🎬 Voir l'Animation (OBLIGATOIRE)</Button>
+                        </div>
+                        
+                        {!hasCompletedOnce ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-white p-4 rounded-xl border border-stone-200 shadow-sm">
+                                <button onClick={() => handleAction('lluvia', '#38bdf8')} className="bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold py-3 rounded-lg border border-sky-200 text-xs shadow-sm transition active:scale-95 flex flex-col items-center">
+                                    <span className="text-2xl mb-1">🌧️</span> Pluie (Chimique)
+                                </button>
+                                <button onClick={() => handleAction('viento', '#a8a29e')} className="bg-stone-50 hover:bg-stone-100 text-stone-800 font-bold py-3 rounded-lg border border-stone-200 text-xs shadow-sm transition active:scale-95 flex flex-col items-center">
+                                    <span className="text-2xl mb-1">💨</span> Vent (Mécanique)
+                                </button>
+                                <button onClick={() => handleAction('raices', '#4ade80')} className="bg-green-50 hover:bg-green-100 text-green-800 font-bold py-3 rounded-lg border border-green-200 text-xs shadow-sm transition active:scale-95 flex flex-col items-center">
+                                    <span className="text-2xl mb-1">🌱</span> Racines (Biologique)
+                                </button>
+                            </div>
+                        ) : (
+                            hasViewedGif && <ReflectionBox id="meteorizacion" onSave={onComplete} />
+                        )}
+                    </div>
+
+                    <div className="relative w-64 h-80 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-64 h-64 bg-sky-50 rounded-2xl border-4 border-sky-100 flex flex-col items-center justify-end overflow-hidden shadow-inner pb-4">
+                            
+                            {/* SVG Actions Animations */}
+                            {activeAgent === 'lluvia' && (
+                                <div className="absolute inset-0 flex justify-around pointer-events-none z-20 overflow-hidden">
+                                    <div className="w-1 h-8 bg-blue-400 rounded-full animate-[rain-fall_0.4s_linear_infinite]"></div>
+                                    <div className="w-1 h-8 bg-blue-400 rounded-full animate-[rain-fall_0.4s_linear_infinite_0.1s] mt-4"></div>
+                                    <div className="w-1 h-8 bg-blue-400 rounded-full animate-[rain-fall_0.4s_linear_infinite_0.2s]"></div>
+                                    <div className="w-1 h-8 bg-blue-400 rounded-full animate-[rain-fall_0.4s_linear_infinite_0.3s] mt-8"></div>
+                                </div>
+                            )}
+                            {activeAgent === 'viento' && (
+                                <div className="absolute inset-0 flex flex-col justify-around pointer-events-none z-20 overflow-hidden">
+                                    <div className="h-1 w-16 bg-gray-400 rounded-full animate-[wind-blow_0.5s_linear_infinite]"></div>
+                                    <div className="h-1 w-24 bg-gray-400 rounded-full animate-[wind-blow_0.5s_linear_infinite_0.2s] ml-8"></div>
+                                    <div className="h-1 w-12 bg-gray-400 rounded-full animate-[wind-blow_0.5s_linear_infinite_0.4s]"></div>
+                                </div>
+                            )}
+                            {activeAgent === 'raices' && (
+                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 pointer-events-none z-20">
+                                    <svg width="80" height="80" viewBox="0 0 100 100" className="animate-[roots-grow_0.8s_ease-out_forwards]">
+                                        <path d="M50 0 Q40 50 20 80 M50 0 Q60 60 80 90 M50 0 Q50 50 40 100 M50 0 Q50 50 60 100" stroke="#16a34a" strokeWidth="6" strokeLinecap="round" fill="none" />
+                                    </svg>
+                                </div>
+                            )}
+
+                            {rockSize > 0 && (
+                                <div className="bg-stone-500 rounded-t-3xl rounded-b-lg border-b-4 border-stone-700 transition-all duration-300 relative z-10 shadow-lg" style={{ width: `${rockSize}px`, height: `${rockSize}px` }}></div>
+                            )}
+                            
+                            {particles.map(p => (
+                                <div key={p.id} className="particle bottom-10" style={{ '--tx': p.tx, '--ty': p.ty, backgroundColor: p.color }}></div>
+                            ))}
+
+                            <div className="absolute bottom-0 w-full bg-amber-200/80 transition-all duration-500 border-t border-amber-300" style={{ height: `${(time/1000000) * 60}px` }}>
+                                <div className="absolute inset-0 opacity-50" style={{ backgroundImage: 'radial-gradient(#b45309 1px, transparent 1px)', backgroundSize: '10px 10px' }}></div>
+                            </div>
+                        </div>
+                        {isDone && <div className="mt-6 text-amber-700 font-black text-xl text-center leading-tight bg-amber-100 border-2 border-amber-300 px-4 py-2 rounded-full shadow-md animate-fade-in">Sédiments !</div>}
+                    </div>
+
+                    <Modal isOpen={showGif} onClose={() => setShowGif(false)} title="Animation : Altération et Érosion">
+                        <img src="https://i.ibb.co/q33LWFkh/weather-erosion.gif" alt="Altération et Érosion" className="w-full rounded-xl shadow-inner border border-stone-200" />
+                    </Modal>
+                </div>
+            );
+        };
+
+        // 5. Compactación
+        const SEDIMENT_IMAGES = {
+            'arena': 'https://i.ibb.co/6c93TgKj/arenisca.jpg',
+            'arcilla': 'https://i.ibb.co/TD6Wh1dM/arcilla.jpg',
+            'cantos': 'https://i.ibb.co/C3b9rsS6/conglomerado.webp'
+        };
+        const SEDIMENT_NAMES = {
+            'arena': 'Grès',
+            'arcilla': 'Shale (Argilite)',
+            'cantos': 'Conglomérat'
+        };
+
+        const RetoCompactacion = ({ onComplete, teacherMode }) => {
+            const [sedimentType, setSedimentType] = useState(null); 
+            const [time, setTime] = useState(0);
+            const [showGif, setShowGif] = useState(false);
+            const [hasViewedGif, setHasViewedGif] = useState(false);
+            const [completedTypes, setCompletedTypes] = useState(new Set());
+            const [expandedImage, setExpandedImage] = useState(null);
+            
+            const timerRef = useRef(null);
+            const isDone = time >= 5000000;
+
+            useEffect(() => {
+                if (teacherMode) {
+                    setSedimentType('arena');
+                    setTime(5000000);
+                    setCompletedTypes(new Set(['arena', 'arcilla', 'cantos']));
+                    setHasViewedGif(true);
+                }
+            }, [teacherMode]);
+
+            useEffect(() => {
+                if (isDone && sedimentType) {
+                    setCompletedTypes(prev => {
+                        const newSet = new Set(prev);
+                        newSet.add(sedimentType);
+                        return newSet;
+                    });
+                }
+            }, [isDone, sedimentType]);
+
+            const handlePress = () => {
+                if (!sedimentType || isDone) return;
+                
+                let currentT = time;
+                timerRef.current = setInterval(() => {
+                    currentT += 200000;
+                    if(currentT >= 5000000) {
+                        clearInterval(timerRef.current);
+                        setTime(5000000);
+                    } else {
+                        setTime(currentT);
+                    }
+                }, 50);
+            };
+
+            const stopPress = () => clearInterval(timerRef.current);
+
+            const handleSedimentChange = (type) => {
+                setSedimentType(type);
+                setTime(0); 
+            };
+
+            return (
+                <div className="flex flex-col lg:flex-row gap-8 items-center justify-center p-4 h-full w-full max-w-5xl mx-auto">
+
+                    <Modal isOpen={!!expandedImage} onClose={() => setExpandedImage(null)} title={SEDIMENT_NAMES[sedimentType]}>
+                        <img src={expandedImage} alt={SEDIMENT_NAMES[sedimentType]} className="w-full max-h-[60vh] object-contain rounded-lg shadow-inner" />
+                    </Modal>
+
+                    <div className="flex-1 w-full space-y-4 flex flex-col justify-center">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 relative">
+                            <h3 className="text-xl font-bold text-stone-800 mb-2">Compactage et Cimentation</h3>
+                            <div className="absolute top-4 right-4 bg-stone-100 px-3 py-1 rounded-full text-xs font-bold text-stone-500 shadow-inner">
+                                ⏳ {time.toLocaleString()} ans
+                            </div>
+                            <p className="text-stone-600 text-sm leading-relaxed mb-4 mt-4">
+                                La même chose se produit avec les sédiments formés par l'altération et l'érosion des roches. Au fil du temps, les sédiments s'accumulent dans les océans, les lacs et les vallées, formant des couches qui exercent un <strong className="text-stone-600 underline">poids</strong> sur le matériau sous-jacent. Ce poids <strong className="text-amber-800 underline">comprime</strong> les particules de sédiments, les compactant. L'eau qui passe par les espaces entre les particules aide à les cimenter encore plus. Ce processus de <strong className="text-amber-800 underline">compactage et de cimentation</strong> des sédiments forme la <strong className="text-amber-700 font-bold">roche sédimentaire</strong>.
+                            </p>
+                            
+                            <AnalogyDropdown 
+                                question="Que se passe-t-il avec un tas d'ordures en vrac lorsqu'il est introduit dans un compacteur ?" 
+                                text="La pression de la machine produit un cube solide d'ordures compactées."
+                                result="C'est comme le camion poubelle qui écrase les sacs. Des couches et des couches de sédiments s'accumulent, et le poids écrase celles du dessous, tandis que les minéraux les collent. C'est ainsi que naissent les Roches Sédimentaires !"
+                            />
+
+                            <Button onClick={() => {setShowGif(true); setHasViewedGif(true);}} variant={hasViewedGif ? "secondary" : "primary"} className="w-full py-2 text-sm mt-4 animate-pulse">🎬 Voir l'Animation (OBLIGATOIRE)</Button>
+                        </div>
+                        
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 space-y-4">
+                            <h4 className="font-bold text-sm text-stone-700">Étape 1 : Choisis les sédiments déposés</h4>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button onClick={()=>handleSedimentChange('arena')} className={`font-bold py-3 rounded-lg border text-xs shadow-sm transition-colors relative ${sedimentType === 'arena' ? 'bg-yellow-500 text-white border-yellow-600' : 'bg-yellow-50 hover:bg-yellow-100 text-yellow-800 border-yellow-200'}`}>
+                                    Grains de Sable
+                                    {completedTypes.has('arena') && <span className="absolute -top-2 -right-2 text-green-500 bg-white rounded-full text-lg shadow"><IconCheck/></span>}
+                                </button>
+                                <button onClick={()=>handleSedimentChange('arcilla')} className={`font-bold py-3 rounded-lg border text-xs shadow-sm transition-colors relative ${sedimentType === 'arcilla' ? 'bg-orange-500 text-white border-orange-600' : 'bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200'}`}>
+                                    Boue et Argile
+                                    {completedTypes.has('arcilla') && <span className="absolute -top-2 -right-2 text-green-500 bg-white rounded-full text-lg shadow"><IconCheck/></span>}
+                                </button>
+                                <button onClick={()=>handleSedimentChange('cantos')} className={`font-bold py-3 rounded-lg border text-xs shadow-sm transition-colors relative ${sedimentType === 'cantos' ? 'bg-stone-600 text-white border-stone-700' : 'bg-stone-100 hover:bg-stone-200 text-stone-800 border-stone-300'}`}>
+                                    Galets
+                                    {completedTypes.has('cantos') && <span className="absolute -top-2 -right-2 text-green-500 bg-white rounded-full text-lg shadow"><IconCheck/></span>}
+                                </button>
+                            </div>
+
+                            {sedimentType && !isDone && (
+                                <>
+                                    <h4 className="font-bold text-sm text-stone-700 mt-4">Étape 2 : Simuler des millions d'années de pression</h4>
+                                    <Button 
+                                        onMouseDown={handlePress} onMouseUp={stopPress} onMouseLeave={stopPress}
+                                        onTouchStart={handlePress} onTouchEnd={stopPress}
+                                        className="w-full h-16 select-none cursor-pointer animate-pulse"
+                                        variant="primary"
+                                    >
+                                        👇 Maintenir appuyé
+                                    </Button>
+                                </>
+                            )}
+                            
+                            {isDone && (
+                                <div className="animate-fade-in mt-4">
+                                    <h4 className="font-bold text-sm text-stone-700 mb-3">Roche formée !</h4>
+                                    <div 
+                                        className="flex items-center gap-4 bg-stone-50 p-3 rounded-xl border border-stone-200 mb-2 cursor-pointer hover:border-blue-300 transition-colors relative group"
+                                        onClick={() => setExpandedImage(SEDIMENT_IMAGES[sedimentType])}
+                                    >
+                                        <div className="relative">
+                                            <img src={SEDIMENT_IMAGES[sedimentType]} alt={SEDIMENT_NAMES[sedimentType]} className="w-20 h-20 rounded-lg object-cover border border-stone-300 shadow-sm" />
+                                            <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center rounded-lg text-white"><IconExpand/></div>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-stone-800 text-sm">Exemple Réel : {SEDIMENT_NAMES[sedimentType]}</h4>
+                                            <p className="text-xs text-stone-600 mt-1">Formée par le compactage et la cimentation de {sedimentType === 'arena' ? 'grains de sable' : sedimentType === 'arcilla' ? 'boue et argile' : 'galets'}.</p>
+                                        </div>
+                                    </div>
+                                    
+                                    {completedTypes.size < 3 ? (
+                                        <div className="text-orange-600 font-bold text-xs text-center bg-orange-50 border border-orange-200 p-2 rounded-lg mt-4">
+                                            Tu dois expérimenter avec les autres types de sédiments avant de continuer ({completedTypes.size}/3).
+                                        </div>
+                                    ) : (
+                                        hasViewedGif && <ReflectionBox id="compactacion" onSave={onComplete} hideExample={true} />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="relative w-64 h-64 bg-white rounded-xl border-4 border-stone-300 overflow-hidden shadow-inner flex flex-col justify-end shrink-0">
+                        <div className="absolute top-0 w-full bg-stone-800 border-b-8 border-stone-600 z-20 transition-all duration-75" style={{ height: `${(time/5000000) * 60 + 10}px` }}>
+                            <div className="w-8 h-full bg-stone-400 mx-auto"></div>
+                        </div>
+
+                        {sedimentType && (
+                            <div className="w-full transition-all duration-75 flex flex-col justify-end overflow-hidden" style={{ height: `${160 - (time/5000000) * 50}px` }}>
+                                <div className="w-full h-full relative bg-amber-100" style={{ opacity: 1 - time/5000000 }}>
+                                    {sedimentType === 'arena' && <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#d97706 2px, transparent 2px)', backgroundSize: '10px 10px' }}></div>}
+                                    {sedimentType === 'arcilla' && <div className="absolute inset-0 bg-orange-200"></div>}
+                                    {sedimentType === 'cantos' && <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#78716c 6px, transparent 6px)', backgroundSize: '20px 20px' }}></div>}
+                                </div>
+                                <div className="absolute bottom-0 w-full transition-all duration-500 bg-amber-700 flex items-center justify-center border-t-4 border-amber-900 shadow-inner" style={{ height: `${(time/5000000) * 80}px`, opacity: time/5000000 }}>
+                                    {isDone && <span className="text-white font-bold text-xl drop-shadow-md z-30">{SEDIMENT_NAMES[sedimentType]}</span>}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <Modal isOpen={showGif} onClose={() => setShowGif(false)} title="Animation : Compactage">
+                        <img src="https://i.ibb.co/F4QLcL3g/compacting-cementing.gif" alt="Compactage" className="w-full rounded-xl shadow-inner border border-stone-200" />
+                    </Modal>
+                </div>
+            );
+        };
+
+        // --- PHASE 1.5: MOVILIZACIÓN DE RECURSOS 1 (Simulador Externo y Desbloqueo) ---
+        const Movilizacion1Phase = ({ onNext }) => {
+            const [answer, setAnswer] = useState("");
+            const isCorrect = answer.toLowerCase().includes("magma");
+
+            return (
+                <div className="flex-1 flex flex-col items-center justify-center p-4 animate-fade-in h-full">
+                    <div className="bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-stone-200 max-w-3xl w-full text-center">
+                        <div className="text-6xl mb-6 text-blue-600">💻</div>
+                        <h2 className="text-3xl font-black text-stone-800 mb-6">Simulateur Interactif</h2>
+                        <p className="text-stone-600 mb-8 leading-relaxed text-lg">
+                            Avant de construire le diagramme complet, voyons comment tous ces changements se produisent de manière continue dans la nature.
+                        </p>
+                        <a href="https://www.learner.org/wp-content/interactive/rockcycle/transformrock/" target="_blank" rel="noopener noreferrer" className="inline-block">
+                            <Button variant="primary" className="py-4 px-10 text-xl mb-8">Ouvrir le Simulateur Externe</Button>
+                        </a>
+                        <div className="border-t border-stone-200 pt-8 mt-4 bg-stone-50 p-6 rounded-xl shadow-inner">
+                            <label className="block text-stone-700 font-bold mb-2">Pour débloquer la phase suivante, réponds :</label>
+                            <p className="text-stone-600 mb-3 text-sm">En quoi l'obsidienne s'est-elle transformée sur le dernier écran du simulateur ?</p>
+                            <input 
+                                type="text" 
+                                value={answer} 
+                                onChange={e => setAnswer(e.target.value)} 
+                                className="w-full max-w-sm mx-auto p-3 border-2 border-stone-200 rounded-xl mb-6 focus:border-blue-500 outline-none text-center" 
+                                placeholder="Écris ta réponse..." 
+                            />
+                            <Button variant="success" onClick={onNext} disabled={!isCorrect} className="w-full md:w-auto mx-auto text-lg">Continuer vers le Schéma →</Button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- PHASE 3 PRE: Pizarra Hipótesis ---
+        const PizarraPhase = ({ onNext, teacherMode }) => {
+            const canvasRef = useRef(null);
+            const [isDrawing, setIsDrawing] = useState(false);
+
+            useEffect(() => {
+                if (teacherMode) onNext();
+            }, [teacherMode]);
+
+            const getCoordinates = (e, canvas) => {
+                if (e.touches && e.touches.length > 0) {
+                    const rect = canvas.getBoundingClientRect();
+                    return {
+                        x: e.touches[0].clientX - rect.left,
+                        y: e.touches[0].clientY - rect.top
+                    };
+                }
+                return { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
+            };
+
+            const startDrawing = (e) => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const pos = getCoordinates(e, canvas);
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y);
+                setIsDrawing(true);
+            };
+
+            const draw = (e) => {
+                if (!isDrawing) return;
+                e.preventDefault(); 
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const pos = getCoordinates(e, canvas);
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+            };
+
+            const stopDrawing = () => {
+                if(isDrawing) {
+                    canvasRef.current.getContext('2d').closePath();
+                    setIsDrawing(false);
+                }
+            };
+
+            const clearCanvas = () => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            };
+
+            return (
+                <div className="flex-1 flex flex-col items-center justify-center p-4 animate-fade-in h-full w-full max-w-4xl mx-auto">
+                    <div className="bg-white p-6 md:p-8 rounded-3xl shadow-xl w-full border border-stone-200 text-center flex flex-col h-[80vh]">
+                        <div className="text-4xl mb-2">📝</div>
+                        <h2 className="text-3xl font-black text-stone-800 mb-2">Dessine ton Hypothèse</h2>
+                        <p className="text-stone-600 mb-4 leading-relaxed text-sm">
+                            Avant de voir et de construire la vraie carte, dessine ici ou dans ton cahier comment tu penses que les roches et les processus se connectent.
+                        </p>
+                        
+                        <div className="flex-1 w-full bg-stone-50 rounded-2xl border-4 border-stone-200 shadow-inner overflow-hidden mb-4 relative touch-none">
+                            <canvas 
+                                ref={canvasRef}
+                                width={800} 
+                                height={400}
+                                className="w-full h-full cursor-crosshair touch-none block"
+                                onMouseDown={startDrawing}
+                                onMouseMove={draw}
+                                onMouseUp={stopDrawing}
+                                onMouseLeave={stopDrawing}
+                                onTouchStart={startDrawing}
+                                onTouchMove={draw}
+                                onTouchEnd={stopDrawing}
+                            />
+                            <button onClick={clearCanvas} className="absolute bottom-4 right-4 bg-white text-stone-500 hover:text-red-500 font-bold p-2 rounded-full shadow border border-stone-200 z-20">
+                                <IconTrash/>
+                            </button>
+                        </div>
+                        
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-left max-w-xl mx-auto text-xs w-full">
+                            <h4 className="font-bold text-blue-900 mb-1">N'oublie pas d'inclure dans ton schéma :</h4>
+                            <ul className="list-disc pl-5 text-blue-800 space-y-1">
+                                <li>Roches (Ignées, Sédimentaires, Métamorphiques, Magma, Sédiments).</li>
+                                <li>Flèches directionnelles avec le nom du processus.</li>
+                            </ul>
+                        </div>
+
+                        <Button variant="primary" onClick={onNext} className="w-full md:w-auto mx-auto py-3 px-8 text-md">
+                            Je l'ai déjà validé avec le professeur → Afficher la Carte
+                        </Button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- PHASE 3: CONSTRUCCIÓN DEL DIAGRAMA ---
+        const DiagramPhase = ({ onComplete, onUpdateProgress, progress, teacherMode, onNext }) => {
+            
+            const initialPlacedRocks = {
+                'n_meta': 'i_metamorfica',
+                'n_ignea': 'i_ignea',
+                'n_sedi': 'i_sedimentaria',
+                'n_magma': 'i_magma',
+                'n_sedimento': 'i_sedimento'
+            };
+
+            const [placedItems, setPlacedItems] = useState(() => {
+                if (teacherMode) return DIAGRAM_SOLUTION;
+                if (progress.diagramPlacedItems && Object.keys(progress.diagramPlacedItems).length > 0) return progress.diagramPlacedItems;
+                return initialPlacedRocks;
+            });
+            
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [errorNode, setErrorNode] = useState(null);
+            const [infoModal, setInfoModal] = useState(null); 
+
+            const isComplete = Object.keys(DIAGRAM_SOLUTION).every(k => placedItems[k] === DIAGRAM_SOLUTION[k]);
+
+            useEffect(() => {
+                if (teacherMode) setPlacedItems({...DIAGRAM_SOLUTION});
+            }, [teacherMode]);
+
+            useEffect(() => {
+                if (isComplete && !progress.diagrama) onComplete();
+            }, [isComplete]);
+
+            useEffect(() => {
+                if (!teacherMode) {
+                    onUpdateProgress({ diagramPlacedItems: placedItems });
+                }
+            }, [placedItems, teacherMode]);
+
+            const handleSlotTap = (slotId) => {
+                const isRockNode = slotId.startsWith('n_');
+                if (isRockNode) {
+                    setInfoModal(ITEMS_DIAGRAMA.find(i => i.id === DIAGRAM_SOLUTION[slotId]));
+                    return;
+                }
+
+                if (!selectedItem) {
+                    if (placedItems[slotId]) {
+                        setInfoModal(ITEMS_DIAGRAMA.find(i => i.id === placedItems[slotId]));
+                    }
+                    return; 
+                }
+
+                const expectedItemId = DIAGRAM_SOLUTION[slotId];
+                if (selectedItem.id === expectedItemId) {
+                    setPlacedItems(prev => ({...prev, [slotId]: selectedItem.id}));
+                    setSelectedItem(null);
+                } else {
+                    setErrorNode(slotId);
+                    setTimeout(() => setErrorNode(null), 500);
+                    setSelectedItem(null); 
+                }
+            };
+
+            const availableItems = ITEMS_DIAGRAMA.filter(item => item.type === 'proceso');
+
+            return (
+                <div className="flex flex-col h-full gap-4 relative animate-fade-in">
+                    
+                    {infoModal && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setInfoModal(null)}>
+                            <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-xl w-full relative" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setInfoModal(null)} className="absolute -top-3 -right-3 bg-stone-700 hover:bg-red-500 text-white rounded-full w-8 h-8 font-bold shadow-lg hover:scale-105 transition-all flex items-center justify-center z-50">✕</button>
+                                <h3 className="text-2xl font-black mb-4 text-center text-stone-800 flex items-center justify-center gap-2">
+                                    {infoModal.icon} {infoModal.label}
+                                </h3>
+                                {infoModal.type === 'proceso' ? (
+                                    <div className="border border-stone-200 rounded-xl overflow-hidden shadow-inner">
+                                        <img src={infoModal.gif} alt={infoModal.label} className="w-full h-auto object-contain bg-stone-50" />
+                                    </div>
+                                ) : (
+                                    <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center shadow-inner">
+                                        <p className="text-lg text-blue-900 leading-relaxed">{infoModal.def}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <PhaseHeader 
+                        title="Construis le Cycle" 
+                        subtitle="Sélectionne les processus ci-dessous pour connecter les roches situées sur la carte." 
+                        progressText={`${Object.keys(placedItems).length} / ${Object.keys(DIAGRAM_SOLUTION).length}`}
+                        onNext={isComplete ? onNext : null}
+                        nextLabel="Aller à la Navigation"
+                    />
+
+                    <div className="flex flex-col flex-1 gap-6 relative">
+                        {/* PANEL DIAGRAMA (A dalt, full width) */}
+                        <div className="w-full bg-white rounded-2xl shadow-inner border-4 border-stone-200 relative overflow-hidden min-h-[700px]">
+                            
+                            <svg viewBox="0 0 1200 800" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                                <defs>
+                                    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9333ea" /></marker>
+                                    <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ea580c" /></marker>
+                                    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" /></marker>
+                                    <marker id="arrow-yellow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#eab308" /></marker>
+                                    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706" /></marker>
+                                </defs>
+                                
+                                {DIAGRAM_LAYOUT.EDGES.map(edge => {
+                                    if(edge.curved) {
+                                        return <path key={`base-${edge.id}`} d={`M ${edge.sx} ${edge.sy} C ${edge.cx1} ${edge.cy1}, ${edge.cx2} ${edge.cy2}, ${edge.ex} ${edge.ey}`} stroke={edge.color} strokeWidth="4" markerEnd={`url(#${edge.marker})`} fill="none" />
+                                    }
+                                    return <path key={`base-${edge.id}`} 
+                                          d={`M ${edge.sx} ${edge.sy} Q ${edge.cx} ${edge.cy} ${edge.ex} ${edge.ey}`}
+                                          stroke={edge.color} 
+                                          strokeWidth="4" 
+                                          fill="none"
+                                          markerEnd={`url(#${edge.marker})`}/>
+                                })}
+                            </svg>
+
+                            {Object.entries(DIAGRAM_LAYOUT.NODES).map(([nodeId, pos]) => {
+                                const placedItemId = placedItems[nodeId];
+                                const itemData = ITEMS_DIAGRAMA.find(i => i.id === placedItemId);
+
+                                return (
+                                    <div key={nodeId} 
+                                         onClick={() => handleSlotTap(nodeId)}
+                                         className={`absolute w-32 md:w-36 -translate-x-1/2 -translate-y-1/2 p-3 border-2 border-solid rounded-xl text-center font-bold text-xs md:text-sm z-10 shadow-md scale-100 cursor-pointer hover:scale-105 transition-transform bg-white ${itemData ? itemData.color : ''}`} 
+                                         style={{ top: `${(pos.cy / 800) * 100}%`, left: `${(pos.cx / 1200) * 100}%` }}>
+                                        {itemData ? itemData.label : 'Roche'}
+                                        {nodeId === 'n_ignea' && <div className="text-[9px] font-normal mt-1 leading-tight text-stone-700">Plutonique / Volcanique</div>}
+                                    </div>
+                                );
+                            })}
+
+                            {DIAGRAM_LAYOUT.EDGES.map((edge) => {
+                                const placedItemId = placedItems[edge.id];
+                                const itemData = ITEMS_DIAGRAMA.find(i => i.id === placedItemId);
+                                const isError = errorNode === edge.id;
+                                
+                                const midPos = getEdgeMidpoint(edge);
+
+                                return (
+                                    <div key={edge.id} onClick={() => handleSlotTap(edge.id)}
+                                         className={`absolute flex flex-col items-center justify-center z-20 cursor-pointer transition-all hover:scale-110
+                                            ${selectedItem && !itemData ? 'ring-4 ring-blue-300 rounded-full' : ''}
+                                            ${isError ? 'animate-shake' : ''}
+                                         `} style={{ top: midPos.top, left: midPos.left, transform: 'translate(-50%, -50%)' }}>
+                                        
+                                        <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md border-[3px]" style={{ borderColor: edge.color }}>
+                                            {itemData ? <span className="text-2xl">{itemData.icon}</span> : <span className="text-[10px] text-stone-400">?</span>}
+                                        </div>
+                                        {itemData && <span className="bg-white/90 px-2 py-0.5 rounded text-[9px] font-bold text-stone-800 shadow-sm mt-1 uppercase">{itemData.label}</span>}
+                                    </div>
+                                );
+                            })}
+                            
+                            {isComplete && (
+                                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white font-bold px-6 py-2 rounded-full shadow-lg flex items-center gap-2 animate-bounce z-50">
+                                    <IconCheck/> Diagramme Terminé !
+                                </div>
+                            )}
+                        </div>
+
+                        {/* PANEL BANCO DE PIEZAS (A sota, horitzontal) */}
+                        <div className="w-full bg-white rounded-2xl shadow-sm border border-stone-200 p-6 z-30 mb-20">
+                            <h3 className="font-bold text-stone-800 mb-2 border-b pb-2 flex justify-between items-center text-lg">
+                                <span>Processus Géologiques</span>
+                                {isComplete && <button onClick={onNext} className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-bold shadow hover:bg-green-700 transition">Continuer vers la Navigation</button>}
+                            </h3>
+                            <p className="text-xs text-stone-500 mb-6">Sélectionne un processus et touche les flèches du diagramme où elles correspondent (elles peuvent être répétées). Touche les roches ou les processus terminés pour voir leurs informations.</p>
+                            
+                            <div className="flex flex-wrap justify-center gap-4">
+                                {availableItems.map(item => (
+                                    <div key={item.id} 
+                                         onClick={() => setSelectedItem(selectedItem?.id === item.id ? null : item)}
+                                         className={`p-3 px-6 rounded-xl border-2 text-sm font-bold cursor-pointer transition-all flex items-center gap-2 bg-stone-50 border-stone-300 text-stone-700 hover:bg-stone-100 min-w-[160px]
+                                            ${selectedItem?.id === item.id ? 'ring-4 ring-blue-400 scale-105 shadow-md border-blue-500 bg-white' : ''}
+                                         `}>
+                                        <span className="text-xl">{item.icon}</span>
+                                        <span>{item.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+
+        // --- PHASE 4: DESAFIOS DE NAVEGACIÓN EN EL MAPA ---
+        const MISSIONS = [
+            { id: 1, start: 'n_sedi', target: 'n_meta', energy: 3, name: "Mission 1 : Initiation", desc: "Objectif : Convertis la Roche Sédimentaire directement en Roche Métamorphique.", blockedEdges: [], mustPass: [] },
+            { id: 2, start: 'n_ignea', target: 'n_sedi', energy: 6, name: "Mission 2 : L'Usure", desc: "Objectif : Convertis une Roche Ignée en Roche Sédimentaire. Indice : Tu devras passer par l'état de Sédiments.", blockedEdges: [], mustPass: ['n_sedimento'], idealPath: ['e_ignea_sedimento', 'e_sedimento_sedi'] },
+            { id: 3, start: 'n_meta', target: 'n_ignea', energy: 8, name: "Mission 3 : Le Réveil Volcanique", desc: "Objectif : Convertis une Roche Métamorphique en Roche Ignée (Volcanique ou Plutonique).", blockedEdges: [], mustPass: ['n_magma'], idealPath: ['e_meta_magma', 'e_magma_ignea'] },
+            { id: 4, start: 'n_sedi', target: 'n_ignea', energy: 10, name: "Mission 4 : Le Grand Voyage", desc: "Objectif : Convertis une Roche Sédimentaire en Roche Ignée en passant par le métamorphisme.", blockedEdges: ['e_sedi_magma'], mustPass: ['n_meta', 'n_magma'], idealPath: ['e_sedi_meta', 'e_meta_magma', 'e_magma_ignea'] }
+        ];
+
+        const ROCK_NAMES = { 'n_ignea': 'Roche Ignée', 'n_sedi': 'Roche Sédimentaire', 'n_meta': 'Roche Métamorphique', 'n_magma': 'Magma', 'n_sedimento': 'Sédiments' };
+
+        // Componente Metacognición Post-Misión
+        const PostMissionReflection = ({ mission, allHypotheses, currentMissionIdx, onSave }) => {
+            const [text, setText] = useState("");
+            const hyp = allHypotheses[currentMissionIdx];
+            if (!hyp) return null;
+
+            const getProcNameFromEdge = (edgeId) => {
+                const procId = DIAGRAM_SOLUTION[edgeId] || edgeId;
+                const proc = ITEMS_DIAGRAMA.find(i => i.id === procId);
+                return proc ? proc.label : edgeId;
+            };
+
+            const getProcNameFromId = (pId) => {
+                const p = ITEMS_DIAGRAMA.find(i => i.id === pId);
+                return p ? p.label : pId;
+            };
+
+            const plannedNames = (hyp.predictedPath || []).map(getProcNameFromId);
+            const actualNames = (hyp.actualPathEdges || []).map(getProcNameFromEdge);
+
+            const isPerfect = JSON.stringify(plannedNames) === JSON.stringify(actualNames);
+
+            const handleSave = () => {
+                if (!isPerfect && text.trim().length < 5) {
+                    alert("S'il te plaît, explique brièvement pourquoi tu as changé de plan.");
+                    return;
+                }
+                onSave(isPerfect ? "J'ai suivi le parcours planifié à la perfection." : text);
+            };
+
+            return (
+                <div className="absolute inset-0 bg-green-500/90 backdrop-blur-md z-[200] flex items-center justify-center animate-fade-in p-4 overflow-y-auto">
+                    <div className="bg-white p-8 rounded-3xl shadow-2xl border-4 border-green-300 w-full max-w-2xl text-center flex flex-col items-center my-auto">
+                        <div className="text-7xl mb-4 animate-bounce">🏆</div>
+                        <h4 className="text-3xl font-black text-green-700 mb-6">Mission Accomplie !</h4>
+                        
+                        <div className="w-full text-left bg-stone-50 p-4 rounded-xl border border-stone-200 mb-6">
+                            <h5 className="font-bold text-stone-800 mb-2 border-b pb-1">Analyse de ton parcours :</h5>
+                            
+                            <div className="flex flex-col md:flex-row gap-4 mb-4 mt-3">
+                                <div className="flex-1 bg-white p-3 rounded-lg border border-stone-200 shadow-sm">
+                                    <p className="text-xs font-bold text-stone-500 mb-2 uppercase tracking-wide">Processus Planifiés</p>
+                                    <ol className="list-decimal list-inside text-sm font-medium text-stone-700 space-y-1">
+                                        {plannedNames.map((name, idx) => <li key={idx}>{name}</li>)}
+                                    </ol>
+                                </div>
+                                <div className="flex-1 bg-white p-3 rounded-lg border border-stone-200 shadow-sm">
+                                    <p className="text-xs font-bold text-stone-500 mb-2 uppercase tracking-wide">Processus Exécutés</p>
+                                    <ol className="list-decimal list-inside text-sm font-medium text-green-700 space-y-1">
+                                        {actualNames.map((name, idx) => <li key={idx}>{name}</li>)}
+                                    </ol>
+                                </div>
+                            </div>
+                            
+                            {isPerfect ? (
+                                <p className="text-sm font-bold text-green-700 bg-green-100 p-3 rounded shadow-sm border border-green-200">
+                                    Parcours parfait ! Tu as suivi exactement les processus que tu avais planifiés.
+                                </p>
+                            ) : (
+                                <p className="text-sm font-bold text-orange-700 bg-orange-100 p-3 rounded shadow-sm border border-orange-200">
+                                    Très bien, tu as atteint l'objectif ! Mais ton vrai parcours n'a pas coïncidé avec ton plan initial. Pourquoi as-tu dû changer de plan en cours de route ?
+                                </p>
+                            )}
+                        </div>
+
+                        {!isPerfect && (
+                            <textarea 
+                                className="w-full p-4 border-2 border-stone-200 rounded-xl mb-6 text-sm resize-none focus:ring-2 focus:ring-green-500 outline-none transition-all custom-scroll shadow-inner min-h-[100px]"
+                                placeholder="Écris ici ta réflexion sur ce changement..."
+                                id="mission-reflection-input"
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                            ></textarea>
+                        )}
+
+                        <Button variant="success" onClick={handleSave} className="w-full py-4 text-lg shadow-lg">
+                            Continuer →
+                        </Button>
+                    </div>
+                </div>
+            );
+        };
+
+        const DesafiosNavegacionPhase = ({ progress, onUpdateProgress, onCompleteProgress, teacherMode }) => {
+            
+            const [difficulty, setDifficulty] = useState(progress.navDifficulty || null); 
+            const [currentMissionIdx, setCurrentMissionIdx] = useState(progress.navMissionIdx || 0);
+            const [isSandbox, setIsSandbox] = useState(progress.navIsSandbox || false);
+            const [showMetacognition, setShowMetacognition] = useState(false);
+            const [allHypotheses, setAllHypotheses] = useState(Array.isArray(progress.navHypotheses) ? progress.navHypotheses : []);
+            const [missionReflections, setMissionReflections] = useState(progress.missionReflections || {});
+            
+            const [metaQ1, setMetaQ1] = useState(progress.reflections?.metaQ1 || "");
+            const [metaQ2, setMetaQ2] = useState(progress.reflections?.metaQ2 || "");
+
+            const mission = MISSIONS[currentMissionIdx] || MISSIONS[0];
+            
+            // Navegation State
+            const [energy, setEnergy] = useState(0);
+            const [currentNode, setCurrentNode] = useState(null);
+            const [step, setStep] = useState(0); 
+            const [selectedOrigin, setSelectedOrigin] = useState(null);
+            const [selectedEdge, setSelectedEdge] = useState(null);
+            const [pathHistory, setPathHistory] = useState([]);
+            
+            const [feedback, setFeedback] = useState({type: 'info', text: ''});
+            const [animatingGif, setAnimatingGif] = useState(null);
+            const [animatingTitle, setAnimatingTitle] = useState("");
+            const [hypothesisMade, setHypothesisMade] = useState(false);
+            const [missionWon, setMissionWon] = useState(false);
+            const [infoModal, setInfoModal] = useState(null); 
+            
+            // Blind-Path State
+            const [hypothesisText, setHypothesisText] = useState("");
+            const [plannedPath, setPlannedPath] = useState([]);
+            const [currentPlanStep, setCurrentPlanStep] = useState(0);
+
+            // Hint System
+            const [hintsLeft, setHintsLeft] = useState(3);
+            const [isHintMode, setIsHintMode] = useState(false);
+            const [revealedElements, setRevealedElements] = useState([]);
+
+            const UNIQUE_PROCESSES = useMemo(() => {
+                const uniqueLabels = new Set();
+                const uniques = [];
+                ITEMS_DIAGRAMA.filter(i => i.type === 'proceso').forEach(p => {
+                    if (!uniqueLabels.has(p.label)) {
+                        uniqueLabels.add(p.label);
+                        uniques.push(p);
+                    }
+                });
+                return uniques;
+            }, []);
+
+            useEffect(() => {
+                if (!teacherMode) {
+                    onUpdateProgress({
+                        navMissionIdx: currentMissionIdx,
+                        navHypotheses: Array.isArray(allHypotheses) ? allHypotheses : [],
+                        navIsSandbox: isSandbox,
+                        navDifficulty: difficulty,
+                        missionReflections: missionReflections,
+                        reflections: {
+                            ...(progress.reflections || {}),
+                            metaQ1,
+                            metaQ2
+                        }
+                    });
+                }
+            }, [currentMissionIdx, allHypotheses, isSandbox, difficulty, missionReflections, metaQ1, metaQ2, teacherMode]);
+
+            useEffect(() => {
+                if (difficulty && !isSandbox && !showMetacognition) {
+                    setEnergy(mission.energy);
+                    setCurrentNode(mission.start);
+                    setStep(0);
+                    setSelectedOrigin(null);
+                    setSelectedEdge(null);
+                    setPathHistory([]);
+                    setFeedback({type: 'info', text: 'Lis la mission et formule ton hypothèse pour commencer.'});
+                    setHypothesisMade(false);
+                    setHypothesisText("");
+                    setPlannedPath(['']); 
+                    setCurrentPlanStep(0);
+                    setHintsLeft(3);
+                    setRevealedElements([]);
+                    setIsHintMode(false);
+                    setMissionWon(false);
+                }
+            }, [currentMissionIdx, isSandbox, showMetacognition, difficulty]);
+
+            const handleAddPlanStep = () => setPlannedPath([...plannedPath, '']);
+            const handlePlanChange = (index, val) => {
+                const newPlan = [...plannedPath];
+                newPlan[index] = val;
+                setPlannedPath(newPlan);
+            };
+            const handleRemovePlanStep = (index) => setPlannedPath(plannedPath.filter((_, i) => i !== index));
+
+            const saveHypothesis = () => {
+                if(hypothesisText.trim().length < 10) {
+                    alert("S'il te plaît, écris une justification plus détaillée.");
+                    return;
+                }
+                if(plannedPath.length === 0 || plannedPath.some(p => p === '')) {
+                    alert("Tu dois compléter tous les sélecteurs de ton parcours planifié.");
+                    return;
+                }
+                setHypothesisMade(true);
+                const newHypotheses = Array.isArray(allHypotheses) ? [...allHypotheses] : [];
+                newHypotheses[currentMissionIdx] = {
+                    levelName: mission.name,
+                    start: ROCK_NAMES[mission.start],
+                    target: ROCK_NAMES[mission.target],
+                    text: hypothesisText,
+                    predictedPath: [...plannedPath],
+                    actualPath: [],
+                    actualPathEdges: [],
+                    reflection: ""
+                };
+                setAllHypotheses(newHypotheses);
+                setFeedback({type: 'info', text: 'Clique sur ta position actuelle sur la carte pour commencer.'});
+            };
+
+            const resetMission = () => {
+                if (confirm("Recommencer la mission ? Tu perdras ta progression actuelle.")) {
+                    setEnergy(mission.energy);
+                    setCurrentNode(mission.start);
+                    setStep(0);
+                    setSelectedOrigin(null);
+                    setSelectedEdge(null);
+                    setPathHistory([]);
+                    setCurrentPlanStep(0);
+                    setFeedback({type: 'info', text: 'Mission recommencée. Commence depuis ton origine.'});
+                }
+            };
+
+            const consumeEnergyAndCheck = (msg) => {
+                let finalMsg = msg;
+                if (!teacherMode && !isSandbox) {
+                    const newEnergy = energy - 1;
+                    setEnergy(newEnergy);
+                    if (newEnergy <= 0) {
+                        finalMsg = 'Tu n\'as plus d\'énergie ! Clique sur recommencer la mission.';
+                    }
+                }
+                setFeedback({type: 'error', text: finalMsg});
+                setStep(0);
+                setSelectedOrigin(null);
+                setSelectedEdge(null);
+            };
+
+            const applyHint = (elementId) => {
+                if (energy < 1 && !teacherMode) {
+                    setFeedback({type: 'error', text: 'Tu n\'as pas assez d\'énergie pour demander un indice.'});
+                    setIsHintMode(false);
+                    return;
+                }
+                if (!teacherMode) {
+                    setEnergy(prev => prev - 1);
+                    setHintsLeft(prev => prev - 1);
+                }
+                setRevealedElements(prev => [...prev, elementId]);
+                setIsHintMode(false);
+                setFeedback({type: 'success', text: 'Indice activé temporairement.'});
+                setTimeout(() => {
+                    setRevealedElements(prev => prev.filter(e => e !== elementId));
+                    setFeedback({type: 'info', text: 'Continue ta navigation.'});
+                }, 3000);
+            };
+
+            const handleNodeClick = (nodeId) => {
+                try {
+                    const isRevealed = revealedElements.includes(nodeId) || teacherMode || isSandbox || difficulty === 'easy' || difficulty === 'normal' || (difficulty === 'hard' && hypothesisMade && ['n_ignea', 'n_sedi', 'n_meta'].includes(nodeId));
+                    
+                    if (isRevealed && step === 0 && nodeId !== currentNode) {
+                        setInfoModal(ITEMS_DIAGRAMA.find(i => i.id === DIAGRAM_SOLUTION[nodeId]));
+                        return;
+                    }
+
+                    if (!hypothesisMade && !isSandbox) return;
+                    if (animatingGif || (energy <= 0 && !teacherMode && !isSandbox) || missionWon) return;
+                    if (isHintMode) return applyHint(nodeId);
+
+                    if (step === 0) {
+                        if (nodeId === currentNode) {
+                            setSelectedOrigin(nodeId);
+                            setStep(1);
+                            setFeedback({type: 'info', text: 'Sélectionne le PROCESSUS (flèche) que tu veux appliquer.'});
+                        } else {
+                            setFeedback({type: 'error', text: `Tu es à ${ROCK_NAMES[currentNode] || 'une autre roche'}.`});
+                        }
+                    } else if (step === 2) {
+                        const expectedTarget = DIAGRAM_ADJACENCY[selectedOrigin]?.[selectedEdge];
+                        
+                        if (expectedTarget === nodeId) {
+                            if (!isSandbox && mission.blockedEdges.includes(selectedEdge)) {
+                                consumeEnergyAndCheck("Ce chemin est BLOQUÉ ! Cherche une alternative.");
+                                return;
+                            }
+
+                            // VALID MOVE
+                            const itemData = getEdgeData(selectedEdge);
+                            setAnimatingGif(itemData?.gif || 'https://i.ibb.co/nsv6C6P6/heat-pressure.gif');
+                            setAnimatingTitle(itemData?.label || 'Processus');
+                            
+                            if (!teacherMode && !isSandbox) setEnergy(e => e - 1);
+                            
+                            setTimeout(() => {
+                                setAnimatingGif(null);
+                                const newHistory = [...pathHistory, { from: selectedOrigin, edge: selectedEdge, to: nodeId }];
+                                setPathHistory(newHistory);
+                                setCurrentNode(nodeId);
+                                setStep(0);
+                                setSelectedOrigin(null);
+                                setSelectedEdge(null);
+                                setCurrentPlanStep(prev => prev + 1);
+                                
+                                if (!isSandbox && (nodeId === mission.target || (mission.target === 'n_ignea' && (nodeId === 'n_plutonica' || nodeId === 'n_volcanica')))) {
+                                    const passedNodes = newHistory.map(h => h.to);
+                                    const allMustPassMet = mission.mustPass.every(mp => passedNodes.includes(mp));
+                                    
+                                    if (allMustPassMet) {
+                                        const updatedHyp = Array.isArray(allHypotheses) ? [...allHypotheses] : [];
+                                        if(updatedHyp[currentMissionIdx]) {
+                                            updatedHyp[currentMissionIdx].actualPath = newHistory.map(h => h.to);
+                                            updatedHyp[currentMissionIdx].actualPathEdges = newHistory.map(h => h.edge);
+                                        }
+                                        setAllHypotheses(updatedHyp);
+                                        
+                                        setMissionWon(true);
+                                    } else {
+                                        setFeedback({type: 'error', text: 'Tu es arrivé à destination, mais tu n\'as pas respecté les restrictions de la mission. Tu dois recommencer.'});
+                                    }
+                                } else {
+                                    setFeedback({type: 'success', text: `Transformé ! Sélectionne ta nouvelle position pour continuer.`});
+                                }
+                            }, 4500); 
+                        } else {
+                            consumeEnergyAndCheck("Le processus n'est pas physiquement possible vers cette destination.");
+                        }
+                    }
+                } catch(e) {
+                    console.error(e);
+                    consumeEnergyAndCheck("Une erreur inattendue s'est produite lors de la navigation.");
+                }
+            };
+
+            const handleEdgeClick = (edgeId) => {
+                try {
+                    const isRevealed = revealedElements.includes(edgeId) || teacherMode || isSandbox || difficulty === 'easy';
+                    if (isRevealed && step === 0) {
+                        setInfoModal(getEdgeData(edgeId));
+                        return;
+                    }
+
+                    if (!hypothesisMade && !isSandbox) return;
+                    if (animatingGif || (energy <= 0 && !teacherMode && !isSandbox) || missionWon) return;
+                    if (isHintMode) return applyHint(edgeId);
+
+                    if (step === 1) {
+                        if (!isSandbox && !teacherMode) {
+                            if (currentPlanStep >= plannedPath.length) {
+                                return consumeEnergyAndCheck(`Tu as dépassé le nombre de processus planifiés ! Tu en avais planifié ${plannedPath.length}. Recommence la mission.`);
+                            }
+                        }
+                        setSelectedEdge(edgeId);
+                        setStep(2);
+                        setFeedback({type: 'info', text: 'Clique sur le NŒUD DE DESTINATION que tu espères atteindre.'});
+                    } else if (step === 0) {
+                        setFeedback({type: 'error', text: 'Sélectionne d\'abord le NŒUD D\'ORIGINE.'});
+                    } else if (step === 2) {
+                        if (!isSandbox && !teacherMode) {
+                            if (currentPlanStep >= plannedPath.length) {
+                                return consumeEnergyAndCheck(`Tu as dépassé le nombre de processus planifiés ! Tu en avais planifié ${plannedPath.length}. Recommence la mission.`);
+                            }
+                        }
+                        setSelectedEdge(edgeId); 
+                    }
+                } catch (e) {
+                    console.error(e);
+                    consumeEnergyAndCheck("Une erreur inattendue s'est produite.");
+                }
+            };
+
+            const getNodeLabel = (nodeId) => {
+                const isRevealed = revealedElements.includes(nodeId) || teacherMode || isSandbox || difficulty === 'easy' || difficulty === 'normal' || (difficulty === 'hard' && hypothesisMade && ['n_ignea', 'n_sedi', 'n_meta'].includes(nodeId));
+                const itemData = ITEMS_DIAGRAMA.find(i => i.id === DIAGRAM_SOLUTION[nodeId]);
+                return isRevealed ? itemData?.label : 'Roche'; 
+            };
+
+            const getEdgeLabel = (edgeId) => {
+                const itemData = getEdgeData(edgeId);
+                const isRevealed = revealedElements.includes(edgeId) || teacherMode || isSandbox || difficulty === 'easy';
+                if (isRevealed) return <span className="flex items-center gap-1">{itemData?.icon} {itemData?.label}</span>;
+                if (difficulty === 'normal' || difficulty === 'hard') return <span className="flex items-center text-lg">{itemData?.icon}</span>; 
+                return <span>Processus</span>;
+            };
+
+            const saveMissionReflectionAndNext = (text) => {
+                const newRef = {...missionReflections, [mission.id]: text};
+                setMissionReflections(newRef);
+                
+                const newHyp = [...allHypotheses];
+                if(newHyp[currentMissionIdx]) newHyp[currentMissionIdx].reflection = text;
+                setAllHypotheses(newHyp);
+                
+                setMissionWon(false);
+                if (currentMissionIdx < MISSIONS.length - 1) {
+                    setCurrentMissionIdx(prev => prev + 1);
+                } else {
+                    setShowMetacognition(true);
+                }
+            };
+
+            const generatePDF = () => {
+                const element = document.getElementById('informe-pdf');
+                
+                const pxToMm = 0.264583;
+                const eWidth = element.scrollWidth * pxToMm;
+                const eHeight = element.scrollHeight * pxToMm;
+
+                const opt = { 
+                    margin: [10, 10, 10, 10], 
+                    filename: 'Laboratoire_Roches_Resume.pdf', 
+                    image: { type: 'jpeg', quality: 0.98 }, 
+                    html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
+                    jsPDF: { unit: 'mm', format: [Math.max(210, eWidth + 20), eHeight + 20], orientation: 'portrait' } 
+                };
+                html2pdf().set(opt).from(element).save();
+            };
+
+            if (!difficulty) {
+                return (
+                    <div className="flex-1 flex flex-col items-center justify-center p-4 animate-fade-in h-full">
+                        <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl max-w-4xl w-full border border-stone-200 text-center">
+                            <div className="text-6xl mb-6">🧭</div>
+                            <h2 className="text-3xl font-black text-stone-800 mb-4">Navigation du Cycle</h2>
+                            <p className="text-stone-600 mb-8 leading-relaxed text-lg">Déduis et trace le parcours des roches à travers le cycle. Choisis la difficulté :</p>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                                <button onClick={() => setDifficulty('easy')} className="flex flex-col items-center p-6 border-2 border-green-400 rounded-2xl hover:bg-green-50 shadow-sm group bg-white transition-transform hover:-translate-y-1">
+                                    <div className="bg-green-100 text-green-600 w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:bg-green-500 group-hover:text-white transition-colors">🤓</div>
+                                    <h3 className="font-bold text-green-700 text-xl mb-2">Mode Facile</h3>
+                                    <p className="text-sm text-stone-600">Noms visibles sur toute la carte.</p>
+                                </button>
+                                <button onClick={() => setDifficulty('normal')} className="flex flex-col items-center p-6 border-2 border-orange-400 rounded-2xl hover:bg-orange-50 shadow-sm group bg-white transition-transform hover:-translate-y-1">
+                                    <div className="bg-orange-100 text-orange-600 w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:bg-orange-500 group-hover:text-white transition-colors">🧐</div>
+                                    <h3 className="font-bold text-orange-700 text-xl mb-2">Mode Normal</h3>
+                                    <p className="text-sm text-stone-600">Roches visibles, processus comme icônes cachées.</p>
+                                </button>
+                                <button onClick={() => setDifficulty('hard')} className="flex flex-col items-center p-6 border-2 border-red-400 rounded-2xl hover:bg-red-50 shadow-sm group bg-white transition-transform hover:-translate-y-1">
+                                    <div className="bg-red-100 text-red-600 w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:bg-red-500 group-hover:text-white transition-colors">🤯</div>
+                                    <h3 className="font-bold text-red-700 text-xl mb-2">Mode Difficile</h3>
+                                    <p className="text-sm text-stone-600">Diagramme caché jusqu'à l'enregistrement de l'hypothèse.</p>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (showMetacognition) {
+                const getProcNameFromEdge = (edgeId) => {
+                    const procId = DIAGRAM_SOLUTION[edgeId] || edgeId;
+                    const proc = ITEMS_DIAGRAMA.find(i => i.id === procId);
+                    return proc ? proc.label : edgeId;
+                };
+
+                return (
+                    <div className="flex-1 flex flex-col p-4 animate-fade-in h-full max-w-4xl mx-auto w-full custom-scroll overflow-y-auto">
+                        <div className="bg-white rounded-3xl shadow-lg border-2 border-stone-200 p-8 flex flex-col items-center text-center mb-8 relative">
+                            
+                            {/* Visual Content for PDF */}
+                            <div id="informe-pdf" className="w-full text-left p-4 pdf-content pb-10">
+                                <div className="text-center mb-8 border-b-4 border-blue-600 pb-4">
+                                    <h2 className="text-3xl font-black text-stone-800">Bulletin Scientifique : Cycle des Roches</h2>
+                                    <p className="text-stone-500">Résumé de l'apprentissage et réflexions</p>
+                                </div>
+                                
+                                {/* Reflections from Phase 1 */}
+                                {progress.reflections && Object.keys(progress.reflections).length > 0 && (
+                                    <div className="mb-8">
+                                        <h3 className="text-xl font-bold text-blue-900 border-b border-blue-200 pb-2 mb-4">Mes Réflexions sur les Processus :</h3>
+                                        <ul className="space-y-3 text-sm text-stone-700">
+                                            {['calor', 'fusion', 'enfriamiento', 'meteorizacion', 'compactacion'].map((k) => {
+                                                if(!progress.reflections[k] || progress.reflections[k].startsWith('metaQ')) return null;
+                                                return <li key={k} className="bg-stone-50 p-3 rounded-lg border border-stone-200 shadow-sm"><strong className="capitalize text-blue-700 block mb-1">{k}</strong> "{progress.reflections[k]}"</li>
+                                            })}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {/* Hypotheses & Mission Reflections from Phase 4 */}
+                                <div className="mb-8">
+                                    <h3 className="text-xl font-bold text-green-900 border-b border-green-200 pb-2 mb-4">Mes Parcours de Navigation :</h3>
+                                    {allHypotheses.map((hyp, i) => {
+                                        if (!hyp) return null;
+                                        return (
+                                            <div key={i} className="bg-green-50/50 p-4 rounded-xl border border-green-100 mb-4 text-sm shadow-sm">
+                                                <p className="font-bold text-stone-800 text-base mb-2">{hyp.levelName}: <span className="text-stone-500 font-normal">De {hyp.start} à {hyp.target}</span></p>
+                                                <p className="italic text-stone-600 mb-2 p-2 bg-white rounded border border-stone-100">Hypothèse initiale : "{hyp.text}"</p>
+                                                <p className="text-xs font-mono text-green-700 mb-3">✓ Parcours validé : {hyp.start} ➔ {hyp.actualPathEdges?.map(edgeId => getProcNameFromEdge(edgeId)).join(' ➔ ') || 'Terminé'}</p>
+                                                {hyp.reflection && <p className="text-stone-800 bg-white p-3 rounded-lg border border-green-200 shadow-sm"><strong className="text-green-800 block mb-1">Conclusion post-défi :</strong> "{hyp.reflection}"</p>}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+
+                                {/* Metacognition Question */}
+                                <div className="mb-2">
+                                    <h3 className="text-xl font-bold text-orange-900 border-b border-orange-200 pb-2 mb-4">Réflexion Finale :</h3>
+                                    <div className="flex flex-col gap-4">
+                                        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 text-left shadow-sm">
+                                            <label className="block text-sm font-bold text-stone-800 mb-2">1. Penses-tu que le cycle des roches est plus complexe ou plus facile que ce que tu imaginais au début ? Pourquoi ?</label>
+                                            <textarea value={metaQ1} onChange={e=>setMetaQ1(e.target.value)} onInput={autoResizeTextarea} className="w-full p-3 border border-orange-300 rounded focus:ring-orange-500 text-sm min-h-[80px] resize-none overflow-hidden" placeholder="Écris ta réponse..."></textarea>
+                                        </div>
+                                        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 text-left shadow-sm">
+                                            <label className="block text-sm font-bold text-stone-800 mb-2">2. Y a-t-il un processus ou un type de roche qui n'est pas encore tout à fait clair pour toi ?</label>
+                                            <textarea value={metaQ2} onChange={e=>setMetaQ2(e.target.value)} onInput={autoResizeTextarea} className="w-full p-3 border border-orange-300 rounded focus:ring-orange-500 text-sm min-h-[80px] resize-none overflow-hidden" placeholder="Écris ta réponse..."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row gap-4 w-full mt-4 border-t pt-6">
+                                <Button variant="primary" onClick={generatePDF} className="flex-1 py-4 text-lg">📄 Télécharger le Résumé PDF</Button>
+                                <Button variant="success" onClick={() => {
+                                    setShowMetacognition(false);
+                                    setIsSandbox(true);
+                                    setDifficulty('easy');
+                                    setHypothesisMade(true);
+                                    setPathHistory([]);
+                                    setFeedback({type: 'info', text: 'Mode libre actif. Explore sans limites.'});
+                                    onCompleteProgress();
+                                }} className="flex-1 py-4 text-lg">Jouer au Mode Libre →</Button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="flex-1 flex flex-col h-full relative animate-fade-in w-full">
+                    
+                    <Modal isOpen={!!animatingGif} title={`Application : ${animatingTitle}`}>
+                        <img src={animatingGif} alt="Animation" className="w-full rounded-xl shadow-inner border border-stone-200" />
+                    </Modal>
+
+                    {infoModal && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setInfoModal(null)}>
+                            <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-xl w-full relative" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setInfoModal(null)} className="absolute -top-3 -right-3 bg-stone-700 hover:bg-red-500 text-white rounded-full w-8 h-8 font-bold shadow-lg hover:scale-105 transition-all flex items-center justify-center z-50">✕</button>
+                                <h3 className="text-2xl font-black mb-4 text-center text-stone-800 flex items-center justify-center gap-2">
+                                    {infoModal.icon} {infoModal.label}
+                                </h3>
+                                {infoModal.type === 'proceso' ? (
+                                    <div className="border border-stone-200 rounded-xl overflow-hidden shadow-inner">
+                                        <img src={infoModal.gif} alt={infoModal.label} className="w-full h-auto object-contain bg-stone-50" />
+                                    </div>
+                                ) : (
+                                    <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center shadow-inner">
+                                        <p className="text-lg text-blue-900 leading-relaxed">{infoModal.def}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {missionWon && (
+                        <PostMissionReflection 
+                            mission={mission} 
+                            allHypotheses={allHypotheses} 
+                            currentMissionIdx={currentMissionIdx} 
+                            onSave={saveMissionReflectionAndNext} 
+                        />
+                    )}
+
+                    {/* Header Controls */}
+                    <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-4 mb-4 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0 relative z-30">
+                        <div className="flex-1">
+                            <h2 className="text-2xl font-black text-stone-800 flex items-center gap-2">
+                                🗺️ {isSandbox ? "Mode Libre Infini" : mission.name}
+                                {!isSandbox && <span className={`text-xs px-2 py-1 rounded text-white ${difficulty==='easy'?'bg-green-500':difficulty==='normal'?'bg-orange-500':'bg-red-500'}`}>{difficulty.toUpperCase()}</span>}
+                            </h2>
+                            {!isSandbox && <p className="text-stone-600 font-medium text-sm mt-1">{mission.desc}</p>}
+                        </div>
+                        
+                        <div className="flex gap-4 items-center flex-wrap justify-center">
+                            {!isSandbox && (
+                                <div className="flex items-center gap-2 bg-stone-100 p-2 px-4 rounded-xl border border-stone-200">
+                                    <div className="text-right"><span className="text-[10px] font-bold text-stone-500 uppercase block">Origine</span><span className="font-bold text-stone-800 text-sm">{ROCK_NAMES[mission.start]}</span></div>
+                                    <div className="text-stone-400">➔</div>
+                                    <div className="text-left"><span className="text-[10px] font-bold text-stone-500 uppercase block">Destination</span><span className="font-bold text-blue-700 text-sm">{ROCK_NAMES[mission.target]}</span></div>
+                                </div>
+                            )}
+
+                            {!isSandbox && (
+                                <div className="bg-blue-50 border border-blue-200 p-2 px-4 rounded-xl text-center flex items-center gap-4">
+                                    <div>
+                                        <span className="text-[10px] font-bold text-blue-600 uppercase block">Énergie</span>
+                                        <span className="font-black text-blue-800 text-lg flex items-center gap-1 justify-center"><IconLightning/> {teacherMode ? '∞' : energy}</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsHintMode(!isHintMode)}
+                                        disabled={hintsLeft <= 0 || (energy < 1 && !teacherMode)}
+                                        className={`px-3 py-2 rounded-xl text-xs font-bold shadow transition-colors ${isHintMode ? 'bg-yellow-400 text-stone-900 animate-pulse ring-2 ring-yellow-500' : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'} disabled:opacity-50`}
+                                        title="Révéler temporairement le nom d'un élément (Coût : 1 énergie)"
+                                    >
+                                        💡 Indice ({hintsLeft})
+                                    </button>
+                                </div>
+                            )}
+
+                            {!isSandbox && (
+                                <button onClick={resetMission} className="bg-stone-200 hover:bg-stone-300 text-stone-700 p-3 rounded-xl transition-colors" title="Recommencer la Mission">
+                                    ⟲
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div className={`flex flex-col gap-6 flex-1 relative z-30 w-full ${isHintMode ? 'cursor-help' : ''}`}>
+                        
+                        {/* DIAGRAMA INTERACTIVO (MAPA) */}
+                        <div className="w-full bg-white rounded-3xl shadow-lg border-4 border-stone-200 relative overflow-hidden min-h-[500px] lg:min-h-[700px]">
+                            
+                            <svg viewBox="0 0 1200 800" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                                <defs>
+                                    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9333ea" /></marker>
+                                    <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ea580c" /></marker>
+                                    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" /></marker>
+                                    <marker id="arrow-yellow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#eab308" /></marker>
+                                    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706" /></marker>
+                                </defs>
+                                
+                                {DIAGRAM_LAYOUT.EDGES.map(edge => {
+                                    if(edge.curved) {
+                                        return <path key={`base-${edge.id}`} d={`M ${edge.sx} ${edge.sy} C ${edge.cx1} ${edge.cy1}, ${edge.cx2} ${edge.cy2}, ${edge.ex} ${edge.ey}`} stroke={edge.color} strokeWidth="4" markerEnd={`url(#${edge.marker})`} fill="none" />
+                                    }
+                                    return <path key={`base-${edge.id}`} 
+                                          d={`M ${edge.sx} ${edge.sy} Q ${edge.cx} ${edge.cy} ${edge.ex} ${edge.ey}`}
+                                          stroke={edge.color} 
+                                          strokeWidth="4" 
+                                          fill="none"
+                                          markerEnd={`url(#${edge.marker})`}/>
+                                })}
+
+                                {teacherMode && !isSandbox && mission.idealPath && mission.idealPath.map(edgeId => {
+                                    const edgeData = DIAGRAM_LAYOUT.EDGES.find(e => e.id === edgeId);
+                                    if (!edgeData) return null;
+                                    if(edgeData.curved) return <path key={`ideal-${edgeId}`} d={`M ${edgeData.sx} ${edgeData.sy} C ${edgeData.cx1} ${edgeData.cy1}, ${edgeData.cx2} ${edgeData.cy2}, ${edgeData.ex} ${edgeData.ey}`} className="teacher-path pointer-events-none" fill="none" />
+                                    return <path key={`ideal-${edgeId}`} d={`M ${edgeData.sx} ${edgeData.sy} Q ${edgeData.cx} ${edgeData.cy} ${edgeData.ex} ${edgeData.ey}`} fill="none" className="teacher-path pointer-events-none" />
+                                })}
+
+                                {pathHistory.map((hist, idx) => {
+                                    const edgeData = DIAGRAM_LAYOUT.EDGES.find(e => e.id === hist.edge);
+                                    if(!edgeData) return null;
+                                    if(edgeData.curved) return <path key={`hist-${idx}`} d={`M ${edgeData.sx} ${edgeData.sy} C ${edgeData.cx1} ${edgeData.cy1}, ${edgeData.cx2} ${edgeData.cy2}, ${edgeData.ex} ${edgeData.ey}`} className="neon-path pointer-events-none" fill="none" />
+                                    return (
+                                        <path key={`hist-${idx}`} 
+                                            d={`M ${edgeData.sx} ${edgeData.sy} Q ${edgeData.cx} ${edgeData.cy} ${edgeData.ex} ${edgeData.ey}`}
+                                            fill="none"
+                                            className="neon-path pointer-events-none"/>
+                                    );
+                                })}
+                            </svg>
+
+                            {/* En Modo Difícil, el mapa entero queda borroso durante la hipótesis */}
+                            {!hypothesisMade && !isSandbox && difficulty === 'hard' && (
+                                <div className="absolute inset-0 z-[15] bg-stone-100/95 backdrop-blur-md flex items-center justify-center flex-col" title="Complète l'hypothèse pour débloquer la carte">
+                                    <div className="bg-white p-6 rounded-2xl shadow-xl border-2 border-stone-300 text-center">
+                                        <span className="text-4xl text-stone-400 block mb-2"><IconLock/></span>
+                                        <p className="font-black text-stone-700 text-xl">Carte bloquée en Mode Difficile</p>
+                                        <p className="text-sm text-stone-500 mt-2">Déduis le parcours en utilisant tes connaissances sans regarder le diagramme.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {Object.entries(DIAGRAM_LAYOUT.NODES).map(([nodeId, pos]) => {
+                                const itemData = ITEMS_DIAGRAMA.find(i => i.id === DIAGRAM_SOLUTION[nodeId]);
+                                const isCurrent = nodeId === currentNode;
+                                const isOriginSelected = nodeId === selectedOrigin;
+
+                                return (
+                                    <div key={nodeId} 
+                                         onClick={() => handleNodeClick(nodeId)}
+                                         className={`absolute w-32 md:w-36 -translate-x-1/2 -translate-y-1/2 p-3 border-2 border-solid rounded-xl text-center font-bold text-xs md:text-sm shadow-md z-20 transition-transform bg-white
+                                            ${!hypothesisMade && !isSandbox ? 'pointer-events-none grayscale opacity-50' : 'cursor-pointer'}
+                                            ${itemData ? itemData.color : 'bg-stone-100'}
+                                            ${isCurrent && step === 0 ? 'border-blue-500 animate-pulse scale-110' : ''}
+                                            ${isOriginSelected ? 'border-green-500 scale-105' : (!hypothesisMade && !isSandbox ? '' : 'hover:scale-105')}
+                                            ${!isCurrent && step === 0 ? 'opacity-60 saturate-50' : ''}
+                                            ${step === 2 && hypothesisMade ? 'hover:border-blue-400' : ''}
+                                            ${isHintMode ? 'ring-2 ring-yellow-400 border-yellow-500 shadow-[0_0_15px_#facc15]' : ''}
+                                         `}
+                                         style={{ top: `${(pos.cy / 800) * 100}%`, left: `${(pos.cx / 1200) * 100}%` }}>
+                                        {getNodeLabel(nodeId)}
+                                    </div>
+                                );
+                            })}
+
+                            {DIAGRAM_LAYOUT.EDGES.map((edge) => {
+                                const itemData = getEdgeData(edge.id);
+                                const isSelected = edge.id === selectedEdge;
+                                const isBlocked = !isSandbox && mission.blockedEdges.includes(edge.id);
+                                const isRevealed = revealedElements.includes(edge.id) || teacherMode || isSandbox || difficulty === 'easy';
+                                
+                                const midPos = getEdgeMidpoint(edge);
+
+                                return (
+                                    <div key={edge.id} 
+                                         onClick={() => !isBlocked && handleEdgeClick(edge.id)}
+                                         className={`absolute flex flex-col items-center justify-center z-20 transition-all
+                                            ${!hypothesisMade && !isSandbox ? 'pointer-events-none grayscale opacity-50' : 'cursor-pointer'}
+                                            ${isSelected ? 'scale-110' : isBlocked ? 'grayscale cursor-not-allowed opacity-60' : 'hover:scale-110'}
+                                            ${step === 1 ? 'animate-pulse' : ''}
+                                            ${step !== 1 && !isSelected ? 'opacity-90' : ''}
+                                         `}
+                                         style={{ top: midPos.top, left: midPos.left, transform: 'translate(-50%, -50%)' }}>
+                                        
+                                        <div className={`w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md border-[3px]
+                                            ${isSelected ? 'ring-4 ring-blue-300 border-blue-500' : isBlocked ? 'border-red-500' : ''}
+                                            ${isHintMode ? 'ring-4 ring-yellow-400' : ''}
+                                        `} style={{ borderColor: isSelected ? undefined : edge.color }}>
+                                            {(!isRevealed && difficulty === 'hard') ? <span className="text-[10px] text-stone-400">?</span> : <span className="text-2xl">{itemData?.icon}</span>}
+                                            {isBlocked && <div className="absolute inset-0 flex items-center justify-center text-red-600 text-3xl font-black bg-white/50 backdrop-blur-[1px] rounded-full">X</div>}
+                                        </div>
+                                        
+                                        {(!(!isRevealed && difficulty === 'hard')) && (
+                                            <span className="bg-white/90 px-2 py-0.5 rounded text-[10px] font-bold text-stone-800 shadow-sm mt-1 uppercase text-center max-w-[100px] leading-tight">
+                                                {getEdgeLabel(edge.id)}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Sidebar (Hypothesis or Navigation Status) - Ara està a sota horitzontal */}
+                        <div className="w-full flex flex-col md:flex-row gap-6 pb-20">
+                            {!hypothesisMade && !isSandbox ? (
+                                <div className="w-full bg-white rounded-3xl border-2 border-blue-400 p-6 flex flex-col md:flex-row gap-6 shadow-lg z-40">
+                                    <div className="flex-1 flex flex-col">
+                                        <div className="flex items-center gap-4 mb-2">
+                                            <div className="text-4xl">🤔</div>
+                                            <h4 className="text-xl font-black text-blue-900">Phase d'Hypothèse</h4>
+                                        </div>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <p className="text-stone-600 text-xs leading-relaxed max-w-sm">
+                                                Quel parcours suivras-tu pour aller de <strong className="text-stone-800">{ROCK_NAMES[mission.start]}</strong> à <strong className="text-blue-700">{ROCK_NAMES[mission.target]}</strong> ? Planifie et justifie.
+                                            </p>
+                                            <button onClick={() => {setDifficulty(null); resetMission();}} className="text-xs bg-stone-200 text-stone-700 px-3 py-2 rounded hover:bg-stone-300 transition shadow-sm font-bold">Changer de Difficulté</button>
+                                        </div>
+                                        <textarea 
+                                            className="w-full p-3 border-2 border-stone-200 rounded-xl mb-4 text-xs resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all custom-scroll shadow-inner flex-1 min-h-[80px]"
+                                            placeholder="Justifie ta décision ici..."
+                                            value={hypothesisText}
+                                            onChange={(e) => setHypothesisText(e.target.value)}
+                                        ></textarea>
+                                    </div>
+
+                                    <div className="flex-1 flex flex-col">
+                                        <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 mb-4 flex-1">
+                                            <h5 className="font-bold text-blue-900 text-xs uppercase mb-2">Parcours Planifié</h5>
+                                            {plannedPath.map((stepEdge, idx) => (
+                                                <div key={idx} className="flex gap-2 mb-2">
+                                                    <span className="font-bold text-blue-800 py-1 text-xs">{idx+1}.</span>
+                                                    <select className="flex-1 p-1 text-xs border border-blue-300 rounded focus:ring-blue-500" value={stepEdge} onChange={(e) => handlePlanChange(idx, e.target.value)}>
+                                                        <option value="">Sélectionne un processus...</option>
+                                                        {UNIQUE_PROCESSES.map(p => (
+                                                            <option key={p.id} value={p.id}>{difficulty === 'hard' ? EXPERT_PROCESS_LABELS[p.id] : `${p.icon} ${p.label}`}</option>
+                                                        ))}
+                                                    </select>
+                                                    {plannedPath.length > 1 && <button onClick={() => handleRemovePlanStep(idx)} className="text-red-500">✕</button>}
+                                                </div>
+                                            ))}
+                                            <button onClick={handleAddPlanStep} className="text-blue-600 font-bold text-xs mt-2">+ Ajouter un processus</button>
+                                        </div>
+                                        <Button onClick={saveHypothesis} variant="primary" className="py-3 text-sm mt-auto w-full">Enregistrer et Activer la Carte</Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="w-full bg-stone-100/80 rounded-3xl border border-stone-200 p-6 flex flex-col md:flex-row gap-6 shadow-inner z-40">
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center border-b border-stone-300 pb-2 mb-4">
+                                            <h3 className="font-bold text-stone-700">État de la Navigation</h3>
+                                            {!isSandbox && <button onClick={() => {setDifficulty(null); resetMission(); setHypothesisMade(false);}} className="text-xs bg-stone-200 text-stone-700 px-3 py-2 rounded hover:bg-stone-300 transition shadow-sm font-bold">Changer de Difficulté</button>}
+                                        </div>
+                                        <div className="flex flex-col md:flex-row gap-3">
+                                            <div className={`flex-1 p-3 rounded-lg border-2 transition-all ${step === 0 ? 'bg-white border-blue-400 shadow-md scale-105' : selectedOrigin ? 'bg-green-50 border-green-300 opacity-70' : 'bg-stone-50 border-stone-200 opacity-50'}`}>
+                                                <span className="text-xs font-bold text-stone-500 block">1. Origine</span>
+                                                <span className="font-bold text-stone-800">{selectedOrigin ? getNodeLabel(selectedOrigin) : 'En attente de clic...'}</span>
+                                            </div>
+                                            <div className={`flex-1 p-3 rounded-lg border-2 transition-all ${step === 1 ? 'bg-white border-blue-400 shadow-md scale-105' : selectedEdge ? 'bg-green-50 border-green-300 opacity-70' : 'bg-stone-50 border-stone-200 opacity-50'}`}>
+                                                <span className="text-xs font-bold text-stone-500 block">2. Processus</span>
+                                                <span className="font-bold text-stone-800 flex items-center">{selectedEdge ? getEdgeLabel(selectedEdge) : 'En attente de clic...'}</span>
+                                            </div>
+                                            <div className={`flex-1 p-3 rounded-lg border-2 transition-all ${step === 2 ? 'bg-white border-blue-400 shadow-md scale-105' : 'bg-stone-50 border-stone-200 opacity-50'}`}>
+                                                <span className="text-xs font-bold text-stone-500 block">3. Destination</span>
+                                                <span className="font-bold text-stone-800">En attente de clic...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 flex flex-col justify-end">
+                                        <div className={`p-4 rounded-xl border-2 transition-all flex-1 flex items-center justify-center ${feedback.type === 'error' ? 'bg-red-50 border-red-300 text-red-800' : feedback.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-blue-50 border-blue-300 text-blue-800'}`}>
+                                            <p className="text-sm font-bold text-center">{feedback.text}</p>
+                                        </div>
+                                        {teacherMode && !isSandbox && (
+                                            <div className="mt-4 bg-green-50 p-3 rounded-xl border border-green-200">
+                                                <h4 className="font-bold text-green-800 text-xs uppercase mb-2">Bon Parcours (Enseignant)</h4>
+                                                <div className="flex flex-wrap gap-2 text-xs text-green-700 font-medium">
+                                                    {mission.idealPath.map((edgeId, idx) => {
+                                                        const procId = DIAGRAM_SOLUTION[edgeId];
+                                                        const proc = ITEMS_DIAGRAMA.find(i => i.id === procId);
+                                                        return <div key={idx} className="bg-white px-2 py-1 rounded shadow-sm border border-green-200"><span className="font-black mr-1">{idx+1}.</span> {proc?.label}</div>
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+
+        // --- MAIN APP COMPONENT ---
+        const App = () => {
+            const [progress, setProgress] = useState(() => {
+                const saved = localStorage.getItem('rocas_progress');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        return {
+                            ...INITIAL_PROGRESS,
+                            ...parsed,
+                            reflections: {
+                                ...(INITIAL_PROGRESS.reflections || {}),
+                                ...(parsed.reflections || {})
+                            }
+                        };
+                    } catch(e) { return INITIAL_PROGRESS; }
+                }
+                return INITIAL_PROGRESS;
+            });
+            const [teacherMode, setTeacherMode] = useState(false);
+            const [currentPhase, setCurrentPhase] = useState(1);
+            const [activeChallenge, setActiveChallenge] = useState(null);
+
+            const updateProgress = (newData) => {
+                setProgress(prev => {
+                    const combined = { ...prev, ...newData };
+                    localStorage.setItem('rocas_progress', JSON.stringify(combined));
+                    return combined;
+                });
+            };
+
+            const completeChallenge = (id, reflectionText) => {
+                setProgress(prev => {
+                    const newProgress = { ...prev, [id]: true };
+                    if (reflectionText) {
+                        newProgress.reflections = { ...(prev.reflections || {}), [id]: reflectionText };
+                    }
+                    localStorage.setItem('rocas_progress', JSON.stringify(newProgress));
+                    return newProgress;
+                });
+            };
+
+            const toggleTeacherMode = () => {
+                if (teacherMode) setTeacherMode(false);
+                else {
+                    const code = prompt("Introduis le code enseignant :");
+                    if (code === "2421") {
+                        setTeacherMode(true);
+                        const td = { calor: true, fusion: true, enfriamiento: true, meteorizacion: true, compactacion: true, diagrama: true, retos: true, reflections: progress.reflections, hasDrawnHypothesis: true };
+                        setProgress(p => ({...p, ...td}));
+                        localStorage.setItem('rocas_progress', JSON.stringify({...progress, ...td}));
+                    } else if (code) alert("Code incorrect");
+                }
+            };
+
+            const resetProgress = () => {
+                if (confirm("Es-tu sûr de vouloir effacer toute la progression ?")) {
+                    setProgress(INITIAL_PROGRESS);
+                    localStorage.setItem('rocas_progress', JSON.stringify(INITIAL_PROGRESS));
+                    setTeacherMode(false);
+                    setCurrentPhase(1);
+                    setActiveChallenge(null);
+                }
+            };
+
+            const retos = [
+                { id: 'calor', title: '1. Chaleur et Pression', icon: '🔥', component: RetoCalor },
+                { id: 'fusion', title: '2. Fusion', icon: '🌋', component: RetoFusion },
+                { id: 'enfriamiento', title: '3. Refroidissement', icon: '❄️', component: RetoEnfriamiento },
+                { id: 'meteorizacion', title: '4. Altération et Érosion', icon: '🌧️', component: RetoMeteorizacion },
+                { id: 'compactacion', title: '5. Compactage', icon: '🧱', component: RetoCompactacion }
+            ];
+
+            return (
+                <div className="min-h-screen flex flex-col bg-stone-100">
+                    {/* HEADER */}
+                    <header className="bg-stone-800 text-stone-50 px-6 py-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
+                        <h1 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+                            <span className="text-3xl">🪨</span> Modélisation du cycle des roches
+                        </h1>
+                        <div className="flex gap-4 items-center">
+                            <button onClick={toggleTeacherMode} className={`p-2 rounded-full transition-colors ${teacherMode ? 'bg-amber-500 text-stone-900' : 'bg-stone-700 text-stone-300 hover:bg-stone-600'}`} title="Mode Enseignant">
+                                {teacherMode ? <IconUnlock/> : <IconTeacher/>}
+                            </button>
+                            <button onClick={resetProgress} className="p-2 bg-stone-700 text-red-400 rounded-full hover:bg-red-500 hover:text-white transition-colors" title="Effacer la Progression">
+                                <IconTrash/>
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* MAIN CONTENT */}
+                    <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 flex flex-col">
+                        
+                        {/* NAVIGATION TABS */}
+                        {!activeChallenge && (
+                            <div className="flex flex-wrap bg-white rounded-xl p-2 mb-6 shadow-sm border border-stone-200 max-w-3xl mx-auto w-full shrink-0">
+                                <button onClick={() => setCurrentPhase(1)} className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all min-w-[120px] ${currentPhase === 1 ? 'bg-stone-800 text-white shadow-md' : 'text-stone-500 hover:bg-stone-100'}`}>1. Théorie</button>
+                                <button onClick={() => setCurrentPhase(1.5)} disabled={!progress.compactacion && !teacherMode} className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all min-w-[120px] ${currentPhase === 1.5 ? 'bg-stone-800 text-white shadow-md' : 'text-stone-500 hover:bg-stone-100 disabled:opacity-50'}`}>2. Action</button>
+                                <button onClick={() => setCurrentPhase(2)} disabled={!progress.compactacion && !teacherMode} className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all min-w-[120px] ${currentPhase === 2 || currentPhase === 2.5 ? 'bg-stone-800 text-white shadow-md' : 'text-stone-500 hover:bg-stone-100 disabled:opacity-50'}`}>3. Le Cycle</button>
+                                <button onClick={() => setCurrentPhase(3)} disabled={!progress.diagrama && !teacherMode} className={`flex-1 py-3 text-xs md:text-sm font-bold rounded-lg transition-all min-w-[120px] ${currentPhase === 3 ? 'bg-stone-800 text-white shadow-md' : 'text-stone-500 hover:bg-stone-100 disabled:opacity-50'}`}>4. Navigation</button>
+                            </div>
+                        )}
+
+                        {/* DYNAMIC VIEW */}
+                        <div className="flex-1 flex flex-col animate-fade-in">
+                            {activeChallenge ? (
+                                <div className="flex-1 flex flex-col h-full">
+                                    <PhaseHeader 
+                                        title={activeChallenge.title} 
+                                        onBack={() => setActiveChallenge(null)}
+                                        infoBox={progress[activeChallenge.id] && <span className="text-green-600 flex items-center gap-1 font-bold bg-green-50 px-3 py-1 rounded-lg"><IconCheck/> Terminé</span>}
+                                    />
+                                    <div className="flex-1 bg-white rounded-3xl shadow-sm border border-stone-200 overflow-hidden flex flex-col h-full min-h-[600px]">
+                                        <div className="flex-1 overflow-y-auto custom-scroll flex flex-col bg-stone-50/50 relative">
+                                            <activeChallenge.component onComplete={(refData) => completeChallenge(activeChallenge.id, refData)} teacherMode={teacherMode} />
+                                            {progress[activeChallenge.id] && (
+                                                <div className="p-4 bg-white border-t border-stone-200 flex justify-end shrink-0 animate-fade-in sticky bottom-0 z-50">
+                                                    <Button variant="success" onClick={() => {
+                                                        const currentIndex = retos.findIndex(r => r.id === activeChallenge.id);
+                                                        if (currentIndex < retos.length - 1) setActiveChallenge(retos[currentIndex + 1]);
+                                                        else { setActiveChallenge(null); setCurrentPhase(1.5); }
+                                                    }}>
+                                                        {activeChallenge.id === 'compactacion' ? "Aller à l'Action en Vidéo" : 'Transformation suivante'} →
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : currentPhase === 1 ? (
+                                <div className="flex flex-col gap-6 p-4">
+                                    <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-stone-200 text-center max-w-4xl mx-auto w-full">
+                                        <h2 className="text-2xl font-black text-stone-800 mb-4">Transformations de Base</h2>
+                                        <p className="text-stone-600 text-sm leading-relaxed mb-4">Penses-tu que les roches ne changent jamais ? Par exemple, si tu trouves un morceau de granit aujourd'hui, peux-tu espérer qu'il restera du granit jusqu'à la fin de ta vie ? C'est peut-être vrai, mais seulement parce que notre vie est très courte comparée à l'histoire de la Terre.</p>
+                                        <p className="text-stone-600 text-sm leading-relaxed mb-4">Si nous prenons du recul et observons le temps géologique (qui se concentre sur les changements survenant au fil des millions d'années), nous découvrons que les roches changent bel et bien. En fait, toutes les roches se transforment lentement d'un type à un autre, encore et encore. Ces changements forment un cycle, appelé le <strong>"cycle des roches"</strong>.</p>
+                                        <p className="text-stone-600 text-sm leading-relaxed">La façon dont les roches changent dépend de plusieurs processus qui se produisent constamment à la surface et sous la surface de la Terre. Examinons maintenant de plus près chacun de ces processus.</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {retos.map((reto, idx) => {
+                                            const isUnlocked = idx === 0 || progress[retos[idx-1].id] || teacherMode;
+                                            const isCompleted = progress[reto.id];
+                                            return (
+                                                <div key={reto.id} onClick={() => isUnlocked && setActiveChallenge(reto)}
+                                                     className={`relative p-6 rounded-3xl border-2 transition-all cursor-pointer h-48 flex flex-col justify-center items-center text-center
+                                                        ${isCompleted ? 'bg-green-50 border-green-400 hover:bg-green-100 shadow-sm' : 
+                                                          isUnlocked ? 'bg-white border-stone-300 hover:border-blue-400 hover:shadow-md hover:-translate-y-1 shadow-sm' : 
+                                                          'bg-stone-100 border-stone-200 opacity-60 cursor-not-allowed'}
+                                                     `}>
+                                                    <div className="text-5xl mb-4">{reto.icon}</div>
+                                                    <h3 className="font-bold text-stone-800 text-lg">{reto.title}</h3>
+                                                    {isCompleted && <div className="absolute top-4 right-4 text-green-600 bg-white rounded-full p-1 shadow-sm border border-green-200"><IconCheck/></div>}
+                                                    {!isUnlocked && <div className="absolute inset-0 bg-stone-100/60 backdrop-blur-[2px] rounded-3xl flex items-center justify-center"><div className="bg-stone-800 text-white p-4 rounded-full shadow-lg"><IconLock/></div></div>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ) : currentPhase === 1.5 ? (
+                                <Movilizacion1Phase onNext={() => setCurrentPhase(progress.hasDrawnHypothesis ? 2.5 : 2)} />
+                            ) : currentPhase === 2 ? (
+                                <PizarraPhase teacherMode={teacherMode} onNext={() => { updateProgress({hasDrawnHypothesis: true}); setCurrentPhase(2.5); }} />
+                            ) : currentPhase === 2.5 ? (
+                                <div className="flex-1 flex flex-col h-full animate-shake" style={{animationDuration: '0.2s'}}>
+                                    <DiagramPhase onComplete={() => updateProgress({diagrama: true})} onUpdateProgress={updateProgress} progress={progress} teacherMode={teacherMode} onNext={() => setCurrentPhase(3)} />
+                                </div>
+                            ) : (
+                                <DesafiosNavegacionPhase progress={progress} onUpdateProgress={updateProgress} onCompleteProgress={() => updateProgress({retos: true})} teacherMode={teacherMode} />
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
