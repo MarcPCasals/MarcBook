@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DEAND - Emergències Andorra</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel per compilar JSX al vol -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: League Gothic & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=League+Gothic&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Leaflet (Mapes) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Configuració Tailwind personalitzada -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'gothic': ['"League Gothic"', 'sans-serif'],
+                        'sans': ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            black: '#000000',
+                            red: '#E62E2D',
+                            blue: '#0066CC',
+                            green: '#009933',
+                            orange: '#FF8C00',
+                            purple: '#800080'
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out',
+                        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { 
+            background-color: #FFFFFF; 
+            color: #000000;
+            overscroll-behavior-y: none; /* Evita pull-to-refresh en mòbils */
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Estils personalitzats pel mapa de Leaflet */
+        .leaflet-container { background: #f8f9fa; font-family: 'Inter', sans-serif; }
+        .custom-dea-marker {
+            background-color: #0066CC;
+            border: 3px solid white;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            width: 30px;
+            height: 30px;
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .custom-user-marker {
+            background-color: #E62E2D;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            box-shadow: 0 0 10px rgba(230, 46, 45, 0.8);
+            animation: pulse-marker 2s infinite;
+        }
+        @keyframes pulse-marker {
+            0% { box-shadow: 0 0 0 0 rgba(230, 46, 45, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(230, 46, 45, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(230, 46, 45, 0); }
+        }
+        
+        /* Ocultar controls de zoom del mapa com demanat */
+        .leaflet-control-zoom { display: none !important; }
+
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- DADES DELS DEA (Parròquies d'Andorra) ---
+        const DEAS = [
+            { id: 1, name: "DEA CANILLO", address: "Pl. Carlemany, Canillo", lat: 42.5667, lng: 1.5972, img: "https://images.unsplash.com/photo-1583324113626-70df0f4deaab?auto=format&fit=crop&w=300&q=80" },
+            { id: 2, name: "DEA ENCAMP", address: "Pl. dels Arínsols, Encamp", lat: 42.5361, lng: 1.5822, img: "https://images.unsplash.com/photo-1583324113626-70df0f4deaab?auto=format&fit=crop&w=300&q=80" },
+            { id: 3, name: "DEA ORDINO", address: "Carrer Major, Ordino", lat: 42.5561, lng: 1.5331, img: "https://images.unsplash.com/photo-1583324113626-70df0f4deaab?auto=format&fit=crop&w=300&q=80" },
+            { id: 4, name: "DEA LA MASSANA", address: "Av. Sant Antoni, La Massana", lat: 42.5447, lng: 1.5147, img: "https://images.unsplash.com/photo-1583324113626-70df0f4deaab?auto=format&fit=crop&w=300&q=80" },
+            { id: 5, name: "DEA ANDORRA LA VELLA", address: "Pl. del Poble, Andorra la Vella", lat: 42.5075, lng: 1.5218, img: "https://images.unsplash.com/photo-1583324113626-70df0f4deaab?auto=format&fit=crop&w=300&q=80" },
+            { id: 6, name: "DEA ESCALDES", address: "Copríncep F., Escaldes-Engordany", lat: 42.5083, lng: 1.5389, img: "https://images.unsplash.com/photo-1583324113626-70df0f4deaab?auto=format&fit=crop&w=300&q=80" },
+            { id: 7, name: "DEA SANT JULIÀ", address: "Av. Verge de Canòlich, Sant Julià", lat: 42.4667, lng: 1.4917, img: "https://images.unsplash.com/photo-1583324113626-70df0f4deaab?auto=format&fit=crop&w=300&q=80" }
+        ];
+
+        // --- COMPONENTS VISUALS ---
+
+        const LogoAndorra = ({ className }) => (
+            <svg viewBox="0 0 100 100" className={className}>
+                {/* Cercle exterior negre gruixut */}
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#000000" strokeWidth="6"/>
+                {/* Muntanyes negres estilitzades */}
+                <path d="M 15 75 L 35 35 L 50 60 L 65 25 L 85 75 Z" fill="#000000" stroke="#000000" strokeWidth="2" strokeLinejoin="round"/>
+                {/* Cor amb els colors de la bandera d'Andorra */}
+                <g transform="translate(35, 60) scale(0.3)">
+                    <path d="M 50 85 C 50 85 15 55 15 30 A 15 15 0 0 1 50 20 A 15 15 0 0 1 85 30 C 85 55 50 85 50 85 Z" fill="url(#andorraGrad)"/>
+                </g>
+                <defs>
+                    <linearGradient id="andorraGrad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="33%" stopColor="#0018a8"/> {/* Blau Andorra */}
+                        <stop offset="33%" stopColor="#fedf00"/> {/* Groc Andorra */}
+                        <stop offset="66%" stopColor="#fedf00"/>
+                        <stop offset="66%" stopColor="#d50032"/> {/* Vermell Andorra */}
+                    </linearGradient>
+                </defs>
+            </svg>
+        );
+
+        // --- PANTALLES ---
+
+        // 1. SPLASH SCREEN
+        const SplashScreen = ({ onFinish }) => {
+            useEffect(() => {
+                const timer = setTimeout(onFinish, 2000); // 2 segons d'autoentrada
+                return () => clearTimeout(timer);
+            }, [onFinish]);
+
+            return (
+                <div onClick={onFinish} className="flex flex-col items-center justify-center w-screen h-screen bg-white cursor-pointer animate-fade-in">
+                    <LogoAndorra className="w-64 h-64 animate-pulse-slow" />
+                </div>
+            );
+        };
+
+        // 2. PANTALLA D'INICI
+        const HomeScreen = ({ onNavigate }) => {
+            return (
+                <div className="flex flex-col w-screen h-screen bg-white animate-fade-in">
+                    {/* 1/3 Superior */}
+                    <div className="h-1/3 flex flex-col items-center justify-end pb-8 relative">
+                        <h1 className="font-gothic text-[8rem] leading-none text-brand-black tracking-wider">DEAND</h1>
+                        {/* Fons de muntanyes simple */}
+                        <div className="absolute bottom-0 w-full h-12 opacity-10">
+                            <svg viewBox="0 0 100 20" preserveAspectRatio="none" className="w-full h-full">
+                                <path d="M 0 20 L 20 5 L 40 20 L 70 0 L 100 20 Z" fill="#000000"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    {/* 2/3 Inferior */}
+                    <div className="h-2/3 flex flex-col p-6 gap-6">
+                        <button 
+                            onClick={() => onNavigate('map')}
+                            className="flex-1 bg-brand-blue rounded-3xl flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+                        >
+                            <span className="font-gothic text-6xl text-white tracking-wide">DEA MAP</span>
+                        </button>
+                        
+                        <button 
+                            onClick={() => onNavigate('abcde')}
+                            className="flex-1 bg-brand-green rounded-3xl flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+                        >
+                            <span className="font-gothic text-6xl text-white tracking-wide">ABCDE</span>
+                        </button>
+
+                        <a 
+                            href="tel:112"
+                            className="flex-[1.5] bg-brand-red rounded-[3rem] flex items-center justify-center shadow-xl active:scale-95 transition-transform border-4 border-white ring-4 ring-brand-red"
+                        >
+                            <span className="font-gothic text-8xl text-white tracking-widest drop-shadow-md flex items-center gap-4">
+                                <i className="fa-solid fa-phone"></i> 112
+                            </span>
+                        </a>
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. MAPA DEA
+        const MapScreen = ({ onNavigate }) => {
+            const mapRef = useRef(null);
+            const mapInstance = useRef(null);
+            const userMarkerRef = useRef(null);
+            
+            const [userLoc, setUserLoc] = useState(null);
+            const [selectedDea, setSelectedDea] = useState(null);
+            const [distanceInfo, setDistanceInfo] = useState({ dist: 0, time: 0 });
+
+            // Calcular distància (Fórmula de Haversine)
+            const getDistance = (lat1, lon1, lat2, lon2) => {
+                const R = 6371; // Radi de la terra en km
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                          Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c; // Distància en km
+            };
+
+            useEffect(() => {
+                // Inicialitzar mapa
+                if (!mapInstance.current && mapRef.current) {
+                    mapInstance.current = L.map(mapRef.current, {
+                        zoomControl: false, // Sense botons de zoom com demanat
+                        center: [42.5063, 1.5218], // Centre d'Andorra aprox
+                        zoom: 12
+                    });
+
+                    // Estil net tipus AndorraTools
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(mapInstance.current);
+
+                    // Afegir Marcadors DEA
+                    DEAS.forEach(dea => {
+                        const icon = L.divIcon({
+                            className: 'bg-transparent',
+                            html: '<div class="custom-dea-marker flex items-center justify-center"><i class="fa-solid fa-heart-pulse text-white text-[10px] transform rotate-45"></i></div>',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 30]
+                        });
+                        
+                        const marker = L.marker([dea.lat, dea.lng], { icon }).addTo(mapInstance.current);
+                        marker.on('click', () => {
+                            setSelectedDea(dea);
+                        });
+                    });
+                }
+
+                // GPS Tracking
+                if ("geolocation" in navigator) {
+                    const watchId = navigator.geolocation.watchPosition(
+                        (position) => {
+                            const { latitude, longitude } = position.coords;
+                            const newLoc = { lat: latitude, lng: longitude };
+                            setUserLoc(newLoc);
+
+                            // Actualitzar marcador d'usuari
+                            if (mapInstance.current) {
+                                if (userMarkerRef.current) {
+                                    userMarkerRef.current.setLatLng([latitude, longitude]);
+                                } else {
+                                    const userIcon = L.divIcon({
+                                        className: 'bg-transparent',
+                                        html: '<div class="custom-user-marker"></div>',
+                                        iconSize: [20, 20],
+                                        iconAnchor: [10, 10]
+                                    });
+                                    userMarkerRef.current = L.marker([latitude, longitude], { icon: userIcon, zIndexOffset: 1000 }).addTo(mapInstance.current);
+                                    mapInstance.current.setView([latitude, longitude], 14); // Centrar primer cop
+                                }
+                            }
+                        },
+                        (error) => console.log("Error GPS", error),
+                        { enableHighAccuracy: true, maximumAge: 0 }
+                    );
+                    return () => navigator.geolocation.clearWatch(watchId);
+                }
+            }, []);
+
+            // Calcular distància i temps quan se selecciona un DEA
+            useEffect(() => {
+                if (userLoc && selectedDea) {
+                    const distKm = getDistance(userLoc.lat, userLoc.lng, selectedDea.lat, selectedDea.lng);
+                    const distMeters = Math.round(distKm * 1000);
+                    const timeMins = Math.round((distKm / 5) * 60); // Aprox 5km/h caminant
+                    setDistanceInfo({ dist: distMeters, time: timeMins });
+                }
+            }, [selectedDea, userLoc]);
+
+            const handleCenterUser = () => {
+                if (userLoc && mapInstance.current) {
+                    mapInstance.current.setView([userLoc.lat, userLoc.lng], 15);
+                }
+            };
+
+            const handleNearestDea = () => {
+                if (!userLoc) return alert("Activa el GPS per trobar el DEA més proper");
+                let nearest = DEAS[0];
+                let minDist = getDistance(userLoc.lat, userLoc.lng, nearest.lat, nearest.lng);
+                
+                DEAS.forEach(dea => {
+                    const d = getDistance(userLoc.lat, userLoc.lng, dea.lat, dea.lng);
+                    if (d < minDist) {
+                        minDist = d;
+                        nearest = dea;
+                    }
+                });
+                
+                setSelectedDea(nearest);
+                if (mapInstance.current) {
+                    mapInstance.current.setView([nearest.lat, nearest.lng], 16);
+                }
+            };
+
+            const openRoute = () => {
+                if (!userLoc || !selectedDea) return;
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${userLoc.lat},${userLoc.lng}&destination=${selectedDea.lat},${selectedDea.lng}&travelmode=walking`;
+                window.open(url, '_blank');
+            };
+
+            return (
+                <div className="w-screen h-screen flex flex-col bg-white animate-fade-in relative">
+                    {/* Header Top */}
+                    <div className="absolute top-4 left-4 z-[1000] flex gap-2">
+                        <button onClick={() => onNavigate('home')} className="bg-brand-black text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg active:scale-95">
+                            <i className="fa-solid fa-arrow-left text-xl"></i>
+                        </button>
+                    </div>
+
+                    <div className="absolute top-4 right-4 z-[1000]">
+                        <div className="bg-white px-4 py-2 rounded-full shadow-lg font-gothic text-3xl tracking-widest text-brand-blue border-2 border-brand-blue">
+                            DEA MAP
+                        </div>
+                    </div>
+
+                    {/* Mapa */}
+                    <div ref={mapRef} className="flex-1 w-full z-0"></div>
+
+                    {/* Botons Flotants Mapa */}
+                    <div className="absolute bottom-32 right-4 z-[1000] flex flex-col gap-4">
+                        <button onClick={handleCenterUser} className="bg-white text-brand-black w-14 h-14 rounded-full flex items-center justify-center shadow-xl border-2 border-gray-200 active:scale-95">
+                            <i className="fa-solid fa-location-crosshairs text-2xl"></i>
+                        </button>
+                        <button onClick={handleNearestDea} className="bg-brand-blue text-white w-14 h-14 rounded-full flex items-center justify-center shadow-xl active:scale-95 border-2 border-white">
+                            <i className="fa-solid fa-bolt text-2xl"></i>
+                        </button>
+                    </div>
+
+                    {/* Targeta Inferior DEA Seleccionat */}
+                    <div className={`absolute bottom-0 w-full bg-white rounded-t-3xl shadow-[0_-10px_20px_rgba(0,0,0,0.1)] p-6 z-[1000] transition-transform duration-300 ${selectedDea ? 'translate-y-0' : 'translate-y-full'}`}>
+                        {selectedDea && (
+                            <div className="flex flex-col gap-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h2 className="font-gothic text-4xl text-brand-black leading-none">{selectedDea.name}</h2>
+                                        <p className="text-gray-600 font-semibold mt-1"><i className="fa-solid fa-location-dot text-brand-blue mr-2"></i>{selectedDea.address}</p>
+                                    </div>
+                                    <button onClick={() => setSelectedDea(null)} className="text-gray-400 hover:text-black">
+                                        <i className="fa-solid fa-times text-2xl"></i>
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-4">
+                                    <div className="w-24 h-24 bg-gray-200 rounded-xl overflow-hidden shrink-0 shadow-inner">
+                                        <img src={selectedDea.img} alt="DEA" className="w-full h-full object-cover" />
+                                    </div>
+                                    <div className="flex-1 flex flex-col justify-center gap-2">
+                                        <div className="bg-gray-100 p-2 rounded-lg flex items-center gap-3">
+                                            <i className="fa-solid fa-ruler text-gray-500"></i>
+                                            <span className="font-bold text-lg">{userLoc ? `${distanceInfo.dist} m` : '--'}</span>
+                                        </div>
+                                        <div className="bg-gray-100 p-2 rounded-lg flex items-center gap-3">
+                                            <i className="fa-solid fa-person-walking text-brand-blue"></i>
+                                            <span className="font-bold text-lg">{userLoc ? `${distanceInfo.time} min` : '--'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button onClick={openRoute} className="w-full bg-brand-green text-white font-gothic text-4xl py-3 rounded-xl shadow-md active:scale-95 transition-transform flex items-center justify-center gap-3 mt-2 tracking-wide">
+                                    <i className="fa-solid fa-route"></i> ANAR-HI
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. PROTOCOL ABCDE (MENÚ PRINCIPAL)
+        const AbcdeScreen = ({ onNavigate, onSelectLetter }) => {
+            return (
+                <div className="w-screen h-screen flex flex-col bg-white animate-fade-in px-6 py-8">
+                    <div className="flex items-center mb-8 relative">
+                        <button onClick={() => onNavigate('home')} className="text-brand-black w-12 h-12 flex items-center justify-center active:scale-95 absolute left-0">
+                            <i className="fa-solid fa-arrow-left text-3xl"></i>
+                        </button>
+                        <h1 className="font-gothic text-6xl text-brand-black w-full text-center tracking-widest">A B C D E</h1>
+                    </div>
+
+                    <div className="flex-1 flex flex-col gap-4">
+                        <button onClick={() => onSelectLetter('A')} className="flex-1 bg-brand-blue rounded-2xl flex items-center justify-center shadow-md active:scale-95">
+                            <span className="font-gothic text-5xl text-white tracking-wider">A - VIA AÈRIA</span>
+                        </button>
+                        <button onClick={() => onSelectLetter('B')} className="flex-1 bg-brand-green rounded-2xl flex items-center justify-center shadow-md active:scale-95">
+                            <span className="font-gothic text-5xl text-white tracking-wider">B - RESPIRACIÓ</span>
+                        </button>
+                        <button onClick={() => onSelectLetter('C')} className="flex-1 bg-brand-red rounded-2xl flex items-center justify-center shadow-md active:scale-95">
+                            <span className="font-gothic text-5xl text-white tracking-wider">C - CIRCULACIÓ</span>
+                        </button>
+                        <button onClick={() => onSelectLetter('D')} className="flex-1 bg-brand-orange rounded-2xl flex items-center justify-center shadow-md active:scale-95">
+                            <span className="font-gothic text-5xl text-white tracking-wider">D - DISCAPACITAT</span>
+                        </button>
+                        <button onClick={() => onSelectLetter('E')} className="flex-1 bg-brand-purple rounded-2xl flex items-center justify-center shadow-md active:scale-95">
+                            <span className="font-gothic text-5xl text-white tracking-wider">E - EXPOSICIÓ</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // UI Helpers for Details
+        const SectionHeader = ({ title, icon, color }) => (
+            <h2 className="font-gothic text-3xl mb-3 flex items-center gap-2 border-b-2 pb-1" style={{ borderColor: color, color: color }}>
+                {icon} {title}
+            </h2>
+        );
+        
+        const ListItem = ({ icon, text }) => (
+            <div className="flex items-start gap-3 mb-2">
+                <span className="text-xl shrink-0 mt-0.5">{icon}</span>
+                <span className="font-bold text-lg leading-tight uppercase text-brand-black">{text}</span>
+            </div>
+        );
+
+        const AlertBox = ({ text }) => (
+            <div className="bg-brand-red text-white p-4 rounded-xl mt-6 shadow-md flex items-center gap-3">
+                <i className="fa-solid fa-triangle-exclamation text-3xl shrink-0"></i>
+                <span className="font-gothic text-3xl tracking-wide leading-none">{text}</span>
+            </div>
+        );
+
+        // 5. DETALLS LLETRES
+        const DetailA = () => (
+            <div className="p-4 space-y-6">
+                <div>
+                    <SectionHeader title="COMPROVA" icon="⚠️" color="#0066CC" />
+                    <ListItem icon="👀" text="MIRA SI POT RESPIRAR" />
+                    <ListItem icon="😮‍💨" text="LI COSTA RESPIRAR" />
+                    <ListItem icon="🔊" text="SOROLLS ESTRANYS" />
+                    <ListItem icon="🗣️" text="NO POT PARLAR" />
+                    <ListItem icon="🤧" text="TOS" />
+                    <ListItem icon="🚫" text="NO RESPIRA" />
+                </div>
+                <div>
+                    <SectionHeader title="CAUSES" icon="❗" color="#0066CC" />
+                    <ListItem icon="🍽️" text="COS ESTRANY" />
+                    <ListItem icon="🤮" text="VÒMIT O SANG" />
+                    <ListItem icon="👅" text="LLENGUA" />
+                    <ListItem icon="🧠" text="DEPRESIÓ SNC" />
+                </div>
+                <div>
+                    <SectionHeader title="QUÈ FER" icon="🛠️" color="#0066CC" />
+                    <ListItem icon="↩️" text="FRONT-MENTÓ" />
+                    <ListItem icon="🦴" text="TRACCIÓ MANDIBULAR (TRAUMA)" />
+                    <ListItem icon="🧼" text="NETEJAR BOCA" />
+                    <ListItem icon="↪️" text="POSICIÓ LATERAL" />
+                </div>
+                <AlertBox text="SI NO POT RESPIRAR, OBRE LA VIA AÈRIA IMMEDIATAMENT" />
+            </div>
+        );
+
+        const DetailB = () => (
+            <div className="p-4 space-y-6">
+                <div>
+                    <SectionHeader title="COMPROVA" icon="👀" color="#009933" />
+                    <ListItem icon="👀" text="OBSERVA PIT" />
+                    <ListItem icon="👂" text="ESCOLTA" />
+                    <ListItem icon="🤲" text="SENT AIRE" />
+                </div>
+                <div>
+                    <SectionHeader title="NORMAL" icon="📊" color="#009933" />
+                    <ListItem icon="⏱️" text="12–20 RESPIRACIONS/MINUT" />
+                    <ListItem icon="🔁" text="RITME REGULAR" />
+                </div>
+                <div>
+                    <SectionHeader title="ALERTA" icon="⚠️" color="#009933" />
+                    <ListItem icon="😮‍💨" text="RESPIRACIÓ ANORMAL" />
+                    <ListItem icon="🦴" text="ESFORÇ RESPIRATORI" />
+                    <ListItem icon="🎨" text="COLOR ANORMAL" />
+                    <ListItem icon="↔️" text="ASIMETRIA TORÀCICA" />
+                    <ListItem icon="🚫" text="NO RESPIRA" />
+                </div>
+                <div>
+                    <SectionHeader title="QUÈ FER" icon="🛠️" color="#009933" />
+                    <ListItem icon="💨" text="ADMINISTRAR OXIGEN" />
+                    <ListItem icon="🧰" text="VENTILACIÓ" />
+                </div>
+                <AlertBox text="SI NO RESPIRA, ACTUA IMMEDIATAMENT" />
+            </div>
+        );
+
+        const DetailC = () => (
+            <div className="p-4 space-y-6">
+                <div>
+                    <SectionHeader title="COMPROVA" icon="❤️" color="#E62E2D" />
+                    <ListItem icon="💓" text="POLS CENTRAL I PERIFÈRIC" />
+                    <ListItem icon="⏱️" text="60–80 BPM" />
+                    <ListItem icon="🩸" text="REOMPLIMENT CAPIL·LAR < 2s" />
+                </div>
+                <div>
+                    <SectionHeader title="SHOCK" icon="⚠️" color="#E62E2D" />
+                    <ListItem icon="😵" text="CONFUSIÓ" />
+                    <ListItem icon="💓" text="TAQUICÀRDIA" />
+                    <ListItem icon="📉" text="HIPOTENSIÓ" />
+                    <ListItem icon="🧊" text="SUOR FREDA" />
+                    <ListItem icon="🤍" text="PELL PÀL·LIDA" />
+                </div>
+                <div>
+                    <SectionHeader title="SANGRAT" icon="🩸" color="#E62E2D" />
+                    <ListItem icon="🩸" text="DETECTAR" />
+                    <ListItem icon="✋" text="ATURAR AMB PRESSIÓ" />
+                </div>
+                <AlertBox text="PARADA CARDÍACA: NO POLS, NO RESPIRA. INICIAR RCP" />
+            </div>
+        );
+
+        const DetailD = () => (
+            <div className="p-4 space-y-6">
+                <div>
+                    <SectionHeader title="CONSCIÈNCIA" icon="🧠" color="#FF8C00" />
+                    <ListItem icon="👀" text="RESPON?" />
+                    <ListItem icon="🗣️" text="PARLA?" />
+                    <ListItem icon="✋" text="OBEEIX ORDRES?" />
+                </div>
+                <div>
+                    <SectionHeader title="PUPIL·LES" icon="👁️" color="#FF8C00" />
+                    <ListItem icon="⚖️" text="IGUALS?" />
+                    <ListItem icon="🔦" text="REACTIVES?" />
+                </div>
+                <div>
+                    <SectionHeader title="ALTRES" icon="📊" color="#FF8C00" />
+                    <ListItem icon="🧠" text="ESCALA GLASGOW" />
+                    <ListItem icon="😖" text="DOLOR" />
+                    <ListItem icon="🍬" text="GLUCÈMIA 80–120 mg/dl" />
+                </div>
+                <div>
+                    <SectionHeader title="ALERTA" icon="⚠️" color="#FF8C00" />
+                    <ListItem icon="⚡" text="CONVULSIONS" />
+                    <ListItem icon="😵" text="INCONSCIÈNCIA" />
+                </div>
+            </div>
+        );
+
+        const DetailE = () => (
+            <div className="p-4 space-y-6">
+                <div>
+                    <SectionHeader title="TEMPERATURA" icon="🌡️" color="#800080" />
+                    <ListItem icon="🌡️" text="CONTROLAR" />
+                    <ListItem icon="🧊" text="EXTREMS = PERILL" />
+                </div>
+                <div>
+                    <SectionHeader title="EXPOSAR" icon="👕" color="#800080" />
+                    <ListItem icon="👕" text="TREURE ROBA" />
+                    <ListItem icon="🔍" text="BUSCAR LESIONS" />
+                </div>
+                <div>
+                    <SectionHeader title="EXPLORACIÓ" icon="👀" color="#800080" />
+                    <div className="grid grid-cols-2 gap-x-2">
+                        <ListItem icon="🧠" text="CAP" />
+                        <ListItem icon="🦴" text="COLL" />
+                        <ListItem icon="🫁" text="TRONC" />
+                        <ListItem icon="🍽️" text="ABDOMEN" />
+                        <ListItem icon="🦵" text="PELVIS" />
+                        <ListItem icon="💪" text="EXTREMITATS" />
+                    </div>
+                </div>
+                <div>
+                    <SectionHeader title="OPUMA" icon="🧠" color="#800080" />
+                    <ListItem icon="❓" text="OCÓRRER" />
+                    <ListItem icon="🏥" text="ANTECEDENTS" />
+                    <ListItem icon="🍽️" text="ÚLTIMA INGESTA" />
+                    <ListItem icon="💊" text="MEDICACIÓ" />
+                    <ListItem icon="⚠️" text="AL·LÈRGIES" />
+                </div>
+                <AlertBox text="EXPLORA TOT EL COS I OBTÉ INFORMACIÓ CLÍNICA" />
+            </div>
+        );
+
+        const LetterDetailScreen = ({ letter, onBack }) => {
+            const config = {
+                'A': { title: "A - VIA AÈRIA", color: "bg-brand-blue", comp: <DetailA /> },
+                'B': { title: "B - RESPIRACIÓ", color: "bg-brand-green", comp: <DetailB /> },
+                'C': { title: "C - CIRCULACIÓ", color: "bg-brand-red", comp: <DetailC /> },
+                'D': { title: "D - DISCAPACITAT", color: "bg-brand-orange", comp: <DetailD /> },
+                'E': { title: "E - EXPOSICIÓ", color: "bg-brand-purple", comp: <DetailE /> },
+            }[letter];
+
+            return (
+                <div className="w-screen h-screen flex flex-col bg-white animate-fade-in relative overflow-hidden">
+                    {/* Header Colorejat */}
+                    <div className={`${config.color} p-6 pb-4 shadow-md z-10 flex items-center shrink-0`}>
+                        <button onClick={onBack} className="text-white text-3xl active:scale-95 pr-4">
+                            <i className="fa-solid fa-arrow-left"></i>
+                        </button>
+                        <h1 className="font-gothic text-5xl text-white tracking-widest pt-2">{config.title}</h1>
+                    </div>
+                    {/* Contingut Scrolleable */}
+                    <div className="flex-1 overflow-y-auto bg-white pb-10">
+                        {config.comp}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- APP CONTROLLER ---
+        const App = () => {
+            const [screen, setScreen] = useState('splash'); // splash, home, map, abcde, detail
+            const [selectedLetter, setSelectedLetter] = useState(null);
+
+            const navigate = (newScreen) => {
+                setScreen(newScreen);
+                window.scrollTo(0,0);
+            };
+
+            const openLetter = (letter) => {
+                setSelectedLetter(letter);
+                navigate('detail');
+            };
+
+            return (
+                <div className="font-sans antialiased bg-white min-h-screen w-full select-none">
+                    {screen === 'splash' && <SplashScreen onFinish={() => navigate('home')} />}
+                    {screen === 'home' && <HomeScreen onNavigate={navigate} />}
+                    {screen === 'map' && <MapScreen onNavigate={navigate} />}
+                    {screen === 'abcde' && <AbcdeScreen onNavigate={navigate} onSelectLetter={openLetter} />}
+                    {screen === 'detail' && <LetterDetailScreen letter={selectedLetter} onBack={() => navigate('abcde')} />}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
