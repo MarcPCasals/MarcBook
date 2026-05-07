@@ -2531,9 +2531,9 @@
         // --- MAIN APP COMPONENT ---
         const App = () => {
             const [progress, setProgress] = useState(() => {
-                const saved = localStorage.getItem('rocas_progress');
-                if (saved) {
-                    try {
+                try {
+                    const saved = localStorage.getItem('rocas_progress');
+                    if (saved) {
                         const parsed = JSON.parse(saved);
                         // Migración: compactacion → diagenesis
                         if (parsed.compactacion !== undefined && parsed.diagenesis === undefined) {
@@ -2552,8 +2552,8 @@
                                 ...(parsed.reflections || {})
                             }
                         };
-                    } catch(e) { return INITIAL_PROGRESS; }
-                }
+                    }
+                } catch(e) { /* storage unavailable or corrupt */ }
                 return INITIAL_PROGRESS;
             });
             const [teacherMode, setTeacherMode] = useState(false);
@@ -2590,10 +2590,25 @@
                 updateProgress({ phasesSummarySeen: newSeen });
             };
 
+            const lsSave = (data) => {
+                try {
+                    localStorage.setItem('rocas_progress', JSON.stringify(data));
+                } catch(e) {
+                    // QuotaExceededError: try again without diagramPlacedItems (largest field)
+                    try {
+                        const slim = { ...data };
+                        delete slim.diagramPlacedItems;
+                        localStorage.setItem('rocas_progress', JSON.stringify(slim));
+                    } catch(e2) {
+                        console.warn('No se pudo guardar el progreso:', e2.message);
+                    }
+                }
+            };
+
             const updateProgress = (newData) => {
                 setProgress(prev => {
                     const combined = { ...prev, ...newData };
-                    localStorage.setItem('rocas_progress', JSON.stringify(combined));
+                    lsSave(combined);
                     return combined;
                 });
             };
@@ -2604,7 +2619,7 @@
                     if (reflectionText) {
                         newProgress.reflections = { ...(prev.reflections || {}), [id]: reflectionText };
                     }
-                    localStorage.setItem('rocas_progress', JSON.stringify(newProgress));
+                    lsSave(newProgress);
                     return newProgress;
                 });
                 const summaryKey = `reto_${id}`;
@@ -2621,7 +2636,7 @@
                         setTeacherMode(true);
                         const td = { calor: true, fusion: true, enfriamiento: true, meteorizacion: true, diagenesis: true, diagrama: true, retos: true, metacognicionPT: true, reflections: progress.reflections };
                         setProgress(p => ({...p, ...td}));
-                        localStorage.setItem('rocas_progress', JSON.stringify({...progress, ...td}));
+                        lsSave({...progress, ...td});
                     } else if (code) alert("Código incorrecto");
                 }
             };
@@ -2629,7 +2644,7 @@
             const resetProgress = () => {
                 if (confirm("¿Estás seguro de querer borrar todo el progreso?")) {
                     setProgress(INITIAL_PROGRESS);
-                    localStorage.setItem('rocas_progress', JSON.stringify(INITIAL_PROGRESS));
+                    lsSave(INITIAL_PROGRESS);
                     setTeacherMode(false);
                     setCurrentPhase(1);
                     setActiveChallenge(null);
