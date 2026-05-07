@@ -110,6 +110,37 @@
             animation: particle-fly 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
         }
 
+        /* Block H — Enfriamiento simulation keyframes */
+        @keyframes magma-rise {
+            0%   { transform: translateY(0px); opacity: 0.6; }
+            100% { transform: translateY(-60px); opacity: 1; }
+        }
+        @keyframes lava-flow {
+            0%   { transform: scaleX(0); transform-origin: left; opacity: 1; }
+            100% { transform: scaleX(1); transform-origin: left; opacity: 0.85; }
+        }
+        @keyframes erupt-particle {
+            0%   { transform: translate(0,0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--epx), var(--epy)) scale(0.2); opacity: 0; }
+        }
+        @keyframes crystal-grow {
+            0%   { transform: scale(0) rotate(var(--cr)); opacity: 0; }
+            60%  { opacity: 1; }
+            100% { transform: scale(1) rotate(var(--cr)); opacity: 1; }
+        }
+        @keyframes cool-color {
+            0%   { background: #ea580c; box-shadow: 0 0 18px #ea580c; }
+            50%  { background: #b45309; box-shadow: 0 0 8px #b45309; }
+            100% { background: #78716c; box-shadow: none; }
+        }
+        .erupt-particle {
+            position: absolute;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: erupt-particle 0.9s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+        }
+
         /* PDF Styles */
         .pdf-content { font-family: 'Helvetica', 'Arial', sans-serif !important; background: white; color: #1c1917; }
         .pdf-content h2, .pdf-content h3, .pdf-content h4 { color: #1c1917; }
@@ -423,10 +454,12 @@
         };
 
         const ReflectionBox = ({ id, onSave, hideExample = false }) => {
-            const [text, setText] = useState("");
+            const [explanation, setExplanation] = useState("");
+            const [critical, setCritical] = useState("");
             const [expanded, setExpanded] = useState(false);
             const data = ROCK_IMAGES[id];
-            
+            const canSave = explanation.trim().length >= 5 && critical.trim().length >= 5;
+
             return (
                 <div className="mt-4 bg-stone-50 border-2 border-stone-200 p-4 rounded-2xl animate-fade-in w-full shadow-inner">
                     <Modal isOpen={expanded} onClose={() => setExpanded(false)} title={data?.name}>
@@ -445,15 +478,34 @@
                             </div>
                         </div>
                     )}
-                    <label className="block text-sm font-bold text-stone-700 mb-2">{REFLECTION_QUESTIONS[id] || '¿Qué has entendido de este proceso? Explícaselo a un compañero/a en una frase:'}</label>
-                    <textarea 
-                        value={text} 
-                        onChange={e => setText(e.target.value)} 
-                        onInput={autoResizeTextarea}
-                        className="w-full p-3 border-2 border-stone-300 rounded-xl text-sm focus:border-blue-500 focus:ring-0 outline-none transition-colors resize-none mb-3 overflow-hidden min-h-[80px]"
-                        placeholder="Escribe tu reflexión..."
-                    ></textarea>
-                    <Button onClick={() => onSave(text)} disabled={text.trim().length < 5} variant="success" className="w-full text-sm py-2">Guardar y Continuar</Button>
+
+                    {/* Field 1 — Explain to a classmate */}
+                    <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
+                        <label className="block text-sm font-bold text-blue-800 mb-1">💬 Explica el proceso a un/a compañero/a</label>
+                        <p className="text-xs text-blue-600 mb-2">Usa tus propias palabras como si se lo estuvieras contando a alguien que no lo sabe.</p>
+                        <textarea
+                            value={explanation}
+                            onChange={e => setExplanation(e.target.value)}
+                            onInput={autoResizeTextarea}
+                            className="w-full p-3 border-2 border-blue-200 rounded-xl text-sm focus:border-blue-500 focus:ring-0 outline-none transition-colors resize-none overflow-hidden min-h-[80px] bg-white"
+                            placeholder="Explica el proceso con tus propias palabras..."
+                        ></textarea>
+                    </div>
+
+                    {/* Field 2 — Critical question */}
+                    <div className="mb-4 bg-orange-50 border-2 border-orange-200 rounded-xl p-3">
+                        <label className="block text-sm font-bold text-orange-800 mb-1">🔍 Pregunta de reflexión crítica</label>
+                        <p className="text-xs text-orange-600 mb-2">{REFLECTION_QUESTIONS[id] || '¿Qué dudas o conexiones nuevas has descubierto?'}</p>
+                        <textarea
+                            value={critical}
+                            onChange={e => setCritical(e.target.value)}
+                            onInput={autoResizeTextarea}
+                            className="w-full p-3 border-2 border-orange-200 rounded-xl text-sm focus:border-orange-500 focus:ring-0 outline-none transition-colors resize-none overflow-hidden min-h-[80px] bg-white"
+                            placeholder="Responde la pregunta de reflexión..."
+                        ></textarea>
+                    </div>
+
+                    <Button onClick={() => onSave({ explanation, critical })} disabled={!canSave} variant="success" className="w-full text-sm py-2">Guardar y Continuar</Button>
                 </div>
             );
         };
@@ -632,140 +684,338 @@
         };
 
         // 3. Enfriamiento
+        const VolcanicScene = ({ phase }) => {
+            // phase: 0=idle, 1=magma rising, 2=eruption, 3=lava flow, 4=cooling, 5=done
+            const particleCount = 12;
+            const particles = Array.from({length: particleCount}, (_, i) => {
+                const angle = (i / particleCount) * Math.PI * 2;
+                const dist = 35 + Math.random() * 30;
+                return { epx: Math.cos(angle) * dist + 'px', epy: (-Math.abs(Math.sin(angle)) * 55 - 20) + 'px', color: i % 3 === 0 ? '#f97316' : i % 3 === 1 ? '#dc2626' : '#fbbf24' };
+            });
+            return (
+                <div className="relative w-full h-full overflow-hidden select-none">
+                    {/* Sky gradient */}
+                    <div className="absolute inset-0" style={{background: 'linear-gradient(to bottom, #7dd3fc 0%, #e0f2fe 40%, #bae6fd 40%)'}}></div>
+                    {/* Ground band */}
+                    <div className="absolute left-0 right-0" style={{top:'40%', height:'18%', background:'linear-gradient(to bottom, #6b7280, #4b5563)'}}></div>
+                    {/* Interior */}
+                    <div className="absolute left-0 right-0 bottom-0" style={{top:'58%', background:'linear-gradient(to bottom, #292524, #1c1917)'}}></div>
+
+                    {/* Magma chamber glow */}
+                    <div className="absolute rounded-full magma-blob transition-all duration-700"
+                        style={{width:'70px', height:'50px', bottom:'4%', left:'50%', transform:'translateX(-50%)', opacity: phase >= 1 ? 1 : 0.4, boxShadow: phase >= 1 ? '0 0 30px #ea580c' : '0 0 10px #ea580c'}}></div>
+
+                    {/* Chimney */}
+                    <svg className="absolute" style={{left:'50%', transform:'translateX(-50%)', bottom:'14%', width:'20px', height:'160px'}} viewBox="0 0 20 160" preserveAspectRatio="none">
+                        <rect x="3" y="0" width="14" height="160" fill="#292524"/>
+                        {phase >= 1 && phase <= 3 && (
+                            <rect x="6" y="0" width="8" height="160" fill="#ea580c" opacity="0.8" style={{animation:'magma-rise 0.6s ease-in-out infinite alternate'}}/>
+                        )}
+                    </svg>
+
+                    {/* Volcano SVG shape */}
+                    <svg className="absolute" style={{left:'50%', transform:'translateX(-50%)', bottom:'40%', width:'160px', height:'90px'}} viewBox="0 0 160 90" preserveAspectRatio="none">
+                        <polygon points="80,0 10,90 150,90" fill="#57534e" stroke="#44403c" strokeWidth="2"/>
+                        <polygon points="80,0 65,20 95,20" fill="#292524"/>
+                        {phase >= 2 && particles.map((p, i) => (
+                            <circle key={i} cx="80" cy="5" r="4" fill={p.color}
+                                style={{'--epx': p.epx, '--epy': p.epy, animation:`erupt-particle ${0.7+i*0.05}s ease-out forwards`, animationDelay:`${i*0.04}s`}}
+                                className="erupt-particle"/>
+                        ))}
+                    </svg>
+
+                    {/* Lava flow */}
+                    {phase >= 3 && (
+                        <div className="absolute rounded-full" style={{height:'10px', width:'60px', bottom:'39%', left:'calc(50% + 10px)', background:'linear-gradient(to right, #ea580c, #f97316)', animation:'lava-flow 1.2s ease-out forwards', transformOrigin:'left', transform:'scaleX(0)'}}></div>
+                    )}
+
+                    {/* Cooled basalt patch */}
+                    {phase >= 4 && (
+                        <div className="absolute flex items-center justify-center rounded-lg text-white font-bold text-[9px]"
+                            style={{height:'14px', width:'60px', bottom:'39%', left:'calc(50% + 10px)', background:'#78716c', animation:'cool-color 1.5s ease-out forwards'}}>BASALTO</div>
+                    )}
+
+                    {/* Labels */}
+                    <div className="absolute top-1 left-2 text-[10px] font-bold text-sky-700">Atmósfera</div>
+                    <div className="absolute left-1 text-[9px] font-bold text-stone-300" style={{top:'44%'}}>Corteza</div>
+                    <div className="absolute left-1 text-[9px] font-bold text-stone-500" style={{top:'62%'}}>Interior</div>
+                </div>
+            );
+        };
+
+        const PlutonicScene = ({ phase }) => {
+            // phase: 0=idle, 1=chamber growing, 2=crystallizing, 3=done
+            const crystals = Array.from({length: 9}, (_, i) => {
+                const angle = (i / 9) * 360;
+                const r = 12 + (i % 3) * 7;
+                const cx = 50 + Math.cos(angle * Math.PI/180) * r;
+                const cy = 50 + Math.sin(angle * Math.PI/180) * r * 0.6;
+                return {cx, cy, angle, size: 6 + (i % 3) * 3};
+            });
+            const chamberSize = phase >= 1 ? 70 : 40;
+            const chamberColor = phase >= 3 ? '#9ca3af' : phase >= 2 ? '#b45309' : '#ea580c';
+            const chamberGlow = phase >= 3 ? 'none' : `0 0 ${phase >= 1 ? 30 : 15}px #ea580c`;
+            return (
+                <div className="relative w-full h-full overflow-hidden select-none">
+                    {/* Sky */}
+                    <div className="absolute inset-0" style={{background:'linear-gradient(to bottom, #7dd3fc 0%, #e0f2fe 30%, #6b7280 30%, #57534e 50%, #292524 50%, #1c1917 100%)'}}></div>
+                    {/* Ground labels */}
+                    <div className="absolute top-1 left-2 text-[10px] font-bold text-sky-700">Superficie</div>
+                    <div className="absolute left-1 text-[9px] font-bold text-stone-400" style={{top:'33%'}}>Corteza</div>
+                    <div className="absolute left-1 text-[9px] font-bold text-stone-500" style={{top:'52%'}}>Interior profundo</div>
+
+                    {/* No eruption label */}
+                    {phase <= 1 && (
+                        <div className="absolute right-2 top-3 text-[9px] text-sky-600 font-bold bg-sky-50/80 rounded px-1">Sin erupción</div>
+                    )}
+
+                    {/* Magma chamber — large blob deep underground */}
+                    <div className="absolute magma-blob transition-all duration-1000 flex items-center justify-center"
+                        style={{
+                            width: chamberSize + 'px', height: Math.round(chamberSize*0.7) + 'px',
+                            bottom: '8%', left: '50%', transform: 'translateX(-50%)',
+                            background: chamberColor, boxShadow: chamberGlow,
+                            transition: 'background 2s, box-shadow 1s, width 1.5s, height 1.5s'
+                        }}>
+                        {phase >= 2 && crystals.map((c, i) => (
+                            <div key={i} className="absolute"
+                                style={{
+                                    width: c.size + 'px', height: c.size * 2 + 'px',
+                                    left: (c.cx / 100) * chamberSize + 'px',
+                                    top: (c.cy / 100) * Math.round(chamberSize*0.7) + 'px',
+                                    '--cr': c.angle + 'deg',
+                                    background: phase >= 3 ? '#d1d5db' : '#fcd34d',
+                                    clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
+                                    animation: `crystal-grow ${0.8 + i*0.15}s ease-out forwards`,
+                                    animationDelay: `${i * 0.12}s`,
+                                    transform: 'scale(0) rotate(' + c.angle + 'deg)',
+                                    transformOrigin: 'center bottom'
+                                }}>
+                            </div>
+                        ))}
+                    </div>
+
+                    {phase >= 3 && (
+                        <div className="absolute text-white font-bold text-[9px] flex items-center justify-center"
+                            style={{bottom:'10%', left:'50%', transform:'translateX(-50%)', zIndex:10}}>GRANITO</div>
+                    )}
+                </div>
+            );
+        };
+
         const RetoEnfriamiento = ({ onComplete, teacherMode }) => {
             const VOLC_MAX = 5;
             const PLUT_MAX = 50000;
+            // mode: null | 'volcanic' | 'plutonic'
+            const [mode, setMode] = useState(null);
+            // phase for each sim
+            const [volcPhase, setVolcPhase] = useState(0);
+            const [plutPhase, setPlutPhase] = useState(0);
             const [simVolcTime, setSimVolcTime] = useState(0);
             const [simPlutTime, setSimPlutTime] = useState(0);
             const [simVolcDone, setSimVolcDone] = useState(false);
             const [simPlutDone, setSimPlutDone] = useState(false);
-            const [showGif, setShowGif] = useState(false);
-            const [hasViewedGif, setHasViewedGif] = useState(false);
-            const [activeSim, setActiveSim] = useState(null);
+            const [isRunning, setIsRunning] = useState(false);
             const timerRef = useRef(null);
+            const phaseTimerRef = useRef(null);
 
             useEffect(() => {
                 if (teacherMode) {
                     setSimVolcTime(VOLC_MAX); setSimPlutTime(PLUT_MAX);
                     setSimVolcDone(true); setSimPlutDone(true);
-                    setHasViewedGif(true);
+                    setVolcPhase(5); setPlutPhase(3);
                 }
             }, [teacherMode]);
 
-            const startSim = (type) => {
-                if (activeSim || (type === 'volcanic' && simVolcDone) || (type === 'plutonic' && simPlutDone)) return;
-                setActiveSim(type);
-                const maxT = type === 'volcanic' ? VOLC_MAX : PLUT_MAX;
-                let currentT = 0;
-                const increment = maxT / 20;
+            const runVolcanic = () => {
+                if (simVolcDone || isRunning) return;
+                setIsRunning(true);
+                let t = 0;
+                const inc = VOLC_MAX / 40;
+                // Phase timeline: 0→1 at 10%, 1→2 at 40%, 2→3 at 60%, 3→4 at 80%, 4→5 at 100%
+                setVolcPhase(1);
                 timerRef.current = setInterval(() => {
-                    currentT += increment;
-                    if (currentT >= maxT) {
+                    t += inc;
+                    setSimVolcTime(Math.min(Math.round(t), VOLC_MAX));
+                    const pct = t / VOLC_MAX;
+                    if (pct >= 0.4 && pct < 0.41) setVolcPhase(2);
+                    if (pct >= 0.6 && pct < 0.61) setVolcPhase(3);
+                    if (pct >= 0.8 && pct < 0.81) setVolcPhase(4);
+                    if (t >= VOLC_MAX) {
                         clearInterval(timerRef.current);
-                        if (type === 'volcanic') { setSimVolcTime(maxT); setSimVolcDone(true); }
-                        else { setSimPlutTime(maxT); setSimPlutDone(true); }
-                        setActiveSim(null);
-                    } else {
-                        if (type === 'volcanic') setSimVolcTime(Math.round(currentT));
-                        else setSimPlutTime(Math.round(currentT));
+                        setSimVolcTime(VOLC_MAX);
+                        setVolcPhase(5);
+                        setSimVolcDone(true);
+                        setIsRunning(false);
                     }
-                }, 50);
+                }, 80);
             };
+
+            const runPlutonic = () => {
+                if (simPlutDone || isRunning) return;
+                setIsRunning(true);
+                let t = 0;
+                const inc = PLUT_MAX / 40;
+                setPlutPhase(1);
+                timerRef.current = setInterval(() => {
+                    t += inc;
+                    setSimPlutTime(Math.min(Math.round(t), PLUT_MAX));
+                    const pct = t / PLUT_MAX;
+                    if (pct >= 0.5 && pct < 0.51) setPlutPhase(2);
+                    if (t >= PLUT_MAX) {
+                        clearInterval(timerRef.current);
+                        setSimPlutTime(PLUT_MAX);
+                        setPlutPhase(3);
+                        setSimPlutDone(true);
+                        setIsRunning(false);
+                    }
+                }, 80);
+            };
+
+            useEffect(() => () => { clearInterval(timerRef.current); }, []);
 
             const bothDone = simVolcDone && simPlutDone;
 
-            return (
-                <div className="flex flex-col gap-5 p-4 h-full w-full max-w-5xl mx-auto overflow-y-auto custom-scroll">
+            const SceneFrame = ({ children, done, label, timer }) => (
+                <div className={`relative rounded-2xl border-2 overflow-hidden transition-all ${done ? 'border-green-400 shadow-green-100 shadow-lg' : 'border-stone-300'}`}
+                    style={{width:'100%', height:'320px'}}>
+                    {children}
+                    {/* Timer overlay */}
+                    <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-full backdrop-blur-sm">{timer}</div>
+                    {done && <div className="absolute bottom-2 left-0 right-0 flex justify-center"><span className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">✓ {label}</span></div>}
+                </div>
+            );
 
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+            return (
+                <div className="flex flex-col gap-5 p-4 h-full w-full max-w-3xl mx-auto overflow-y-auto custom-scroll">
+
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-stone-200">
                         <h3 className="text-xl font-bold text-stone-800 mb-2">Enfriamiento del Magma</h3>
                         <p className="text-stone-600 text-sm leading-relaxed mb-3">
-                            Cualquier roca que se forme a partir del enfriamiento del magma es una <strong className="text-red-700">roca ígnea</strong>.
-                            El magma que erupciona y se enfría rápidamente en la superficie forma <strong className="text-orange-600">roca volcánica (extrusiva)</strong>.
-                            El magma que permanece en profundidad y se enfría muy lentamente forma <strong className="text-red-900">roca plutónica (intrusiva)</strong>.
+                            Cualquier roca formada a partir del enfriamiento del magma es una <strong className="text-red-700">roca ígnea</strong>.
+                            Si erupciona y se enfría rápido en superficie → <strong className="text-orange-600">roca volcánica (basalto)</strong>.
+                            Si se queda en profundidad y cristaliza lentamente → <strong className="text-red-900">roca plutónica (granito)</strong>.
                         </p>
                         <AnalogyDropdown
-                            question="¿Cómo afecta la velocidad de enfriamiento al tamaño de los cristales de una roca?"
-                            text="Como el azúcar: enfriado lento → cristales grandes (azúcar cande); enfriado rápido → cristales diminutos o sin forma (azúcar glasé)."
-                            result="Enfriamiento lento (plutónico) = cristales grandes visibles a simple vista (granito). Enfriamiento rápido (volcánico) = cristales microscópicos o vidrio (basalto, obsidiana)."
+                            question="¿Cómo afecta la velocidad de enfriamiento al tamaño de los cristales?"
+                            text="Como el azúcar: enfriado lento → cristales grandes (azúcar cande); enfriado rápido → cristales diminutos (azúcar glasé)."
+                            result="Enfriamiento lento (plutónico) = cristales grandes visibles (granito). Enfriamiento rápido (volcánico) = cristales microscópicos o vidrio (basalto, obsidiana)."
                         />
-                        <Button onClick={() => { setShowGif(true); setHasViewedGif(true); }} variant={hasViewedGif ? "secondary" : "primary"} className="w-full py-2 text-sm mt-4 animate-pulse">🎬 Ver Animación (OBLIGATORIO)</Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className={'bg-white rounded-2xl border-2 p-4 transition-all ' + (simVolcDone ? 'border-green-400' : 'border-orange-200')}>
-                            <div className="flex justify-between items-center mb-2">
-                                <h4 className="font-bold text-stone-800 text-sm">🌋 Roca Volcánica</h4>
-                                <span className="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-1 rounded-full">⏳ {simVolcTime} días</span>
-                            </div>
-                            <p className="text-xs text-stone-500 mb-3">Enfriamiento rápido en superficie. Tarda solo días.</p>
-                            <div className="relative h-20 bg-sky-100 rounded-xl overflow-hidden mb-3 border border-sky-200">
-                                <div className="absolute bottom-0 left-0 right-0 h-2/5 bg-stone-400/30"></div>
-                                <div className="absolute top-1 left-2 text-[10px] text-sky-700 font-bold">Superficie</div>
-                                <div className="absolute rounded-full flex items-center justify-center transition-all duration-500"
-                                    style={{ width: '36px', height: '36px', bottom: simVolcDone ? 'calc(40% + 4px)' : '4px', left: '50%', transform: 'translateX(-50%)', background: simVolcDone ? '#78716c' : '#ea580c', boxShadow: simVolcDone ? 'none' : '0 0 12px #ea580c' }}>
-                                    <span className="text-white text-[8px] font-bold">{simVolcDone ? 'Basalto' : 'Lava'}</span>
-                                </div>
-                            </div>
+                    {/* Mode selector */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <button onClick={() => !isRunning && setMode('volcanic')}
+                            className={`p-4 rounded-2xl border-2 text-left transition-all ${mode === 'volcanic' ? 'border-orange-500 bg-orange-50 shadow-orange-100 shadow-md' : 'border-stone-200 bg-white hover:border-orange-300'}`}>
+                            <div className="text-2xl mb-1">🌋</div>
+                            <div className="font-bold text-stone-800 text-sm">Volcánico</div>
+                            <div className="text-xs text-stone-500">Erupción · días</div>
+                            {simVolcDone && <div className="text-xs text-green-600 font-bold mt-1">✓ Completado</div>}
+                        </button>
+                        <button onClick={() => !isRunning && setMode('plutonic')}
+                            className={`p-4 rounded-2xl border-2 text-left transition-all ${mode === 'plutonic' ? 'border-red-800 bg-red-50 shadow-red-100 shadow-md' : 'border-stone-200 bg-white hover:border-red-300'}`}>
+                            <div className="text-2xl mb-1">⛰️</div>
+                            <div className="font-bold text-stone-800 text-sm">Plutónico</div>
+                            <div className="text-xs text-stone-500">Sin erupción · miles de años</div>
+                            {simPlutDone && <div className="text-xs text-green-600 font-bold mt-1">✓ Completado</div>}
+                        </button>
+                    </div>
+
+                    {/* Simulation frame */}
+                    {mode === 'volcanic' && (
+                        <div className="animate-fade-in">
+                            <SceneFrame done={simVolcDone} label={`Basalto — ${VOLC_MAX} días`} timer={`${simVolcTime} días`}>
+                                <VolcanicScene phase={volcPhase} />
+                            </SceneFrame>
                             {!simVolcDone ? (
-                                <Button onClick={() => startSim('volcanic')} variant="primary" disabled={activeSim !== null} className="w-full text-sm">
-                                    {activeSim === 'volcanic' ? '⚡ Enfriando...' : '▶ Simular Enfriamiento Rápido'}
+                                <Button onClick={runVolcanic} variant="primary" disabled={isRunning} className="w-full mt-3 text-sm">
+                                    {isRunning ? '⚡ Simulando erupción...' : '▶ Iniciar simulación volcánica'}
                                 </Button>
                             ) : (
-                                <div className="text-center text-green-700 font-bold text-xs bg-green-50 rounded-lg p-2 border border-green-200">✓ Roca Volcánica — {VOLC_MAX} días</div>
-                            )}
-                        </div>
-
-                        <div className={'bg-white rounded-2xl border-2 p-4 transition-all ' + (simPlutDone ? 'border-green-400' : 'border-red-200')}>
-                            <div className="flex justify-between items-center mb-2">
-                                <h4 className="font-bold text-stone-800 text-sm">⛰️ Roca Plutónica</h4>
-                                <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full">⏳ {simPlutTime.toLocaleString()} años</span>
-                            </div>
-                            <p className="text-xs text-stone-500 mb-3">Enfriamiento lento en profundidad. Tarda miles de años.</p>
-                            <div className="relative h-20 bg-stone-700 rounded-xl overflow-hidden mb-3 border border-stone-600">
-                                <div className="absolute top-1 left-2 text-[10px] text-stone-400 font-bold">Profundidad</div>
-                                <div className="absolute rounded-[40%] flex items-center justify-center transition-all duration-500"
-                                    style={{ width: '44px', height: '44px', bottom: '6px', left: '50%', transform: 'translateX(-50%)', background: simPlutDone ? '#9ca3af' : '#ea580c', boxShadow: simPlutDone ? 'none' : '0 0 18px #ea580c' }}>
-                                    <span className="text-white text-[8px] font-bold text-center leading-tight">{simPlutDone ? 'Granito' : 'Magma'}</span>
+                                <div className="mt-3 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-800">
+                                    <strong>El basalto</strong> se forma en días. Sus cristales son microscópicos porque el magma se enfría muy rápido al contacto con la atmósfera.
                                 </div>
-                            </div>
-                            {!simPlutDone ? (
-                                <Button onClick={() => startSim('plutonic')} variant="primary" disabled={activeSim !== null} className="w-full text-sm">
-                                    {activeSim === 'plutonic' ? '🌡️ Cristalizando...' : '▶ Simular Enfriamiento Lento'}
-                                </Button>
-                            ) : (
-                                <div className="text-center text-green-700 font-bold text-xs bg-green-50 rounded-lg p-2 border border-green-200">✓ Roca Plutónica — {PLUT_MAX.toLocaleString()} años</div>
                             )}
-                        </div>
-                    </div>
-
-                    {bothDone && (
-                        <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4 text-center animate-fade-in">
-                            <h4 className="font-bold text-blue-900 mb-1">📊 Comparativa de velocidades</h4>
-                            <p className="text-sm text-blue-800">La roca plutónica tardó aproximadamente <strong>3.650.000×</strong> más tiempo en formarse que la volcánica.</p>
-                            <p className="text-xs text-blue-600 mt-1">Por eso el granito tiene cristales grandes visibles y el basalto tiene textura fina homogénea.</p>
                         </div>
                     )}
 
-                    {bothDone && hasViewedGif && (
+                    {mode === 'plutonic' && (
+                        <div className="animate-fade-in">
+                            <SceneFrame done={simPlutDone} label={`Granito — ${PLUT_MAX.toLocaleString()} años`} timer={`${simPlutTime.toLocaleString()} años`}>
+                                <PlutonicScene phase={plutPhase} />
+                            </SceneFrame>
+                            {!simPlutDone ? (
+                                <Button onClick={runPlutonic} variant="primary" disabled={isRunning} className="w-full mt-3 text-sm">
+                                    {isRunning ? '🌡️ Cristalizando en profundidad...' : '▶ Iniciar simulación plutónica'}
+                                </Button>
+                            ) : (
+                                <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-900">
+                                    <strong>El granito</strong> tarda ~50.000 años. Sus cristales son grandes y visibles porque tiene tiempo de crecer lentamente en profundidad.
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!mode && (
+                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-center text-stone-500 text-sm">
+                            Selecciona una simulación para comenzar.
+                        </div>
+                    )}
+
+                    {/* Comparator table */}
+                    {bothDone && (
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-5 animate-fade-in">
+                            <h4 className="font-bold text-blue-900 mb-3 text-center">📊 Comparativa: Volcánico vs. Plutónico</h4>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs text-stone-700 border-collapse">
+                                    <thead>
+                                        <tr className="bg-blue-100">
+                                            <th className="p-2 text-left rounded-tl-lg font-bold text-blue-900">Característica</th>
+                                            <th className="p-2 text-center font-bold text-orange-700">🌋 Volcánico</th>
+                                            <th className="p-2 text-center font-bold text-red-900 rounded-tr-lg">⛰️ Plutónico</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr className="border-t border-blue-100">
+                                            <td className="p-2 font-semibold">Tiempo de formación</td>
+                                            <td className="p-2 text-center">5 días</td>
+                                            <td className="p-2 text-center">50.000 años</td>
+                                        </tr>
+                                        <tr className="border-t border-blue-100 bg-blue-50/40">
+                                            <td className="p-2 font-semibold">Lugar</td>
+                                            <td className="p-2 text-center">Superficie</td>
+                                            <td className="p-2 text-center">Profundidad</td>
+                                        </tr>
+                                        <tr className="border-t border-blue-100">
+                                            <td className="p-2 font-semibold">Cristales</td>
+                                            <td className="p-2 text-center">Microscópicos</td>
+                                            <td className="p-2 text-center">Grandes y visibles</td>
+                                        </tr>
+                                        <tr className="border-t border-blue-100 bg-blue-50/40">
+                                            <td className="p-2 font-semibold">Ejemplo</td>
+                                            <td className="p-2 text-center">Basalto</td>
+                                            <td className="p-2 text-center">Granito</td>
+                                        </tr>
+                                        <tr className="border-t border-blue-200">
+                                            <td className="p-2 font-semibold rounded-bl-lg">Diferencia de tiempo</td>
+                                            <td className="p-2 text-center text-blue-800 font-bold" colSpan="2">El granito tardó <strong>3.650.000×</strong> más que el basalto</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {bothDone && (
                         <div className="animate-fade-in">
                             <ReflectionBox id="enfriamiento" onSave={onComplete} />
                         </div>
                     )}
-                    {bothDone && !hasViewedGif && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center text-amber-800 text-sm font-bold animate-pulse">
-                            ¡Bien! Ahora visiona la animación (botón verde arriba) para completar el reto.
-                        </div>
-                    )}
                     {!bothDone && (
-                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 text-center text-stone-500 text-sm">
-                            Simula ambos tipos de enfriamiento para completar el reto.
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center text-amber-700 text-xs">
+                            Completa <strong>ambas</strong> simulaciones (volcánica y plutónica) para continuar.
                         </div>
                     )}
-
-                    <Modal isOpen={showGif} onClose={() => setShowGif(false)} title="Animación: Enfriamiento">
-                        <img src="https://i.ibb.co/cKRCrJLF/cooling.gif" alt="Enfriamiento" className="w-full rounded-xl shadow-inner border border-stone-200" />
-                    </Modal>
                 </div>
             );
         };
@@ -1959,14 +2209,28 @@
                                 {progress.reflections && Object.keys(progress.reflections).length > 0 && (
                                     <div className="mb-8">
                                         <h3 className="text-xl font-bold text-blue-900 border-b border-blue-200 pb-2 mb-4">Mis Reflexiones de Procesos:</h3>
-                                        <ul className="space-y-3 text-sm text-stone-700">
+                                        <ul className="space-y-4 text-sm text-stone-700">
                                             {['calor', 'fusion', 'enfriamiento', 'meteorizacion', 'diagenesis'].map((k) => {
-                                                if(!progress.reflections[k] || progress.reflections[k].startsWith('metaQ')) return null;
+                                                const ref = progress.reflections[k];
+                                                if (!ref) return null;
+                                                const expl = typeof ref === 'object' ? ref.explanation : ref;
+                                                const crit = typeof ref === 'object' ? ref.critical : '';
+                                                if (!expl && !crit) return null;
                                                 return (
-                                                    <li key={k} className="bg-stone-50 p-3 rounded-lg border border-stone-200 shadow-sm">
-                                                        <strong className="text-blue-700 block mb-1">{REFLECTION_LABELS[k] || k}</strong>
-                                                        <p className="text-xs text-stone-400 italic mb-2">{REFLECTION_QUESTIONS[k]}</p>
-                                                        <p>"{progress.reflections[k]}"</p>
+                                                    <li key={k} className="rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+                                                        <div className="bg-stone-100 px-3 py-2 font-bold text-stone-800">{REFLECTION_LABELS[k] || k}</div>
+                                                        {expl && (
+                                                            <div className="border-l-4 border-blue-400 px-3 py-2 bg-blue-50/50">
+                                                                <p className="text-xs text-blue-600 font-semibold mb-1">Explicación al compañero/a</p>
+                                                                <p>"{expl}"</p>
+                                                            </div>
+                                                        )}
+                                                        {crit && (
+                                                            <div className="border-l-4 border-orange-400 px-3 py-2 bg-orange-50/50">
+                                                                <p className="text-xs text-orange-600 font-semibold mb-1">{REFLECTION_QUESTIONS[k]}</p>
+                                                                <p>"{crit}"</p>
+                                                            </div>
+                                                        )}
                                                     </li>
                                                 );
                                             })}
@@ -1977,7 +2241,7 @@
                                 {/* Hypotheses & Mission Reflections from Phase 4 */}
                                 <div className="mb-8">
                                     <h3 className="text-xl font-bold text-green-900 border-b border-green-200 pb-2 mb-4">Mis Rutas de Navegación:</h3>
-                                    {allHypotheses.map((hyp, i) => {
+                                    {(allHypotheses || []).map((hyp, i) => {
                                         if (!hyp) return null;
                                         return (
                                             <div key={i} className="bg-green-50/50 p-4 rounded-xl border border-green-100 mb-4 text-sm shadow-sm">
@@ -2544,6 +2808,14 @@
                             parsed.reflections.diagenesis = parsed.reflections.compactacion;
                             delete parsed.reflections.compactacion;
                         }
+                        // Migración Block I: reflections[k] string → {explanation, critical}
+                        if (parsed.reflections) {
+                            ['calor','fusion','enfriamiento','meteorizacion','diagenesis'].forEach(k => {
+                                if (typeof parsed.reflections[k] === 'string') {
+                                    parsed.reflections[k] = { explanation: parsed.reflections[k], critical: '' };
+                                }
+                            });
+                        }
                         return {
                             ...INITIAL_PROGRESS,
                             ...parsed,
@@ -2613,11 +2885,14 @@
                 });
             };
 
-            const completeChallenge = (id, reflectionText) => {
+            const completeChallenge = (id, reflectionData) => {
                 setProgress(prev => {
                     const newProgress = { ...prev, [id]: true };
-                    if (reflectionText) {
-                        newProgress.reflections = { ...(prev.reflections || {}), [id]: reflectionText };
+                    if (reflectionData) {
+                        const val = typeof reflectionData === 'string'
+                            ? { explanation: reflectionData, critical: '' }
+                            : reflectionData;
+                        newProgress.reflections = { ...(prev.reflections || {}), [id]: val };
                     }
                     lsSave(newProgress);
                     return newProgress;
@@ -2634,7 +2909,13 @@
                     const code = prompt("Introduce el código de docente:");
                     if (code === "2421") {
                         setTeacherMode(true);
-                        const td = { calor: true, fusion: true, enfriamiento: true, meteorizacion: true, diagenesis: true, diagrama: true, retos: true, metacognicionPT: true, reflections: progress.reflections };
+                        const makeRef = (k) => {
+                        const existing = progress.reflections?.[k];
+                        if (existing && typeof existing === 'object' && existing.explanation) return existing;
+                        return { explanation: '[Modo docente]', critical: '[Modo docente]' };
+                    };
+                    const td = { calor: true, fusion: true, enfriamiento: true, meteorizacion: true, diagenesis: true, diagrama: true, retos: true, metacognicionPT: true,
+                        reflections: { calor: makeRef('calor'), fusion: makeRef('fusion'), enfriamiento: makeRef('enfriamiento'), meteorizacion: makeRef('meteorizacion'), diagenesis: makeRef('diagenesis') } };
                         setProgress(p => ({...p, ...td}));
                         lsSave({...progress, ...td});
                     } else if (code) alert("Código incorrecto");
