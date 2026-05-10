@@ -357,6 +357,7 @@
                         ref={divRef}
                         contentEditable
                         suppressContentEditableWarning={true}
+                        spellCheck={false}
                         onInput={() => onChange(divRef.current?.innerHTML || '')}
                         onKeyDown={(e) => {
                             if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); applyFormat('bold'); }
@@ -413,7 +414,8 @@
                                     ...a,
                                     text: (a.text || '').replace(/^•\s*/, ''),
                                     time: a.time || '',
-                                    challengeResponse: a.challengeResponse || ''
+                                    challengeResponse: a.challengeResponse || '',
+                                    comments: a.comments || ''
                                 }));
                             }
                             
@@ -460,6 +462,7 @@
                     onFocus={onFocus}
                     placeholder={placeholder}
                     rows={1}
+                    spellCheck={false}
                     className={`textarea-auto ${className}`}
                 />
             );
@@ -511,11 +514,11 @@
             }, [agendaUrl]);
 
             useEffect(() => {
-                if (activeCourseId) localStorage.setItem('lastActiveCourseId', activeCourseId);
+                if (activeCourseId && hasLoadedRef.current) localStorage.setItem('lastActiveCourseId', activeCourseId);
             }, [activeCourseId]);
 
             useEffect(() => {
-                if (activeUnitId) localStorage.setItem('lastActiveUnitId', activeUnitId);
+                if (activeUnitId && hasLoadedRef.current) localStorage.setItem('lastActiveUnitId', activeUnitId);
             }, [activeUnitId]);
 
             // Setup the bridge with Firebase auth and data
@@ -1875,9 +1878,9 @@
                                             <thead className="sticky top-0 z-20 bg-gray-50 shadow-sm">
                                                 <tr className="border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
                                                     <th className="p-3 w-20 text-center font-semibold border-r border-gray-200">Sessió</th>
-                                                    <th className="p-3 w-[54%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
-                                                    <th className="p-3 w-[22%] font-semibold border-r border-gray-200">Materials</th>
-                                                    <th className="p-3 w-[21%] font-semibold">Comentaris / Observacions</th>
+                                                    <th className="p-3 w-[46%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
+                                                    <th className="p-3 w-[20%] font-semibold border-r border-gray-200">Materials</th>
+                                                    <th className="p-3 w-[31%] font-semibold">Observacions per activitat</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2090,7 +2093,7 @@
                                                                                 </div>
                                                                             );
                                                                         })}
-                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "Nova activitat", detail: "", time: "", challengeResponse: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
+                                                                        <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "Nova activitat", detail: "", time: "", challengeResponse: "", comments: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
                                                                             <IconPlus /><span className="ml-1">Afegir activitat</span>
                                                                         </button>
                                                                     </td>
@@ -2149,13 +2152,27 @@
                                                                     </td>
                                                                     
                                                                     <td className="p-0 align-top h-[1px]">
-                                                                        <div className="p-3 h-full flex flex-col">
-                                                                            <textarea
-                                                                                value={session.comments}
-                                                                                onChange={(e) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', e.target.value)}
-                                                                                placeholder="Notes d'aplicació..."
-                                                                                className={`w-full flex-1 min-h-[40px] text-sm italic resize-none outline-none bg-transparent overflow-y-auto custom-scroll ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
-                                                                            />
+                                                                        <div className="p-2 h-full flex flex-col gap-0">
+                                                                            {session.activities.length === 0 ? (
+                                                                                <AutoTextarea
+                                                                                    value={session.comments || ''}
+                                                                                    onChange={(val) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', val)}
+                                                                                    placeholder="Observacions..."
+                                                                                    className={`w-full text-sm italic outline-none bg-transparent ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
+                                                                                />
+                                                                            ) : (
+                                                                                session.activities.map((act, actIdx) => (
+                                                                                    <div key={act.id} className={`flex items-start gap-1 ${actIdx > 0 ? 'border-t border-gray-100 pt-1 mt-1' : ''}`}>
+                                                                                        <span className="text-[10px] text-gray-400 font-bold mt-1 shrink-0 w-3 text-right">{actIdx + 1}</span>
+                                                                                        <AutoTextarea
+                                                                                            value={act.comments || ''}
+                                                                                            onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'comments', value: val })}
+                                                                                            placeholder=""
+                                                                                            className={`flex-1 text-sm italic outline-none bg-transparent ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
+                                                                                        />
+                                                                                    </div>
+                                                                                ))
+                                                                            )}
                                                                         </div>
                                                                     </td>
                                                                 </tr>
