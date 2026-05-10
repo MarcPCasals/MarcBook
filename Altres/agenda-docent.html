@@ -1619,9 +1619,12 @@
                 notes: planData[key]?.notes || "",
                 materials: planData[key]?.materials || "",
                 links: planData[key]?.links || [],
-                activityNotes: planData[key]?.activityNotes || []
+                activityNotes: planData[key]?.activityNotes || [],
+                activityObservations: planData[key]?.activityObservations || []
             });
             const [linkInput, setLinkInput] = useState({ url: "", title: "" });
+            const [visibleObsIdx, setVisibleObsIdx] = useState(null);
+            const [dragLinkIdx, setDragLinkIdx] = useState(null);
 
             useEffect(() => {
                 const timer = setTimeout(() => {
@@ -1643,6 +1646,15 @@
 
             const removeLink = (index) => {
                 setData(prev => ({ ...prev, links: (prev.links || []).filter((_, i) => i !== index) }));
+            };
+
+            const reorderLinks = (fromIdx, toIdx) => {
+                setData(prev => {
+                    const links = [...(prev.links || [])];
+                    const [moved] = links.splice(fromIdx, 1);
+                    links.splice(toIdx, 0, moved);
+                    return { ...prev, links };
+                });
             };
 
             const handleActivityNoteChange = (idx, value) => {
@@ -1686,10 +1698,26 @@
                                     <div className="space-y-3">
                                         {sessionTasks.map((task, i) => (
                                             <div key={i} className="space-y-1">
-                                                <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5 flex-wrap">
-                                                    {task.time && <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0">{task.time}'</span>}
-                                                    <span>{task.text}</span>
-                                                </p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="flex-1 text-xs font-semibold text-gray-500 flex items-center gap-1.5 flex-wrap">
+                                                        {task.time && <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0">{task.time}'</span>}
+                                                        <span>{task.text}</span>
+                                                    </p>
+                                                    {(data.activityObservations || [])[i]?.trim() && (
+                                                        <div className="relative shrink-0">
+                                                            <button
+                                                                onClick={() => setVisibleObsIdx(visibleObsIdx === i ? null : i)}
+                                                                className="w-5 h-5 bg-red-200 hover:bg-red-300 rounded border border-red-300 transition-colors"
+                                                                title="Veure observació del Programador"
+                                                            />
+                                                            {visibleObsIdx === i && (
+                                                                <div className="absolute right-0 top-6 z-50 bg-white border border-red-200 rounded-lg shadow-lg p-3 w-64 text-xs text-gray-700 whitespace-pre-wrap">
+                                                                    {(data.activityObservations || [])[i]}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <textarea
                                                     className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 outline-none text-gray-700 bg-gray-50/50 min-h-[60px] text-sm transition-all"
                                                     placeholder="Notes per aquesta activitat..."
@@ -1702,73 +1730,68 @@
                                 )}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                        <Icons.Table size={16} className="text-blue-500" /> Comentaris i Observacions
-                                    </label>
-                                    <textarea
-                                        className="w-full p-4 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 outline-none text-gray-700 bg-gray-50/50 min-h-[150px] transition-all"
-                                        placeholder="Comentaris generals de la sessió..."
-                                        value={data.notes}
-                                        onChange={(e) => handleChange('notes', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="space-y-2 flex flex-col">
-                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                        <Icons.Link size={16} className="text-green-500" /> Enllaços i Recursos
-                                    </label>
-                                    <div className="flex-1 bg-gray-50/50 border border-gray-200 rounded-xl p-4 flex flex-col">
-                                        <div className="flex gap-2 mb-3">
-                                            <input
-                                                type="text"
-                                                className="flex-1 border border-gray-300 p-2 rounded-lg text-sm focus:outline-none focus:border-green-500"
-                                                placeholder="Nom del material..."
-                                                value={linkInput.title}
-                                                onChange={(e) => setLinkInput({ ...linkInput, title: e.target.value })}
-                                                onKeyDown={(e) => e.key === 'Enter' && (async () => {
-                                                    try {
-                                                        const text = await navigator.clipboard.readText();
-                                                        if (text && text.trim()) {
-                                                            setData(prev => ({ ...prev, links: [...(prev.links || []), { url: text.trim(), title: linkInput.title.trim() || text.trim() }] }));
-                                                            setLinkInput({ url: "", title: "" });
-                                                        }
-                                                    } catch (err) { alert("No s'ha pogut accedir al portapapers."); }
-                                                })()}
-                                            />
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const text = await navigator.clipboard.readText();
-                                                        if (text && text.trim()) {
-                                                            setData(prev => ({ ...prev, links: [...(prev.links || []), { url: text.trim(), title: linkInput.title.trim() || text.trim() }] }));
-                                                            setLinkInput({ url: "", title: "" });
-                                                        } else {
-                                                            alert("El portapapers està buit o no conté un URL vàlid.");
-                                                        }
-                                                    } catch (err) { alert("No s'ha pogut accedir al portapapers. Assegura't de tenir un URL copiat."); }
-                                                }}
-                                                className="bg-green-500 text-white px-3 py-2 rounded-lg font-bold hover:bg-green-600 transition-colors whitespace-nowrap text-sm"
-                                                title="Enganxa l'URL que tens copiat al portapapers"
-                                            >Enganxar</button>
-                                        </div>
-                                        <div className="flex-1 overflow-y-auto max-h-[100px] space-y-2 custom-scroll pr-1">
-                                            {(!data.links || data.links.length === 0) && <p className="text-gray-400 text-xs italic text-center mt-4">No hi ha enllaços</p>}
-                                            {(data.links || []).map((l, i) => {
-                                                const url = typeof l === 'string' ? l : l.url;
-                                                const title = typeof l === 'string' ? l : (l.title || l.url);
-                                                return (
-                                                    <div key={i} className="flex items-center justify-between bg-white p-2 rounded border border-gray-200 shadow-sm text-xs group hover:border-green-300 transition-colors">
-                                                        <a href={url} target="_blank" className="text-blue-600 hover:underline truncate max-w-[160px] block font-medium" title={url}>{title}</a>
-                                                        <div className="flex items-center gap-1 shrink-0">
-                                                            <button onClick={() => copyToClipboard(url)} className="p-1 text-gray-300 hover:text-blue-500 transition-colors rounded" title="Copiar enllaç"><Icons.Copy /></button>
-                                                            <button onClick={() => removeLink(i)} className="text-gray-300 hover:text-red-500 font-bold px-1 transition-colors">×</button>
-                                                        </div>
+                            <div className="space-y-2">
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
+                                    <Icons.Link size={16} className="text-green-500" /> Enllaços i Recursos
+                                </label>
+                                <div className="bg-gray-50/50 border border-gray-200 rounded-xl p-4">
+                                    <div className="flex gap-2 mb-3">
+                                        <input
+                                            type="text"
+                                            className="flex-1 border border-gray-300 p-2 rounded-lg text-sm focus:outline-none focus:border-green-500"
+                                            placeholder="Nom del material..."
+                                            value={linkInput.title}
+                                            onChange={(e) => setLinkInput({ ...linkInput, title: e.target.value })}
+                                            onKeyDown={(e) => e.key === 'Enter' && (async () => {
+                                                try {
+                                                    const text = await navigator.clipboard.readText();
+                                                    if (text && text.trim()) {
+                                                        setData(prev => ({ ...prev, links: [...(prev.links || []), { url: text.trim(), title: linkInput.title.trim() || text.trim() }] }));
+                                                        setLinkInput({ url: "", title: "" });
+                                                    }
+                                                } catch (err) { alert("No s'ha pogut accedir al portapapers."); }
+                                            })()}
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const text = await navigator.clipboard.readText();
+                                                    if (text && text.trim()) {
+                                                        setData(prev => ({ ...prev, links: [...(prev.links || []), { url: text.trim(), title: linkInput.title.trim() || text.trim() }] }));
+                                                        setLinkInput({ url: "", title: "" });
+                                                    } else {
+                                                        alert("El portapapers està buit o no conté un URL vàlid.");
+                                                    }
+                                                } catch (err) { alert("No s'ha pogut accedir al portapapers. Assegura't de tenir un URL copiat."); }
+                                            }}
+                                            className="bg-green-500 text-white px-3 py-2 rounded-lg font-bold hover:bg-green-600 transition-colors whitespace-nowrap text-sm"
+                                            title="Enganxa l'URL que tens copiat al portapapers"
+                                        >Enganxar</button>
+                                    </div>
+                                    <div className="overflow-y-auto max-h-[200px] space-y-2 custom-scroll pr-1">
+                                        {(!data.links || data.links.length === 0) && <p className="text-gray-400 text-xs italic text-center mt-4">No hi ha enllaços</p>}
+                                        {(data.links || []).map((l, i) => {
+                                            const url = typeof l === 'string' ? l : l.url;
+                                            const title = typeof l === 'string' ? l : (l.title || l.url);
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    draggable
+                                                    onDragStart={() => setDragLinkIdx(i)}
+                                                    onDragOver={(e) => e.preventDefault()}
+                                                    onDrop={(e) => { e.preventDefault(); if (dragLinkIdx !== null && dragLinkIdx !== i) reorderLinks(dragLinkIdx, i); setDragLinkIdx(null); }}
+                                                    className={`flex items-center gap-2 bg-white p-2 rounded border border-gray-200 shadow-sm text-xs group hover:border-green-300 transition-colors cursor-grab ${dragLinkIdx === i ? 'opacity-40' : ''}`}
+                                                >
+                                                    <span className="text-gray-400 font-bold text-[10px] w-4 shrink-0 text-center">{i + 1}</span>
+                                                    <span className="text-gray-300 shrink-0 select-none">⠿</span>
+                                                    <a href={url} target="_blank" className="text-blue-600 hover:underline truncate flex-1 font-medium" title={url}>{title}</a>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <button onClick={() => copyToClipboard(url)} className="p-1 text-gray-300 hover:text-blue-500 transition-colors rounded" title="Copiar enllaç"><Icons.Copy /></button>
+                                                        <button onClick={() => removeLink(i)} className="text-gray-300 hover:text-red-500 font-bold px-1 transition-colors">×</button>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -2249,7 +2272,8 @@
                     notes: data.notes,
                     materials: data.materials,
                     links: data.links,
-                    activityNotes: data.activityNotes
+                    activityNotes: data.activityNotes,
+                    activityObservations: data.activityObservations
                 };
                 updatePlanData(newData);
             };
@@ -2265,6 +2289,7 @@
                     materials: "",
                     links: [],
                     activityNotes: [],
+                    activityObservations: [],
                     review: ""
                 };
                 updatePlanData(newData);
@@ -3195,7 +3220,7 @@
             const handleSessionNotepadSave = (wId, dayIndex, slotId, data) => {
                 const wData = { ...(weeksData[wId] || {}) };
                 const k = `${dayIndex}-${slotId}`;
-                wData[k] = { ...wData[k], notes: data.notes, materials: data.materials, links: data.links, activityNotes: data.activityNotes };
+                wData[k] = { ...wData[k], notes: data.notes, materials: data.materials, links: data.links, activityNotes: data.activityNotes, activityObservations: data.activityObservations };
                 updatePlanData(wId, wData);
             };
 
@@ -3210,6 +3235,7 @@
                     materials: "",
                     links: [],
                     activityNotes: [],
+                    activityObservations: [],
                     review: ""
                 };
                 updatePlanData(wId, wData);
@@ -3897,14 +3923,19 @@
             // Calcula quines sessions del rang ja tenen contingut (per al modal de confirmació)
             const computeSessionsWithContent = () => {
                 const { startDate, endDate } = getDateRange(selectedUTId, startFromDate);
+                const numToImport = (data.sessions || []).length;
                 const result = [];
                 selectedClassIds.forEach(classId => {
                     const className = config.classes.find(c => c.id === classId)?.name || classId;
-                    let sessionNum = 1;
-                    allWeeks.forEach(w => {
+                    let utSessionNum = 0;
+                    for (let wi = 0; wi < allWeeks.length; wi++) {
+                        if (utSessionNum >= numToImport) break;
+                        const w = allWeeks[wi];
                         const isHoliday = holidayWeeks?.includes(w.id);
                         for (let d = 0; d < 5; d++) {
+                            if (utSessionNum >= numToImport) break;
                             for (let s = 0; s < TIME_SLOTS.length; s++) {
+                                if (utSessionNum >= numToImport) break;
                                 const slot = TIME_SLOTS[s];
                                 if (slot.type === 'break') continue;
                                 const isGlobal = config.schedule[d]?.[slot.id] === classId;
@@ -3918,28 +3949,27 @@
                                 const sessionDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(day), 12, 0, 0);
                                 const cellData = weeksData[w.id]?.[`${d}-${slot.id}`] || {};
                                 const isZzz = cellData.status === 'zzz';
-                                if (!isHoliday && !isZzz) {
-                                    const thisSessionNum = sessionNum++;
-                                    if (sessionDate >= startDate && sessionDate <= endDate) {
-                                        const hasExistingContent =
-                                            (cellData.tasks || []).some(t => t && t.text && t.text.trim() !== '') ||
-                                            (typeof cellData.notes === 'string' && cellData.notes.trim() !== '') ||
-                                            (typeof cellData.materials === 'string' && cellData.materials.trim() !== '') ||
-                                            (Array.isArray(cellData.links) && cellData.links.length > 0) ||
-                                            (Array.isArray(cellData.activityNotes) && cellData.activityNotes.some(n => n && n.trim()));
-                                        if (hasExistingContent) {
-                                            result.push({
-                                                sessionNum: thisSessionNum,
-                                                date: `${day}/${m}/${y}`,
-                                                time: slot.label,
-                                                className: selectedClassIds.length > 1 ? className : null
-                                            });
-                                        }
+                                if (!isHoliday && !isZzz && sessionDate >= startDate && sessionDate <= endDate) {
+                                    utSessionNum++;
+                                    const hasExistingContent =
+                                        (cellData.tasks || []).some(t => t && t.text && t.text.trim() !== '') ||
+                                        (typeof cellData.notes === 'string' && cellData.notes.trim() !== '') ||
+                                        (typeof cellData.materials === 'string' && cellData.materials.trim() !== '') ||
+                                        (Array.isArray(cellData.links) && cellData.links.length > 0) ||
+                                        (Array.isArray(cellData.activityNotes) && cellData.activityNotes.some(n => n && n.trim())) ||
+                                        (Array.isArray(cellData.activityObservations) && cellData.activityObservations.some(n => n && n.trim()));
+                                    if (hasExistingContent) {
+                                        result.push({
+                                            sessionNum: utSessionNum,
+                                            date: `${day}/${m}/${y}`,
+                                            time: slot.label,
+                                            className: selectedClassIds.length > 1 ? className : null
+                                        });
                                     }
                                 }
                             }
                         }
-                    });
+                    }
                 });
                 return result;
             };
@@ -4049,23 +4079,22 @@
                                 .trim();
                         };
 
-                        // Per-activity notes: detail → notes, comments → just below (separated by —)
+                        // Per-activity notes: detail → activityNotes, comments → activityObservations (indicador vermell)
                         const activityNotesArr = new Array(activitiesArr.length).fill('');
+                        const activityObsArr = new Array(activitiesArr.length).fill('');
                         activitiesArr.forEach((act, i) => {
                             if (typeof act === 'object' && act !== null) {
-                                let noteContent = '';
                                 const detail = stripHtmlTags(act.detail);
-                                if (detail) noteContent += detail;
+                                if (detail) activityNotesArr[i] = detail;
                                 const actComments = String(act.comments || '').trim();
-                                if (actComments) {
-                                    if (noteContent) noteContent += '\n—\n';
-                                    noteContent += actComments;
-                                }
-                                activityNotesArr[i] = noteContent;
+                                if (actComments) activityObsArr[i] = actComments;
                             }
                         });
                         if (activityNotesArr.some(n => n && n.trim())) {
                             currentCell.activityNotes = activityNotesArr;
+                        }
+                        if (activityObsArr.some(n => n && n.trim())) {
+                            currentCell.activityObservations = activityObsArr;
                         }
 
                         const materialLines = [], linkItems = [];
