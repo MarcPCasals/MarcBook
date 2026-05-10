@@ -58,6 +58,14 @@
         .phase-header-2 { background-color: #fef3c7; color: #92400e; border-left: 4px solid #d97706; }
         .phase-header-3 { background-color: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
         .phase-header-4 { background-color: #f3e8ff; color: #6b21a8; border-left: 4px solid #9333ea; }
+
+        /* Placeholder per contentEditable ric */
+        .richtext-placeholder:empty:before {
+            content: attr(data-placeholder);
+            color: #9ca3af;
+            pointer-events: none;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -286,7 +294,7 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useLayoutEffect, useRef, useMemo } = React;
 
         // --- ICONES SVG ---
         const IconSave = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
@@ -305,6 +313,61 @@
         const IconDotsVertical = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>;
         const IconChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
         const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>;
+
+        // Editor de text ric (negreta + cursiva) per al detall de l'activitat
+        const RichTextArea = ({ value, onChange, placeholder, className }) => {
+            const divRef = useRef(null);
+
+            useEffect(() => {
+                if (divRef.current) {
+                    divRef.current.innerHTML = value || '';
+                }
+            }, []);
+
+            useEffect(() => {
+                if (divRef.current && document.activeElement !== divRef.current) {
+                    divRef.current.innerHTML = value || '';
+                }
+            }, [value]);
+
+            const applyFormat = (command) => {
+                if (!divRef.current) return;
+                divRef.current.focus();
+                document.execCommand(command, false, null);
+                onChange(divRef.current.innerHTML || '');
+            };
+
+            return (
+                <div className="flex flex-col gap-1">
+                    <div className="flex gap-1">
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); applyFormat('bold'); }}
+                            className="px-1.5 text-xs font-bold border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 leading-5 h-5"
+                            title="Negreta (Ctrl+B)"
+                        >B</button>
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); applyFormat('italic'); }}
+                            className="px-1.5 text-xs italic border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 leading-5 h-5"
+                            title="Cursiva (Ctrl+I)"
+                        >I</button>
+                    </div>
+                    <div
+                        ref={divRef}
+                        contentEditable
+                        suppressContentEditableWarning={true}
+                        onInput={() => onChange(divRef.current?.innerHTML || '')}
+                        onKeyDown={(e) => {
+                            if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); applyFormat('bold'); }
+                            if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); applyFormat('italic'); }
+                        }}
+                        data-placeholder={placeholder || ''}
+                        className={`outline-none richtext-placeholder ${className || ''}`}
+                    />
+                </div>
+            );
+        };
 
         // --- DADES INICIALS ---
         const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -355,9 +418,13 @@
                             }
                             
                             if (typeof newS.material === 'string') {
-                                newS.materials = newS.material.split('\n').filter(m=>m.trim()).map(m => ({ id: generateId(), name: m, url: '' }));
+                                newS.materials = newS.material.split('\n').filter(m=>m.trim()).map(m => ({ id: generateId(), name: m, url: '', teacherUrl: '' }));
                                 delete newS.material;
-                            } else if (!newS.materials) newS.materials = [];
+                            } else if (!newS.materials) {
+                                newS.materials = [];
+                            } else {
+                                newS.materials = newS.materials.map(m => ({ ...m, teacherUrl: m.teacherUrl || '' }));
+                            }
                             return newS;
                         })
                     }))
@@ -378,7 +445,7 @@
                 }
             };
 
-            useEffect(() => {
+            useLayoutEffect(() => {
                 adjustHeight();
             }, [value]);
 
@@ -1312,7 +1379,7 @@
                     return {
                         id: generateId(),
                         activities: cols[1] ? cols[1].split('\n').filter(x=>x.trim()).map(a => ({ id: generateId(), text: a.trim().replace(/^•\s*/, ''), detail: "", time: "", challengeResponse: "", expanded: false })) : [],
-                        materials: cols[2] ? cols[2].split('\n').filter(x=>x.trim()).map(m => ({ id: generateId(), name: m.trim(), url: "" })) : [],
+                        materials: cols[2] ? cols[2].split('\n').filter(x=>x.trim()).map(m => ({ id: generateId(), name: m.trim(), url: "", teacherUrl: "" })) : [],
                         comments: cols[3] || "",
                         completed: false
                     };
@@ -1412,6 +1479,16 @@
                         ...u, transversalMaterials: u.transversalMaterials.filter(m => m.id !== matId)
                     })
                 }));
+            };
+
+            const openSendAgendaForSession = (sessionNum) => {
+                setAgendaExportConfig({
+                    courseId: activeCourse?.id || '',
+                    unitId: activeUnit?.id || '',
+                    range: String(sessionNum),
+                    targetClasses: ""
+                });
+                setShowSendAgendaModal(true);
             };
 
             const sessionNumbers = {};
@@ -1768,13 +1845,22 @@
                                             <button onClick={() => addTransversalMaterial(activeCourse.id, activeUnit.id)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 transition font-bold shadow-sm flex items-center gap-1"><IconPlus/> Afegir Material Fix</button>
                                         </div>
                                         {activeUnit.transversalMaterials && activeUnit.transversalMaterials.length > 0 ? (
-                                            <div className="flex flex-wrap gap-3 mt-2">
+                                            <div className="flex flex-wrap gap-2 mt-2">
                                                 {activeUnit.transversalMaterials.map(mat => (
-                                                    <div key={mat.id} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-blue-200 shadow-sm text-sm group">
-                                                        <input value={mat.name} onChange={(e) => updateTransversalMaterial(activeCourse.id, activeUnit.id, mat.id, 'name', e.target.value)} className="font-semibold text-blue-800 bg-transparent outline-none w-32 border-b border-transparent focus:border-blue-300 transition-colors" placeholder="Nom..." />
-                                                        <input value={mat.url} onChange={(e) => updateTransversalMaterial(activeCourse.id, activeUnit.id, mat.id, 'url', e.target.value)} className="text-gray-500 bg-transparent outline-none w-36 text-xs border-b border-transparent focus:border-blue-300 transition-colors" placeholder="URL (opcional)..." />
-                                                        {mat.url && <a href={mat.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded hover:bg-blue-100 transition-colors" title="Obrir enllaç"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
-                                                        <button onClick={() => removeTransversalMaterial(activeCourse.id, activeUnit.id, mat.id)} className="text-red-400 hover:text-red-600 ml-1 opacity-0 group-hover:opacity-100 transition-opacity p-1"><IconTrash /></button>
+                                                    <div key={mat.id} className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-blue-200 shadow-sm text-sm group">
+                                                        {mat.url ? (
+                                                            <a href={mat.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:text-blue-900 hover:underline max-w-[180px] truncate" title={mat.url}>
+                                                                {mat.name || 'Material'}
+                                                            </a>
+                                                        ) : (
+                                                            <input value={mat.name} onChange={(e) => updateTransversalMaterial(activeCourse.id, activeUnit.id, mat.id, 'name', e.target.value)} className="font-semibold text-blue-800 bg-transparent outline-none w-28 border-b border-transparent focus:border-blue-300 transition-colors" placeholder="Nom..." />
+                                                        )}
+                                                        <button
+                                                            onClick={() => { const url = prompt(mat.url ? "Edita l'URL del material (deixa en blanc per eliminar-lo):" : "URL del material:", mat.url || ''); if(url !== null) updateTransversalMaterial(activeCourse.id, activeUnit.id, mat.id, 'url', url); }}
+                                                            className={`opacity-0 group-hover:opacity-100 text-xs p-0.5 rounded transition-opacity ${mat.url ? 'text-blue-500 hover:text-blue-700' : 'text-gray-400 hover:text-blue-600'}`}
+                                                            title={mat.url ? "Editar URL" : "Afegir URL"}
+                                                        >✏️</button>
+                                                        <button onClick={() => removeTransversalMaterial(activeCourse.id, activeUnit.id, mat.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded"><IconTrash /></button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1789,9 +1875,9 @@
                                             <thead className="sticky top-0 z-20 bg-gray-50 shadow-sm">
                                                 <tr className="border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
                                                     <th className="p-3 w-20 text-center font-semibold border-r border-gray-200">Sessió</th>
-                                                    <th className="p-3 w-[48%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
-                                                    <th className="p-3 w-[27%] font-semibold border-r border-gray-200">Materials</th>
-                                                    <th className="p-3 w-[25%] font-semibold">Comentaris / Observacions</th>
+                                                    <th className="p-3 w-[54%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
+                                                    <th className="p-3 w-[22%] font-semibold border-r border-gray-200">Materials</th>
+                                                    <th className="p-3 w-[21%] font-semibold">Comentaris / Observacions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1877,9 +1963,19 @@
                                                                     
                                                                     <td className="p-2 align-top border-r border-gray-200 group/session relative">
                                                                         <div className="flex flex-col items-center justify-start h-full mt-1 gap-0.5">
-                                                                            <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing mb-1 opacity-0 group-hover/session:opacity-100 transition-opacity" title="Arrossega per moure la sessió">
-                                                                                <IconGripVertical />
-                                                                            </span>
+                                                                            {/* Fila superior: arrossegar + tic */}
+                                                                            <div className="flex items-center gap-0.5 mb-0.5">
+                                                                                <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover/session:opacity-100 transition-opacity" title="Arrossega per moure la sessió">
+                                                                                    <IconGripVertical />
+                                                                                </span>
+                                                                                <button
+                                                                                    onClick={() => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'completed', !session.completed)}
+                                                                                    className={`p-0.5 rounded transition-colors ${session.completed ? 'text-green-600 bg-green-100 hover:bg-green-200' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`}
+                                                                                    title={session.completed ? 'Marcar com a pendent' : 'Marcar com a feta'}
+                                                                                >
+                                                                                    <IconCheck />
+                                                                                </button>
+                                                                            </div>
                                                                             <span className={`w-full text-center font-bold text-gray-700 block ${session.completed ? 'opacity-50' : ''}`}>
                                                                                 {sessionNum}
                                                                             </span>
@@ -1889,11 +1985,11 @@
                                                                                 </div>
                                                                             )}
                                                                             <button
-                                                                                onClick={() => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'completed', !session.completed)}
-                                                                                className={`mt-1 p-1 rounded transition-colors ${session.completed ? 'text-green-600 bg-green-100 hover:bg-green-200' : 'text-gray-300 hover:text-green-500 hover:bg-green-50'}`}
-                                                                                title={session.completed ? 'Marcar com a pendent' : 'Marcar com a feta'}
+                                                                                onClick={() => openSendAgendaForSession(sessionNum)}
+                                                                                className="mt-1 p-1 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors opacity-0 group-hover/session:opacity-100"
+                                                                                title={`Enviar sessió ${sessionNum} a l'Agenda`}
                                                                             >
-                                                                                <IconCheck />
+                                                                                <IconSend />
                                                                             </button>
                                                                             <button onClick={() => deleteSession(activeCourse.id, activeUnit.id, phase.id, session.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover/session:opacity-100" title="Eliminar sessió">
                                                                                 <IconTrash />
@@ -1964,7 +2060,7 @@
                                                                                                     updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'text', value: '' });
                                                                                                 }
                                                                                             }}
-                                                                                            className={`text-sm font-medium mt-0.5 w-full ${session.completed ? 'text-gray-500' : 'text-gray-800'}`}
+                                                                                            className={`text-sm font-bold mt-0.5 w-full ${session.completed ? 'text-gray-500' : 'text-gray-800'}`}
                                                                                         />
                                                                                         <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'delete', act.id)} className="ml-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold mt-0.5">×</button>
                                                                                     </div>
@@ -1972,11 +2068,11 @@
                                                                                     {act.expanded && (
                                                                                         <div className="ml-5 mt-2 mb-2 relative animate-[fadeIn_0.2s_ease-out]">
                                                                                             <div className="border-l-4 border-orange-400 bg-orange-50/80 rounded-r-lg shadow-sm p-3 flex flex-col space-y-3">
-                                                                                                <AutoTextarea 
-                                                                                                    value={act.detail} 
-                                                                                                    onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'detail', value: val })} 
-                                                                                                    placeholder="Descriu detalls de la dinàmica, pautes, agrupament..." 
-                                                                                                    className="text-sm text-gray-800 w-full leading-relaxed placeholder-gray-400" 
+                                                                                                <RichTextArea
+                                                                                                    value={act.detail}
+                                                                                                    onChange={(val) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'detail', value: val })}
+                                                                                                    placeholder="Descriu detalls de la dinàmica, pautes, agrupament..."
+                                                                                                    className="text-sm text-gray-800 w-full leading-relaxed min-h-[40px]"
                                                                                                 />
                                                                                                 
                                                                                                 <div className={`transition-all duration-300 rounded border flex flex-col p-2 ${act.challengeResponse && act.challengeResponse.trim() !== '' ? 'border-green-500 bg-transparent' : 'border-gray-200 bg-transparent hover:border-gray-300'}`}>
@@ -2027,29 +2123,38 @@
                                                                                                     >✏️</button>
                                                                                                 )}
 
-                                                                                                <button 
-                                                                                                    onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url); if(url !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }} 
+                                                                                                <button
+                                                                                                    onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url); if(url !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }}
                                                                                                     className={`text-xs px-1 hover:scale-110 transition-transform ${mat.url ? 'text-blue-600' : 'text-gray-300 hover:text-blue-400'}`} title="Afegir/Editar Enllaç"
                                                                                                 >🔗</button>
+                                                                                                {mat.teacherUrl ? (
+                                                                                                    <a href={mat.teacherUrl} target="_blank" rel="noopener noreferrer" className="text-xs px-1 hover:scale-110 transition-transform inline-block" title="Versió del docent (corregida)">🎓</a>
+                                                                                                ) : (
+                                                                                                    <button
+                                                                                                        onClick={() => { const url = prompt("URL de la versió del docent:"); if(url) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'teacherUrl', value: url }); }}
+                                                                                                        className="text-xs px-1 opacity-20 hover:opacity-100 transition-opacity"
+                                                                                                        title="Afegir versió del docent"
+                                                                                                    >🎓</button>
+                                                                                                )}
                                                                                                 <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
                                                                                             </div>
                                                                                         </div>
                                                                                     </li>
                                                                                 ))}
                                                                             </ul>
-                                                                            <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'add', { id: generateId(), name: "", url: "" })} className="text-xs text-orange-500 hover:text-orange-700 mt-3 flex items-center">
+                                                                            <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'add', { id: generateId(), name: "", url: "", teacherUrl: "" })} className="text-xs text-orange-500 hover:text-orange-700 mt-3 flex items-center">
                                                                                 <IconPlus /><span className="ml-1">Afegir material</span>
                                                                             </button>
                                                                         </div>
                                                                     </td>
                                                                     
-                                                                    <td className="p-0 align-top">
-                                                                        <div className="p-3">
+                                                                    <td className="p-0 align-top h-[1px]">
+                                                                        <div className="p-3 h-full flex flex-col">
                                                                             <textarea
                                                                                 value={session.comments}
                                                                                 onChange={(e) => updateSession(activeCourse.id, activeUnit.id, phase.id, session.id, 'comments', e.target.value)}
                                                                                 placeholder="Notes d'aplicació..."
-                                                                                className={`w-full min-h-[60px] max-h-[110px] text-sm italic resize-none outline-none bg-transparent overflow-y-auto custom-scroll ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
+                                                                                className={`w-full flex-1 min-h-[40px] text-sm italic resize-none outline-none bg-transparent overflow-y-auto custom-scroll ${session.completed ? 'text-gray-600 opacity-80' : 'text-orange-800'}`}
                                                                             />
                                                                         </div>
                                                                     </td>
