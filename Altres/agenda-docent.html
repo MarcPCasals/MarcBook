@@ -1614,10 +1614,12 @@
 
         const SessionNotepadModal = ({ dayIndex, slotId, className, slotLabel, planData, onClose, onSave }) => {
             const key = `${dayIndex}-${slotId}`;
+            const sessionTasks = (planData[key]?.tasks || []).filter(t => t && t.text && t.text.trim());
             const [data, setData] = useState({
                 notes: planData[key]?.notes || "",
                 materials: planData[key]?.materials || "",
-                links: planData[key]?.links || []
+                links: planData[key]?.links || [],
+                activityNotes: planData[key]?.activityNotes || []
             });
             const [linkInput, setLinkInput] = useState({ url: "", title: "" });
 
@@ -1643,6 +1645,22 @@
                 setData(prev => ({ ...prev, links: (prev.links || []).filter((_, i) => i !== index) }));
             };
 
+            const handleActivityNoteChange = (idx, value) => {
+                setData(prev => {
+                    const arr = [...(prev.activityNotes || [])];
+                    arr[idx] = value;
+                    return { ...prev, activityNotes: arr };
+                });
+            };
+
+            const copyToClipboard = (text) => {
+                if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(text).catch(() => { const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); });
+                } else {
+                    const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+                }
+            };
+
             return (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onClick={onClose}>
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
@@ -1658,26 +1676,42 @@
                         <div className="p-6 overflow-y-auto custom-scroll space-y-6">
                             <div className="space-y-2">
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                    <Icons.FileText size={16} className="text-orange-500" /> Notes de la Sessió
+                                    <Icons.FileText size={16} className="text-orange-500" /> Notes per Activitat
                                 </label>
-                                <textarea
-                                    className="w-full p-4 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 outline-none text-gray-700 bg-gray-50/50 min-h-[120px] transition-all"
-                                    placeholder="Escriu aquí les observacions, idees o punts clau..."
-                                    value={data.notes}
-                                    onChange={(e) => handleChange('notes', e.target.value)}
-                                />
+                                {sessionTasks.length === 0 ? (
+                                    <p className="text-sm text-gray-400 italic bg-gray-50/50 p-4 rounded-xl border border-gray-200 text-center">
+                                        No hi ha activitats en aquesta sessió. Afegeix-les a la vista setmanal per prendre notes per activitat.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {sessionTasks.map((task, i) => (
+                                            <div key={i} className="space-y-1">
+                                                <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5 flex-wrap">
+                                                    {task.time && <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0">{task.time}'</span>}
+                                                    <span>{task.text}</span>
+                                                </p>
+                                                <textarea
+                                                    className="w-full p-3 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-orange-200 focus:border-orange-300 outline-none text-gray-700 bg-gray-50/50 min-h-[60px] text-sm transition-all"
+                                                    placeholder="Notes per aquesta activitat..."
+                                                    value={(data.activityNotes || [])[i] || ""}
+                                                    onChange={(e) => handleActivityNoteChange(i, e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
-                                        <Icons.Table size={16} className="text-blue-500" /> Materials Necessaris
+                                        <Icons.Table size={16} className="text-blue-500" /> Comentaris i Observacions
                                     </label>
                                     <textarea
                                         className="w-full p-4 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 outline-none text-gray-700 bg-gray-50/50 min-h-[150px] transition-all"
-                                        placeholder="Llista de materials..."
-                                        value={data.materials}
-                                        onChange={(e) => handleChange('materials', e.target.value)}
+                                        placeholder="Comentaris generals de la sessió..."
+                                        value={data.notes}
+                                        onChange={(e) => handleChange('notes', e.target.value)}
                                     />
                                 </div>
 
@@ -1713,8 +1747,11 @@
                                                 const title = typeof l === 'string' ? l : (l.title || l.url);
                                                 return (
                                                     <div key={i} className="flex items-center justify-between bg-white p-2 rounded border border-gray-200 shadow-sm text-xs group hover:border-green-300 transition-colors">
-                                                        <a href={url} target="_blank" className="text-blue-600 hover:underline truncate max-w-[200px] block font-medium" title={url}>{title}</a>
-                                                        <button onClick={() => removeLink(i)} className="text-gray-300 hover:text-red-500 font-bold px-1 transition-colors">×</button>
+                                                        <a href={url} target="_blank" className="text-blue-600 hover:underline truncate max-w-[160px] block font-medium" title={url}>{title}</a>
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            <button onClick={() => copyToClipboard(url)} className="p-1 text-gray-300 hover:text-blue-500 transition-colors rounded" title="Copiar enllaç"><Icons.Copy /></button>
+                                                            <button onClick={() => removeLink(i)} className="text-gray-300 hover:text-red-500 font-bold px-1 transition-colors">×</button>
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -2080,7 +2117,7 @@
             );
         };
 
-        const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onBack, onAddToRadar, allWeeks, holidayWeeks, reminders, onSaveReminder }) => {
+        const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onBack, onAddToRadar, allWeeks, holidayWeeks, reminders, onSaveReminder, onChangeWeek }) => {
             const [planData, setPlanData] = useState(weeksData[weekId] || {});
             const [history, setHistory] = useState([]);
             const [future, setFuture] = useState([]);
@@ -2110,6 +2147,11 @@
             useEffect(() => {
                 setPlanData(weeksData[weekId] || {});
             }, [weekId, weeksData]);
+
+            useEffect(() => {
+                setHistory([]);
+                setFuture([]);
+            }, [weekId]);
 
             const updatePlanData = (newData, saveToHistory = true) => {
                 if (saveToHistory) {
@@ -2193,10 +2235,27 @@
                     ...currentCell,
                     notes: data.notes,
                     materials: data.materials,
-                    links: data.links
+                    links: data.links,
+                    activityNotes: data.activityNotes
                 };
                 updatePlanData(newData);
-            }
+            };
+
+            const handleClearSession = (d, s) => {
+                if (!confirm("Segur que vols eliminar tot el contingut d'aquesta sessió?\nActivitats, notes, comentaris i enllaços s'esborraran.")) return;
+                const newData = { ...planData };
+                const key = `${d}-${s}`;
+                newData[key] = {
+                    ...(newData[key] || {}),
+                    tasks: [{ text: "", time: "", status: null }, { text: "", time: "", status: null }, { text: "", time: "", status: null }],
+                    notes: "",
+                    materials: "",
+                    links: [],
+                    activityNotes: [],
+                    review: ""
+                };
+                updatePlanData(newData);
+            };
 
             const handleSmartPaste = (tasks) => {
                 if (!activeSmartPaste) return;
@@ -2400,6 +2459,18 @@
                 setShowCopyModal(true);
             };
 
+            const getNextActiveWeekId = (currentWid) => {
+                const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
+                if (currentIndex === -1) return null;
+                let nextIndex = currentIndex + 1;
+                while (nextIndex < allWeeks.length) {
+                    const w = allWeeks[nextIndex];
+                    if (!holidayWeeks.includes(w.id)) return w.id;
+                    nextIndex++;
+                }
+                return null;
+            };
+
             const executeCopy = (targetType) => {
                 const sourceTasks = getTasks(copySource.day, copySource.slot).filter(t => t.text.trim());
                 if (sourceTasks.length === 0) { alert("No hi ha activitats."); setShowCopyModal(false); return; }
@@ -2415,7 +2486,38 @@
                     handleTasksChange(found.d, found.s, combined);
                     alert("Copiades!");
                     setShowCopyModal(false);
-                } else { alert("Només es pot copiar dins la mateixa setmana actualment."); }
+                } else if (found && found.w === 1) {
+                    const nextWeekId = getNextActiveWeekId(weekId);
+                    if (nextWeekId) {
+                        const nextWeekData = weeksData[nextWeekId] || {};
+                        const targetKey = `${found.d}-${found.s}`;
+                        const existingTasks = getTasks(found.d, found.s, nextWeekData).filter(t => t.text.trim());
+                        const combined = [...existingTasks, ...sourceTasks.map(t => ({ ...t, status: null }))];
+                        while (combined.length < 3) combined.push({ text: "", time: "", status: null });
+                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...(nextWeekData[targetKey] || {}), tasks: combined } };
+                        onUpdateWeekData(nextWeekId, updatedNextWeekData);
+                        alert("Copiades a la setmana vinent!");
+                        setShowCopyModal(false);
+                    } else {
+                        alert("No s'ha trobat cap setmana lectiva disponible.");
+                    }
+                } else { alert("No s'ha trobat cap sessió de destí disponible."); }
+            };
+
+            const goToPrevWeek = () => {
+                if (!onChangeWeek) return;
+                const idx = allWeeks.findIndex(w => w.id === weekId);
+                for (let i = idx - 1; i >= 0; i--) {
+                    if (!holidayWeeks.includes(allWeeks[i].id)) { onChangeWeek(allWeeks[i].id); return; }
+                }
+            };
+
+            const goToNextWeek = () => {
+                if (!onChangeWeek) return;
+                const idx = allWeeks.findIndex(w => w.id === weekId);
+                for (let i = idx + 1; i < allWeeks.length; i++) {
+                    if (!holidayWeeks.includes(allWeeks[i].id)) { onChangeWeek(allWeeks[i].id); return; }
+                }
             };
 
             const generateHTML = (onlyRows = false) => {
@@ -2514,6 +2616,17 @@
                         <div className="flex items-center gap-3">
                             <button onClick={() => { onBack(); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-600"><Icons.ChevronLeft /></button>
                             <h2 className="font-bold text-gray-800">Planificador {config.schoolYear}</h2>
+                            {onChangeWeek && (() => {
+                                const wInfo = allWeeks.find(w => w.id === weekId);
+                                const label = wInfo ? `${wInfo.startDate.toLocaleDateString('ca-ES', { day: 'numeric', month: 'short' })} – ${wInfo.endDate.toLocaleDateString('ca-ES', { day: 'numeric', month: 'short' })}` : weekId;
+                                return (
+                                    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 ml-1">
+                                        <button onClick={goToPrevWeek} className="p-1.5 hover:bg-white rounded text-gray-600 transition-colors" title="Setmana anterior"><Icons.ChevronLeft /></button>
+                                        <span className="text-xs font-semibold text-gray-700 px-2 min-w-[120px] text-center">{label}</span>
+                                        <button onClick={goToNextWeek} className="p-1.5 hover:bg-white rounded text-gray-600 transition-colors" title="Setmana seguent"><Icons.ChevronRight /></button>
+                                    </div>
+                                );
+                            })()}
                         </div>
                         <button onClick={handleUndo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${history.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={history.length === 0} title="Desfer última acció"><Icons.Undo /></button>
                         <button onClick={handleRedo} className={`bg-gray-100 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-200 border border-gray-300 font-medium ${future.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={future.length === 0} title="Refer última acció desfeta"><Icons.Redo /></button>
@@ -2634,7 +2747,7 @@
                                                         </button>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <button onClick={() => setActiveSmartPaste({ day: d, slot: slot.id })} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Enganxar des de text"><Icons.Paste size={14} /></button>
+                                                        <button onClick={() => handleClearSession(d, slot.id)} className="p-0.5 rounded hover:bg-red-100/60 text-red-400 hover:text-red-600 transition-colors" title="Eliminar contingut de la sessió"><Icons.Trash /></button>
                                                         <button onClick={() => openCopyModal(d, slot.id, cid)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14} /></button>
                                                         <button onClick={() => { if (isZzz) { handleStatusChange(d, slot.id, null); } else { handleZzzAction(d, slot.id, cid); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors reactivate-btn ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14} /></button>
                                                         <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
@@ -3069,7 +3182,23 @@
             const handleSessionNotepadSave = (wId, dayIndex, slotId, data) => {
                 const wData = { ...(weeksData[wId] || {}) };
                 const k = `${dayIndex}-${slotId}`;
-                wData[k] = { ...wData[k], notes: data.notes, materials: data.materials, links: data.links };
+                wData[k] = { ...wData[k], notes: data.notes, materials: data.materials, links: data.links, activityNotes: data.activityNotes };
+                updatePlanData(wId, wData);
+            };
+
+            const handleClearSession = (wId, d, s) => {
+                if (!confirm("Segur que vols eliminar tot el contingut d'aquesta sessió?\nActivitats, notes, comentaris i enllaços s'esborraran.")) return;
+                const wData = { ...(weeksData[wId] || {}) };
+                const key = `${d}-${s}`;
+                wData[key] = {
+                    ...(wData[key] || {}),
+                    tasks: [{ text: "", time: "", status: null }, { text: "", time: "", status: null }, { text: "", time: "", status: null }],
+                    notes: "",
+                    materials: "",
+                    links: [],
+                    activityNotes: [],
+                    review: ""
+                };
                 updatePlanData(wId, wData);
             };
 
@@ -3349,7 +3478,7 @@
 
             // NOU DISSENY AMB FLEXBOX PER EVITAR QUE EL HEADER TAPI LA BARRA LATERAL
             return (
-                <div className="max-w-[1500px] mx-auto p-4 fade-in pb-20 flex flex-col xl:flex-row gap-6 items-start">
+                <div className="max-w-[1500px] mx-auto p-4 fade-in pb-20 flex flex-col xl:flex-row gap-6">
 
                     {/* COLUMNA ESQUERRA (Contingut Principal) */}
                     <div className="flex-1 min-w-0 w-full">
@@ -3435,7 +3564,7 @@
                                                                     </button>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <button onClick={() => setActiveSmartPaste({ wId: sess.weekId, day: sess.dayIndex, slot: sess.slot.id })} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Enganxar des de text"><Icons.Paste size={14} /></button>
+                                                                    <button onClick={() => handleClearSession(sess.weekId, sess.dayIndex, sess.slot.id)} className="p-0.5 rounded hover:bg-red-100/60 text-red-400 hover:text-red-600 transition-colors" title="Eliminar contingut de la sessió"><Icons.Trash /></button>
                                                                     <button onClick={() => openCopyModal(sess.weekId, sess.dayIndex, sess.slot.id, classId)} className="p-0.5 rounded hover:bg-white/20 text-gray-700 transition-colors" title="Copiar"><Icons.Copy size={14} /></button>
                                                                     <button onClick={() => { if (isZzz) { handleStatusChange(sess.weekId, sess.dayIndex, sess.slot.id, null); } else { handleZzzAction(sess.weekId, sess.dayIndex, sess.slot.id); } }} className={`p-0.5 rounded hover:bg-white/20 transition-colors reactivate-btn ${isZzz ? 'text-gray-800' : ''}`} title={isZzz ? "Reactivar" : "No fer classe"}><Icons.Moon size={14} /></button>
                                                                     <span className="bg-white/90 px-1.5 rounded text-[10px] min-w-[24px] text-center font-mono font-bold text-gray-700">{totalTime}'</span>
@@ -3700,6 +3829,7 @@
             const [selectedClassIds, setSelectedClassIds] = useState(() => findBestClassIds());
             const [selectedUTId, setSelectedUTId] = useState(() => detectedUT?.id || "");
             const [startFromDate, setStartFromDate] = useState(todayStr);
+            const [allowOverwrite, setAllowOverwrite] = useState(false);
 
             const targetNamesFromData = Array.isArray(data.targetClasses) ? data.targetClasses : [];
             const showNoMatchWarning = selectedClassIds.length === 0 && targetNamesFromData.length > 0;
@@ -3716,8 +3846,8 @@
                 return { startDate, endDate };
             };
 
-            // Helper: obté sessions buides per a una classe en un rang de dates
-            const getEmptySessions = (classId, startDate, endDate, dataToCheck) => {
+            // Helper: obté sessions disponibles per a una classe en un rang de dates
+            const getEmptySessions = (classId, startDate, endDate, dataToCheck, overwrite = false) => {
                 const result = [];
                 allWeeks.forEach(w => {
                     if (holidayWeeks?.includes(w.id)) return;
@@ -3741,7 +3871,7 @@
                                 (typeof cellData.notes === 'string' && cellData.notes.trim()) ||
                                 (typeof cellData.materials === 'string' && cellData.materials.trim()) ||
                                 (Array.isArray(cellData.links) && cellData.links.length > 0);
-                            if (hasContent) continue;
+                            if (hasContent && !overwrite) continue;
                             result.push({ weekId: w.id, dayIndex: d, slotId: slot.id, dateStr });
                         }
                     }
@@ -3757,7 +3887,7 @@
                 let firstDate = null, totalWillFill = 0, totalWillMiss = 0;
                 const classDetails = [];
                 selectedClassIds.forEach(classId => {
-                    const empty = getEmptySessions(classId, startDate, endDate, weeksData);
+                    const empty = getEmptySessions(classId, startDate, endDate, weeksData, allowOverwrite);
                     const willFill = Math.min(numSessions, empty.length);
                     const willMiss = Math.max(0, numSessions - empty.length);
                     totalWillFill += willFill;
@@ -3770,7 +3900,7 @@
                 });
                 const selectedUT = sortedUTs.find(u => u.id === selectedUTId);
                 setPreviewInfo({ numSessions, firstDate, utName: selectedUT?.name || 'Tot el curs', endDateStr: selectedUT?.date || null, classDetails, totalWillFill, totalWillMiss });
-            }, [selectedClassIds, selectedUTId, startFromDate]);
+            }, [selectedClassIds, selectedUTId, startFromDate, allowOverwrite]);
 
             // Lògica d'inserció per a una sola classe — rep startDate i endDate com a paràmetres
             const processImportForClass = (classId, currentWeeksData, startDate, endDate) => {
@@ -3818,12 +3948,13 @@
                             (typeof cellData.notes === 'string' && cellData.notes.trim() !== '') ||
                             (typeof cellData.materials === 'string' && cellData.materials.trim() !== '') ||
                             (Array.isArray(cellData.links) && cellData.links.length > 0);
-                        if (sess.isHoliday || sess.isZzz || hasExistingContent) { agendaIndex++; continue; }
+                        if (sess.isHoliday || sess.isZzz || (hasExistingContent && !allowOverwrite)) { agendaIndex++; continue; }
 
                         const wId = sess.weekId;
                         const cellKey = `${sess.dayIndex}-${sess.slotId}`;
                         if (!newWeeksData[wId]) newWeeksData[wId] = {};
                         if (!newWeeksData[wId][cellKey]) newWeeksData[wId][cellKey] = {};
+                        if (allowOverwrite && hasExistingContent) newWeeksData[wId][cellKey] = {};
                         const currentCell = newWeeksData[wId][cellKey];
 
                         const activitiesArr = Array.isArray(pSess.activities) ? pSess.activities : [];
@@ -4094,15 +4225,31 @@
                                 )
                             )}
 
-                            <p className="text-xs text-gray-400">L'assistent col·locarà les sessions als espais buits sense sobreescriure el que ja tens escrit.</p>
+                            <div className={`mt-3 rounded-lg border p-3 ${allowOverwrite ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={allowOverwrite}
+                                        onChange={(e) => {
+                                            if (e.target.checked && !confirm("⚠️ Atenció: En activar el mode sobreescriptura, es reemplaçarà tot el contingut de les sessions que ja estiguin programades en el rang seleccionat.\n\nEl contingut existent (activitats, notes, comentaris, enllaços) S'ESBORRARÀ i es substituirà per les dades del Programador.\n\nVols continuar?")) { return; }
+                                            setAllowOverwrite(e.target.checked);
+                                        }}
+                                        className="w-4 h-4 accent-amber-500"
+                                    />
+                                    <span className={`text-sm font-semibold ${allowOverwrite ? 'text-amber-800' : 'text-gray-600'}`}>
+                                        {allowOverwrite ? '⚠️ Sobreescriptura activada — s\'esborraran sessions amb contingut' : 'Sobreescriure sessions ja programades'}
+                                    </span>
+                                </label>
+                                {!allowOverwrite && <p className="text-xs text-gray-400 mt-1 ml-7">Per defecte, les sessions amb contingut es salten.</p>}
+                            </div>
                         </div>
 
                         {/* Botons d'acció */}
                         <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100 shrink-0">
                             <button onClick={onClose} disabled={processing} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors">Cancel·lar</button>
-                            <button onClick={handleProcess} disabled={processing || selectedClassIds.length === 0} className="px-6 py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2">
+                            <button onClick={handleProcess} disabled={processing || selectedClassIds.length === 0} className={`px-6 py-2 text-white rounded-lg font-bold disabled:opacity-50 transition-colors flex items-center gap-2 ${allowOverwrite ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
                                 {processing ? <span className="loader-spinner !w-4 !h-4 !border-2 !mb-0 !border-white !border-t-purple-300"></span> : <Icons.Check />}
-                                {processing ? 'Processant...' : 'Importar Ara'}
+                                {processing ? 'Processant...' : (allowOverwrite ? 'Importar i Sobreescriure' : 'Importar Ara')}
                             </button>
                         </div>
                     </div>
@@ -4299,7 +4446,7 @@
 
                     {view === 'dashboard' && <DashboardScreen config={config} radar={radar} setRadar={(r) => { setRadar(r); saveData(config, weeksData, r, holidayWeeks, reminders); }} onSelectWeek={handleSelectWeek} onSelectClassView={handleSelectClassView} onExport={handleExport} onImport={handleImport} goToConfig={() => setView('config')} onReset={handleReset} onSaveConfig={setConfig} holidayWeeks={holidayWeeks} onToggleHoliday={handleToggleHoliday} reminders={reminders} onSaveReminder={handleSaveReminder} weeksData={weeksData} />}
 
-                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} />}
+                    {view === 'planner' && <PlannerScreen weekId={currentWeekId} weeksData={weeksData} config={config} onConfigChange={setConfig} onUpdateWeekData={handleUpdateWeekData} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} reminders={reminders} onSaveReminder={handleSaveReminder} onChangeWeek={(id) => setCurrentWeekId(id)} />}
 
                     {view === 'class_planner' && <ClassPlannerScreen classId={selectedClassId} config={config} weeksData={weeksData} allWeeks={generateAllWeeks(config.schoolYear)} holidayWeeks={holidayWeeks} onUpdateWeekData={handleUpdateWeekData} onConfigChange={setConfig} onBack={() => setView('dashboard')} onAddToRadar={(t, d) => setRadar([...radar, { id: Date.now(), text: t, date: d, fromTask: true, completedAt: null }])} reminders={reminders} onSaveReminder={handleSaveReminder} />}
 
