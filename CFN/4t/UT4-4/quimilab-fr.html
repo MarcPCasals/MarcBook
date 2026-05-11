@@ -857,6 +857,7 @@ footer a { color: inherit; text-decoration: none; border-bottom: 1px dotted; }
 
   <!-- Toolbar -->
   <div class="toolbar">
+    <button class="tool-btn" id="nom-toggle-btn" onclick="toggleNomenclatureMode()">📚 <strong>IUPAC</strong> / Stock</button>
     <button class="tool-btn" onclick="openModal('pt-modal')">⚛️ Tableau périodique</button>
     <button class="tool-btn" onclick="openDichotomousKey()">🌳 Clé dichotomique</button>
     <button class="tool-btn" onclick="openWeeklyReport()">📅 Rapport hebdomadaire</button>
@@ -928,6 +929,7 @@ footer a { color: inherit; text-decoration: none; border-bottom: 1px dotted; }
       <div class="question-meta">
         <span class="fam-tag" id="q-fam-tag"></span>
         <span id="q-mode-label"></span>
+        <span id="nom-mode-badge" style="margin-left:auto; font-size:0.72rem; color:var(--text-muted); align-self:center; white-space:nowrap;"></span>
       </div>
       <div id="q-exam-progress"></div>
       <div class="q-prompt" id="q-prompt"></div>
@@ -1182,155 +1184,207 @@ footer a { color: inherit; text-decoration: none; border-bottom: 1px dotted; }
 const COMPUESTOS = {
   oxido: [
     { f:'CaO', fp:'CaO', n:'oxyde de calcium', alts:[],
+      nameStock:'oxyde de calcium', altsStock:[],
       ctx:'Poussière de ciment des chantiers du Pas de la Casa.', imp:'particulado' },
     { f:'SO<sub>2</sub>', fp:'SO2', n:'dioxyde de soufre',
       alts:['oxyde de soufre (IV)'],
+      nameStock:'dioxyde de soufre', altsStock:['oxyde de soufre (IV)'],
       ctx:'Principal précurseur des pluies acides dans les vallées des Pyrénées.', imp:'lluvia_acida' },
     { f:'SO<sub>3</sub>', fp:'SO3', n:'trioxyde de soufre',
       alts:['oxyde de soufre (VI)'],
+      nameStock:'trioxyde de soufre', altsStock:['oxyde de soufre (VI)'],
       ctx:'Génère de l\'acide sulfurique qui corrode les églises romanes.', imp:'lluvia_acida' },
     { f:'CO', fp:'CO', n:'monoxyde de carbone', alts:['oxyde de carbone (II)'],
+      nameStock:'monoxyde de carbone', altsStock:['oxyde de carbone (II)'],
       ctx:'Gaz d\'échappement de véhicules mal réglés — gaz toxique inodore.', imp:'invernadero' },
     { f:'CO<sub>2</sub>', fp:'CO2', n:'dioxyde de carbone',
       alts:['oxyde de carbone (IV)'],
+      nameStock:'dioxyde de carbone', altsStock:['oxyde de carbone (IV)'],
       ctx:'Gaz à effet de serre — chaudières et trafic routier.', imp:'invernadero' },
     { f:'Al<sub>2</sub>O<sub>3</sub>', fp:'Al2O3', n:'trioxyde de dialuminium',
       alts:['oxyde d\'aluminium'],
+      nameStock:'oxyde d\'aluminium', altsStock:['trioxyde de dialuminium'],
       ctx:'Couche protectrice naturelle de l\'aluminium.', imp:'persistente' },
     { f:'N<sub>2</sub>O', fp:'N2O', n:'monoxyde de diazote',
       alts:['oxyde d\'azote (I)'],
+      nameStock:'monoxyde de diazote', altsStock:['oxyde d\'azote (I)'],
       ctx:'Puissant gaz à effet de serre — anciens systèmes de chauffage.', imp:'invernadero' },
     { f:'N<sub>2</sub>O<sub>3</sub>', fp:'N2O3', n:'trioxyde de diazote',
       alts:['oxyde d\'azote (III)'],
+      nameStock:'trioxyde de diazote', altsStock:['oxyde d\'azote (III)'],
       ctx:'Précurseur des pluies acides.', imp:'lluvia_acida' },
     { f:'N<sub>2</sub>O<sub>5</sub>', fp:'N2O5', n:'pentoxyde de diazote',
       alts:['oxyde d\'azote (V)'],
+      nameStock:'pentoxyde de diazote', altsStock:['oxyde d\'azote (V)'],
       ctx:'Forme de l\'acide nitrique en se dissolvant dans l\'eau de pluie.', imp:'lluvia_acida' },
     { f:'Fe<sub>2</sub>O<sub>3</sub>', fp:'Fe2O3', n:'trioxyde de difer',
       alts:['oxyde de fer (III)'],
+      nameStock:'oxyde de fer (III)', altsStock:['trioxyde de difer'],
       ctx:'La rouille — couleur rouge caractéristique.', imp:'persistente' },
     { f:'FeO', fp:'FeO', n:'oxyde de fer',
       alts:['monoxyde de fer','oxyde de fer (II)'],
+      nameStock:'oxyde de fer (II)', altsStock:['oxyde de fer','monoxyde de fer'],
       ctx:'Composant des minerais de fer.', imp:'persistente' },
     { f:'MgO', fp:'MgO', n:'oxyde de magnésium', alts:[],
+      nameStock:'oxyde de magnésium', altsStock:[],
       ctx:'Réfractaire industriel.', imp:'particulado' },
     { f:'ZnO', fp:'ZnO', n:'oxyde de zinc', alts:[],
+      nameStock:'oxyde de zinc', altsStock:[],
       ctx:'Pigment blanc et filtre UV dans les crèmes solaires.', imp:'persistente' },
     { f:'CuO', fp:'CuO', n:'oxyde de cuivre', alts:['oxyde de cuivre (II)'],
+      nameStock:'oxyde de cuivre (II)', altsStock:['oxyde de cuivre'],
       ctx:'Patine vert-noir du cuivre oxydé.', imp:'metal_pesado' },
     { f:'MnO<sub>2</sub>', fp:'MnO2', n:'dioxyde de manganèse',
       alts:['oxyde de manganèse (IV)'],
+      nameStock:'oxyde de manganèse (IV)', altsStock:['dioxyde de manganèse'],
       ctx:'Utilisé dans les piles alcalines.', imp:'persistente' },
     { f:'SO', fp:'SO', n:'monoxyde de soufre', alts:['oxyde de soufre (II)'],
+      nameStock:'monoxyde de soufre', altsStock:['oxyde de soufre (II)'],
       ctx:'Gaz détecté dans des espaces confinés réduisant la visibilité.', imp:'lluvia_acida' },
   ],
 
   peroxido: [
     { f:'H<sub>2</sub>O<sub>2</sub>', fp:'H2O2', n:'peroxyde d\'hydrogène',
       alts:['peroxyde de dihydrogène','eau oxygénée'],
+      nameStock:'peroxyde d\'hydrogène', altsStock:['peroxyde de dihydrogène','eau oxygénée'],
       ctx:'L\'eau oxygénée — désinfectant domestique.', imp:'desinfectante' },
     { f:'Na<sub>2</sub>O<sub>2</sub>', fp:'Na2O2', n:'peroxyde de disodium',
       alts:['peroxyde de sodium'],
+      nameStock:'peroxyde de sodium', altsStock:['peroxyde de disodium'],
       ctx:'Utilisé dans les sous-marins pour régénérer l\'oxygène.', imp:'desinfectante' },
     { f:'BaO<sub>2</sub>', fp:'BaO2', n:'peroxyde de baryum', alts:[],
+      nameStock:'peroxyde de baryum', altsStock:[],
       ctx:'Réactif de laboratoire pour produire de l\'eau oxygénée.', imp:'persistente' },
     { f:'K<sub>2</sub>O<sub>2</sub>', fp:'K2O2', n:'peroxyde de dipotassium',
       alts:['peroxyde de potassium'],
+      nameStock:'peroxyde de potassium', altsStock:['peroxyde de dipotassium'],
       ctx:'Génère de l\'oxygène dans les systèmes à circuit fermé.', imp:'desinfectante' },
     { f:'CaO<sub>2</sub>', fp:'CaO2', n:'peroxyde de calcium', alts:[],
+      nameStock:'peroxyde de calcium', altsStock:[],
       ctx:'Utilisé pour oxygéner les sols pollués et les eaux stagnantes.', imp:'desinfectante' },
   ],
 
   hidruro: [
     { f:'CaH<sub>2</sub>', fp:'CaH2', n:'hydrure de calcium',
       alts:['dihydrure de calcium'],
+      nameStock:'hydrure de calcium', altsStock:['dihydrure de calcium'],
       ctx:'Réactif industriel — libère H₂ au contact de l\'eau.', imp:'persistente' },
     { f:'LiH', fp:'LiH', n:'hydrure de lithium', alts:[],
+      nameStock:'hydrure de lithium', altsStock:[],
       ctx:'Source d\'hydrogène en chimie fine.', imp:'persistente' },
     { f:'NaH', fp:'NaH', n:'hydrure de sodium', alts:[],
+      nameStock:'hydrure de sodium', altsStock:[],
       ctx:'Base très forte utilisée en laboratoire.', imp:'persistente' },
     { f:'KH', fp:'KH', n:'hydrure de potassium', alts:[],
+      nameStock:'hydrure de potassium', altsStock:[],
       ctx:'Réactif en synthèse organique.', imp:'persistente' },
     { f:'AlH<sub>3</sub>', fp:'AlH3', n:'trihydrure d\'aluminium',
       alts:['hydrure d\'aluminium'],
+      nameStock:'hydrure d\'aluminium', altsStock:['trihydrure d\'aluminium'],
       ctx:'Étudié pour le stockage d\'hydrogène comme carburant propre.', imp:'desinfectante' },
     { f:'MgH<sub>2</sub>', fp:'MgH2', n:'hydrure de magnésium',
       alts:['dihydrure de magnésium'],
+      nameStock:'hydrure de magnésium', altsStock:['dihydrure de magnésium'],
       ctx:'Candidat pour les véhicules à hydrogène.', imp:'desinfectante' },
     { f:'SrH<sub>2</sub>', fp:'SrH2', n:'hydrure de strontium',
       alts:['dihydrure de strontium'],
+      nameStock:'hydrure de strontium', altsStock:['dihydrure de strontium'],
       ctx:'Réactif de laboratoire.', imp:'persistente' },
     { f:'BeH<sub>2</sub>', fp:'BeH2', n:'hydrure de béryllium',
       alts:['dihydrure de béryllium'],
+      nameStock:'hydrure de béryllium', altsStock:['dihydrure de béryllium'],
       ctx:'Recherche aérospatiale.', imp:'metal_pesado' },
     { f:'FeH<sub>3</sub>', fp:'FeH3', n:'trihydrure de fer',
       alts:['hydrure de fer (III)'],
+      nameStock:'hydrure de fer (III)', altsStock:['trihydrure de fer'],
       ctx:'Composé instable de laboratoire.', imp:'persistente' },
     { f:'BaH<sub>2</sub>', fp:'BaH2', n:'hydrure de baryum',
       alts:['dihydrure de baryum'],
+      nameStock:'hydrure de baryum', altsStock:['dihydrure de baryum'],
       ctx:'Réactif de laboratoire — réagit avec l\'eau en libérant H₂.', imp:'persistente' },
   ],
 
   hidracido: [
     { f:'HCl', fp:'HCl', n:'chlorure d\'hydrogène',
       alts:['acide chlorhydrique'],
+      nameStock:'chlorure d\'hydrogène', altsStock:['acide chlorhydrique'],
       ctx:'Dans l\'eau : acide chlorhydrique — rejets industriels dans la rivière Valira.', imp:'acidificacion' },
     { f:'HF', fp:'HF', n:'fluorure d\'hydrogène',
       alts:['acide fluorhydrique'],
+      nameStock:'fluorure d\'hydrogène', altsStock:['acide fluorhydrique'],
       ctx:'Traitement du verre — très corrosif.', imp:'acidificacion' },
     { f:'HBr', fp:'HBr', n:'bromure d\'hydrogène',
       alts:['acide bromhydrique'],
+      nameStock:'bromure d\'hydrogène', altsStock:['acide bromhydrique'],
       ctx:'Réactif industriel.', imp:'acidificacion' },
     { f:'HI', fp:'HI', n:'iodure d\'hydrogène',
       alts:['acide iodhydrique'],
+      nameStock:'iodure d\'hydrogène', altsStock:['acide iodhydrique'],
       ctx:'Synthèse organique.', imp:'acidificacion' },
     { f:'H<sub>2</sub>S', fp:'H2S', n:'sulfure de dihydrogène',
       alts:['acide sulfhydrique','sulfure d\'hydrogène'],
+      nameStock:'sulfure de dihydrogène', altsStock:['acide sulfhydrique','sulfure d\'hydrogène'],
       ctx:'Odeur d\'œufs pourris près des stations d\'épuration — endommage la pierre romane.', imp:'lluvia_acida' },
     { f:'H<sub>2</sub>Se', fp:'H2Se', n:'séléniure de dihydrogène',
       alts:['acide sélénhydrique','séléniure d\'hydrogène'],
+      nameStock:'séléniure de dihydrogène', altsStock:['acide sélénhydrique','séléniure d\'hydrogène'],
       ctx:'Traces dans les lixiviats de décharges — très toxique.', imp:'persistente' },
   ],
 
   sal: [
     { f:'NaCl', fp:'NaCl', n:'chlorure de sodium', alts:[],
+      nameStock:'chlorure de sodium', altsStock:[],
       ctx:'Sel de déneigement — salinise les aquifères des routes de montagne.', imp:'salinizacion' },
     { f:'KI', fp:'KI', n:'iodure de potassium', alts:[],
+      nameStock:'iodure de potassium', altsStock:[],
       ctx:'Supplément d\'iode et réactif de laboratoire.', imp:'desinfectante' },
     { f:'CdI<sub>2</sub>', fp:'CdI2', n:'diiodure de cadmium',
       alts:['iodure de cadmium'],
+      nameStock:'iodure de cadmium', altsStock:['diiodure de cadmium'],
       ctx:'Métal lourd toxique — ruissellement industriel détecté.', imp:'metal_pesado' },
     { f:'LiF', fp:'LiF', n:'fluorure de lithium', alts:[],
+      nameStock:'fluorure de lithium', altsStock:[],
       ctx:'Déchet de batteries — toxique pour la flore.', imp:'persistente' },
     { f:'AuBr<sub>3</sub>', fp:'AuBr3', n:'tribromure d\'or',
       alts:['bromure d\'or (III)'],
+      nameStock:'bromure d\'or (III)', altsStock:['tribromure d\'or'],
       ctx:'Microdéchet de la joaillerie andorrane.', imp:'metal_pesado' },
     { f:'Na<sub>2</sub>S', fp:'Na2S', n:'sulfure de disodium',
       alts:['sulfure de sodium'],
+      nameStock:'sulfure de sodium', altsStock:['sulfure de disodium'],
       ctx:'Stations de traitement des eaux.', imp:'persistente' },
     { f:'SnS<sub>2</sub>', fp:'SnS2', n:'disulfure d\'étain',
       alts:['sulfure d\'étain (IV)'],
+      nameStock:'sulfure d\'étain (IV)', altsStock:['disulfure d\'étain'],
       ctx:'Pigment qui s\'accumule dans les boues de rivière.', imp:'metal_pesado' },
     { f:'CaCl<sub>2</sub>', fp:'CaCl2', n:'dichlorure de calcium',
       alts:['chlorure de calcium'],
+      nameStock:'chlorure de calcium', altsStock:['dichlorure de calcium'],
       ctx:'Antiverglas pour routes — moins agressif que NaCl.', imp:'salinizacion' },
     { f:'AlCl<sub>3</sub>', fp:'AlCl3', n:'trichlorure d\'aluminium',
       alts:['chlorure d\'aluminium'],
+      nameStock:'chlorure d\'aluminium', altsStock:['trichlorure d\'aluminium'],
       ctx:'Floculant dans les stations de potabilisation.', imp:'desinfectante' },
     { f:'FeCl<sub>3</sub>', fp:'FeCl3', n:'trichlorure de fer',
       alts:['chlorure de fer (III)'],
+      nameStock:'chlorure de fer (III)', altsStock:['trichlorure de fer'],
       ctx:'Floculant dans le traitement des eaux.', imp:'desinfectante' },
     { f:'KBr', fp:'KBr', n:'bromure de potassium', alts:[],
+      nameStock:'bromure de potassium', altsStock:[],
       ctx:'Autrefois utilisé comme sédatif.', imp:'persistente' },
     { f:'PbI<sub>2</sub>', fp:'PbI2', n:'diiodure de plomb',
       alts:['iodure de plomb (II)'],
+      nameStock:'iodure de plomb (II)', altsStock:['diiodure de plomb'],
       ctx:'Pigment jaune interdit en raison de sa toxicité.', imp:'metal_pesado' },
     { f:'NaF', fp:'NaF', n:'fluorure de sodium', alts:[],
+      nameStock:'fluorure de sodium', altsStock:[],
       ctx:'Dentifrices et prévention des caries.', imp:'desinfectante' },
     { f:'MgF<sub>2</sub>', fp:'MgF2', n:'difluorure de magnésium',
       alts:['fluorure de magnésium'],
+      nameStock:'fluorure de magnésium', altsStock:['difluorure de magnésium'],
       ctx:'Composant optique transparent aux UV.', imp:'persistente' },
     { f:'ZnS', fp:'ZnS', n:'sulfure de zinc', alts:[],
+      nameStock:'sulfure de zinc', altsStock:[],
       ctx:'Pigment luminescent.', imp:'metal_pesado' },
   ],
 
@@ -1338,77 +1392,103 @@ const COMPUESTOS = {
     // Hydroxydes
     { f:'NaOH', fp:'NaOH', n:'hydroxyde de sodium',
       alts:['soude caustique'],
+      nameStock:'hydroxyde de sodium', altsStock:['soude caustique'],
       ctx:'Déboucheurs domestiques — base très corrosive.', imp:'acidificacion' },
     { f:'KOH', fp:'KOH', n:'hydroxyde de potassium',
       alts:['potasse caustique'],
+      nameStock:'hydroxyde de potassium', altsStock:['potasse caustique'],
       ctx:'Rejets dans des zones de nettoyage industriel — modifie le pH de l\'eau.', imp:'acidificacion' },
     { f:'Ca(OH)<sub>2</sub>', fp:'Ca(OH)2', n:'hydroxyde de calcium',
       alts:['chaux éteinte','dihydroxyde de calcium'],
+      nameStock:'hydroxyde de calcium', altsStock:['chaux éteinte','dihydroxyde de calcium'],
       ctx:'Neutralise l\'acidité des lacs pyrénéens.', imp:'desinfectante' },
     { f:'Al(OH)<sub>3</sub>', fp:'Al(OH)3', n:'hydroxyde d\'aluminium',
       alts:['trihydroxyde d\'aluminium'],
+      nameStock:'hydroxyde d\'aluminium', altsStock:['trihydroxyde d\'aluminium'],
       ctx:'Antiacide et traitement de l\'eau acide.', imp:'desinfectante' },
     { f:'Fe(OH)<sub>3</sub>', fp:'Fe(OH)3', n:'hydroxyde de fer (III)',
       alts:['trihydroxyde de fer'],
+      nameStock:'hydroxyde de fer (III)', altsStock:['trihydroxyde de fer'],
       ctx:'Précipité brun dans les eaux riches en fer.', imp:'persistente' },
     { f:'Mg(OH)<sub>2</sub>', fp:'Mg(OH)2', n:'hydroxyde de magnésium',
       alts:['dihydroxyde de magnésium','lait de magnésie'],
+      nameStock:'hydroxyde de magnésium', altsStock:['dihydroxyde de magnésium','lait de magnésie'],
       ctx:'Antiacide — lait de magnésie.', imp:'desinfectante' },
     { f:'Ba(OH)<sub>2</sub>', fp:'Ba(OH)2', n:'hydroxyde de baryum',
       alts:['dihydroxyde de baryum'],
+      nameStock:'hydroxyde de baryum', altsStock:['dihydroxyde de baryum'],
       ctx:'Réactif de laboratoire.', imp:'metal_pesado' },
     { f:'Cu(OH)<sub>2</sub>', fp:'Cu(OH)2', n:'hydroxyde de cuivre (II)',
       alts:['dihydroxyde de cuivre'],
+      nameStock:'hydroxyde de cuivre (II)', altsStock:['dihydroxyde de cuivre'],
       ctx:'Fongicide agricole — couleur bleue.', imp:'metal_pesado' },
     // Oxosels
     { f:'KNO<sub>3</sub>', fp:'KNO3', n:'nitrate de potassium', alts:[],
+      nameStock:'nitrate de potassium', altsStock:[],
       ctx:'Engrais — s\'infiltre dans les aquifères.', imp:'eutrofizacion' },
     { f:'AgNO<sub>2</sub>', fp:'AgNO2', n:'nitrite d\'argent', alts:[],
+      nameStock:'nitrite d\'argent', altsStock:[],
       ctx:'Sel oxydant détecté dans les lixiviats de décharges.', imp:'metal_pesado' },
     { f:'KHCO<sub>3</sub>', fp:'KHCO3', n:'bicarbonate de potassium',
       alts:['hydrogénocarbonate de potassium'],
+      nameStock:'bicarbonate de potassium', altsStock:['hydrogénocarbonate de potassium'],
       ctx:'Antiacide et agent de boulangerie.', imp:'desinfectante' },
     { f:'K<sub>2</sub>CO<sub>3</sub>', fp:'K2CO3', n:'carbonate de potassium', alts:[],
+      nameStock:'carbonate de potassium', altsStock:[],
       ctx:'Fabrication de savons et de verre.', imp:'desinfectante' },
     { f:'Zn(NO<sub>3</sub>)<sub>2</sub>', fp:'Zn(NO3)2', n:'nitrate de zinc',
       alts:['dinitrate de zinc'],
+      nameStock:'nitrate de zinc', altsStock:['dinitrate de zinc'],
       ctx:'Rejet industriel détecté dans le Valira.', imp:'eutrofizacion' },
     { f:'Sr(ClO)<sub>2</sub>', fp:'Sr(ClO)2', n:'hypochlorite de strontium',
       alts:['dihypochlorite de strontium'],
+      nameStock:'hypochlorite de strontium', altsStock:['dihypochlorite de strontium'],
       ctx:'Désinfection dans les stations de potabilisation.', imp:'desinfectante' },
     { f:'Mg(ClO)<sub>2</sub>', fp:'Mg(ClO)2', n:'hypochlorite de magnésium',
       alts:['dihypochlorite de magnésium'],
+      nameStock:'hypochlorite de magnésium', altsStock:['dihypochlorite de magnésium'],
       ctx:'Désinfection de l\'eau — utilisé dans les piscines.', imp:'desinfectante' },
     { f:'CaCO<sub>3</sub>', fp:'CaCO3', n:'carbonate de calcium', alts:[],
+      nameStock:'carbonate de calcium', altsStock:[],
       ctx:'Marbre et calcaire — bouclier naturel contre les pluies acides.', imp:'desinfectante' },
     { f:'AgNO<sub>3</sub>', fp:'AgNO3', n:'nitrate d\'argent', alts:[],
+      nameStock:'nitrate d\'argent', altsStock:[],
       ctx:'Calibration du détecteur de sels d\'argent.', imp:'metal_pesado' },
     { f:'CuSO<sub>4</sub>', fp:'CuSO4', n:'sulfate de cuivre',
       alts:['sulfate de cuivre (II)'],
+      nameStock:'sulfate de cuivre (II)', altsStock:['sulfate de cuivre'],
       ctx:'Fongicide agricole — couleur bleue éclatante.', imp:'metal_pesado' },
     { f:'Na<sub>3</sub>PO<sub>4</sub>', fp:'Na3PO4', n:'phosphate de sodium',
       alts:['phosphate de trisodium'],
+      nameStock:'phosphate de sodium', altsStock:['phosphate de trisodium'],
       ctx:'Détergents — provoque l\'eutrophisation des rivières.', imp:'eutrofizacion' },
     { f:'KMnO<sub>4</sub>', fp:'KMnO4', n:'permanganate de potassium', alts:[],
+      nameStock:'permanganate de potassium', altsStock:[],
       ctx:'Désinfectant — couleur violet intense.', imp:'desinfectante' },
     // Oxoacides
     { f:'H<sub>2</sub>SO<sub>4</sub>', fp:'H2SO4', n:'acide sulfurique',
       alts:['sulfate d\'hydrogène','sulfate de dihydrogène'],
+      nameStock:'acide sulfurique', altsStock:['sulfate d\'hydrogène','sulfate de dihydrogène'],
       ctx:'Pluies acides — corrode le granite et le marbre andorrans.', imp:'lluvia_acida' },
     { f:'HNO<sub>3</sub>', fp:'HNO3', n:'acide nitrique',
       alts:['nitrate d\'hydrogène'],
+      nameStock:'acide nitrique', altsStock:['nitrate d\'hydrogène'],
       ctx:'Composant majeur des pluies acides.', imp:'lluvia_acida' },
     { f:'HNO<sub>2</sub>', fp:'HNO2', n:'acide nitreux',
       alts:['nitrite d\'hydrogène'],
+      nameStock:'acide nitreux', altsStock:['nitrite d\'hydrogène'],
       ctx:'Intermédiaire dans le cycle de l\'azote.', imp:'eutrofizacion' },
     { f:'H<sub>2</sub>SO<sub>3</sub>', fp:'H2SO3', n:'acide sulfureux',
       alts:['sulfite d\'hydrogène','sulfite de dihydrogène'],
+      nameStock:'acide sulfureux', altsStock:['sulfite d\'hydrogène','sulfite de dihydrogène'],
       ctx:'Se forme quand SO₂ réagit avec l\'eau.', imp:'lluvia_acida' },
     { f:'HClO', fp:'HClO', n:'acide hypochloreux',
       alts:['hypochlorite d\'hydrogène'],
+      nameStock:'acide hypochloreux', altsStock:['hypochlorite d\'hydrogène'],
       ctx:'Forme active de l\'eau de Javel lors de la désinfection.', imp:'desinfectante' },
     { f:'H<sub>2</sub>CO<sub>3</sub>', fp:'H2CO3', n:'acide carbonique',
       alts:['carbonate d\'hydrogène','carbonate de dihydrogène'],
+      nameStock:'acide carbonique', altsStock:['carbonate d\'hydrogène','carbonate de dihydrogène'],
       ctx:'CO₂ dissous — acidifie les océans et les rivières.', imp:'acidificacion' },
   ]
 };
@@ -1589,6 +1669,18 @@ function saveState() {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//   5b. NOMENCLATURE MODE — IUPAC systématique vs Stock
+// ════════════════════════════════════════════════════════════════════
+let nomenclatureMode = localStorage.getItem('nomenclatureMode') || 'iupac';
+
+function getCurrentName(comp) {
+  return nomenclatureMode === 'stock' ? (comp.nameStock ?? comp.n) : comp.n;
+}
+function getCurrentAlts(comp) {
+  return nomenclatureMode === 'stock' ? (comp.altsStock ?? comp.alts) : comp.alts;
+}
+
+// ════════════════════════════════════════════════════════════════════
 //   6. SPACED REPETITION (Leitner)
 // ════════════════════════════════════════════════════════════════════
 const BOX_HOURS = [0, 6, 24, 72, 168, 336];
@@ -1686,7 +1778,7 @@ function clsAnswer(fam) {
     document.getElementById('cls-feedback').innerHTML = `
       <div class="feedback correct fade-in">
         <button class="feedback-close" onclick="clsCloseFeedback()">×</button>
-        ✅ <strong>${clsCurrent.f}</strong> est ${FAM_LABELS.find(f=>f.id===fam).label} : ${clsCurrent.n}.
+        ✅ <strong>${clsCurrent.f}</strong> est ${FAM_LABELS.find(f=>f.id===fam).label} : ${getCurrentName(clsCurrent)}.
         <span class="xp-gain">+3 XP</span>
         <span class="context">${clsCurrent.ctx}</span>
         <div class="next-btn-wrap">
@@ -1702,7 +1794,7 @@ function clsAnswer(fam) {
     document.getElementById('cls-feedback').innerHTML = `
       <div class="feedback incorrect fade-in">
         <button class="feedback-close" onclick="clsCloseFeedback()">×</button>
-        ❌ C'est <strong>${correctLabel.label}</strong> : ${clsCurrent.f} = ${clsCurrent.n}.
+        ❌ C'est <strong>${correctLabel.label}</strong> : ${clsCurrent.f} = ${getCurrentName(clsCurrent)}.
         <span class="context">${clsCurrent.ctx}</span>
         <div class="next-btn-wrap">
           <button class="next-btn" onclick="clsNext()">Suivant →</button>
@@ -1875,8 +1967,8 @@ function normalizeFormula(str) {
 function checkName(input, comp) {
   const n = normalize(input);
   if (!n) return false;
-  if (normalize(comp.n) === n) return true;
-  return comp.alts.some(a => normalize(a) === n);
+  if (normalize(getCurrentName(comp)) === n) return true;
+  return getCurrentAlts(comp).some(a => normalize(a) === n);
 }
 
 function checkFormula(input, comp) {
@@ -2155,11 +2247,11 @@ function nextQuestion() {
     disp.style.fontSize = '';
     disp.innerHTML = comp.f;
     disp.classList.remove('pop'); void disp.offsetWidth; disp.classList.add('pop');
-    renderTextInput('Écris le nom IUPAC...', false);
+    renderTextInput(nomenclatureMode === 'stock' ? 'Écris le nom Stock...' : 'Écris le nom IUPAC systématique...', false);
   } else if (mode === 'B') {
     document.getElementById('q-prompt').textContent = 'Quelle est la formule chimique ?';
     const disp = document.getElementById('q-display');
-    disp.innerHTML = comp.n.charAt(0).toUpperCase() + comp.n.slice(1);
+    disp.innerHTML = getCurrentName(comp).charAt(0).toUpperCase() + getCurrentName(comp).slice(1);
     disp.style.fontSize = 'clamp(1.2rem, 4vw, 1.6rem)';
     disp.classList.remove('pop'); void disp.offsetWidth; disp.classList.add('pop');
     renderTextInput('Écris la formule (ex. : Al2O3 ou Al₂O₃)...', true);
@@ -2256,7 +2348,7 @@ function renderMultipleChoice(comp) {
   const shuffled = pool.sort(() => Math.random() - 0.5);
   for (const c of shuffled) {
     if (distractors.length >= 3) break;
-    if (!distractors.find(d => d.n === c.n)) distractors.push(c);
+    if (!distractors.find(d => getCurrentName(d) === getCurrentName(c))) distractors.push(c);
   }
   while (distractors.length < 3) {
     let extra = [];
@@ -2265,7 +2357,7 @@ function renderMultipleChoice(comp) {
         extra = extra.concat(COMPUESTOS[id]);
       }
     });
-    extra = extra.filter(c => c.fp !== comp.fp && !distractors.find(d=>d.n===c.n));
+    extra = extra.filter(c => c.fp !== comp.fp && !distractors.find(d=>getCurrentName(d)===getCurrentName(c)));
     if (!extra.length) break;
     distractors.push(extra[Math.floor(Math.random()*extra.length)]);
   }
@@ -2274,7 +2366,7 @@ function renderMultipleChoice(comp) {
   const area = document.getElementById('q-input-area');
   area.innerHTML = `<div class="mc-grid">${
     options.map(o =>
-      `<button class="mc-btn" data-correct="${o.fp===comp.fp?'1':'0'}" onclick="submitMCAnswer(this, '${o.fp.replace(/'/g,"\\'")}')">${o.n.charAt(0).toUpperCase()+o.n.slice(1)}</button>`
+      `<button class="mc-btn" data-correct="${o.fp===comp.fp?'1':'0'}" onclick="submitMCAnswer(this, '${o.fp.replace(/'/g,"\\'")}')">${getCurrentName(o).charAt(0).toUpperCase()+getCurrentName(o).slice(1)}</button>`
     ).join('')
   }</div>`;
 }
@@ -2392,7 +2484,7 @@ function showCorrectFeedback(comp, xpGain, skipNextBtn) {
   fb.innerHTML = `
     <div class="feedback correct fade-in">
       <button class="feedback-close" onclick="closeFeedback()">×</button>
-      ✅ <strong>${comp.f}</strong> = ${comp.n}
+      ✅ <strong>${comp.f}</strong> = <span class="q-comp-name">${getCurrentName(comp)}</span>
       <span class="xp-gain">+${xpGain} XP</span>
       <span class="context">${comp.ctx}</span>
       ${impHtml}
@@ -2406,7 +2498,7 @@ function showIncorrectFeedback(comp, mode) {
   fb.innerHTML = `
     <div class="feedback incorrect fade-in">
       <button class="feedback-close" onclick="closeFeedback()">×</button>
-      ❌ La bonne réponse était : <strong>${comp.f}</strong> = ${comp.n}
+      ❌ La bonne réponse était : <strong>${comp.f}</strong> = <span class="q-comp-name">${getCurrentName(comp)}</span>
       <span class="context">${comp.ctx}</span>
     </div>`;
   // Explica tu error solo en modos A y B
@@ -2518,7 +2610,7 @@ function showExamFeedback(correct) {
   fb.innerHTML = `
     <div class="feedback ${correct ? 'correct' : 'incorrect'} fade-in">
       <button class="feedback-close" onclick="closeFeedback()">×</button>
-      ${correct ? '✅' : '❌'} ${correct ? 'Correct !' : 'C\'était :'} <strong>${comp.f}</strong> = ${comp.n}
+      ${correct ? '✅' : '❌'} ${correct ? 'Correct !' : 'C\'était :'} <strong>${comp.f}</strong> = <span class="q-comp-name">${getCurrentName(comp)}</span>
       <div class="next-btn-wrap"><button class="next-btn" onclick="examAdvance()">Suivant →</button></div>
     </div>`;
 }
@@ -2604,7 +2696,7 @@ function finishExam() {
   if (wrongs.length) {
     html += `<h3 style="font-size:0.95rem; margin-top: 1rem;">Composés à réviser :</h3><ul style="font-size:0.88rem;">`;
     wrongs.forEach(w => {
-      html += `<li><strong>${w.f}</strong> = ${w.n}</li>`;
+      html += `<li><strong>${w.f}</strong> = ${getCurrentName(w)}</li>`;
     });
     html += `</ul>`;
   }
@@ -2649,7 +2741,7 @@ function showHint() {
   const { comp, mode } = currentQuestion;
   let hint = '';
   if (mode === 'A' || mode === 'C') {
-    const words = comp.n.split(' ');
+    const words = getCurrentName(comp).split(' ');
     hint = `Commence par <strong>« ${words[0].charAt(0).toUpperCase()+words[0].slice(1)} »</strong> · ${words.length} mot${words.length>1?'s':''}.`;
   } else {
     const m = comp.fp.match(/^[A-Z][a-z]?/);
@@ -3124,7 +3216,7 @@ function exportProgress() {
   allComps.sort((a,b) => (a.card.hits/a.card.seen) - (b.card.hits/b.card.seen));
   allComps.slice(0,15).forEach(c => {
     const acc2 = Math.round(c.card.hits/c.card.seen*100);
-    html += `<tr><td>${c.fp}</td><td>${c.n}</td><td>${c.card.seen}</td><td>${acc2}%</td></tr>`;
+    html += `<tr><td>${c.fp}</td><td>${getCurrentName(c)}</td><td>${c.card.seen}</td><td>${acc2}%</td></tr>`;
   });
   if (!allComps.length) html += '<tr><td colspan="4" style="text-align:center; color:#999;">Aucun — bon travail !</td></tr>';
   html += `</tbody></table>
@@ -3314,6 +3406,64 @@ function resetAll() {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//   NOMENCLATURE MODE TOGGLE
+// ════════════════════════════════════════════════════════════════════
+function toggleNomenclatureMode() {
+  nomenclatureMode = nomenclatureMode === 'iupac' ? 'stock' : 'iupac';
+  localStorage.setItem('nomenclatureMode', nomenclatureMode);
+  updateNomBtn();
+  updateNomModeBadge();
+  refreshCurrentQuestion();
+}
+
+function updateNomBtn() {
+  const btn = document.getElementById('nom-toggle-btn');
+  if (!btn) return;
+  if (nomenclatureMode === 'stock') {
+    btn.innerHTML = '📚 IUPAC / <strong>Stock</strong>';
+    btn.style.background = 'var(--xp)';
+    btn.style.color = 'white';
+    btn.style.borderColor = 'var(--xp)';
+  } else {
+    btn.innerHTML = '📚 <strong>IUPAC</strong> / Stock';
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }
+}
+
+function updateNomModeBadge() {
+  const badge = document.getElementById('nom-mode-badge');
+  if (!badge) return;
+  badge.textContent = nomenclatureMode === 'stock' ? 'Mode : Stock' : 'Mode : IUPAC';
+}
+
+function refreshCurrentQuestion() {
+  if (!currentQuestion || !currentQuestion.comp) return;
+  const { comp, mode } = currentQuestion;
+  updateNomModeBadge();
+  if (mode === 'A') {
+    const input = document.getElementById('q-input');
+    if (input && !input.disabled) {
+      input.placeholder = nomenclatureMode === 'stock' ? 'Écris le nom Stock...' : 'Écris le nom IUPAC systématique...';
+    }
+  } else if (mode === 'B') {
+    const disp = document.getElementById('q-display');
+    if (disp) {
+      const nm = getCurrentName(comp);
+      disp.innerHTML = nm.charAt(0).toUpperCase() + nm.slice(1);
+    }
+  } else if (mode === 'C' && !trainerAwaitingNext) {
+    renderMultipleChoice(comp);
+  }
+
+  // Update compound name in any visible feedback
+  document.querySelectorAll('#q-feedback-area .q-comp-name').forEach(span => {
+    span.textContent = getCurrentName(comp);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
 //   26. PESTAÑAS
 // ════════════════════════════════════════════════════════════════════
 document.querySelectorAll('.tab').forEach(tab => {
@@ -3336,6 +3486,8 @@ updateClsStats();
 renderPT();
 renderLevels();
 updateRankBar(); // also calls updateFilterVisibility (C4)
+updateNomBtn();
+updateNomModeBadge();
 
 // Tutorial al inicio si no se ha visto
 if (!state.tutorial_seen) {
