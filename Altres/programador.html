@@ -508,6 +508,11 @@
             const [showManualDropdown, setShowManualDropdown] = useState(false);
             const [showNuvolDropdown, setShowNuvolDropdown] = useState(false);
             const [showUnitMenu, setShowUnitMenu] = useState(false);
+            const [editingMatId, setEditingMatId] = useState(null);
+
+            // Refs per controlar que el drag només s'inicia des del grip handle
+            const lastGripMousedownRef = useRef(null);
+            const lastActivityGripMousedownRef = useRef(null);
 
             useEffect(() => {
                 localStorage.setItem('programacio_agenda_url', agendaUrl);
@@ -938,6 +943,45 @@
                         })
                     })
                 }));
+            };
+
+            const moveActivityToSession = (courseId, unitId, srcPhaseId, srcSessionId, tgtPhaseId, tgtSessionId, actId, beforeActId) => {
+                setData(prev => {
+                    const newData = JSON.parse(JSON.stringify(prev));
+                    const course = newData.find(c => c.id === courseId);
+                    if (!course) return prev;
+                    const unit = course.units.find(u => u.id === unitId);
+                    if (!unit) return prev;
+
+                    let movedActivity = null;
+                    for (const phase of unit.phases) {
+                        if (phase.id === srcPhaseId) {
+                            for (const session of phase.sessions) {
+                                if (session.id === srcSessionId) {
+                                    const idx = session.activities.findIndex(a => a.id === actId);
+                                    if (idx >= 0) movedActivity = session.activities.splice(idx, 1)[0];
+                                }
+                            }
+                        }
+                    }
+                    if (!movedActivity) return prev;
+
+                    for (const phase of unit.phases) {
+                        if (phase.id === tgtPhaseId) {
+                            for (const session of phase.sessions) {
+                                if (session.id === tgtSessionId) {
+                                    if (beforeActId) {
+                                        const idx = session.activities.findIndex(a => a.id === beforeActId);
+                                        session.activities.splice(idx >= 0 ? idx : session.activities.length, 0, movedActivity);
+                                    } else {
+                                        session.activities.push(movedActivity);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return newData;
+                });
             };
 
             const reorderActivities = (courseId, unitId, phaseId, sessionId, draggedId, targetId) => {
@@ -1878,9 +1922,9 @@
                                             <thead className="sticky top-0 z-20 bg-gray-50 shadow-sm">
                                                 <tr className="border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500">
                                                     <th className="p-3 w-20 text-center font-semibold border-r border-gray-200">Sessió</th>
-                                                    <th className="p-3 w-[46%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
-                                                    <th className="p-3 w-[20%] font-semibold border-r border-gray-200">Materials</th>
-                                                    <th className="p-3 w-[31%] font-semibold">Observacions per activitat</th>
+                                                    <th className="p-3 w-[50%] font-semibold border-r border-gray-200">Descripció d'activitats</th>
+                                                    <th className="p-3 w-[28%] font-semibold border-r border-gray-200">Materials</th>
+                                                    <th className="p-3 w-[19%] font-semibold">Comentaris / Observacions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1938,12 +1982,15 @@
                                                             const totalSessionTime = session.activities.reduce((acc, act) => acc + (parseInt(act.time) || 0), 0);
 
                                                             return (
-                                                                <tr 
-                                                                    key={session.id} 
-                                                                    draggable
+                                                                <tr
+                                                                    key={session.id}
+                                                                    draggable={false}
                                                                     onDragStart={(e) => {
+                                                                        if (lastGripMousedownRef.current !== session.id) { e.preventDefault(); return; }
+                                                                        lastGripMousedownRef.current = null;
                                                                         e.dataTransfer.setData('session/plain', session.id);
                                                                     }}
+                                                                    onDragEnd={() => { lastGripMousedownRef.current = null; }}
                                                                     onDragOver={(e) => {
                                                                         e.preventDefault();
                                                                         if(e.dataTransfer.types.includes('session/plain')) {
@@ -1968,7 +2015,18 @@
                                                                         <div className="flex flex-col items-center justify-start h-full mt-1 gap-0.5">
                                                                             {/* Fila superior: arrossegar + tic */}
                                                                             <div className="flex items-center gap-0.5 mb-0.5">
-                                                                                <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover/session:opacity-100 transition-opacity" title="Arrossega per moure la sessió">
+                                                                                <span
+                                                                                    className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing opacity-0 group-hover/session:opacity-100 transition-opacity"
+                                                                                    title="Arrossega per moure la sessió"
+                                                                                    onMouseDown={(e) => {
+                                                                                        lastGripMousedownRef.current = session.id;
+                                                                                        e.currentTarget.closest('tr')?.setAttribute('draggable', 'true');
+                                                                                    }}
+                                                                                    onMouseUp={() => {
+                                                                                        lastGripMousedownRef.current = null;
+                                                                                        document.querySelectorAll('tr[draggable="true"]').forEach(t => t.setAttribute('draggable', 'false'));
+                                                                                    }}
+                                                                                >
                                                                                     <IconGripVertical />
                                                                                 </span>
                                                                                 <button
@@ -2004,17 +2062,21 @@
                                                                         {session.activities.map((act) => {
                                                                             const hasDetailOrChallenge = (act.detail && act.detail.trim() !== '') || (act.challengeResponse && act.challengeResponse.trim() !== '');
                                                                             return (
-                                                                                <div 
-                                                                                    key={act.id} 
+                                                                                <div
+                                                                                    key={act.id}
+                                                                                    data-act-drag
                                                                                     className="mb-2 last:mb-0 group relative transition-all"
-                                                                                    draggable
+                                                                                    draggable={false}
                                                                                     onDragStart={(e) => {
+                                                                                        if (lastActivityGripMousedownRef.current !== act.id) { e.preventDefault(); e.stopPropagation(); return; }
+                                                                                        lastActivityGripMousedownRef.current = null;
                                                                                         e.stopPropagation();
-                                                                                        e.dataTransfer.setData('activity/plain', act.id);
+                                                                                        e.dataTransfer.setData('activity/plain', JSON.stringify({ actId: act.id, sessionId: session.id, phaseId: phase.id }));
                                                                                         e.currentTarget.style.opacity = '0.5';
                                                                                     }}
                                                                                     onDragEnd={(e) => {
                                                                                         e.currentTarget.style.opacity = '1';
+                                                                                        lastActivityGripMousedownRef.current = null;
                                                                                     }}
                                                                                     onDragOver={(e) => {
                                                                                         e.preventDefault();
@@ -2030,12 +2092,34 @@
                                                                                         e.preventDefault();
                                                                                         e.stopPropagation();
                                                                                         e.currentTarget.classList.remove('border-t-2', 'border-orange-400');
-                                                                                        const draggedId = e.dataTransfer.getData('activity/plain');
-                                                                                        if(draggedId) reorderActivities(activeCourse.id, activeUnit.id, phase.id, session.id, draggedId, act.id);
+                                                                                        const raw = e.dataTransfer.getData('activity/plain');
+                                                                                        if (!raw) return;
+                                                                                        try {
+                                                                                            const { actId, sessionId: srcSess, phaseId: srcPhase } = JSON.parse(raw);
+                                                                                            if (srcSess === session.id) {
+                                                                                                reorderActivities(activeCourse.id, activeUnit.id, phase.id, session.id, actId, act.id);
+                                                                                            } else {
+                                                                                                moveActivityToSession(activeCourse.id, activeUnit.id, srcPhase, srcSess, phase.id, session.id, actId, act.id);
+                                                                                            }
+                                                                                        } catch(_) { reorderActivities(activeCourse.id, activeUnit.id, phase.id, session.id, raw, act.id); }
                                                                                     }}
                                                                                 >
                                                                                     <div className="flex items-start">
-                                                                                        <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing mr-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><IconGripVertical /></span>
+                                                                                        <span
+                                                                                            className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing mr-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                                            onMouseDown={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                lastActivityGripMousedownRef.current = act.id;
+                                                                                                const actDiv = e.currentTarget.closest('[data-act-drag]');
+                                                                                                if (actDiv) actDiv.setAttribute('draggable', 'true');
+                                                                                            }}
+                                                                                            onMouseUp={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                lastActivityGripMousedownRef.current = null;
+                                                                                                const actDiv = e.currentTarget.closest('[data-act-drag]');
+                                                                                                if (actDiv) actDiv.setAttribute('draggable', 'false');
+                                                                                            }}
+                                                                                        ><IconGripVertical /></span>
                                                                                         <span 
                                                                                             className={`${hasDetailOrChallenge ? 'text-orange-500 hover:text-orange-700' : 'text-gray-300 hover:text-gray-400'} mr-1 mt-1.5 cursor-pointer select-none text-xs transition-colors shrink-0`} 
                                                                                             onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'update', { itemId: act.id, field: 'expanded', value: !act.expanded })}
@@ -2093,55 +2177,135 @@
                                                                                 </div>
                                                                             );
                                                                         })}
+                                                                        {/* Zona de drop al final de la sessió per activitats inter-sessió */}
+                                                                        <div
+                                                                            className="min-h-[12px] w-full rounded mt-1 transition-all"
+                                                                            onDragOver={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                if (e.dataTransfer.types.includes('activity/plain')) {
+                                                                                    e.currentTarget.classList.add('bg-orange-100', 'border', 'border-dashed', 'border-orange-400', 'min-h-[24px]');
+                                                                                }
+                                                                            }}
+                                                                            onDragLeave={(e) => {
+                                                                                e.currentTarget.classList.remove('bg-orange-100', 'border', 'border-dashed', 'border-orange-400', 'min-h-[24px]');
+                                                                            }}
+                                                                            onDrop={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                e.currentTarget.classList.remove('bg-orange-100', 'border', 'border-dashed', 'border-orange-400', 'min-h-[24px]');
+                                                                                const raw = e.dataTransfer.getData('activity/plain');
+                                                                                if (!raw) return;
+                                                                                try {
+                                                                                    const { actId, sessionId: srcSess, phaseId: srcPhase } = JSON.parse(raw);
+                                                                                    if (srcSess !== session.id) {
+                                                                                        moveActivityToSession(activeCourse.id, activeUnit.id, srcPhase, srcSess, phase.id, session.id, actId, null);
+                                                                                    }
+                                                                                } catch(_) {}
+                                                                            }}
+                                                                        />
                                                                         <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'activities', 'add', { id: generateId(), text: "Nova activitat", detail: "", time: "", challengeResponse: "", comments: "", expanded: true })} className="text-xs text-orange-500 hover:text-orange-700 mt-2 flex items-center">
                                                                             <IconPlus /><span className="ml-1">Afegir activitat</span>
                                                                         </button>
                                                                     </td>
                                                                     
                                                                     <td className="p-0 align-top border-r border-gray-200 relative h-[1px]">
+                                                                        {editingMatId && <div className="fixed inset-0 z-20" onClick={() => setEditingMatId(null)} />}
                                                                         <div className="h-full w-full overflow-y-auto custom-scroll p-3 flex flex-col">
-                                                                            <ul className="space-y-2">
+                                                                            <ul className="space-y-1.5">
                                                                                 {session.materials.map((mat) => (
-                                                                                    <li key={mat.id} className={`text-sm group flex items-start ${session.completed ? 'opacity-70' : ''}`}>
-                                                                                        <span className="text-gray-400 mr-2 mt-1 select-none">•</span>
-                                                                                        <div className="flex-1 flex flex-col min-w-0">
-                                                                                            <div className="flex items-center space-x-1">
-                                                                                                {mat.url ? (
-                                                                                                    <a href={mat.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-blue-600 hover:text-blue-800 underline font-medium truncate" title={`Obrir: ${mat.url}`}>
-                                                                                                        {mat.name || 'Enllaç'}
-                                                                                                    </a>
-                                                                                                ) : (
-                                                                                                    <AutoTextarea 
-                                                                                                        value={mat.name} 
-                                                                                                        onChange={(v) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: v })} 
-                                                                                                        className="flex-1 text-sm text-gray-700 font-medium" 
-                                                                                                        placeholder="Nom del material" 
-                                                                                                    />
-                                                                                                )}
-                                                                                                
-                                                                                                {mat.url && (
-                                                                                                    <button 
-                                                                                                        onClick={() => { const newName = prompt("Edita el nom del material:", mat.name); if(newName !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: newName }); }} 
-                                                                                                        className="text-xs px-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity" title="Editar Nom"
-                                                                                                    >✏️</button>
-                                                                                                )}
-
+                                                                                    <li key={mat.id} className={`text-sm group relative ${session.completed ? 'opacity-70' : ''}`}>
+                                                                                        <div className="flex items-center gap-1 min-w-0">
+                                                                                            <span className="text-gray-400 shrink-0 select-none">•</span>
+                                                                                            {/* Nom: link si té URL, input si no */}
+                                                                                            {mat.url ? (
+                                                                                                <a href={mat.url} target="_blank" rel="noopener noreferrer"
+                                                                                                   className="flex-1 text-sm text-blue-600 hover:text-blue-800 underline font-medium truncate"
+                                                                                                   title={mat.url}>
+                                                                                                    {mat.name || 'Enllaç'}
+                                                                                                </a>
+                                                                                            ) : (
+                                                                                                <AutoTextarea
+                                                                                                    value={mat.name}
+                                                                                                    onChange={(v) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: v })}
+                                                                                                    className="flex-1 text-sm text-gray-700 font-medium"
+                                                                                                    placeholder="Nom del material"
+                                                                                                />
+                                                                                            )}
+                                                                                            {/* 🎓 link directe si té teacherUrl */}
+                                                                                            {mat.teacherUrl && (
+                                                                                                <a href={mat.teacherUrl} target="_blank" rel="noopener noreferrer"
+                                                                                                   className="shrink-0 text-xs leading-none" title="Versió del docent">🎓</a>
+                                                                                            )}
+                                                                                            {/* Botó + per enganxar URL del portapapers (només quan no hi ha URL) */}
+                                                                                            {!mat.url && (
                                                                                                 <button
-                                                                                                    onClick={() => { const url = prompt("Introdueix l'enllaç del material (deixa en blanc per eliminar-lo):", mat.url); if(url !== null) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url }); }}
-                                                                                                    className={`text-xs px-1 hover:scale-110 transition-transform ${mat.url ? 'text-blue-600' : 'text-gray-300 hover:text-blue-400'}`} title="Afegir/Editar Enllaç"
-                                                                                                >🔗</button>
-                                                                                                {mat.teacherUrl ? (
-                                                                                                    <a href={mat.teacherUrl} target="_blank" rel="noopener noreferrer" className="text-xs px-1 hover:scale-110 transition-transform inline-block" title="Versió del docent (corregida)">🎓</a>
-                                                                                                ) : (
-                                                                                                    <button
-                                                                                                        onClick={() => { const url = prompt("URL de la versió del docent:"); if(url) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'teacherUrl', value: url }); }}
-                                                                                                        className="text-xs px-1 opacity-20 hover:opacity-100 transition-opacity"
-                                                                                                        title="Afegir versió del docent"
-                                                                                                    >🎓</button>
-                                                                                                )}
-                                                                                                <button onClick={() => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 px-1 font-bold">×</button>
-                                                                                            </div>
+                                                                                                    onClick={async () => {
+                                                                                                        try {
+                                                                                                            const text = await navigator.clipboard.readText();
+                                                                                                            const trimmed = text.trim();
+                                                                                                            if (trimmed) {
+                                                                                                                updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: trimmed });
+                                                                                                            }
+                                                                                                        } catch(_) {
+                                                                                                            const url = prompt("Enganxa l'URL del material:");
+                                                                                                            if (url) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: url.trim() });
+                                                                                                        }
+                                                                                                    }}
+                                                                                                    className="shrink-0 w-5 h-5 flex items-center justify-center text-xs font-bold text-orange-500 hover:text-white hover:bg-orange-500 border border-orange-300 rounded transition-colors"
+                                                                                                    title="Enganxar URL del portapapers"
+                                                                                                >+</button>
+                                                                                            )}
+                                                                                            {/* Llapis d'edició (apareix en hover) */}
+                                                                                            <button
+                                                                                                onClick={(e) => { e.stopPropagation(); setEditingMatId(editingMatId === mat.id ? null : mat.id); }}
+                                                                                                className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity text-xs leading-none px-0.5"
+                                                                                                title="Editar material"
+                                                                                            >✏️</button>
                                                                                         </div>
+                                                                                        {/* Panell d'edició inline */}
+                                                                                        {editingMatId === mat.id && (
+                                                                                            <div className="relative z-30 mt-1 ml-3 bg-white rounded-lg shadow-xl border border-gray-200 p-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+                                                                                                <div>
+                                                                                                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-0.5">Nom</label>
+                                                                                                    <input
+                                                                                                        value={mat.name}
+                                                                                                        onChange={(e) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'name', value: e.target.value })}
+                                                                                                        className="w-full text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400"
+                                                                                                        placeholder="Nom del material"
+                                                                                                        autoFocus
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-0.5">Enllaç principal</label>
+                                                                                                    <input
+                                                                                                        value={mat.url}
+                                                                                                        onChange={(e) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'url', value: e.target.value })}
+                                                                                                        className="w-full text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400"
+                                                                                                        placeholder="https://..."
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-0.5">🎓 Versió docent</label>
+                                                                                                    <input
+                                                                                                        value={mat.teacherUrl || ''}
+                                                                                                        onChange={(e) => updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'teacherUrl', value: e.target.value })}
+                                                                                                        className="w-full text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400"
+                                                                                                        placeholder="https://..."
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <div className="flex justify-between items-center pt-1 border-t border-gray-100">
+                                                                                                    <button
+                                                                                                        onClick={() => { updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'delete', mat.id); setEditingMatId(null); }}
+                                                                                                        className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
+                                                                                                    ><IconTrash /> Eliminar</button>
+                                                                                                    <button
+                                                                                                        onClick={() => setEditingMatId(null)}
+                                                                                                        className="text-xs text-gray-600 hover:text-gray-800 font-medium bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded"
+                                                                                                    >Tancar</button>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )}
                                                                                     </li>
                                                                                 ))}
                                                                             </ul>
