@@ -509,6 +509,7 @@
             const [showNuvolDropdown, setShowNuvolDropdown] = useState(false);
             const [showUnitMenu, setShowUnitMenu] = useState(false);
             const [editingMatId, setEditingMatId] = useState(null);
+            const [editingMatPos, setEditingMatPos] = useState({ top: 0, left: 0 });
 
             // Refs per controlar que el drag només s'inicia des del grip handle
             const lastGripMousedownRef = useRef(null);
@@ -2232,11 +2233,6 @@
                                                                                                     placeholder="Nom del material"
                                                                                                 />
                                                                                             )}
-                                                                                            {/* 🎓 link directe si té teacherUrl */}
-                                                                                            {mat.teacherUrl && (
-                                                                                                <a href={mat.teacherUrl} target="_blank" rel="noopener noreferrer"
-                                                                                                   className="shrink-0 text-xs leading-none" title="Versió del docent">🎓</a>
-                                                                                            )}
                                                                                             {/* Botó + per enganxar URL del portapapers (només quan no hi ha URL) */}
                                                                                             {!mat.url && (
                                                                                                 <button
@@ -2256,16 +2252,39 @@
                                                                                                     title="Enganxar URL del portapapers"
                                                                                                 >+</button>
                                                                                             )}
+                                                                                            {/* 🎓 sempre visible: link si té URL, botó per afegir si no */}
+                                                                                            {mat.teacherUrl ? (
+                                                                                                <a href={mat.teacherUrl} target="_blank" rel="noopener noreferrer"
+                                                                                                   className="shrink-0 opacity-0 group-hover:opacity-100 text-xs leading-none transition-opacity"
+                                                                                                   title="Versió del docent">🎓</a>
+                                                                                            ) : (
+                                                                                                <button
+                                                                                                    onClick={() => { const url = prompt("URL de la versió del docent:"); if(url) updateSessionArray(activeCourse.id, activeUnit.id, phase.id, session.id, 'materials', 'update', { itemId: mat.id, field: 'teacherUrl', value: url.trim() }); }}
+                                                                                                    className="shrink-0 opacity-0 group-hover:opacity-20 hover:!opacity-100 text-xs leading-none transition-opacity"
+                                                                                                    title="Afegir versió del docent"
+                                                                                                >🎓</button>
+                                                                                            )}
                                                                                             {/* Llapis d'edició (apareix en hover) */}
                                                                                             <button
-                                                                                                onClick={(e) => { e.stopPropagation(); setEditingMatId(editingMatId === mat.id ? null : mat.id); }}
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    if (editingMatId === mat.id) { setEditingMatId(null); return; }
+                                                                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                                                                    const popW = 288;
+                                                                                                    const left = Math.min(rect.left, window.innerWidth - popW - 8);
+                                                                                                    const top = rect.bottom + 4 + window.scrollY > window.innerHeight - 220
+                                                                                                        ? rect.top - 220
+                                                                                                        : rect.bottom + 4;
+                                                                                                    setEditingMatPos({ top, left });
+                                                                                                    setEditingMatId(mat.id);
+                                                                                                }}
                                                                                                 className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity text-xs leading-none px-0.5"
                                                                                                 title="Editar material"
                                                                                             >✏️</button>
                                                                                         </div>
-                                                                                        {/* Panell d'edició inline */}
-                                                                                        {editingMatId === mat.id && (
-                                                                                            <div className="relative z-30 mt-1 ml-3 bg-white rounded-lg shadow-xl border border-gray-200 p-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+                                                                                        {/* Panell d'edició flotant (portal fix) */}
+                                                                                        {editingMatId === mat.id && ReactDOM.createPortal(
+                                                                                            <div style={{ position: 'fixed', top: editingMatPos.top, left: editingMatPos.left, zIndex: 9999, width: '18rem' }} className="bg-white rounded-lg shadow-2xl border border-gray-200 p-3 space-y-2" onClick={(e) => e.stopPropagation()}>
                                                                                                 <div>
                                                                                                     <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-0.5">Nom</label>
                                                                                                     <input
@@ -2305,7 +2324,7 @@
                                                                                                     >Tancar</button>
                                                                                                 </div>
                                                                                             </div>
-                                                                                        )}
+                                                                                        , document.body)}
                                                                                     </li>
                                                                                 ))}
                                                                             </ul>
