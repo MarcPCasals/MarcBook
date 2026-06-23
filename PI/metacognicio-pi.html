@@ -406,38 +406,8 @@
                 <h3 class="text-sm font-bold text-gray-800 mb-2">1A. El Mapa de Coordenades (Organització vs. Qualitat)</h3>
                 <p class="text-xs text-gray-500 mb-3">On situaries la majoria de sessions de treball d'aquest projecte? <strong>Toca o clica</strong> el diagrama per col·locar la teva X.</p>
 
-                <div class="relative w-full h-64 border border-gray-200 rounded-xl bg-white shadow-inner p-4">
-                    <svg id="coordinate-map" viewBox="0 0 400 250" class="w-full h-full" style="cursor:crosshair;">
-                        <line x1="200" y1="10" x2="200" y2="240" stroke="#94a3b8" stroke-width="2" />
-                        <line x1="10" y1="125" x2="390" y2="125" stroke="#94a3b8" stroke-width="2" />
-                        
-                        <text x="15" y="120" font-size="9" fill="#64748b" font-weight="bold">← CAOS</text>
-                        <text x="385" y="120" font-size="9" fill="#64748b" font-weight="bold" text-anchor="end">ORDRE →</text>
-                        <text x="200" y="248" font-size="9" fill="#64748b" text-anchor="middle">NIVELL D'ORGANITZACIÓ</text>
-                        <text x="205" y="20" font-size="9" fill="#64748b" font-weight="bold">↑ ALTA QUALITAT</text>
-                        <text x="205" y="235" font-size="9" fill="#64748b" font-weight="bold">↓ BAIXA QUALITAT</text>
-
-                        <rect x="205" y="25" width="180" height="95" fill="#dcfce7" opacity="0.3" rx="4" />
-                        <text x="295" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#166534">TOP CLASS</text>
-                        <text x="295" y="75" text-anchor="middle" font-size="10" fill="#166534">Bona feina i amb temps</text>
-
-                        <rect x="15" y="25" width="180" height="95" fill="#fef9c3" opacity="0.3" rx="4" />
-                        <text x="105" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#854d0e">EL MIRACLE</text>
-                        <text x="105" y="75" text-anchor="middle" font-size="10" fill="#854d0e">Salvat a l'últim minut</text>
-
-                        <rect x="15" y="130" width="180" height="95" fill="#fee2e2" opacity="0.3" rx="4" />
-                        <text x="105" y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#991b1b">ZONA PERILL</text>
-                        <text x="105" y="185" text-anchor="middle" font-size="10" fill="#991b1b">Caos i mal resultat</text>
-
-                        <rect x="205" y="130" width="180" height="95" fill="#ffedd5" opacity="0.3" rx="4" />
-                        <text x="295" y="170" text-anchor="middle" font-size="12" font-weight="bold" fill="#9a3412">INEFICIÈNCIA</text>
-                        <text x="295" y="185" text-anchor="middle" font-size="10" fill="#9a3412">Molt temps, poc resultat</text>
-
-                        <g id="map-x-marker" transform="translate(140, 60) rotate(-10)">
-                            <text x="0" y="0" font-family="Verdana" font-size="40" fill="#ef4444" font-weight="bold" opacity="0.8">X</text>
-                            <text id="map-x-label" x="5" y="20" font-size="10" fill="#ef4444" font-weight="bold">(toca per col·locar)</text>
-                        </g>
-                    </svg>
+                <div id="coordinate-map-container" class="relative w-full h-64 border border-gray-200 rounded-xl bg-white shadow-inner overflow-hidden">
+                    <canvas id="coordinate-map" class="absolute inset-0 touch-none" style="cursor:crosshair;"></canvas>
                 </div>
             </div>
 
@@ -1013,7 +983,11 @@
             const element = document.getElementById('full-document');
             const nomAlumne = document.querySelector('input[type="text"]').value || "Alumne";
             const noPrintEls = document.querySelectorAll('.no-print');
-            const prevDisplay = Array.from(noPrintEls).map(el => el.style.display);
+            const prevNoprint = Array.from(noPrintEls).map(el => el.style.display);
+            const pages = document.querySelectorAll('.page-a4');
+            const prevPages = Array.from(pages).map(el => ({
+                h: el.style.height, ov: el.style.overflow, pba: el.style.pageBreakAfter
+            }));
 
             const opt = {
                 margin:       0,
@@ -1024,9 +998,19 @@
             };
 
             noPrintEls.forEach(el => el.style.display = 'none');
+            pages.forEach(el => {
+                el.style.height = 'auto';
+                el.style.overflow = 'visible';
+                el.style.pageBreakAfter = 'always';
+            });
 
             html2pdf().from(element).set(opt).save().then(() => {
-                noPrintEls.forEach((el, i) => el.style.display = prevDisplay[i]);
+                noPrintEls.forEach((el, i) => el.style.display = prevNoprint[i]);
+                pages.forEach((el, i) => {
+                    el.style.height = prevPages[i].h;
+                    el.style.overflow = prevPages[i].ov;
+                    el.style.pageBreakAfter = prevPages[i].pba;
+                });
             });
         }
 
@@ -1119,26 +1103,98 @@
 
         function clearEcgCanvas() { if (ecgCanvas.clear) ecgCanvas.clear(); }
 
-        // === MAPA COORDENADES (1A) ===
+        // === MAPA COORDENADES (1A) - CANVAS ===
         (function() {
-            const svg = document.getElementById('coordinate-map');
-            if (!svg) return;
-            const marker = document.getElementById('map-x-marker');
-            const label = document.getElementById('map-x-label');
-            let placed = false;
+            const container = document.getElementById('coordinate-map-container');
+            const canvas = document.getElementById('coordinate-map');
+            if (!canvas || !container) return;
+            const ctx = canvas.getContext('2d');
+            let mx = 0, my = 0, placed = false;
 
-            function place(e) {
-                const rect = svg.getBoundingClientRect();
-                const src = (e.changedTouches && e.changedTouches[0]) || e;
-                const svgX = (src.clientX - rect.left) * (400 / rect.width);
-                const svgY = (src.clientY - rect.top) * (250 / rect.height);
-                marker.setAttribute('transform', `translate(${svgX - 20}, ${svgY - 20}) rotate(-10)`);
-                if (!placed) { label.textContent = ''; placed = true; }
-                e.preventDefault();
+            function draw() {
+                const w = canvas.width, h = canvas.height;
+                const cx = w / 2, cy = h / 2;
+                ctx.clearRect(0, 0, w, h);
+
+                // Quadrant backgrounds
+                const quads = [
+                    { x: 0,  y: 0,  c: 'rgba(254,249,195,0.45)' },
+                    { x: cx, y: 0,  c: 'rgba(220,252,231,0.45)' },
+                    { x: 0,  y: cy, c: 'rgba(254,226,226,0.45)' },
+                    { x: cx, y: cy, c: 'rgba(255,237,213,0.45)' },
+                ];
+                quads.forEach(q => {
+                    ctx.fillStyle = q.c;
+                    ctx.fillRect(q.x, q.y, cx, cy);
+                });
+
+                // Axes
+                ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
+
+                // Quadrant labels
+                const fs = Math.max(10, Math.round(w * 0.03));
+                const fsub = Math.max(8, Math.round(w * 0.022));
+                const ql = [
+                    { t: 'EL MIRACLE',  s: "Salvat a l'últim minut", x: cx/2,       y: cy/2,       c: '#854d0e' },
+                    { t: 'TOP CLASS',   s: 'Bona feina i amb temps', x: cx+cx/2,    y: cy/2,       c: '#166534' },
+                    { t: 'ZONA PERILL', s: 'Caos i mal resultat',    x: cx/2,       y: cy+cy/2,    c: '#991b1b' },
+                    { t: 'INEFICIÈNCIA',s: 'Molt temps, poc resultat',x: cx+cx/2,   y: cy+cy/2,    c: '#9a3412' },
+                ];
+                ql.forEach(l => {
+                    ctx.fillStyle = l.c; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.font = `bold ${fs}px Inter,sans-serif`; ctx.fillText(l.t, l.x, l.y - 7);
+                    ctx.font = `${fsub}px Inter,sans-serif`;    ctx.fillText(l.s, l.x, l.y + 9);
+                });
+
+                // Axis labels
+                ctx.fillStyle = '#64748b'; ctx.font = `bold ${fsub}px Inter,sans-serif`;
+                ctx.textAlign = 'left';   ctx.textBaseline = 'middle'; ctx.fillText('← CAOS',  6,     cy - 9);
+                ctx.textAlign = 'right';  ctx.fillText('ORDRE →', w - 6, cy - 9);
+                ctx.textAlign = 'center'; ctx.fillText('NIVELL D\'ORGANITZACIÓ', w/2, h - 6);
+                ctx.fillText('↑ ALTA QUALITAT',  cx + 70, 11);
+                ctx.fillText('↓ BAIXA QUALITAT', cx + 70, h - 14);
+
+                // X marker
+                const px = placed ? mx : w * 0.35;
+                const py = placed ? my : h * 0.24;
+                ctx.save();
+                ctx.translate(px, py);
+                ctx.rotate(-0.18);
+                ctx.font = `bold ${Math.round(w * 0.09)}px Verdana,sans-serif`;
+                ctx.fillStyle = 'rgba(239,68,68,0.85)';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('X', 0, 0);
+                if (!placed) {
+                    ctx.font = `${fsub}px Inter,sans-serif`;
+                    ctx.fillStyle = '#ef4444'; ctx.textBaseline = 'alphabetic';
+                    ctx.fillText('(toca per col·locar)', 0, Math.round(w * 0.06));
+                }
+                ctx.restore();
             }
 
-            svg.addEventListener('click', place);
-            svg.addEventListener('touchend', place, { passive: false });
+            function place(e) {
+                const rect = canvas.getBoundingClientRect();
+                const src = (e.changedTouches && e.changedTouches[0]) || e;
+                mx = (src.clientX - rect.left) * (canvas.width / rect.width);
+                my = (src.clientY - rect.top) * (canvas.height / rect.height);
+                placed = true; draw(); e.preventDefault();
+            }
+
+            function resize() {
+                const rect = container.getBoundingClientRect();
+                const nw = Math.round(rect.width), nh = Math.round(rect.height);
+                if (canvas.width === nw && canvas.height === nh) return;
+                canvas.width = nw; canvas.height = nh;
+                canvas.style.width = nw + 'px'; canvas.style.height = nh + 'px';
+                draw();
+            }
+
+            canvas.addEventListener('click', place);
+            canvas.addEventListener('touchend', place, { passive: false });
+            window.addEventListener('resize', resize);
+            resize();
         })();
     </script>
 </body>
