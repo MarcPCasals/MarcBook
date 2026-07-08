@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preparador de Investigaciones · UT 1.3</title>
+<style>
+  :root{
+    --bg:#F6F2E9; --surface:#FFFFFF; --ink:#26301F; --ink-soft:#5E6A56; --line:#E6E0D2;
+    --green:#2F6D4E; --green-soft:#E3EFE7; --orange:#E08A3C; --orange-soft:#FBE9D6;
+    --ok:#2F6D4E; --ok-soft:#E3EFE7; --pending:#C6CCBE; --warn:#B4531F; --warn-soft:#F7E3D5;
+    --radius:14px; --shadow:0 1px 2px rgba(30,42,46,.05),0 8px 24px rgba(30,42,46,.06);
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 22px 60px}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+  .brand{font-weight:600}.brand .dot{color:var(--orange)}
+  .badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .phasepill{font-size:.82rem;color:#fff;background:var(--green);padding:5px 12px;border-radius:999px;font-weight:600}
+  .aiflag{font-size:.72rem;padding:4px 9px;border-radius:999px;cursor:pointer;border:1px solid transparent}
+  .aiflag.on{background:var(--green-soft);color:var(--green)}
+  .aiflag.off{background:#EFECE2;color:var(--ink-soft)}
+  .layout{display:grid;grid-template-columns:1fr 330px;gap:26px;align-items:start}
+  @media(max-width:860px){.layout{grid-template-columns:1fr}}
+
+  .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .stage-head{padding:18px 24px 12px;border-bottom:1px solid var(--line)}
+  .stage-head h1{font-size:1.12rem;margin:0 0 3px}.stage-head p{margin:0;color:var(--ink-soft);font-size:.9rem}
+  .thread{padding:12px 24px 6px;max-height:48vh;overflow-y:auto}
+  .turn{margin:13px 0;display:flex;gap:12px}
+  .turn .who{flex:0 0 auto;width:60px;font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);padding-top:3px}
+  .turn .say{flex:1}
+  .turn.mentor .say{background:var(--green-soft);border-left:3px solid var(--green);padding:11px 14px;border-radius:0 10px 10px 0}
+  .turn.mentor.reconduct .say{background:var(--warn-soft);border-left-color:var(--warn)}
+  .turn.mentor.example .say{background:var(--orange-soft);border-left-color:var(--orange)}
+  .turn.mentor.typing .say{opacity:.65;font-style:italic}
+  .turn.student .who{color:var(--green);font-weight:700}
+  .turn.student .say{color:var(--ink);padding:2px 0}
+
+  .compose{padding:14px 24px 20px;border-top:1px solid var(--line)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .chip{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 12px;border-radius:999px;font-size:.86rem;cursor:pointer;transition:.15s}
+  .chip:hover{border-color:var(--green);background:var(--green-soft)}
+  .chip.help{border-style:dashed;color:var(--ink-soft)}
+  .inrow{display:flex;gap:10px;align-items:center}
+  .inrow .frame{flex:0 0 auto;color:var(--ink-soft);font-weight:600;font-size:.92rem}
+  .inrow input{flex:1;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-size:.95rem;font-family:inherit;color:var(--ink);background:#fff}
+  .inrow input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+  .inrow input:disabled{background:#F4F2EC;color:var(--ink-soft)}
+  .inrow button{border:none;background:var(--green);color:#fff;font-weight:600;padding:0 18px;border-radius:10px;cursor:pointer;font-size:.92rem;height:42px}
+  .inrow button:disabled{background:var(--pending);cursor:default}
+
+  .searchbox{background:#FBF9F3;border:1px solid var(--line);border-radius:12px;padding:14px}
+  .searchbox label{display:block;font-size:.82rem;color:var(--ink-soft);margin-bottom:7px}
+  .searchbox .qline{display:flex;gap:10px;align-items:center}
+  .searchbox .qline input{flex:1;border:1px solid var(--line);border-radius:999px;padding:11px 16px;font-size:.95rem;font-family:inherit}
+  .searchbox .qline input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft)}
+  .gbtn{border:none;background:var(--orange);color:#fff;font-weight:600;padding:11px 16px;border-radius:999px;cursor:pointer;white-space:nowrap}
+  .searchbox .after{display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap}
+  .searchbox .after button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;cursor:pointer;font-size:.9rem}
+  .searchbox .after button.primary{border:none;background:var(--orange);color:#fff;font-weight:600}
+  .searchbox .after button:disabled{opacity:.5;cursor:default}
+  .searchbox small{color:var(--ink-soft);font-size:.8rem}
+
+  .panel{padding:22px 24px}
+  .panel h2{margin:0 0 8px;font-size:1.15rem}.panel p{color:var(--ink-soft);margin:0 0 16px}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{border:none;border-radius:10px;padding:11px 18px;font-weight:600;cursor:pointer;font-size:.92rem}
+  .btn.primary{background:var(--orange);color:#fff}.btn.sec{background:#fff;border:1px solid var(--line);color:var(--ink)}.btn.green{background:var(--green);color:#fff}
+  .plan .block{padding:12px 0;border-top:1px solid var(--line)}.plan .block:first-of-type{border-top:none}
+  .plan .k{font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);font-weight:700;margin-bottom:3px}
+  .plan .v{font-size:.98rem}.plan .v.q{font-style:italic;color:var(--green);font-weight:600}
+  .plan .warnline{margin-top:16px;background:var(--green-soft);border-left:3px solid var(--green);padding:10px 14px;border-radius:0 8px 8px 0;font-size:.9rem}
+
+  aside{display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 17px}
+  .card h2{font-size:.76rem;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-soft);margin:0 0 10px;font-weight:700}
+  #resumen .item{font-size:.86rem;margin:7px 0}
+  #resumen .item .lbl{color:var(--ink-soft);display:block;font-size:.74rem;text-transform:uppercase;letter-spacing:.4px}
+  #resumen .empty{color:var(--pending);font-style:italic;font-size:.86rem}
+  .steps{list-style:none;margin:0;padding:0}
+  .steps li{display:flex;align-items:center;gap:9px;font-size:.88rem;padding:4px 0;color:var(--ink-soft)}
+  .steps li .b{width:16px;height:16px;border-radius:50%;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;color:#fff;background:var(--pending)}
+  .steps li.done .b{background:var(--ok)}.steps li.done .b::after{content:"✓"}
+  .steps li.now{color:var(--ink);font-weight:600}.steps li.now .b{background:var(--orange)}
+  .trace{font-size:.8rem;color:var(--ink-soft);display:flex;gap:14px;flex-wrap:wrap}.trace b{color:var(--ink)}
+  .reset{background:none;border:none;color:var(--green);cursor:pointer;font-size:.82rem;text-decoration:underline;padding:0}
+  footer.note{margin-top:24px;font-size:.8rem;color:var(--ink-soft);background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  footer.note b{color:var(--green)}.footlink{background:none;border:none;color:var(--green);text-decoration:underline;cursor:pointer;font-size:.8rem;padding:0}
+
+  .modal{position:fixed;inset:0;background:rgba(20,26,20,.4);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .modal .box{background:#fff;border-radius:14px;max-width:470px;width:100%;padding:22px;box-shadow:var(--shadow)}
+  .modal h3{margin:0 0 6px}.modal p{color:var(--ink-soft);font-size:.85rem;margin:0 0 8px}
+  .modal label{display:block;font-size:.8rem;color:var(--ink-soft);margin:12px 0 4px}
+  .modal input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:.9rem;font-family:inherit}
+  .modal .row{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;align-items:center}
+  .modal .msg{font-size:.82rem;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Preparador de Investigaciones Científicas <span class="dot">·</span> <span style="color:var(--ink-soft);font-weight:500">UT 1.3 — La vuelta al mundo en 24 h</span></div>
+    <div class="badges">
+      <span class="aiflag off" id="aiflag" title="Configurar la conexión con la IA">Modo guiado</span>
+      <span class="phasepill" id="phasepill">Preparado para empezar</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main class="stage">
+      <div class="stage-head">
+        <h1 id="stage-h1">Aprende a investigar</h1>
+        <p id="stage-sub">Tú traes las ideas. Yo te ayudo a convertirlas en una investigación que puedas medir.</p>
+      </div>
+      <div class="thread" id="thread"></div>
+      <div class="compose" id="compose"></div>
+    </main>
+
+    <aside>
+      <div class="card"><h2>Mi investigación</h2><div id="resumen"><div class="empty">Se irá llenando con tus decisiones…</div></div></div>
+      <div class="card">
+        <h2>Mi progreso</h2>
+        <ul class="steps">
+          <li id="p1"><span class="b"></span>Concreto el fenómeno</li>
+          <li id="p2"><span class="b"></span>Formulo mi pregunta investigable</li>
+          <li id="p3"><span class="b"></span>Explicito lo que ya sé</li>
+          <li id="p4"><span class="b"></span>Arriesgo una hipótesis</li>
+          <li id="p5"><span class="b"></span>Identifico las variables</li>
+          <li id="p6"><span class="b"></span>Planifico cómo lo investigo</li>
+          <li id="p7"><span class="b"></span>Selecciono y justifico fuentes</li>
+          <li id="p8"><span class="b"></span>Monto el plan de investigación</li>
+        </ul>
+      </div>
+      <div class="card"><h2>Traza del proceso</h2>
+        <div class="trace"><span>Turnos: <b id="t-turns">0</b></span><span>Reconducciones: <b id="t-recon">0</b></span><span><button class="reset" id="reset">reiniciar</button></span></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="note">
+    <b>Prototipo pedagógico.</b> El motor guiado lleva la estructura y los guardarraíles; cuando hay IA conectada, esta evalúa la calidad en los pasos clave. El mentor <b>no da las respuestas</b>: el producto es el plan; los datos los mides y los interpretas tú. ·
+    <button class="footlink" id="cfg2">Conectar con la IA (profesor)</button>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = "es";
+  var DEFAULT_PROXY = "https://c2.marcpcasals.workers.dev";
+  var CONFIG = { proxyUrl:DEFAULT_PROXY, appToken:"" };
+  try{ CONFIG.proxyUrl=localStorage.getItem("pic_proxy_url")||DEFAULT_PROXY; CONFIG.appToken=localStorage.getItem("pic_app_token")||""; }catch(e){}
+
+  function norm(t){ return (t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim(); }
+  function has(t,arr){ t=norm(t); return arr.some(function(w){return t.indexOf(w)>=0;}); }
+  function esc(s){ return (s||"").replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+  function stripHtml(s){ return (s||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim(); }
+  function looksLikeQuestion(t){ var n=norm(t); return t.indexOf("?")>=0 || /^(por que |cuanto|cuantos|cuantas|como |cual |cuales |que |quien |donde |cuando )/.test(n); }
+
+  var HANDOFF=["hazlo tu","hazmelo","hazme","rellenalo tu","escribelo tu","escribela tu","dimelo tu","dimela tu","hazme la","dame la respuesta","dime la respuesta","hazlo por mi","piensala tu","decidela tu","hazla tu","buscalo tu","busca tu","buscamelo","completalo tu"];
+  var VALID_SEEK=["es correcto","es correcta","esta bien","tengo razon","es la buena","cual es la correcta","he acertado","acierto","es lo correcto"];
+  var STUCK_EXACT=["no lo se","no se","ni idea","ninguna idea","ni la mas remota idea","no tengo ni idea","ayuda","ayudame","pista","dame una pista","no se por que","no se me ocurre","no se que poner","no se que decir","no sabria","no lo tengo claro","echame una mano","no lo se todavia"];
+  function isStuck(text){
+    var n=norm(text).replace(/[.,;:!?¡¿]/g,"").trim();
+    if(STUCK_EXACT.indexOf(n)>=0) return true;
+    if(n.length<=12 && (n.indexOf("ayuda")>=0 || n.indexOf("pista")>=0)) return true;
+    return false;
+  }
+  var NOT_INVEST=["no se puede investigar","no se puede comprobar","no puedo comprobar","no podemos comprobar","no se puede medir","no se puede observar","no tenemos forma","no hay forma","no tiene respuesta","es solo opinion","no se puede saber"];
+  function isNegative(text){ var n=norm(text).replace(/[.,;:!?¡¿]/g,"").trim(); return ["no","nop","no se me ocurre","no se","ninguna","ninguno","nada","no lo se","creo que no","no gracias"].indexOf(n)>=0; }
+  function isGarbage(text){
+    if(isNegative(text)||isStuck(text)) return false;
+    var n=norm(text).replace(/[^a-z0-9 ]/g,"").trim();
+    if(n.length<3) return true;
+    if(/^(.)\1*$/.test(n.replace(/ /g,""))) return true;
+    return false;
+  }
+  function isChangeQuestion(text){ if(looksLikeQuestion(text)) return false; var n=norm(text); return /cambi(o|ar|e|emos)( de| la)? pregunta|otra pregunta|nueva pregunta|empezar de nuevo|otra distinta/.test(n); }
+
+  // ================== fases ==================
+  var PHASES=[
+    { id:"pregunta", label:"Fase 1–2 de 8", title:"Tu pregunta", pk:["p1","p2"],
+      h1:"Del tema a tu pregunta investigable", sub:"Tú traes el tema; yo te ayudo a convertirlo en una pregunta que se pueda medir y comparar.",
+      intro:function(){return "¡Nueva investigación! Ya preparaste una sobre el Universo; ahora toca <b>la Tierra</b>: el aire, el agua y el clima. Lo primero no es buscar, sino <b>decidir qué quieres saber</b>.";},
+      steps:[
+        {key:"tema", ask:function(){return "Sobre la Tierra y sus sistemas —el aire, el agua, el clima, el efecto invernadero…—, ¿qué te intriga o te gustaría entender? Lo que a <b>ti</b> te pique la curiosidad.";}, ex:"Por ejemplo: por qué sube la temperatura del planeta, cómo se mueve el agua en la naturaleza, por qué se derriten los polos, de qué está hecho el aire… ¿Cuál te llama más?", ph:"Escribe el tema que te interesa…", confirm:function(){return "Me quedo con tu tema. Ahora vamos a hacerlo más concreto, que es lo difícil.";}},
+        {key:"fen", ask:function(d){return "«"+esc(d.tema)+"», me gusta. Todavía es amplio. De ahí, ¿qué <b>cosa concreta</b> podrías medir, observar o comparar?";}, ex:"Por ejemplo, de «el clima» podrías fijarte en <i>cómo cambia la temperatura según la cantidad de CO₂</i>. ¿Qué medirías tú?", ph:"Afina el fenómeno concreto…", confirm:function(){return "Bien: ya tienes algo concreto que se puede medir u observar. Eso es un <b>fenómeno</b>.";}},
+        {key:"preg", concept:"pregunta investigable", advanceChip:"Me quedo con esta pregunta →", gate:true, gateCriteria:"Es investigable si: se responde recogiendo datos (medir con instrumentos, observar o buscar en fuentes fiables); NO es de opinión; NO es de consulta/definición («¿qué es…?»); NO es un simple dato ni un sí/no; es concreta; y RELACIONA DOS variables que se puedan medir («¿cómo cambia/afecta X según Y?»).", ask:function(d){return "Ahora lo <b>más importante</b>: convierte tu fenómeno («"+esc(d.fen||"")+"») en una <b>pregunta investigable</b>. Las mejores <b>relacionan dos cosas que puedes medir</b>: «¿cómo cambia X según Y?». Se responde con datos, no con una opinión ni una definición. ¿Cómo la preguntarías?";}, ex:"Fíjate: «¿qué es el efecto invernadero?» es de consulta; «¿está subiendo la temperatura?» es un sí/no. En cambio «¿cómo cambia la temperatura del aire según la cantidad de CO₂?» sí es investigable (relaciona dos cosas y se puede medir). ¿Cómo podrías afinar la tuya así?", ph:"Escribe tu pregunta…", confirm:function(){return "Vale, seguimos con esta pregunta. Recuerda: cuanto más relacione dos cosas que puedas medir («cómo cambia X según Y»), mejor.";}},
+        {key:"mot", special:"reformula_mot", ask:function(){return "Y lo más importante: ¿esta pregunta te <b>engancha</b> de verdad? Si otra te motiva más, escríbela; si esta te gusta, dime por qué.";}, ex:"Por ejemplo: «me engancha porque me preocupa el calentamiento del planeta». ¿Y a ti, por qué esta?", ph:"¿Por qué te motiva? (o escribe otra versión)", confirm:function(){return "Esa es la clave: una pregunta que te <b>importa</b> se investiga con muchas más ganas.";}}
+      ]},
+    { id:"previs", label:"Fase 3 de 8", title:"¿Qué sé ya?", pk:["p3"],
+      h1:"¿Qué sabes ya?", sub:"Antes de medir ni buscar nada, vemos de dónde partes. No hay respuestas mejores ni peores.",
+      intro:function(){return "Antes de investigar, para un momento a pensar qué llevas ya en la cabeza. Te ayudará a arriesgar una buena hipótesis después.";},
+      steps:[
+        {key:"sabe", ask:function(){return "Empecemos por lo seguro: ¿qué crees que <b>YA sabes</b> sobre esto?";}, ex:"Por ejemplo: «el hielo se derrite con el calor». ¿Qué sabes tú seguro?", ph:"Lo que sé seguro…", confirm:function(){return "Bien. Eso es lo que das por seguro; ya verás si se sostiene.";}},
+        {key:"parece", ask:function(){return "Ahora lo interesante: ¿qué te <b>PARECE</b>, aunque no estés seguro/a? Esas corazonadas serán lo primero que comprobarás.";}, ex:"Por ejemplo: «me parece que cuanto más CO₂ hay, más calor hace». ¿Y a ti qué te parece?", ph:"Lo que me parece…", confirm:function(){return "Esto es oro: eso que «te parece» será la <b>semilla de tu hipótesis</b>.";}},
+        {key:"nose", ask:function(){return "Y por último: ¿qué <b>NO sabes todavía</b> y te haría falta averiguar?";}, ex:"Por ejemplo: «no sé cuánto ha subido la temperatura en los últimos años». ¿Qué te falta a ti?", ph:"Lo que no sé todavía…", confirm:function(){return "Perfecto. Eso que no sabes es justo lo que tendrás que medir o buscar.";}}
+      ]},
+    { id:"hipotesi", label:"Fase 4 de 8", title:"Hipótesis", pk:["p4"], guard:"valid_seek",
+      h1:"Arriesga tu hipótesis", sub:"Una hipótesis relaciona dos cosas: lo que crees que pasará y por qué. No tiene que ser correcta — la comprobarás con datos.",
+      intro:function(d){return "Recuerda lo que «te parece»"+(d.parece?": «"+esc(d.parece)+"»":"")+". Vamos a convertir esa corazonada en una <b>hipótesis</b> que relacione dos cosas.";},
+      steps:[
+        {key:"hSi", concept:"predicción", ask:function(){return "Arriesga tu predicción con la forma <b>«Si… entonces…»</b>, relacionando <b>dos cosas</b>. ¿Qué crees que pasará?";}, ex:"Por ejemplo: «Si aumenta el CO₂ del aire, entonces sube la temperatura». Pero con tu idea.", ph:"Si…, entonces…", confirm:function(){return "Ya tienes tu <b>predicción</b>: relaciona dos cosas, como hace un científico. Ahora, el porqué.";}},
+        {key:"hPorque", frame:"…porque", concept:"hipótesis", ask:function(){return "¿Por qué crees que pasa eso? El <b>porqué</b> convierte una adivinanza en una hipótesis.";}, ex:"Por ejemplo: «…porque el CO₂ retiene el calor». ¿Y tú por qué crees que pasa?", ph:"por qué crees que pasa…", confirm:function(){return "Predicción + porqué = <b>hipótesis</b>. ¡Y relaciona dos variables, justo lo que se pide! Es una apuesta razonada que pondrás a prueba con datos.";}}
+      ]},
+    { id:"variables", label:"Fase 5 de 8", title:"Variables", pk:["p5"],
+      h1:"Las variables de tu investigación", sub:"Qué cambia, qué mides y qué mantienes igual. Sin prisa.",
+      intro:function(){return "Ahora las <b>variables</b>. No hay una respuesta única: quiero que reconozcas tú lo que interviene y lo que vas a medir.";},
+      steps:[
+        {key:"vCambia", concept:"variable independiente", gate:true, gateCriteria:"Debe ser la VARIABLE INDEPENDIENTE: lo que cambia de un caso a otro para poder comparar; algo concreto y coherente con su pregunta (por ejemplo: la cantidad de CO₂, la hora del día, la estación).", ask:function(){return "En tu pregunta hay algo que <b>cambia</b> de un caso a otro y que usas para comparar. ¿Qué es?";}, ex:"Por ejemplo, la cantidad de CO₂. Pero míralo en tu pregunta: ¿qué cambia ahí?", ph:"lo que cambia…", confirm:function(){return "Eso, en ciencia, se llama <b>variable independiente</b>: lo que tú cambias para comparar.";}},
+        {key:"vObserva", concept:"variable dependiente", gate:true, gateCriteria:"Debe ser la VARIABLE DEPENDIENTE: lo que se mide u observa cuando cambia la independiente (por ejemplo: la temperatura, la lluvia, la humedad); DISTINTA de la variable independiente ya elegida y coherente con su pregunta.", ask:function(){return "¿Y qué quieres <b>medir u observar</b> cuando eso cambia?";}, ex:"Por ejemplo, la temperatura. ¿Y en tu caso, qué medirías?", ph:"lo que mido u observo…", confirm:function(){return "Y eso es la <b>variable dependiente</b>: lo que mides que cambia cuando cambias la otra.";}},
+        {key:"vConstante", concept:"control de variables", gate:true, gateCriteria:"Debe ser una VARIABLE CONTROLADA: algo que se mantiene igual y NO cambia, para que la comparación sea justa (por ejemplo: medir siempre en el mismo sitio y a la misma hora); distinta de la independiente y de la dependiente.", ask:function(){return "Para comparar de forma <b>justa</b>, ¿qué tendrías que mantener <b>igual</b> en todas las medidas?";}, ex:"Por ejemplo, medir siempre en el mismo sitio y a la misma hora. ¿Qué mantendrías igual tú?", ph:"lo que mantengo igual…", confirm:function(){return "Eso que mantienes igual son las <b>variables controladas</b>. Acabas de hacer <b>control de variables</b>, una pieza clave del método científico.";}}
+      ]},
+    { id:"busqueda", label:"Fase 6 de 8", title:"Cómo lo investigo", pk:["p6"],
+      h1:"¿Cómo lo vas a averiguar?", sub:"Dos vías: medir/observar tú mismo con instrumentos, y buscar información fiable.",
+      intro:function(){return "Ya tienes pregunta, hipótesis y variables. Ahora: <b>¿cómo lo averiguas?</b> Vas a medir tú, y también a buscar información fiable.";},
+      steps:[
+        {key:"instrumento", concept:"instrumento de medida", ask:function(){return "Para responder tu pregunta tendrás que <b>medir</b> algo. ¿Qué <b>instrumento</b> usarías para medir lo que observas?";}, ex:"Por ejemplo: <i>termómetro</i> para la temperatura, <i>pluviómetro</i> para la lluvia, <i>higrómetro</i> para la humedad. ¿Cuál te sirve a ti?", ph:"el instrumento que usaría…", confirm:function(){return "Bien: elegir el instrumento adecuado es parte del método científico.";}},
+        {key:"procedimiento", concept:"procedimiento", ask:function(){return "¿Qué <b>pasos</b> seguirías para medirlo de forma ordenada? Un procedimiento sencillo, paso a paso.";}, ex:"Por ejemplo: «mido la temperatura cada día a la misma hora durante una semana y lo anoto». ¿Cuál sería el tuyo?", ph:"mi procedimiento paso a paso…", confirm:function(){return "Perfecto: un procedimiento ordenado hace que tus datos valgan.";}},
+        {key:"kw", gate:true, gateCriteria:"Además de medir, buscará información. Deben servir para encontrar en Google información sobre SU tema concreto. OBLIGATORIO: deben incluir los objetos/temas reales del fenómeno (por ejemplo, si investiga el efecto invernadero: «efecto invernadero», «CO2», «temperatura» o «clima»). Marca ok:false si SOLO hay términos abstractos o genéricos sin el nombre del tema; en ese caso dile que añada las palabras clave reales de su tema. Entre 2 y 4 palabras, sin frases largas.", ask:function(){return "Y para <b>buscar información</b>: no hace falta escribir toda la pregunta en Google. ¿Qué <b>palabras</b> crees que son las más importantes para buscar?";}, ex:"Por ejemplo: <i>efecto invernadero</i>, <i>CO₂</i>, <i>temperatura</i>. Pero eliges tú.", ph:"palabras clave…", confirm:function(){return "Me gusta: has elegido <b>tus</b> palabras clave. No hay unas correctas.";}},
+        {key:"syn", ask:function(){return "¿Se te ocurre <b>otra manera de decir</b> alguna? (un sinónimo, o una palabra más científica)";}, ex:"Por ejemplo: <i>CO₂</i> también es <i>dióxido de carbono</i>; <i>calentamiento</i> se relaciona con <i>cambio climático</i>. ¿Alguna otra?", ph:"otras palabras / sinónimos…", confirm:function(){return "Cuantas más maneras tengas, más probable es encontrar buenas páginas. Ahora pruébalo en Google de verdad.";}},
+        {key:"query", type:"search", ask:function(){return "Monta la búsqueda y <b>pruébala en Google</b>. La haces tú: se abrirá en una pestaña nueva.";}, confirm:function(){return "";}},
+        {key:"fuente", ask:function(){return "Mira los resultados con <b>ojo crítico</b>: ¿quién publica cada página? ¿el primero es siempre el mejor? Escribe una fuente que te haya parecido útil (o quién la publica).";}, ex:"Por ejemplo, ¿es de una <i>agencia meteorológica</i>, una <i>universidad</i> o un <i>blog personal</i>? ¿Cuál has visto?", ph:"una fuente útil…", confirm:function(){return "Bien, ya tienes una fuente candidata.";}}
+      ]},
+    { id:"fuentes", label:"Fase 7 de 8", title:"Fuentes fiables", pk:["p7"],
+      h1:"¿Te puedes fiar de esa fuente?", sub:"Elegir una fuente no basta: hay que saber por qué es fiable.",
+      intro:function(d){return "Has elegido"+(d.fuente?": «"+esc(d.fuente)+"»":" una fuente")+". Antes de fiarte de ella, veamos qué te aporta y si es fiable.";},
+      steps:[
+        {key:"fuenteDatos", ask:function(){return "Primero, lo importante: ¿qué <b>información útil</b> has sacado de esa fuente para tu pregunta? ¿Qué has aprendido que no sabías?";}, ex:"Por ejemplo: «he aprendido que el CO₂ del aire ha subido mucho en 100 años». ¿Qué has sacado tú?", ph:"lo que he aprendido de la fuente…", confirm:function(){return "Muy bien: eso es <b>extraer información</b> de una fuente, no copiarla entera.";}},
+        {key:"fuenteReason", ask:function(){return "Ahora la fiabilidad: ¿<b>por qué</b> te fiarías de ella? Piensa: quién lo escribe, cuándo se publicó, y si es un sitio científico (universidad, agencia meteorológica, organismo oficial).";}, ex:"Por ejemplo: «me fío porque es una agencia meteorológica y tiene fecha reciente». ¿Cómo lo dirías tú?", ph:"por qué me fío…", confirm:function(){return "Esa es la justificación que te pido: has valorado la <b>fiabilidad</b>, no te has quedado con la primera página porque sí.";}},
+        {key:"dudas", ask:function(){return "¿Qué <b>dudas</b> te quedan, o qué te gustaría contrastar con una segunda fuente o con tus propias medidas?";}, ex:"Por ejemplo: «compararía lo que dicen con la temperatura que yo he medido». ¿Qué contrastarías tú?", ph:"dudas o algo a contrastar…", confirm:function(){return "Muy bien: dudar y contrastar es lo que hace quien investiga de verdad.";}}
+      ]},
+    { id:"plan", label:"Fase 8 de 8", title:"Tu plan", pk:["p8"], type:"summary",
+      h1:"Tu plan de investigación", sub:"Todo lo que has decidido, junto. El punto de partida para medir y buscar.", steps:[] },
+
+    { id:"puente", label:"Acompañamiento", title:"Investiga con ayuda", pk:[],
+      h1:"Ahora mides tú, y te acompaño", sub:"Ya tienes el plan. A medida que mides y buscas, vuelve aquí: te ayudo a ordenar tus datos, sin darte las respuestas.",
+      intro:function(){return "¡Genial que sigas! Recuerda: las respuestas las sacas <b>tú</b> de tus datos; yo te ayudo a hacerlo con método. Ve midiendo y cuéntame.";},
+      steps:[
+        {key:"bDatos", concept:"registro de datos con unidades", ask:function(){return "¿Qué has <b>medido u observado</b>? Anótalo en una <b>tabla ordenada</b>, con sus <b>unidades</b> (°C, mm…).";}, ex:"Por ejemplo: «temperatura: 22 °C el lunes, 24 °C el martes, 23 °C el miércoles». ¿Qué has recogido tú?", ph:"mis datos con unidades…", confirm:function(){return "Bien: registrar datos con sus unidades, en una tabla, es lo que hace un científico.";}},
+        {key:"bContraste", ask:function(){return "Mira tus datos: ¿ves un <b>patrón</b>? ¿Coincide con lo que dicen las fuentes, o hay algo que no cuadra?";}, ex:"Por ejemplo: «los días con más nubes medí menos temperatura». ¿Qué patrón ves tú?", ph:"el patrón o las contradicciones…", confirm:function(){return "Buscar patrones y contrastar con las fuentes: eso es <b>pensamiento crítico</b>.";}},
+        {key:"bConclusion", concept:"conclusión", ask:function(){return "Con tus datos, ¿qué <b>conclusión provisional</b> sacas sobre tu pregunta? ¿Confirma tu hipótesis? (un <b>gráfico de barras</b> te ayuda a verlo).";}, ex:"Por ejemplo: «parece que sí: a más CO₂, más temperatura; pero necesito más datos». ¿Qué concluyes tú?", ph:"mi conclusión provisional…", confirm:function(){return "Esa es <b>tu</b> conclusión, sacada de tus propios datos. ¡Acabas de recorrer el ciclo de una investigación de principio a fin!";}}
+      ]}
+  ];
+  var BRIDGE_IDX = 7;
+  var PMAP={}; PHASES.forEach(function(P,i){ (P.pk||[]).forEach(function(k){ PMAP[k]=i; }); });
+
+  function initState(){ return { meta:{phaseIdx:0, stepIdx:0, turns:0, recon:0, started:false, done:false}, data:{}, hist:[] }; }
+  var J=initState();
+  function save(){ try{ localStorage.setItem("pic_ut13_app", JSON.stringify(J)); }catch(e){} }
+  function load(){ try{ var r=localStorage.getItem("pic_ut13_app"); return r?JSON.parse(r):null; }catch(e){ return null; } }
+  function pushHist(role,text){ if(!J.hist)J.hist=[]; J.hist.push({role:role,text:stripHtml(text).slice(0,500)}); if(J.hist.length>16)J.hist=J.hist.slice(-16); }
+
+  var thread=document.getElementById("thread"), compose=document.getElementById("compose");
+  function addTurn(who,html,kind){
+    var t=document.createElement("div");
+    t.className="turn "+(who==="mentor"?"mentor":"student")+(kind?(" "+kind):"");
+    var w=document.createElement("div"); w.className="who"; w.textContent=(who==="mentor"?"Mentor":"Tú");
+    var s=document.createElement("div"); s.className="say"; s.innerHTML=html;
+    t.appendChild(w); t.appendChild(s); thread.appendChild(t); thread.scrollTop=thread.scrollHeight;
+    return t;
+  }
+  function mentor(h,k){ addTurn("mentor",h,k); pushHist("mentor",h); }
+  function student(t){ addTurn("student",esc(t)); }
+
+  function setHead(P){ document.getElementById("phasepill").innerHTML=P.label+" · "+P.title; document.getElementById("stage-h1").textContent=P.h1; document.getElementById("stage-sub").textContent=P.sub; }
+  function updateProgress(){
+    var cur=J.meta.phaseIdx;
+    ["p1","p2","p3","p4","p5","p6","p7","p8"].forEach(function(k){
+      var li=document.getElementById(k), ph=PMAP[k], cls="";
+      if(J.meta.done) cls="done"; else if(ph<cur) cls="done"; else if(ph>cur) cls=""; else cls="now";
+      if(!J.meta.done && ph===0 && cur===0){ if(k==="p1"){ cls=J.data.fen?"done":"now"; } if(k==="p2"){ cls=J.data.fen?"now":""; } }
+      li.className=cls;
+    });
+  }
+  function resumen(){
+    var d=J.data, out=[];
+    function it(lbl,val){ if(val) out.push('<div class="item"><span class="lbl">'+lbl+'</span>'+esc(val)+'</div>'); }
+    it("Pregunta", d.preg);
+    if(d.hSi&&d.hPorque) out.push('<div class="item"><span class="lbl">Hipótesis</span>'+esc(d.hSi)+', porque '+esc(d.hPorque)+'</div>');
+    if(d.vCambia||d.vObserva) out.push('<div class="item"><span class="lbl">Variables</span>cambia: '+esc(d.vCambia||"—")+' · mido: '+esc(d.vObserva||"—")+(d.vConstante?' · igual: '+esc(d.vConstante):'')+'</div>');
+    if(d.instrumento) it("Instrumento", d.instrumento);
+    if(d.fuente) it("Fuente", d.fuente+(d.fuenteReason?" — "+d.fuenteReason:""));
+    document.getElementById("resumen").innerHTML = out.length? out.join("") : '<div class="empty">Se irá llenando con tus decisiones…</div>';
+  }
+  function refresh(){ document.getElementById("t-turns").textContent=J.meta.turns; document.getElementById("t-recon").textContent=J.meta.recon; updateProgress(); resumen(); save(); }
+
+  function curPhase(){ return PHASES[J.meta.phaseIdx]; }
+  function curStep(){ var P=curPhase(); return P&&P.steps?P.steps[J.meta.stepIdx]:null; }
+
+  function aiOn(){ return !!CONFIG.proxyUrl; }
+  function setFlag(){ var f=document.getElementById("aiflag"); if(aiOn()){ f.className="aiflag on"; f.textContent="IA conectada"; } else { f.className="aiflag off"; f.textContent="Modo guiado"; } }
+  async function callMentor(context, input){
+    var headers={"Content-Type":"application/json"}; if(CONFIG.appToken) headers["X-App-Token"]=CONFIG.appToken;
+    var res=await fetch(CONFIG.proxyUrl,{method:"POST",headers:headers,body:JSON.stringify({input:input,context:context,history:(J.hist||[]).slice(-8),lang:LANG})});
+    var data=await res.json();
+    if(data&&data.reply) return data.reply;
+    throw new Error((data&&data.error)||"sin respuesta");
+  }
+  async function callMentorJSON(context, input){
+    var headers={"Content-Type":"application/json"}; if(CONFIG.appToken) headers["X-App-Token"]=CONFIG.appToken;
+    var res=await fetch(CONFIG.proxyUrl,{method:"POST",headers:headers,body:JSON.stringify({input:input,context:context,history:(J.hist||[]).slice(-6),responseJson:true,lang:LANG})});
+    var data=await res.json();
+    if(!data||!data.reply) throw new Error((data&&data.error)||"sin respuesta");
+    var raw=String(data.reply).trim().replace(/^```json/i,"").replace(/^```/,"").replace(/```$/,"").trim();
+    return JSON.parse(raw);
+  }
+  function gateContext(St, text){
+    var d=J.data, P=curPhase();
+    return "Eres el mentor y EVALÚAS una respuesta del alumno en el paso «"+P.title+"» (unidad sobre la Tierra, el agua y el clima).\n"+
+      "Pregunta de investigación del alumno: «"+stripHtml(d.preg||"(aún no definida)")+"».\n"+
+      "El alumno responde: «"+text+"».\n"+
+      "CRITERIOS para aceptar: "+(St.gateCriteria||"")+"\n"+
+      "Decide con honestidad si CUMPLE los criterios. Responde SOLO con un objeto JSON válido, sin texto alrededor, con este formato: {\"ok\": true o false, \"reply\": \"mensaje breve y cálido para el alumno, UNA idea\", \"value\": \"lo que se guardará\"}.\n"+
+      "Si ok es false: en 'reply' dile con cariño qué falta y sugiérele una versión mejor como EJEMPLO (sin imponerla); NUNCA le des la respuesta científica de su investigación; deja 'value' igual a su texto.\n"+
+      "Si ok es true: en 'reply' valida brevemente y nombra el concepto científico si aplica; en 'value' pon la respuesta ya afinada (o su texto tal cual).\n"+
+      "Español, tono cálido, frases cortas.";
+  }
+  function storeGateValue(St, value){ if(St.key==="preg"){ J.data.preg=value||J.data.preg; } else { J.data[St.key]=value; } }
+  async function gateEvaluate(St, text){
+    J.meta.gate=J.meta.gate||{}; var k=St.key;
+    var typ=addTurn("mentor","<span>pensando…</span>","typing");
+    try{
+      var obj=await callMentorJSON(gateContext(St,text), text);
+      if(typ&&typ.parentNode) typ.parentNode.removeChild(typ);
+      var ok=(obj.ok===true||obj.ok==="true");
+      mentor(esc(obj.reply||""), ok?"":"example");
+      if(ok){ J.meta.gate[k]=0; storeGateValue(St, obj.value||text); return true; }
+      J.meta.gate[k]=(J.meta.gate[k]||0)+1;
+      if(J.meta.gate[k]>=3){ mentor("Seguimos con esto; lo podrás mejorar más adelante."); storeGateValue(St, text); J.meta.gate[k]=0; return true; }
+      return false;
+    }catch(e){ if(typ&&typ.parentNode) typ.parentNode.removeChild(typ); return null; }
+  }
+
+  async function mentorRespond(kind, St, nextInfo, input){ fallbackPost(kind, St, nextInfo); }
+  function fallbackPost(kind, St, nextInfo){
+    var d=J.data;
+    if(kind==="accept"){
+      var c=St.confirm?St.confirm(d):""; if(c) mentor(c);
+      if(nextInfo.type==="step"||nextInfo.type==="phase") mentor(nextInfo.St.ask(d));
+    } else if(kind==="handoff"){
+      mentor("Esto lo decides o lo buscas <b>tú</b>: es tu investigación y es lo que estás aprendiendo a hacer. Te doy un ejemplo, pero eliges tú.","reconduct");
+      if(St.ex) mentor(St.ex,"example");
+    } else if(kind==="valid"){
+      mentor("No te voy a decir si «está bien»: una hipótesis <b>no es correcta o incorrecta de entrada</b>. Es una apuesta que después pondrás a prueba con datos. Vuelve a intentarlo:","reconduct");
+      mentor(St.ask(d));
+    } else if(kind==="stuck"){
+      mentor("No pasa nada, para eso estoy. Mira este ejemplo:");
+      if(St.ex) mentor(St.ex,"example");
+    } else if(kind==="reformulate"){
+      mentor("Buena reflexión. Pero <b>investigar no es solo hacer un experimento</b>: también es buscar en <b>fuentes fiables</b> lo que los científicos ya han descubierto. Así que tu pregunta <b>sí</b> se puede investigar de esa manera. ¿La dejas tal cual, o quieres afinarla un poco?");
+    } else if(kind==="refine_q"){
+      mentor("Miremos tu pregunta: «"+esc(d.preg||"")+"». ¿Se puede responder <b>midiendo, observando o buscando</b>? ¿No es de opinión ni un <b>sí/no</b> cerrado? ¿Relaciona <b>dos cosas</b>? Si ya lo cumple, pulsa <b>«Me quedo con esta pregunta»</b>; si no, reescríbela con tus palabras.");
+    } else if(kind==="confirm"){
+      mentor("Vale, seguimos con esta pregunta. Recuerda: cuanto más relacione dos cosas que puedas medir («cómo cambia X según Y»), mejor será tu investigación.");
+      if(nextInfo.type==="step"||nextInfo.type==="phase") mentor(nextInfo.St.ask(d));
+    }
+  }
+
+  function peekNext(){
+    var P=curPhase();
+    if(J.meta.stepIdx+1 < P.steps.length) return {type:"step", St:P.steps[J.meta.stepIdx+1]};
+    var ni=J.meta.phaseIdx+1;
+    if(ni>=PHASES.length) return {type:"done"};
+    var NP=PHASES[ni];
+    if(NP.type==="summary") return {type:"done"};
+    return {type:"phase", P:NP, St:NP.steps[0]};
+  }
+  function commitAdvance(nextInfo){
+    if(nextInfo.type==="step"){ J.meta.stepIdx++; }
+    else if(nextInfo.type==="phase"){ J.meta.phaseIdx++; J.meta.stepIdx=0; setHead(curPhase()); }
+    else if(nextInfo.type==="done"){ J.meta.phaseIdx++; save(); renderPlan(); return; }
+    save(); refresh(); renderCompose();
+  }
+  function applyAccept(text, St){
+    if(St.special==="reformula"){ if(looksLikeQuestion(text)){ J.data.preg=text; } }
+    else if(St.special==="reformula_mot"){ if(looksLikeQuestion(text)){ J.data.preg=text; J.data.mot="(la he cambiado por una que me gusta más)"; } else { J.data.mot=text; } }
+    else if(St.key==="syn" && isNegative(text)){ J.data.syn=""; }
+    else { J.data[St.key]=text; }
+  }
+
+  function renderCompose(){
+    compose.innerHTML="";
+    var P=curPhase();
+    if(!P || P.type==="summary"){ renderPlan(); return; }
+    var St=curStep();
+    if(St.type==="search"){ renderSearch(St); return; }
+    var chips=document.createElement("div"); chips.className="chips";
+    var help=document.createElement("button"); help.className="chip help"; help.textContent="No lo sé / dame un ejemplo";
+    help.onclick=function(){ handle("no lo sé"); };
+    chips.appendChild(help);
+    if(St.advanceChip && (!aiOn() || J.meta.aiDegraded)){ var ac=document.createElement("button"); ac.className="chip"; ac.id="advancechip"; ac.textContent=St.advanceChip;
+      ac.style.borderColor="var(--orange)"; ac.style.color="var(--orange)"; ac.style.fontWeight="600";
+      ac.onclick=function(){ onConfirmAdvance(); }; chips.appendChild(ac); }
+    var row=document.createElement("div"); row.className="inrow";
+    if(St.frame){ var fr=document.createElement("span"); fr.className="frame"; fr.textContent=St.frame; row.appendChild(fr); }
+    var inp=document.createElement("input"); inp.type="text"; inp.id="entry"; inp.autocomplete="off"; inp.placeholder=St.ph||"Escribe aquí con tus palabras…";
+    var b=document.createElement("button"); b.id="sendbtn"; b.textContent="Enviar"; b.onclick=function(){ handle(inp.value); };
+    inp.addEventListener("keydown",function(e){ if(e.key==="Enter") handle(inp.value); });
+    row.appendChild(inp); row.appendChild(b);
+    compose.appendChild(chips); compose.appendChild(row); inp.focus();
+  }
+  function renderSearch(St){
+    var d=J.data, prefill=[d.kw,d.syn].filter(Boolean).join(" ").trim();
+    var box=document.createElement("div"); box.className="searchbox";
+    box.innerHTML='<label>Monta la búsqueda tal como la pondrías en Google (puedes cambiarla):</label>'+
+      '<div class="qline"><input id="q" type="text" value="'+esc(prefill)+'" placeholder="p. ej. tus palabras clave">'+
+      '<button class="gbtn" id="dogoogle">Buscar en Google →</button></div>'+
+      '<div class="after"><small id="shint">La búsqueda la haces <b>tú</b>: se abrirá Google en una pestaña nueva.</small>'+
+      '<button class="primary" id="searched" disabled>Ya he buscado, continuar →</button></div>';
+    compose.appendChild(box);
+    var q=document.getElementById("q"), searched=document.getElementById("searched");
+    document.getElementById("dogoogle").onclick=function(){
+      var query=(q.value||"").trim(); if(!query){ q.focus(); return; }
+      d.query=query; refresh();
+      window.open("https://www.google.com/search?q="+encodeURIComponent(query)+"&safe=active","_blank","noopener");
+      document.getElementById("shint").innerHTML="Google se ha abierto en una pestaña nueva. Míralo y vuelve aquí.";
+      searched.disabled=false;
+    };
+    searched.onclick=async function(){
+      if(!d.query) return;
+      searched.disabled=true;
+      student("(he buscado: «"+d.query+"»)"); pushHist("user","(he buscado)");
+      var St2=curStep(); var nextInfo=peekNext();
+      await mentorRespond("accept", St2, nextInfo, "(he hecho la búsqueda)");
+      commitAdvance(nextInfo);
+    };
+  }
+
+  function renderPlan(){
+    setHead(PHASES[6]); J.meta.done=true; refresh();
+    var d=J.data;
+    function blk(k,v,q){ return v? '<div class="block"><div class="k">'+k+'</div><div class="v'+(q?' q':'')+'">'+esc(v)+'</div></div>':''; }
+    var hip=(d.hSi&&d.hPorque)? d.hSi+", porque "+d.hPorque+"." : "";
+    var vars=(d.vCambia||d.vObserva||d.vConstante)? ("Cambia: "+(d.vCambia||"—")+" · Mido: "+(d.vObserva||"—")+" · Mantengo igual: "+(d.vConstante||"—")) : "";
+    var bridgeDone = !!d.bConclusion;
+    var bridgeBtn = bridgeDone? '' : '<button class="btn primary" id="gobridge">Seguir: medir con acompañamiento →</button>';
+    var html='<div class="panel plan">'+
+      blk("Pregunta investigable", d.preg, true)+ blk("Por qué me motiva", d.mot)+
+      blk("Lo que ya sé / me parece / no sé", [d.sabe&&("Sé: "+d.sabe), d.parece&&("Me parece: "+d.parece), d.nose&&("No sé: "+d.nose)].filter(Boolean).join("  ·  "))+
+      blk("Hipótesis", hip)+ blk("Variables", vars)+
+      blk("Cómo lo investigo", [d.instrumento&&("Instrumento: "+d.instrumento), d.procedimiento&&("Procedimiento: "+d.procedimiento), d.kw&&("Palabras: "+d.kw), d.query&&("Busqué: "+d.query)].filter(Boolean).join("  ·  "))+
+      blk("Fuentes", [d.fuente&&("Fuente: "+d.fuente), d.fuenteDatos&&("Aprendí: "+d.fuenteDatos), d.fuenteReason&&("Me fío porque: "+d.fuenteReason), d.dudas&&("Dudas: "+d.dudas)].filter(Boolean).join("  ·  "))+
+      blk("Mis datos", d.bDatos)+ blk("Patrón / contraste", d.bContraste)+ blk("Mi conclusión provisional", d.bConclusion, true)+
+      '<div class="warnline">'+(bridgeDone
+        ? 'Has recorrido una investigación <b>de principio a fin</b>: preguntar, planificar, medir, buscar y sacar tu propia conclusión con datos. Eso es investigar.'
+        : 'Este plan <b>no contiene las respuestas</b>: esas las medirás y las buscarás tú. Cuando empieces, puedo acompañarte a ordenar tus datos.')+'</div>'+
+      '<div class="btnrow" style="margin-top:16px">'+bridgeBtn+
+      '<button class="btn sec" id="dlplan">Descargar mi plan (.txt)</button>'+
+      '<button class="btn sec" id="dljson">Descargar datos (.json)</button>'+
+      '<button class="btn green" id="again">Empezar otra investigación</button></div></div>';
+    compose.innerHTML=html;
+    if(!bridgeDone) document.getElementById("gobridge").onclick=function(){ enterBridge(); };
+    document.getElementById("dlplan").onclick=function(){ download("mi-plan-investigacion.txt", buildPlanText(), "text/plain"); };
+    document.getElementById("dljson").onclick=function(){ download("mi-investigacion.json", JSON.stringify(J,null,2), "application/json"); };
+    document.getElementById("again").onclick=function(){ resetAll(); };
+    updateProgress();
+  }
+  function enterBridge(){ J.meta.done=false; J.meta.phaseIdx=BRIDGE_IDX; J.meta.stepIdx=0; save(); enterPhase(BRIDGE_IDX); }
+  function buildPlanText(){
+    var d=J.data, L=[];
+    L.push("PLAN DE INVESTIGACIÓN — UT 1.3 (La vuelta al mundo en 24 h)"); L.push("=========================================================="); L.push("");
+    L.push("PREGUNTA INVESTIGABLE:\n  "+(d.preg||"—")); L.push("POR QUÉ ME MOTIVA:\n  "+(d.mot||"—")); L.push("");
+    L.push("LO QUE YA SÉ:      "+(d.sabe||"—")); L.push("LO QUE ME PARECE:  "+(d.parece||"—")); L.push("LO QUE NO SÉ:      "+(d.nose||"—")); L.push("");
+    L.push("HIPÓTESIS:\n  "+((d.hSi&&d.hPorque)?(d.hSi+", porque "+d.hPorque+"."):"—")); L.push("");
+    L.push("VARIABLES:"); L.push("  Lo que cambia (independiente): "+(d.vCambia||"—")); L.push("  Lo que mido (dependiente):     "+(d.vObserva||"—")); L.push("  Lo que mantengo igual:         "+(d.vConstante||"—")); L.push("");
+    L.push("CÓMO LO INVESTIGO:"); L.push("  Instrumento de medida: "+(d.instrumento||"—")); L.push("  Procedimiento: "+(d.procedimiento||"—")); L.push("  Palabras clave: "+(d.kw||"—")); L.push("  Búsqueda probada en Google: "+(d.query||"—")); L.push("");
+    L.push("FUENTES:"); L.push("  Fuente elegida: "+(d.fuente||"—")); L.push("  Qué he aprendido de ella: "+(d.fuenteDatos||"—")); L.push("  Por qué me fío: "+(d.fuenteReason||"—")); L.push("  Dudas / contrastar: "+(d.dudas||"—")); L.push("");
+    if(d.bDatos||d.bContraste||d.bConclusion){
+      L.push("INVESTIGACIÓN EN MARCHA:");
+      L.push("  Mis datos (con unidades): "+(d.bDatos||"—"));
+      L.push("  Patrón / contraste: "+(d.bContraste||"—"));
+      L.push("  Mi conclusión provisional: "+(d.bConclusion||"—")); L.push("");
+    }
+    L.push("---"); L.push("El alumno ha construido este proceso él mismo; los datos y las conclusiones son suyos.");
+    return L.join("\n");
+  }
+  function download(name,text,mime){ try{ var b=new Blob([text],{type:mime}); var u=URL.createObjectURL(b); var a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},0);}catch(e){ alert("No se ha podido descargar en este entorno."); } }
+
+  function lockInput(on){ var i=document.getElementById("entry"), b=document.getElementById("sendbtn"); if(i)i.disabled=on; if(b)b.disabled=on; }
+
+  async function handle(raw){
+    var text=(raw||"").trim(); if(!text) return;
+    var St=curStep(); if(!St) return;
+    if(isGarbage(text)){ student(text); mentor("Necesito una respuesta un poco más completa, con tus palabras. ¿Lo intentas otra vez?"); renderCompose(); return; }
+    if(St.key==="preg" && isChangeQuestion(text)){ student(text); mentor("¡Claro! Escribe tu nueva pregunta, con tus palabras."); renderCompose(); return; }
+    student(text); pushHist("user",text); J.meta.turns++;
+    lockInput(true);
+    var kind;
+    if(has(text,HANDOFF)){ kind="handoff"; J.meta.recon++; }
+    else if(curPhase().guard==="valid_seek" && has(text,VALID_SEEK)){ kind="valid"; J.meta.recon++; }
+    else if(isStuck(text)){ kind="stuck"; }
+    else kind="accept";
+    if(kind==="accept" && St.key==="preg"){
+      if(!looksLikeQuestion(text) && has(text,NOT_INVEST)) kind="reformulate";
+      else kind="refine_q";
+    }
+    if(kind==="accept" && St.key==="vObserva" && J.data.vCambia && norm(text)===norm(J.data.vCambia)){
+      mentor("Ojo: «"+esc(text)+"» es lo que <b>cambias</b> (la variable independiente). Lo que <b>mides</b> tiene que ser algo <b>distinto</b>: lo que quieres ver que pasa cuando eso cambia. ¿Qué sería?");
+      renderCompose(); return;
+    }
+    if(kind==="accept" && St.key==="vConstante" && ((J.data.vCambia&&norm(text)===norm(J.data.vCambia))||(J.data.vObserva&&norm(text)===norm(J.data.vObserva)))){
+      mentor("Cuidado: eso ya lo has usado como otra variable. Lo que mantienes <b>igual</b> es algo <b>distinto</b> que NO cambias, para que la comparación sea justa. ¿Qué mantendrías igual?");
+      renderCompose(); return;
+    }
+
+    if(St.gate && aiOn() && (kind==="accept" || kind==="refine_q")){
+      if(St.key==="preg") J.data.preg=text;
+      refresh();
+      var gres=await gateEvaluate(St, text);
+      if(gres===true){ commitAdvance(peekNext()); if(!J.meta.done){ var ns=curStep(); if(ns && ns.ask) mentor(ns.ask(J.data)); } return; }
+      if(gres===false){ renderCompose(); return; }
+      if(gres===null){
+        J.meta.gate=J.meta.gate||{}; var nk=St.key+"_e"; J.meta.gate[nk]=(J.meta.gate[nk]||0)+1;
+        J.meta.aiDegraded=true;
+        if(J.meta.gate[nk]<2){ mentor("Ahora mismo el mentor no puede revisar tu respuesta (puede haber mucha gente usándolo a la vez). Espera unos segundos y pulsa Enviar otra vez."); renderCompose(); return; }
+        J.meta.gate[nk]=0;
+        if(St.key==="preg"){ mentor("Sigo sin poder revisarla. Mira tú los criterios de la pregunta de arriba; si crees que ya los cumple, pulsa «Me quedo con esta pregunta»."); renderCompose(); return; }
+        kind="accept";
+      }
+    }
+
+    if(kind==="accept") applyAccept(text, St);
+    else if(kind==="refine_q" && looksLikeQuestion(text)) J.data.preg=text;
+    refresh();
+
+    var nextInfo = (kind==="accept") ? peekNext() : {type:"stay"};
+    await mentorRespond(kind, St, nextInfo, text);
+
+    if(kind==="accept") commitAdvance(nextInfo);
+    else renderCompose();
+  }
+
+  async function onConfirmAdvance(){
+    var St=curStep(); if(!St) return;
+    var nextInfo=peekNext();
+    await mentorRespond("confirm", St, nextInfo, "(me quedo con esta)");
+    commitAdvance(nextInfo);
+  }
+
+  function enterPhase(i){ var P=PHASES[i]; setHead(P); updateProgress(); if(P.type==="summary"){ renderPlan(); return; } if(P.intro) mentor(P.intro(J.data)); mentor(P.steps[0].ask(J.data)); renderCompose(); }
+  function startFresh(){ thread.innerHTML=""; J=initState(); J.meta.started=true; save(); refresh();
+    mentor("¡Hola de nuevo! Vamos a preparar tu investigación sobre la Tierra, el agua y el clima. Yo no te daré las respuestas: te ayudaré a que las midas y las encuentres tú.");
+    enterPhase(0);
+  }
+  function resumeSaved(){ thread.innerHTML=""; refresh();
+    if(J.meta.done){ mentor("Aquí tienes tu plan otra vez."); renderPlan(); return; }
+    mentor("Bienvenido/a de nuevo. Retomamos donde lo dejaste."); var P=curPhase(); setHead(P); mentor(curStep().ask(J.data)); renderCompose();
+  }
+  function renderStart(hasSaved){
+    var html='<div class="panel"><h2>Aprende a investigar · UT 1.3</h2><p>Este preparador te acompaña, paso a paso, a convertir un tema sobre la Tierra y el clima en una investigación que puedas <b>medir</b>: la pregunta, la hipótesis, las variables, cómo lo mides y buscas, y las fuentes. Los datos los sacas <b>tú</b>.</p><div class="btnrow">'+
+      (hasSaved? '<button class="btn primary" id="cont">Continuar donde lo dejé</button><button class="btn sec" id="fresh">Empezar de nuevo</button>' : '<button class="btn primary" id="fresh">Empezar</button>')+'</div></div>';
+    compose.innerHTML=html;
+    if(hasSaved) document.getElementById("cont").onclick=function(){ resumeSaved(); };
+    document.getElementById("fresh").onclick=function(){ startFresh(); };
+  }
+  function resetAll(){ try{ localStorage.removeItem("pic_ut13_app"); }catch(e){} thread.innerHTML=""; J=initState(); refresh(); document.getElementById("phasepill").textContent="Preparado para empezar"; document.getElementById("stage-h1").textContent="Aprende a investigar"; document.getElementById("stage-sub").textContent="Tú traes las ideas. Yo te ayudo a convertirlas en una investigación que puedas medir."; renderStart(false); }
+
+  function openSettings(){
+    var back=document.createElement("div"); back.className="modal";
+    back.innerHTML='<div class="box"><h3>Conexión con la IA</h3>'+
+      '<p>Pega aquí la dirección de tu Worker (proxy). Si la dejas vacía, la app funciona en <b>modo guiado</b> (sin IA). Esto es para el profesor.</p>'+
+      '<label>URL del proxy (Worker)</label><input id="cfgurl" placeholder="https://...workers.dev" value="'+esc(CONFIG.proxyUrl)+'">'+
+      '<label>Token de la app (opcional)</label><input id="cfgtok" placeholder="(si has configurado APP_TOKEN)" value="'+esc(CONFIG.appToken)+'">'+
+      '<div class="msg" id="cfgmsg"></div>'+
+      '<div class="row"><button class="btn primary" id="cfgsave">Guardar</button><button class="btn sec" id="cfgtest">Probar conexión</button><button class="btn sec" id="cfgclose">Cerrar</button></div></div>';
+    document.body.appendChild(back);
+    back.addEventListener("click",function(e){ if(e.target===back) document.body.removeChild(back); });
+    document.getElementById("cfgsave").onclick=function(){
+      CONFIG.proxyUrl=(document.getElementById("cfgurl").value||"").trim();
+      CONFIG.appToken=(document.getElementById("cfgtok").value||"").trim();
+      try{ localStorage.setItem("pic_proxy_url",CONFIG.proxyUrl); localStorage.setItem("pic_app_token",CONFIG.appToken); }catch(e){}
+      setFlag(); document.getElementById("cfgmsg").innerHTML='<span style="color:var(--green)">Guardado. '+(CONFIG.proxyUrl?"IA conectada.":"Modo guiado.")+'</span>';
+    };
+    document.getElementById("cfgtest").onclick=async function(){
+      var m=document.getElementById("cfgmsg"); var url=(document.getElementById("cfgurl").value||"").trim();
+      if(!url){ m.innerHTML='<span style="color:var(--warn)">Escribe primero la URL.</span>'; return; }
+      m.textContent="Probando…";
+      var save0=CONFIG.proxyUrl, tok0=CONFIG.appToken; CONFIG.proxyUrl=url; CONFIG.appToken=(document.getElementById("cfgtok").value||"").trim();
+      try{ var r=await callMentor("PRUEBA DE CONEXIÓN. Responde solo: conexión correcta.","hola");
+        m.innerHTML='<span style="color:var(--green)">✓ Responde: '+esc(r).slice(0,80)+'</span>';
+      }catch(e){ m.innerHTML='<span style="color:var(--warn)">No responde: '+esc(String(e.message||e)).slice(0,90)+'</span>'; }
+      CONFIG.proxyUrl=save0; CONFIG.appToken=tok0;
+    };
+    document.getElementById("cfgclose").onclick=function(){ document.body.removeChild(back); };
+  }
+
+  document.getElementById("reset").onclick=function(){ resetAll(); };
+  document.getElementById("aiflag").onclick=openSettings;
+  document.getElementById("cfg2").onclick=openSettings;
+
+  globalThis.__pic={ handle:handle, getJ:function(){return J;}, curStep:curStep, buildPlanText:buildPlanText, setProxy:function(u){CONFIG.proxyUrl=u;}, searchedClick:function(){var el=document.getElementById("searched"); return el&&el.onclick();}, googleClick:function(v){var q=document.getElementById("q"); if(q)q.value=v; var g=document.getElementById("dogoogle"); return g&&g.onclick();}, advanceChip:function(){var el=document.getElementById("advancechip"); return el&&el.onclick();}, gobridge:function(){var el=document.getElementById("gobridge"); return el&&el.onclick();} };
+
+  setFlag();
+  (function(){ var saved=load(); if(saved&&saved.meta&&saved.meta.started){ J=saved; refresh(); renderStart(true); } else { refresh(); renderStart(false); } })();
+})();
+</script>
+</body>
+</html>
