@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Préparateur de Recherches Scientifiques</title>
+<style>
+  :root{
+    --bg:#F6F2E9; --surface:#FFFFFF; --ink:#26301F; --ink-soft:#5E6A56; --line:#E6E0D2;
+    --green:#2F6D4E; --green-soft:#E3EFE7; --orange:#E08A3C; --orange-soft:#FBE9D6;
+    --ok:#2F6D4E; --ok-soft:#E3EFE7; --pending:#C6CCBE; --warn:#B4531F; --warn-soft:#F7E3D5;
+    --radius:14px; --shadow:0 1px 2px rgba(30,42,46,.05),0 8px 24px rgba(30,42,46,.06);
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 22px 60px}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+  .brand{font-weight:600}.brand .dot{color:var(--orange)}
+  .badges{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .phasepill{font-size:.82rem;color:#fff;background:var(--green);padding:5px 12px;border-radius:999px;font-weight:600}
+  .aiflag{font-size:.72rem;padding:4px 9px;border-radius:999px;cursor:pointer;border:1px solid transparent}
+  .aiflag.on{background:var(--green-soft);color:var(--green)}
+  .aiflag.off{background:#EFECE2;color:var(--ink-soft)}
+  .layout{display:grid;grid-template-columns:1fr 330px;gap:26px;align-items:start}
+  @media(max-width:860px){.layout{grid-template-columns:1fr}}
+
+  .stage{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .stage-head{padding:18px 24px 12px;border-bottom:1px solid var(--line)}
+  .stage-head h1{font-size:1.12rem;margin:0 0 3px}.stage-head p{margin:0;color:var(--ink-soft);font-size:.9rem}
+  .thread{padding:12px 24px 6px;max-height:48vh;overflow-y:auto}
+  .turn{margin:13px 0;display:flex;gap:12px}
+  .turn .who{flex:0 0 auto;width:60px;font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);padding-top:3px}
+  .turn .say{flex:1}
+  .turn.mentor .say{background:var(--green-soft);border-left:3px solid var(--green);padding:11px 14px;border-radius:0 10px 10px 0}
+  .turn.mentor.reconduct .say{background:var(--warn-soft);border-left-color:var(--warn)}
+  .turn.mentor.example .say{background:var(--orange-soft);border-left-color:var(--orange)}
+  .turn.mentor.typing .say{opacity:.65;font-style:italic}
+  .turn.student .who{color:var(--green);font-weight:700}
+  .turn.student .say{color:var(--ink);padding:2px 0}
+
+  .compose{padding:14px 24px 20px;border-top:1px solid var(--line)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .chip{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 12px;border-radius:999px;font-size:.86rem;cursor:pointer;transition:.15s}
+  .chip:hover{border-color:var(--green);background:var(--green-soft)}
+  .chip.help{border-style:dashed;color:var(--ink-soft)}
+  .inrow{display:flex;gap:10px;align-items:center}
+  .inrow .frame{flex:0 0 auto;color:var(--ink-soft);font-weight:600;font-size:.92rem}
+  .inrow input{flex:1;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-size:.95rem;font-family:inherit;color:var(--ink);background:#fff}
+  .inrow input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+  .inrow input:disabled{background:#F4F2EC;color:var(--ink-soft)}
+  .inrow button{border:none;background:var(--green);color:#fff;font-weight:600;padding:0 18px;border-radius:10px;cursor:pointer;font-size:.92rem;height:42px}
+  .inrow button:disabled{background:var(--pending);cursor:default}
+
+  .searchbox{background:#FBF9F3;border:1px solid var(--line);border-radius:12px;padding:14px}
+  .searchbox label{display:block;font-size:.82rem;color:var(--ink-soft);margin-bottom:7px}
+  .searchbox .qline{display:flex;gap:10px;align-items:center}
+  .searchbox .qline input{flex:1;border:1px solid var(--line);border-radius:999px;padding:11px 16px;font-size:.95rem;font-family:inherit}
+  .searchbox .qline input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft)}
+  .gbtn{border:none;background:var(--orange);color:#fff;font-weight:600;padding:11px 16px;border-radius:999px;cursor:pointer;white-space:nowrap}
+  .searchbox .after{display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap}
+  .searchbox .after button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;cursor:pointer;font-size:.9rem}
+  .searchbox .after button.primary{border:none;background:var(--orange);color:#fff;font-weight:600}
+  .searchbox .after button:disabled{opacity:.5;cursor:default}
+  .searchbox small{color:var(--ink-soft);font-size:.8rem}
+
+  .panel{padding:22px 24px}
+  .panel h2{margin:0 0 8px;font-size:1.15rem}.panel p{color:var(--ink-soft);margin:0 0 16px}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{border:none;border-radius:10px;padding:11px 18px;font-weight:600;cursor:pointer;font-size:.92rem}
+  .btn.primary{background:var(--orange);color:#fff}.btn.sec{background:#fff;border:1px solid var(--line);color:var(--ink)}.btn.green{background:var(--green);color:#fff}
+  .plan .block{padding:12px 0;border-top:1px solid var(--line)}.plan .block:first-of-type{border-top:none}
+  .plan .k{font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);font-weight:700;margin-bottom:3px}
+  .plan .v{font-size:.98rem}.plan .v.q{font-style:italic;color:var(--green);font-weight:600}
+  .plan .warnline{margin-top:16px;background:var(--green-soft);border-left:3px solid var(--green);padding:10px 14px;border-radius:0 8px 8px 0;font-size:.9rem}
+
+  aside{display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 17px}
+  .card h2{font-size:.76rem;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-soft);margin:0 0 10px;font-weight:700}
+  #resumen .item{font-size:.86rem;margin:7px 0}
+  #resumen .item .lbl{color:var(--ink-soft);display:block;font-size:.74rem;text-transform:uppercase;letter-spacing:.4px}
+  #resumen .empty{color:var(--pending);font-style:italic;font-size:.86rem}
+  .steps{list-style:none;margin:0;padding:0}
+  .steps li{display:flex;align-items:center;gap:9px;font-size:.88rem;padding:4px 0;color:var(--ink-soft)}
+  .steps li .b{width:16px;height:16px;border-radius:50%;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;color:#fff;background:var(--pending)}
+  .steps li.done .b{background:var(--ok)}.steps li.done .b::after{content:"✓"}
+  .steps li.now{color:var(--ink);font-weight:600}.steps li.now .b{background:var(--orange)}
+  .trace{font-size:.8rem;color:var(--ink-soft);display:flex;gap:14px;flex-wrap:wrap}.trace b{color:var(--ink)}
+  .reset{background:none;border:none;color:var(--green);cursor:pointer;font-size:.82rem;text-decoration:underline;padding:0}
+  footer.note{margin-top:24px;font-size:.8rem;color:var(--ink-soft);background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  footer.note b{color:var(--green)}.footlink{background:none;border:none;color:var(--green);text-decoration:underline;cursor:pointer;font-size:.8rem;padding:0}
+
+  .modal{position:fixed;inset:0;background:rgba(20,26,20,.4);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .modal .box{background:#fff;border-radius:14px;max-width:470px;width:100%;padding:22px;box-shadow:var(--shadow)}
+  .modal h3{margin:0 0 6px}.modal p{color:var(--ink-soft);font-size:.85rem;margin:0 0 8px}
+  .modal label{display:block;font-size:.8rem;color:var(--ink-soft);margin:12px 0 4px}
+  .modal input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:.9rem;font-family:inherit}
+  .modal .row{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;align-items:center}
+  .modal .msg{font-size:.82rem;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Préparateur de Recherches Scientifiques <span class="dot">·</span> <span style="color:var(--ink-soft);font-weight:500">UT 1.2 — L'étoile de la mort</span></div>
+    <div class="badges">
+      <span class="aiflag off" id="aiflag" title="Configurer la connexion avec l'IA">Mode guidé</span>
+      <span class="phasepill" id="phasepill">Prêt à commencer</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main class="stage">
+      <div class="stage-head">
+        <h1 id="stage-h1">Apprends à mener une recherche</h1>
+        <p id="stage-sub">Tu apportes les idées. Je t'aide à les transformer en une recherche bien préparée.</p>
+      </div>
+      <div class="thread" id="thread"></div>
+      <div class="compose" id="compose"></div>
+    </main>
+
+    <aside>
+      <div class="card"><h2>Ma recherche</h2><div id="resumen"><div class="empty">Se remplira avec tes décisions…</div></div></div>
+      <div class="card">
+        <h2>Ma progression</h2>
+        <ul class="steps">
+          <li id="p1"><span class="b"></span>Je précise le phénomène</li>
+          <li id="p2"><span class="b"></span>Je formule ma question de recherche</li>
+          <li id="p3"><span class="b"></span>J'explicite ce que je sais déjà</li>
+          <li id="p4"><span class="b"></span>Je risque une hypothèse</li>
+          <li id="p5"><span class="b"></span>J'identifie les variables</li>
+          <li id="p6"><span class="b"></span>Je planifie et je fais ma recherche</li>
+          <li id="p7"><span class="b"></span>Je sélectionne et justifie mes sources</li>
+          <li id="p8"><span class="b"></span>Je monte mon plan de recherche</li>
+        </ul>
+      </div>
+      <div class="card"><h2>Trace du processus</h2>
+        <div class="trace"><span>Tours : <b id="t-turns">0</b></span><span>Recadrages : <b id="t-recon">0</b></span><span><button class="reset" id="reset">réinitialiser</button></span></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="note">
+    <b>Prototype pédagogique.</b> Le moteur guidé porte la structure et les garde-fous ; quand l'IA est connectée, elle <b>met seulement la voix</b> du mentor en réagissant à ce qu'écrit l'élève. Le mentor <b>ne donne pas les réponses</b> : le produit, c'est le plan. ·
+    <button class="footlink" id="cfg2">Connecter l'IA (enseignant)</button>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ================== CONFIG IA ==================
+  var LANG = "fr";
+  var DEFAULT_PROXY = "https://c2.marcpcasals.workers.dev";
+  var CONFIG = { proxyUrl:DEFAULT_PROXY, appToken:"" };
+  try{ CONFIG.proxyUrl=localStorage.getItem("pic_proxy_url")||DEFAULT_PROXY; CONFIG.appToken=localStorage.getItem("pic_app_token")||""; }catch(e){}
+
+  // ================== utilidades ==================
+  function norm(t){ return (t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim(); }
+  function has(t,arr){ t=norm(t); return arr.some(function(w){return t.indexOf(w)>=0;}); }
+  function esc(s){ return (s||"").replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+  function stripHtml(s){ return (s||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim(); }
+  function looksLikeQuestion(t){ var n=norm(t); return t.indexOf("?")>=0 || /^(pourquoi|comment|combien|quel|quelle|quels|quelles|qui |quand|est-ce|qu'est|qu'|que |ou |a quoi|a quel)/.test(n); }
+
+  var HANDOFF=["fais-le toi","fais le toi","fais-le pour moi","fais le pour moi","fais-moi la","fais moi la","donne-moi la reponse","donne moi la reponse","dis-moi la reponse","dis moi la reponse","la reponse est","fais-la toi","fais la toi","cherche-le toi","cherche pour moi","choisis toi","decide toi","ecris-le toi","ecris le toi","donne la reponse","fais tout toi"];
+  var VALID_SEEK=["est correct","est correcte","c'est correct","c'est bon","c'est bien","j'ai raison","est la bonne","laquelle est la bonne","j'ai reussi","est-ce correct","est ce correct","c'est ca"];
+  var STUCK_EXACT=["je ne sais pas","je sais pas","sais pas","aucune idee","pas d'idee","aucune","aide","aide-moi","aide moi","aidez-moi","indice","un indice","donne un indice","je ne sais pas quoi mettre","je ne sais pas quoi dire","je ne sais pas pourquoi","je saurais pas","ca ne me vient pas","je bloque"];
+  function isStuck(text){
+    var n=norm(text).replace(/[.,;:!?¡¿]/g,"").trim();
+    if(STUCK_EXACT.indexOf(n)>=0) return true;
+    if(n.length<=12 && (n.indexOf("aide")>=0 || n.indexOf("indice")>=0)) return true;
+    return false;
+  }
+  var NOT_INVEST=["on ne peut pas etudier","on ne peut pas verifier","je ne peux pas verifier","on ne peut pas mesurer","on ne peut pas observer","on n'a pas moyen","il n'y a pas moyen","ca n'a pas de reponse","c'est juste une opinion","on ne peut pas savoir","pas etudiable"];
+  function isNegative(text){ var n=norm(text).replace(/[.,;:!?¡¿]/g,"").trim(); return ["non","nan","rien","aucun","aucune","aucune idee","non merci","je ne crois pas","pas vraiment","non rien"].indexOf(n)>=0; }
+  function isGarbage(text){
+    if(isNegative(text)||isStuck(text)) return false;
+    var n=norm(text).replace(/[^a-z0-9 ]/g,"").trim();
+    if(n.length<3) return true;
+    if(/^(.)\1*$/.test(n.replace(/ /g,""))) return true;
+    return false;
+  }
+  function isChangeQuestion(text){ if(looksLikeQuestion(text)) return false; var n=norm(text); return /(changer|change|changeons).{0,6}question|autre question|nouvelle question|recommencer|je change de question/.test(n); }
+
+  // ================== phases (structure, garde-fous) ==================
+  var PHASES=[
+    { id:"pregunta", label:"Phase 1–2 sur 8", title:"Ta question", pk:["p1","p2"],
+      h1:"Du sujet à ta question de recherche", sub:"Tu apportes le sujet ; je t'aide à le transformer en une question qu'on peut étudier et qui te motive.",
+      intro:function(){return "On commence une recherche ! La première chose n'est pas de chercher, mais de <b>décider ce que tu veux savoir</b>. Et c'est toi qui choisis.";},
+      steps:[
+        {key:"tema", ask:function(){return "Dans l'Univers et le Système solaire, qu'est-ce qui t'intrigue ou que tu aimerais comprendre ? Ce qui pique <b>ta</b> curiosité.";}, ex:"Par exemple : comment se déplacent les planètes, pourquoi la Lune change de forme, pourquoi il y a le jour et la nuit… Lequel t'attire le plus, ou lequel d'autre te vient ?", ph:"Écris le sujet qui t'intéresse…", confirm:function(){return "Je garde ton sujet. Maintenant, rendons-le plus concret, c'est le plus difficile.";}},
+        {key:"fen", ask:function(d){return "«"+esc(d.tema)+"», j'aime bien. C'est encore large. À partir de là, quelle <b>chose concrète</b> pourrais-tu regarder, observer ou comparer ?";}, ex:"Par exemple, de «les planètes» tu pourrais t'intéresser à <i>combien de temps elles mettent à tourner autour du Soleil</i>. Toi, que regarderais-tu ?", ph:"Précise le phénomène concret…", confirm:function(){return "Bien : tu as maintenant quelque chose de concret à regarder. C'est un <b>phénomène</b>.";}},
+        {key:"preg", concept:"question de recherche", advanceChip:"Je garde cette question →", gate:true, gateCriteria:"Elle est étudiable si : on y répond en recueillant des données (observer, mesurer ou chercher dans des sources fiables) ; ce N'est PAS une opinion ; ce N'est PAS une question de définition («qu'est-ce que…?») ; ce N'est PAS une simple donnée à compter («combien…?») ; on n'y répond PAS par un simple oui/non ; elle est concrète ; et de préférence elle relie deux choses («comment change/influence X selon Y?»).", ask:function(d){return "Maintenant le <b>plus important</b> de tout : transforme ton phénomène («"+esc(d.fen||"")+"») en une <b>question de recherche</b>. On y répond en recueillant des données (observer, mesurer ou chercher dans des sources fiables) ; ce n'est pas une opinion ni une définition («qu'est-ce que…?»), ce n'est pas une simple donnée ni un oui/non, et les meilleures relient deux choses : <b>«comment change/influence X selon Y?»</b>. Comment la poserais-tu ?";}, ex:"Regarde : «qu'est-ce qu'une galaxie ?» est une définition ; «combien y a-t-il de galaxies ?» est une donnée ponctuelle. Par contre «comment change le nombre de galaxies visibles selon la pollution lumineuse du lieu ?» est bien étudiable (ça relie deux choses et ça se compare). Comment pourrais-tu affiner la tienne ainsi ?", ph:"Écris ta question…", confirm:function(){return "D'accord, on continue avec cette question. Rappelle-toi : plus elle relie deux choses («comment change X selon Y») et moins c'est une donnée ou un oui/non, mieux c'est.";}},
+        {key:"mot", special:"reformula_mot", ask:function(){return "Et le plus important : est-ce que cette question te <b>motive</b> vraiment ? Si une autre te motive plus, écris-la ; si celle-ci te plaît, dis-moi pourquoi.";}, ex:"Par exemple : «elle me motive parce que je me suis toujours demandé pourquoi la Lune change». Et toi, pourquoi celle-ci ?", ph:"Pourquoi te motive-t-elle ? (ou écris une autre version)", confirm:function(){return "C'est ça la clé : une question qui te <b>tient à cœur</b>, on l'étudie avec bien plus d'envie.";}}
+      ]},
+    { id:"previs", label:"Phase 3 sur 8", title:"Ce que je sais déjà", pk:["p3"],
+      h1:"Que sais-tu déjà ?", sub:"Avant de chercher quoi que ce soit, on regarde d'où tu pars. Il n'y a pas de meilleures ou de pires réponses.",
+      intro:function(){return "Avant d'enquêter, arrête-toi un instant pour penser à ce que tu as déjà en tête. Ça t'aidera à risquer une bonne hypothèse ensuite.";},
+      steps:[
+        {key:"sabe", ask:function(){return "Commençons par le sûr : que crois-tu <b>DÉJÀ savoir</b> là-dessus ?";}, ex:"Par exemple : «la Terre tourne autour du Soleil». Toi, qu'est-ce que tu sais de sûr ?", ph:"Ce que je sais de sûr…", confirm:function(){return "Bien. C'est ce que tu tiens pour sûr ; on verra si ça tient.";}},
+        {key:"parece", ask:function(){return "Maintenant l'intéressant : qu'est-ce qu'il te <b>SEMBLE</b>, même sans être sûr(e) ? Ces intuitions seront la première chose à vérifier.";}, ex:"Par exemple : «il me semble que les planètes plus éloignées vont plus lentement». Et toi, qu'est-ce qu'il te semble ?", ph:"Ce qu'il me semble…", confirm:function(){return "C'est de l'or : ce qui «te semble» sera la <b>graine de ton hypothèse</b>.";}},
+        {key:"nose", ask:function(){return "Et pour finir : qu'est-ce que tu <b>NE sais pas encore</b> et qu'il te faudrait découvrir ?";}, ex:"Par exemple : «je ne sais pas combien de temps met chaque planète». Et toi, qu'est-ce qui te manque ?", ph:"Ce que je ne sais pas encore…", confirm:function(){return "Parfait. Ce que tu ne sais pas, c'est justement ce que tu devras chercher.";}}
+      ]},
+    { id:"hipotesi", label:"Phase 4 sur 8", title:"Hypothèse", pk:["p4"], guard:"valid_seek",
+      h1:"Risque ton hypothèse", sub:"Une hypothèse est un pari : ce que tu crois qu'il va se passer et pourquoi. Elle n'a pas à être correcte — tu la vérifieras après.",
+      intro:function(d){return "Rappelle-toi ce qu'il «te semble»"+(d.parece?" : «"+esc(d.parece)+"»":"")+". On va transformer cette intuition en une <b>hypothèse</b> bien faite.";},
+      steps:[
+        {key:"hSi", concept:"prédiction", ask:function(){return "Risque ta prédiction sous la forme <b>«Si… alors…»</b>. Qu'est-ce que tu crois qu'il va se passer ?";}, ex:"Par exemple : «Si une planète est plus loin du Soleil, alors elle met plus de temps à en faire le tour». Mais avec ton idée.", ph:"Si…, alors…", confirm:function(){return "Tu as ta <b>prédiction</b> : ce que tu crois qu'il va se passer. C'est ce que fait un scientifique avant d'enquêter. Maintenant, le pourquoi.";}},
+        {key:"hPorque", frame:"…parce que", concept:"hypothèse", ask:function(){return "Pourquoi crois-tu que ça arrive ? Le <b>pourquoi</b> transforme une devinette en hypothèse.";}, ex:"Par exemple : «…parce qu'elle doit parcourir un chemin plus long». Et toi, pourquoi crois-tu que ça arrive ?", ph:"pourquoi crois-tu que ça arrive…", confirm:function(){return "Prédiction + pourquoi = <b>hypothèse</b>. Tu viens de formuler une hypothèse scientifique ! C'est un pari raisonné qu'on met ensuite à l'épreuve.";}}
+      ]},
+    { id:"variables", label:"Phase 5 sur 8", title:"Variables", pk:["p5"],
+      h1:"Les variables de ta recherche", sub:"Ce qui change, ce que tu observes et ce que tu gardes pareil. Sans te presser.",
+      intro:function(){return "Maintenant les <b>variables</b>. Il n'y a pas une seule bonne réponse : je veux que tu reconnaisses toi ce qui intervient dans ta recherche.";},
+      steps:[
+        {key:"vCambia", concept:"variable indépendante", gate:true, gateCriteria:"Ce doit être la VARIABLE INDÉPENDANTE : ce qui change d'un cas à l'autre pour pouvoir comparer ; quelque chose de concret et cohérent avec sa question.", ask:function(){return "Dans ta question, il y a quelque chose qui <b>change</b> d'un cas à l'autre et que tu utilises pour comparer. Qu'est-ce que c'est ?";}, ex:"Par exemple, la distance au Soleil. Mais regarde dans ta question : qu'est-ce qui change là ?", ph:"ce qui change…", confirm:function(){return "Ça, en science, s'appelle la <b>variable indépendante</b> : ce que toi tu changes pour comparer.";}},
+        {key:"vObserva", concept:"variable dépendante", gate:true, gateCriteria:"Ce doit être la VARIABLE DÉPENDANTE : ce qu'on observe ou mesure quand la variable indépendante change ; elle doit être DIFFÉRENTE de la variable indépendante déjà choisie et cohérente avec sa question.", ask:function(){return "Et qu'est-ce que tu veux <b>regarder qu'il se passe</b> quand ça change ?";}, ex:"Par exemple, le temps que ça met. Et dans ton cas, qu'observes-tu ?", ph:"ce que j'observe…", confirm:function(){return "Et ça, c'est la <b>variable dépendante</b> : ce que tu observes qui change quand tu modifies l'autre.";}},
+        {key:"vConstante", concept:"contrôle des variables", gate:true, gateCriteria:"Ce doit être une VARIABLE CONTRÔLÉE : quelque chose qui reste pareil et NE change PAS, pour que la comparaison soit juste ; différente de l'indépendante et de la dépendante.", ask:function(){return "Pour comparer de façon <b>juste</b>, qu'est-ce que tu devrais garder <b>pareil</b> dans tous les cas ?";}, ex:"Par exemple, tout mesurer de la même manière. Toi, qu'est-ce que tu garderais pareil ?", ph:"ce que je garde pareil…", confirm:function(){return "Ce que tu gardes pareil, ce sont les <b>variables contrôlées</b>. Tu viens de faire du <b>contrôle des variables</b>, une pièce clé de la méthode scientifique.";}}
+      ]},
+    { id:"busqueda", label:"Phase 6 sur 8", title:"Ta recherche", pk:["p6"],
+      h1:"Planifie et fais ta recherche", sub:"Je ne te dirai pas quoi trouver. Je t'aide à décider comment le chercher toi sur Google.",
+      intro:function(){return "Tu as déjà la question, l'hypothèse et les variables. Maintenant, il faut <b>chercher de l'information</b> — et je veux que tu apprennes à le faire toi.";},
+      steps:[
+        {key:"kw", gate:true, gateCriteria:"Ils doivent permettre de trouver sur Google de l'information sur SON sujet concret. OBLIGATOIRE : ils doivent inclure le/les sujets ou objets réels du phénomène qu'il étudie (par exemple, s'il étudie la Lune, des mots comme «lune», «phases» ou «soleil» doivent apparaître). Mets ok:false si il n'y a QUE des termes abstraits ou génériques (comme «position», «obscurité», «distance», «changement») sans le nom de l'objet/sujet ; dans ce cas, dis-lui d'ajouter les vrais mots-clés de son sujet (nomme-les : de quoi ça parle ?). Entre 2 et 4 mots, sans longues phrases.", ask:function(){return "Pas besoin d'écrire toute la question sur Google. Quels <b>mots</b> crois-tu être les plus importants pour chercher ?";}, ex:"Par exemple : <i>planètes</i>, <i>distance</i>, <i>Soleil</i>. Mais c'est toi qui choisis.", ph:"mots-clés…", confirm:function(){return "J'aime bien : tu as choisi <b>tes</b> mots-clés. Il n'y en a pas de corrects.";}},
+        {key:"syn", ask:function(){return "Te vient-il <b>une autre façon de dire</b> l'un d'eux ? (un synonyme, ou un mot plus scientifique)";}, ex:"Par exemple : <i>planètes</i> c'est aussi <i>astres</i> ; <i>faire le tour</i> c'est <i>orbite</i>. Un autre ?", ph:"autres mots / synonymes…", confirm:function(){return "Plus tu as de façons de le dire, plus tu as de chances de trouver de bonnes pages. Maintenant, essaie-le vraiment sur Google.";}},
+        {key:"query", type:"search", ask:function(){return "Compose ta recherche et <b>essaie-la sur Google</b>. C'est toi qui la fais : ça s'ouvrira dans un nouvel onglet.";}, confirm:function(){return "";}},
+        {key:"fuente", ask:function(){return "Regarde les résultats avec un <b>œil critique</b> : qui publie chaque page ? le premier est-il toujours le meilleur ? Écris une source qui t'a paru utile (ou qui la publie).";}, ex:"Par exemple, est-ce d'un <i>planétarium</i>, d'une <i>université</i> ou d'un <i>blog personnel</i> ? Lequel as-tu vu ?", ph:"une source utile…", confirm:function(){return "Bien, tu as une source candidate.";}}
+      ]},
+    { id:"fuentes", label:"Phase 7 sur 8", title:"Sources fiables", pk:["p7"],
+      h1:"Peux-tu te fier à cette source ?", sub:"Choisir une source ne suffit pas : il faut savoir pourquoi elle est fiable.",
+      intro:function(d){return "Tu as choisi"+(d.fuente?" : «"+esc(d.fuente)+"»":" une source")+". Avant de t'y fier, voyons ce qu'elle t'apporte et si elle est fiable.";},
+      steps:[
+        {key:"fuenteDatos", ask:function(){return "D'abord, l'important : quelle <b>information utile</b> as-tu tirée de cette source pour ta question ? Qu'as-tu appris que tu ne savais pas ?";}, ex:"Par exemple : «j'ai appris qu'une supernova n'est dangereuse qu'à moins d'une certaine distance». Toi, qu'as-tu tiré ?", ph:"ce que j'ai appris de la source…", confirm:function(){return "Très bien : ça, c'est <b>extraire de l'information</b> d'une source, pas la copier en entier.";}},
+        {key:"fuenteReason", ask:function(){return "Maintenant la fiabilité : <b>pourquoi</b> t'y fierais-tu ? Pense à : qui l'écrit, quand ça a été publié, et si c'est un site scientifique (université, planétarium, agence spatiale).";}, ex:"Par exemple : «je m'y fie parce que c'est la page d'un planétarium et que la date est récente». Comment le dirais-tu ?", ph:"pourquoi je m'y fie…", confirm:function(){return "C'est la justification que je te demande : tu as évalué la <b>fiabilité</b>, tu n'as pas pris la première page comme ça.";}},
+        {key:"dudas", ask:function(){return "Quels <b>doutes</b> te restent, ou qu'aimerais-tu vérifier avec une deuxième source ?";}, ex:"Par exemple : «je chercherais une autre page pour voir si elles disent la même chose». Toi, que vérifierais-tu ?", ph:"doutes ou quelque chose à vérifier…", confirm:function(){return "Très bien : douter et croiser les sources, c'est ce que fait celui qui enquête vraiment.";}}
+      ]},
+    { id:"plan", label:"Phase 8 sur 8", title:"Ton plan", pk:["p8"], type:"summary",
+      h1:"Ton plan de recherche", sub:"Tout ce que tu as décidé, réuni. Le point de départ pour enquêter.", steps:[] },
+
+    { id:"puente", label:"Accompagnement", title:"Enquête avec de l'aide", pk:[],
+      h1:"Maintenant c'est toi qui enquêtes, et je t'accompagne", sub:"Tu as ton plan. Au fur et à mesure que tu enquêtes, reviens ici : je t'aide à ordonner ce que tu trouves, sans te donner les réponses.",
+      intro:function(){return "Super que tu continues ! Rappelle-toi : les réponses, c'est <b>toi</b> qui les trouves ; je t'aide à le faire avec méthode. Va enquêter et raconte-moi.";},
+      steps:[
+        {key:"bDatos", concept:"relevé de données", ask:function(){return "Qu'as-tu <b>trouvé ou observé</b> jusqu'ici ? Note-le de façon ordonnée (données, faits, ce que disent les sources).";}, ex:"Par exemple : «j'ai noté dans un tableau la distance et l'effet de 3 supernovas». Toi, qu'as-tu recueilli ?", ph:"ce que j'ai trouvé…", confirm:function(){return "Bien : noter de façon ordonnée ce que tu trouves, c'est ce que fait un scientifique.";}},
+        {key:"bContraste", ask:function(){return "Ce que tu as trouvé <b>coïncide</b>-t-il avec une autre source, ou y a-t-il quelque chose qui se <b>contredit</b> ?";}, ex:"Par exemple : «un site disait une distance et un autre en disait une différente». As-tu vu une différence ?", ph:"coïncidences ou contradictions…", confirm:function(){return "Croiser les sources et repérer les contradictions : c'est de l'<b>esprit critique</b>.";}},
+        {key:"bConclusion", concept:"conclusion", ask:function(){return "Avec ce que tu as, quelle <b>conclusion provisoire</b> tires-tu sur ta question ? Confirme-t-elle ton hypothèse ou non ?";}, ex:"Par exemple : «on dirait que oui, mais seulement à une certaine distance ; il me faut plus de données». Toi, que conclus-tu ?", ph:"ma conclusion provisoire…", confirm:function(){return "Ça, c'est <b>ta</b> conclusion, tirée de tes propres données. Tu viens de parcourir le cycle d'une recherche du début à la fin !";}}
+      ]}
+  ];
+  var BRIDGE_IDX = 7;
+  var PMAP={}; PHASES.forEach(function(P,i){ (P.pk||[]).forEach(function(k){ PMAP[k]=i; }); });
+
+  // ================== estado ==================
+  function initState(){ return { meta:{phaseIdx:0, stepIdx:0, turns:0, recon:0, started:false, done:false}, data:{}, hist:[] }; }
+  var J=initState();
+  function save(){ try{ localStorage.setItem("pic_ut12_app_fr", JSON.stringify(J)); }catch(e){} }
+  function load(){ try{ var r=localStorage.getItem("pic_ut12_app_fr"); return r?JSON.parse(r):null; }catch(e){ return null; } }
+  function pushHist(role,text){ if(!J.hist)J.hist=[]; J.hist.push({role:role,text:stripHtml(text).slice(0,500)}); if(J.hist.length>16)J.hist=J.hist.slice(-16); }
+
+  var thread=document.getElementById("thread"), compose=document.getElementById("compose");
+  function addTurn(who,html,kind){
+    var t=document.createElement("div");
+    t.className="turn "+(who==="mentor"?"mentor":"student")+(kind?(" "+kind):"");
+    var w=document.createElement("div"); w.className="who"; w.textContent=(who==="mentor"?"Mentor":"Toi");
+    var s=document.createElement("div"); s.className="say"; s.innerHTML=html;
+    t.appendChild(w); t.appendChild(s); thread.appendChild(t); thread.scrollTop=thread.scrollHeight;
+    return t;
+  }
+  function mentor(h,k){ addTurn("mentor",h,k); pushHist("mentor",h); }
+  function student(t){ addTurn("student",esc(t)); }
+
+  // ================== sidebar ==================
+  function setHead(P){ document.getElementById("phasepill").innerHTML=P.label+" · "+P.title; document.getElementById("stage-h1").textContent=P.h1; document.getElementById("stage-sub").textContent=P.sub; }
+  function updateProgress(){
+    var cur=J.meta.phaseIdx;
+    ["p1","p2","p3","p4","p5","p6","p7","p8"].forEach(function(k){
+      var li=document.getElementById(k), ph=PMAP[k], cls="";
+      if(J.meta.done) cls="done"; else if(ph<cur) cls="done"; else if(ph>cur) cls=""; else cls="now";
+      if(!J.meta.done && ph===0 && cur===0){ if(k==="p1"){ cls=J.data.fen?"done":"now"; } if(k==="p2"){ cls=J.data.fen?"now":""; } }
+      li.className=cls;
+    });
+  }
+  function resumen(){
+    var d=J.data, out=[];
+    function it(lbl,val){ if(val) out.push('<div class="item"><span class="lbl">'+lbl+'</span>'+esc(val)+'</div>'); }
+    it("Question", d.preg);
+    if(d.hSi&&d.hPorque) out.push('<div class="item"><span class="lbl">Hypothèse</span>'+esc(d.hSi)+', parce que '+esc(d.hPorque)+'</div>');
+    if(d.vCambia||d.vObserva) out.push('<div class="item"><span class="lbl">Variables</span>change : '+esc(d.vCambia||"—")+' · j\'observe : '+esc(d.vObserva||"—")+(d.vConstante?' · pareil : '+esc(d.vConstante):'')+'</div>');
+    if(d.query) it("Recherche essayée", d.query);
+    if(d.fuente) it("Source", d.fuente+(d.fuenteReason?" — "+d.fuenteReason:""));
+    document.getElementById("resumen").innerHTML = out.length? out.join("") : '<div class="empty">Se remplira avec tes décisions…</div>';
+  }
+  function refresh(){ document.getElementById("t-turns").textContent=J.meta.turns; document.getElementById("t-recon").textContent=J.meta.recon; updateProgress(); resumen(); save(); }
+
+  function curPhase(){ return PHASES[J.meta.phaseIdx]; }
+  function curStep(){ var P=curPhase(); return P&&P.steps?P.steps[J.meta.stepIdx]:null; }
+
+  // ================== IA (proxy) ==================
+  function aiOn(){ return !!CONFIG.proxyUrl; }
+  function setFlag(){
+    var f=document.getElementById("aiflag");
+    if(aiOn()){ f.className="aiflag on"; f.textContent="IA connectée"; } else { f.className="aiflag off"; f.textContent="Mode guidé"; }
+  }
+  async function callMentor(context, input){
+    var headers={"Content-Type":"application/json"}; if(CONFIG.appToken) headers["X-App-Token"]=CONFIG.appToken;
+    var res=await fetch(CONFIG.proxyUrl,{method:"POST",headers:headers,body:JSON.stringify({input:input,context:context,history:(J.hist||[]).slice(-8),lang:LANG})});
+    var data=await res.json();
+    if(data&&data.reply) return data.reply;
+    throw new Error((data&&data.error)||"sans réponse");
+  }
+  async function callMentorJSON(context, input){
+    var headers={"Content-Type":"application/json"}; if(CONFIG.appToken) headers["X-App-Token"]=CONFIG.appToken;
+    var res=await fetch(CONFIG.proxyUrl,{method:"POST",headers:headers,body:JSON.stringify({input:input,context:context,history:(J.hist||[]).slice(-6),responseJson:true,lang:LANG})});
+    var data=await res.json();
+    if(!data||!data.reply) throw new Error((data&&data.error)||"sans réponse");
+    var raw=String(data.reply).trim().replace(/^```json/i,"").replace(/^```/,"").replace(/```$/,"").trim();
+    return JSON.parse(raw);
+  }
+  function gateContext(St, text){
+    var d=J.data, P=curPhase();
+    return "Tu es le mentor et tu ÉVALUES une réponse de l'élève à l'étape «"+P.title+"».\n"+
+      "Question de recherche de l'élève : «"+stripHtml(d.preg||"(pas encore définie)")+"».\n"+
+      "L'élève répond : «"+text+"».\n"+
+      "CRITÈRES pour accepter : "+(St.gateCriteria||"")+"\n"+
+      "Décide honnêtement si ça REMPLIT les critères. Réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, dans ce format : {\"ok\": true ou false, \"reply\": \"message court et chaleureux pour l'élève, UNE seule idée\", \"value\": \"ce qu'on va enregistrer\"}.\n"+
+      "Si ok est false : dans 'reply' dis-lui gentiment ce qui manque et propose une meilleure version comme EXEMPLE (sans l'imposer) ; NE lui donne JAMAIS la réponse scientifique de sa recherche ; laisse 'value' égal à son texte.\n"+
+      "Si ok est true : dans 'reply' valide brièvement et nomme le concept scientifique s'il y en a un ; dans 'value' mets la réponse déjà affinée (ou son texte tel quel).\n"+
+      "Français, ton chaleureux, phrases courtes.";
+  }
+  function storeGateValue(St, value){ if(St.key==="preg"){ J.data.preg=value||J.data.preg; } else { J.data[St.key]=value; } }
+  async function gateEvaluate(St, text){
+    J.meta.gate=J.meta.gate||{}; var k=St.key;
+    var typ=addTurn("mentor","<span>réflexion…</span>","typing");
+    try{
+      var obj=await callMentorJSON(gateContext(St,text), text);
+      if(typ&&typ.parentNode) typ.parentNode.removeChild(typ);
+      var ok=(obj.ok===true||obj.ok==="true");
+      mentor(esc(obj.reply||""), ok?"":"example");
+      if(ok){ J.meta.gate[k]=0; storeGateValue(St, obj.value||text); return true; }
+      J.meta.gate[k]=(J.meta.gate[k]||0)+1;
+      if(J.meta.gate[k]>=3){ mentor("On continue avec ça ; tu pourras l'améliorer plus tard."); storeGateValue(St, text); J.meta.gate[k]=0; return true; }
+      return false;
+    }catch(e){ if(typ&&typ.parentNode) typ.parentNode.removeChild(typ); return null; }
+  }
+
+  async function mentorRespond(kind, St, nextInfo, input){
+    // Pour ne pas épuiser le quota gratuit de l'IA, celle-ci ne sert QU'À ÉVALUER (gating).
+    // Le reste (accepter, recadrer, exemples, transitions) passe par des modèles : chaleureux et sans consommer de quota.
+    fallbackPost(kind, St, nextInfo);
+  }
+  function fallbackPost(kind, St, nextInfo){
+    var d=J.data;
+    if(kind==="accept"){
+      var c=St.confirm?St.confirm(d):""; if(c) mentor(c);
+      if(nextInfo.type==="step"||nextInfo.type==="phase") mentor(nextInfo.St.ask(d));
+    } else if(kind==="handoff"){
+      mentor("C'est toi qui décides ou qui cherches : c'est ta recherche et c'est ce que tu apprends à faire. Je te donne un exemple, mais c'est toi qui choisis.","reconduct");
+      if(St.ex) mentor(St.ex,"example");
+    } else if(kind==="valid"){
+      mentor("Je ne vais pas te dire si «c'est bien» : une hypothèse <b>n'est ni correcte ni incorrecte au départ</b>. C'est un pari que tu mettras ensuite à l'épreuve. Réessaie :","reconduct");
+      mentor(St.ask(d));
+    } else if(kind==="stuck"){
+      mentor("Pas de souci, je suis là pour ça. Regarde cet exemple :");
+      if(St.ex) mentor(St.ex,"example");
+    } else if(kind==="reformulate"){
+      mentor("Belle réflexion. Mais <b>enquêter, ce n'est pas seulement faire une expérience</b> : c'est aussi chercher dans des <b>sources fiables</b> ce que les scientifiques ont déjà découvert. Donc ta question <b>peut</b> s'étudier de cette façon. Tu la gardes telle quelle, ou tu veux l'affiner un peu ?");
+    } else if(kind==="refine_q"){
+      mentor("Regardons ta question : «"+esc(d.preg||"")+"». Peut-on y répondre en <b>cherchant ou en observant</b> ? N'est-ce pas une opinion ni un <b>oui/non</b> fermé ? Est-elle <b>concrète</b> ? Si oui, appuie sur <b>«Je garde cette question»</b> ; sinon, réécris-la avec tes mots.");
+    } else if(kind==="confirm"){
+      mentor("D'accord, on continue avec cette question. Rappelle-toi : plus elle relie deux choses («comment change X selon Y») et moins c'est un simple oui/non, meilleure sera ta recherche.");
+      if(nextInfo.type==="step"||nextInfo.type==="phase") mentor(nextInfo.St.ask(d));
+    }
+  }
+
+  // ================== avance ==================
+  function peekNext(){
+    var P=curPhase();
+    if(J.meta.stepIdx+1 < P.steps.length) return {type:"step", St:P.steps[J.meta.stepIdx+1]};
+    var ni=J.meta.phaseIdx+1;
+    if(ni>=PHASES.length) return {type:"done"};
+    var NP=PHASES[ni];
+    if(NP.type==="summary") return {type:"done"};
+    return {type:"phase", P:NP, St:NP.steps[0]};
+  }
+  function commitAdvance(nextInfo){
+    if(nextInfo.type==="step"){ J.meta.stepIdx++; }
+    else if(nextInfo.type==="phase"){ J.meta.phaseIdx++; J.meta.stepIdx=0; setHead(curPhase()); }
+    else if(nextInfo.type==="done"){ J.meta.phaseIdx++; save(); renderPlan(); return; }
+    save(); refresh(); renderCompose();
+  }
+  function applyAccept(text, St){
+    if(St.special==="reformula"){ if(looksLikeQuestion(text)){ J.data.preg=text; } }
+    else if(St.special==="reformula_mot"){ if(looksLikeQuestion(text)){ J.data.preg=text; J.data.mot="(je l'ai remplacée par une que je préfère)"; } else { J.data.mot=text; } }
+    else if(St.key==="syn" && isNegative(text)){ J.data.syn=""; }
+    else { J.data[St.key]=text; }
+  }
+
+  // ================== render entrada ==================
+  function renderCompose(){
+    compose.innerHTML="";
+    var P=curPhase();
+    if(!P || P.type==="summary"){ renderPlan(); return; }
+    var St=curStep();
+    if(St.type==="search"){ renderSearch(St); return; }
+    var chips=document.createElement("div"); chips.className="chips";
+    var help=document.createElement("button"); help.className="chip help"; help.textContent="Je ne sais pas / donne-moi un exemple";
+    help.onclick=function(){ handle("je ne sais pas"); };
+    chips.appendChild(help);
+    if(St.advanceChip && (!aiOn() || J.meta.aiDegraded)){ var ac=document.createElement("button"); ac.className="chip"; ac.id="advancechip"; ac.textContent=St.advanceChip;
+      ac.style.borderColor="var(--orange)"; ac.style.color="var(--orange)"; ac.style.fontWeight="600";
+      ac.onclick=function(){ onConfirmAdvance(); }; chips.appendChild(ac); }
+    var row=document.createElement("div"); row.className="inrow";
+    if(St.frame){ var fr=document.createElement("span"); fr.className="frame"; fr.textContent=St.frame; row.appendChild(fr); }
+    var inp=document.createElement("input"); inp.type="text"; inp.id="entry"; inp.autocomplete="off"; inp.placeholder=St.ph||"Écris ici avec tes mots…";
+    var b=document.createElement("button"); b.id="sendbtn"; b.textContent="Envoyer"; b.onclick=function(){ handle(inp.value); };
+    inp.addEventListener("keydown",function(e){ if(e.key==="Enter") handle(inp.value); });
+    row.appendChild(inp); row.appendChild(b);
+    compose.appendChild(chips); compose.appendChild(row); inp.focus();
+  }
+  function renderSearch(St){
+    var d=J.data, prefill=[d.kw,d.syn].filter(Boolean).join(" ").trim();
+    var box=document.createElement("div"); box.className="searchbox";
+    box.innerHTML='<label>Compose la recherche comme tu la mettrais sur Google (tu peux la changer) :</label>'+
+      '<div class="qline"><input id="q" type="text" value="'+esc(prefill)+'" placeholder="p. ex. tes mots-clés">'+
+      '<button class="gbtn" id="dogoogle">Chercher sur Google →</button></div>'+
+      '<div class="after"><small id="shint">C\'est <b>toi</b> qui fais la recherche : Google s\'ouvrira dans un nouvel onglet.</small>'+
+      '<button class="primary" id="searched" disabled>J\'ai cherché, continuer →</button></div>';
+    compose.appendChild(box);
+    var q=document.getElementById("q"), searched=document.getElementById("searched");
+    document.getElementById("dogoogle").onclick=function(){
+      var query=(q.value||"").trim(); if(!query){ q.focus(); return; }
+      d.query=query; refresh();
+      window.open("https://www.google.com/search?q="+encodeURIComponent(query)+"&safe=active","_blank","noopener");
+      document.getElementById("shint").innerHTML="Google s'est ouvert dans un nouvel onglet. Regarde-le et reviens ici.";
+      searched.disabled=false;
+    };
+    searched.onclick=async function(){
+      if(!d.query) return;
+      searched.disabled=true;
+      student("(j'ai cherché : «"+d.query+"»)"); pushHist("user","(j'ai cherché)");
+      var St2=curStep(); var nextInfo=peekNext();
+      await mentorRespond("accept", St2, nextInfo, "(j'ai fait la recherche)");
+      commitAdvance(nextInfo);
+    };
+  }
+
+  // ================== plan final ==================
+  function renderPlan(){
+    setHead(PHASES[6]); J.meta.done=true; refresh();
+    var d=J.data;
+    function blk(k,v,q){ return v? '<div class="block"><div class="k">'+k+'</div><div class="v'+(q?' q':'')+'">'+esc(v)+'</div></div>':''; }
+    var hip=(d.hSi&&d.hPorque)? d.hSi+", parce que "+d.hPorque+"." : "";
+    var vars=(d.vCambia||d.vObserva||d.vConstante)? ("Change : "+(d.vCambia||"—")+" · J'observe : "+(d.vObserva||"—")+" · Je garde pareil : "+(d.vConstante||"—")) : "";
+    var bridgeDone = !!d.bConclusion;
+    var bridgeBtn = bridgeDone? '' : '<button class="btn primary" id="gobridge">Continuer : enquêter avec accompagnement →</button>';
+    var html='<div class="panel plan">'+
+      blk("Question de recherche", d.preg, true)+ blk("Pourquoi elle me motive", d.mot)+
+      blk("Ce que je sais / il me semble / je ne sais pas", [d.sabe&&("Je sais : "+d.sabe), d.parece&&("Il me semble : "+d.parece), d.nose&&("Je ne sais pas : "+d.nose)].filter(Boolean).join("  ·  "))+
+      blk("Hypothèse", hip)+ blk("Variables", vars)+
+      blk("Recherche", [d.kw&&("Mots : "+d.kw), d.query&&("Essayé : "+d.query)].filter(Boolean).join("  ·  "))+
+      blk("Sources", [d.fuente&&("Source : "+d.fuente), d.fuenteDatos&&("Appris : "+d.fuenteDatos), d.fuenteReason&&("Je m'y fie parce que : "+d.fuenteReason), d.dudas&&("Doutes : "+d.dudas)].filter(Boolean).join("  ·  "))+
+      blk("Ce que je trouve", d.bDatos)+ blk("Croisement des sources", d.bContraste)+ blk("Ma conclusion provisoire", d.bConclusion, true)+
+      '<div class="warnline">'+(bridgeDone
+        ? 'Tu as parcouru une recherche <b>du début à la fin</b> : questionner, planifier, chercher et tirer ta propre conclusion. Ça, c\'est enquêter.'
+        : 'Ce plan <b>ne contient pas les réponses</b> : c\'est toi qui les chercheras. Quand tu commenceras à enquêter, je peux t\'accompagner pour ordonner ce que tu trouves.')+'</div>'+
+      '<div class="btnrow" style="margin-top:16px">'+bridgeBtn+
+      '<button class="btn sec" id="dlplan">Télécharger mon plan (.txt)</button>'+
+      '<button class="btn sec" id="dljson">Télécharger les données (.json)</button>'+
+      '<button class="btn green" id="again">Commencer une autre recherche</button></div></div>';
+    compose.innerHTML=html;
+    if(!bridgeDone) document.getElementById("gobridge").onclick=function(){ enterBridge(); };
+    document.getElementById("dlplan").onclick=function(){ download("mon-plan-recherche.txt", buildPlanText(), "text/plain"); };
+    document.getElementById("dljson").onclick=function(){ download("ma-recherche.json", JSON.stringify(J,null,2), "application/json"); };
+    document.getElementById("again").onclick=function(){ resetAll(); };
+    updateProgress();
+  }
+  function enterBridge(){ J.meta.done=false; J.meta.phaseIdx=BRIDGE_IDX; J.meta.stepIdx=0; save(); enterPhase(BRIDGE_IDX); }
+  function buildPlanText(){
+    var d=J.data, L=[];
+    L.push("PLAN DE RECHERCHE — UT 1.2 (L'étoile de la mort)"); L.push("================================================"); L.push("");
+    L.push("QUESTION DE RECHERCHE :\n  "+(d.preg||"—")); L.push("POURQUOI ELLE ME MOTIVE :\n  "+(d.mot||"—")); L.push("");
+    L.push("CE QUE JE SAIS :        "+(d.sabe||"—")); L.push("CE QU'IL ME SEMBLE :    "+(d.parece||"—")); L.push("CE QUE JE NE SAIS PAS : "+(d.nose||"—")); L.push("");
+    L.push("HYPOTHÈSE :\n  "+((d.hSi&&d.hPorque)?(d.hSi+", parce que "+d.hPorque+"."):"—")); L.push("");
+    L.push("VARIABLES :"); L.push("  Ce qui change (indépendante) : "+(d.vCambia||"—")); L.push("  Ce que j'observe (dépendante) : "+(d.vObserva||"—")); L.push("  Ce que je garde pareil :       "+(d.vConstante||"—")); L.push("");
+    L.push("RECHERCHE :"); L.push("  Mots-clés : "+(d.kw||"—")); L.push("  Autres mots : "+(d.syn||"—")); L.push("  Recherche essayée sur Google : "+(d.query||"—")); L.push("");
+    L.push("SOURCES :"); L.push("  Source choisie : "+(d.fuente||"—")); L.push("  Ce que j'en ai appris : "+(d.fuenteDatos||"—")); L.push("  Pourquoi je m'y fie : "+(d.fuenteReason||"—")); L.push("  Doutes / à vérifier : "+(d.dudas||"—")); L.push("");
+    if(d.bDatos||d.bContraste||d.bConclusion){
+      L.push("RECHERCHE EN COURS :");
+      L.push("  Ce que je trouve : "+(d.bDatos||"—"));
+      L.push("  Croisement des sources : "+(d.bContraste||"—"));
+      L.push("  Ma conclusion provisoire : "+(d.bConclusion||"—")); L.push("");
+    }
+    L.push("---"); L.push("L'élève a construit ce processus lui-même ; les conclusions sont les siennes.");
+    return L.join("\n");
+  }
+  function download(name,text,mime){ try{ var b=new Blob([text],{type:mime}); var u=URL.createObjectURL(b); var a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},0);}catch(e){ alert("Le téléchargement n'a pas pu se faire dans cet environnement."); } }
+
+  // ================== motor ==================
+  function lockInput(on){ var i=document.getElementById("entry"), b=document.getElementById("sendbtn"); if(i)i.disabled=on; if(b)b.disabled=on; }
+
+  async function handle(raw){
+    var text=(raw||"").trim(); if(!text) return;
+    var St=curStep(); if(!St) return;
+    if(isGarbage(text)){ student(text); mentor("J'ai besoin d'une réponse un peu plus complète, avec tes mots. Tu réessaies ?"); renderCompose(); return; }
+    if(St.key==="preg" && isChangeQuestion(text)){ student(text); mentor("Bien sûr ! Écris ta nouvelle question, avec tes mots."); renderCompose(); return; }
+    student(text); pushHist("user",text); J.meta.turns++;
+    lockInput(true);
+    var kind;
+    if(has(text,HANDOFF)){ kind="handoff"; J.meta.recon++; }
+    else if(curPhase().guard==="valid_seek" && has(text,VALID_SEEK)){ kind="valid"; J.meta.recon++; }
+    else if(isStuck(text)){ kind="stuck"; }
+    else kind="accept";
+    if(kind==="accept" && St.key==="preg"){
+      if(!looksLikeQuestion(text) && has(text,NOT_INVEST)) kind="reformulate";
+      else kind="refine_q";
+    }
+    if(kind==="accept" && St.key==="vObserva" && J.data.vCambia && norm(text)===norm(J.data.vCambia)){
+      mentor("Attention : «"+esc(text)+"» c'est ce que tu <b>changes</b> (la variable indépendante). Ce que tu <b>observes</b> doit être quelque chose de <b>différent</b> : ce que tu veux voir se produire quand ça change. Qu'est-ce que ce serait ?");
+      renderCompose(); return;
+    }
+    if(kind==="accept" && St.key==="vConstante" && ((J.data.vCambia&&norm(text)===norm(J.data.vCambia))||(J.data.vObserva&&norm(text)===norm(J.data.vObserva)))){
+      mentor("Attention : tu as déjà utilisé ça comme autre variable. Ce que tu gardes <b>pareil</b> est quelque chose de <b>différent</b> que tu NE changes PAS, pour que la comparaison soit juste. Qu'est-ce que tu garderais pareil ?");
+      renderCompose(); return;
+    }
+
+    if(St.gate && aiOn() && (kind==="accept" || kind==="refine_q")){
+      if(St.key==="preg") J.data.preg=text;
+      refresh();
+      var gres=await gateEvaluate(St, text);
+      if(gres===true){ commitAdvance(peekNext()); if(!J.meta.done){ var ns=curStep(); if(ns && ns.ask) mentor(ns.ask(J.data)); } return; }
+      if(gres===false){ renderCompose(); return; }
+      if(gres===null){
+        J.meta.gate=J.meta.gate||{}; var nk=St.key+"_e"; J.meta.gate[nk]=(J.meta.gate[nk]||0)+1;
+        J.meta.aiDegraded=true;
+        if(J.meta.gate[nk]<2){ mentor("En ce moment le mentor ne peut pas revoir ta réponse (il y a peut-être beaucoup de monde en même temps). Attends quelques secondes et appuie de nouveau sur Envoyer."); renderCompose(); return; }
+        J.meta.gate[nk]=0;
+        if(St.key==="preg"){ mentor("Je n'arrive toujours pas à la revoir. Regarde toi les critères de la question au-dessus ; si tu penses qu'elle les remplit déjà, appuie sur «Je garde cette question»."); renderCompose(); return; }
+        kind="accept";
+      }
+    }
+
+    if(kind==="accept") applyAccept(text, St);
+    else if(kind==="refine_q" && looksLikeQuestion(text)) J.data.preg=text;
+    refresh();
+
+    var nextInfo = (kind==="accept") ? peekNext() : {type:"stay"};
+    await mentorRespond(kind, St, nextInfo, text);
+
+    if(kind==="accept") commitAdvance(nextInfo);
+    else renderCompose();
+  }
+
+  async function onConfirmAdvance(){
+    var St=curStep(); if(!St) return;
+    var nextInfo=peekNext();
+    await mentorRespond("confirm", St, nextInfo, "(je garde celle-ci)");
+    commitAdvance(nextInfo);
+  }
+
+  // ================== portada / ajustes ==================
+  function enterPhase(i){ var P=PHASES[i]; setHead(P); updateProgress(); if(P.type==="summary"){ renderPlan(); return; } if(P.intro) mentor(P.intro(J.data)); mentor(P.steps[0].ask(J.data)); renderCompose(); }
+  function startFresh(){ thread.innerHTML=""; J=initState(); J.meta.started=true; save(); refresh();
+    mentor("Bonjour ! On va préparer ensemble une vraie recherche. Je ne te donnerai pas les réponses : je t'aiderai à les trouver toi.");
+    enterPhase(0);
+  }
+  function resumeSaved(){ thread.innerHTML=""; refresh();
+    if(J.meta.done){ mentor("Voici de nouveau ton plan."); renderPlan(); return; }
+    mentor("Bon retour ! On reprend là où tu t'étais arrêté(e)."); var P=curPhase(); setHead(P); mentor(curStep().ask(J.data)); renderCompose();
+  }
+  function renderStart(hasSaved){
+    var html='<div class="panel"><h2>Apprends à mener une recherche</h2><p>Ce préparateur t\'accompagne, pas à pas, à transformer un sujet en une recherche bien préparée : la question, l\'hypothèse, les variables, la recherche et les sources. Les réponses, c\'est <b>toi</b> qui les trouves.</p><div class="btnrow">'+
+      (hasSaved? '<button class="btn primary" id="cont">Continuer là où j\'en étais</button><button class="btn sec" id="fresh">Recommencer</button>' : '<button class="btn primary" id="fresh">Commencer</button>')+'</div></div>';
+    compose.innerHTML=html;
+    if(hasSaved) document.getElementById("cont").onclick=function(){ resumeSaved(); };
+    document.getElementById("fresh").onclick=function(){ startFresh(); };
+  }
+  function resetAll(){ try{ localStorage.removeItem("pic_ut12_app_fr"); }catch(e){} thread.innerHTML=""; J=initState(); refresh(); document.getElementById("phasepill").textContent="Prêt à commencer"; document.getElementById("stage-h1").textContent="Apprends à mener une recherche"; document.getElementById("stage-sub").textContent="Tu apportes les idées. Je t'aide à les transformer en une recherche bien préparée."; renderStart(false); }
+
+  function openSettings(){
+    var back=document.createElement("div"); back.className="modal";
+    back.innerHTML='<div class="box"><h3>Connexion avec l\'IA</h3>'+
+      '<p>Colle ici l\'adresse de ton Worker (proxy). Si tu la laisses vide, l\'application fonctionne en <b>mode guidé</b> (sans IA). C\'est pour l\'enseignant.</p>'+
+      '<label>URL du proxy (Worker)</label><input id="cfgurl" placeholder="https://...workers.dev" value="'+esc(CONFIG.proxyUrl)+'">'+
+      '<label>Token de l\'app (facultatif)</label><input id="cfgtok" placeholder="(si tu as configuré APP_TOKEN)" value="'+esc(CONFIG.appToken)+'">'+
+      '<div class="msg" id="cfgmsg"></div>'+
+      '<div class="row"><button class="btn primary" id="cfgsave">Enregistrer</button><button class="btn sec" id="cfgtest">Tester la connexion</button><button class="btn sec" id="cfgclose">Fermer</button></div></div>';
+    document.body.appendChild(back);
+    back.addEventListener("click",function(e){ if(e.target===back) document.body.removeChild(back); });
+    document.getElementById("cfgsave").onclick=function(){
+      CONFIG.proxyUrl=(document.getElementById("cfgurl").value||"").trim();
+      CONFIG.appToken=(document.getElementById("cfgtok").value||"").trim();
+      try{ localStorage.setItem("pic_proxy_url",CONFIG.proxyUrl); localStorage.setItem("pic_app_token",CONFIG.appToken); }catch(e){}
+      setFlag(); document.getElementById("cfgmsg").innerHTML='<span style="color:var(--green)">Enregistré. '+(CONFIG.proxyUrl?"IA connectée.":"Mode guidé.")+'</span>';
+    };
+    document.getElementById("cfgtest").onclick=async function(){
+      var m=document.getElementById("cfgmsg"); var url=(document.getElementById("cfgurl").value||"").trim();
+      if(!url){ m.innerHTML='<span style="color:var(--warn)">Écris d\'abord l\'URL.</span>'; return; }
+      m.textContent="Test en cours…";
+      var save0=CONFIG.proxyUrl, tok0=CONFIG.appToken; CONFIG.proxyUrl=url; CONFIG.appToken=(document.getElementById("cfgtok").value||"").trim();
+      try{ var r=await callMentor("TEST DE CONNEXION. Réponds seulement : connexion correcte.","bonjour");
+        m.innerHTML='<span style="color:var(--green)">✓ Réponse : '+esc(r).slice(0,80)+'</span>';
+      }catch(e){ m.innerHTML='<span style="color:var(--warn)">Pas de réponse : '+esc(String(e.message||e)).slice(0,90)+'</span>'; }
+      CONFIG.proxyUrl=save0; CONFIG.appToken=tok0;
+    };
+    document.getElementById("cfgclose").onclick=function(){ document.body.removeChild(back); };
+  }
+
+  document.getElementById("reset").onclick=function(){ resetAll(); };
+  document.getElementById("aiflag").onclick=openSettings;
+  document.getElementById("cfg2").onclick=openSettings;
+
+  globalThis.__pic={ handle:handle, getJ:function(){return J;}, curStep:curStep, buildPlanText:buildPlanText, setProxy:function(u){CONFIG.proxyUrl=u;}, searchedClick:function(){var el=document.getElementById("searched"); return el&&el.onclick();}, googleClick:function(v){var q=document.getElementById("q"); if(q)q.value=v; var g=document.getElementById("dogoogle"); return g&&g.onclick();}, advanceChip:function(){var el=document.getElementById("advancechip"); return el&&el.onclick();}, gobridge:function(){var el=document.getElementById("gobridge"); return el&&el.onclick();} };
+
+  setFlag();
+  (function(){ var saved=load(); if(saved&&saved.meta&&saved.meta.started){ J=saved; refresh(); renderStart(true); } else { refresh(); renderStart(false); } })();
+})();
+</script>
+</body>
+</html>
