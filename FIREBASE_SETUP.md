@@ -1,10 +1,12 @@
 # Activació de l’editor de MarcBook
 
-La pàgina pública sempre pot mostrar les targetes que ja existeixen a `index.html`. Per activar la creació i l’edició de targetes des de la web cal completar aquests dos ajustos al projecte Firebase `eines-docents`.
+La pàgina pública sempre pot mostrar les targetes que ja existeixen a `index.html`. La creació i l’edició de targetes utilitzen el projecte Firebase `eines-docents`.
+
+**Estat:** configuració activada i regles publicades l’1 de setembre de 2026.
 
 ## 1. Inici de sessió amb Google
 
-Al tauler de Firebase:
+Configuració verificada al tauler de Firebase:
 
 1. Obre **Authentication → Sign-in method**.
 2. Activa el proveïdor **Google**.
@@ -12,7 +14,7 @@ Al tauler de Firebase:
 
 ## 2. Regles de Firestore
 
-Afegeix aquest bloc dins de `match /databases/{database}/documents` de les regles actuals. No substitueixis les regles de les altres eines del projecte.
+Aquest bloc està publicat dins de `match /databases/{database}/documents`, sense substituir les regles de les altres eines del projecte.
 
 ```text
 match /marcbook_artifacts/{artifactId} {
@@ -22,7 +24,12 @@ match /marcbook_artifacts/{artifactId} {
 }
 ```
 
-Després prem **Publish**. La lectura és pública perquè els alumnes puguin veure el catàleg sense iniciar sessió. L’escriptura queda limitada al compte indicat encara que algú intenti saltar-se els botons de la pàgina.
+La lectura és pública perquè els alumnes puguin veure el catàleg sense iniciar sessió. L’escriptura queda limitada al compte indicat encara que algú intenti saltar-se els botons de la pàgina.
+
+Proves efectuades després de publicar:
+
+- Lectura sense sessió: permesa.
+- Escriptura sense sessió: denegada amb `PERMISSION_DENIED`.
 
 ## Funcionament
 
