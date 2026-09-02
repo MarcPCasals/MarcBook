@@ -462,7 +462,7 @@ function bindInterface() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
+async function initializeMarcBookAdmin() {
     captureBaselineCards();
     bindInterface();
     renderCatalog();
@@ -484,4 +484,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentUser = user;
         updateAuthInterface();
     });
-});
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeMarcBookAdmin, { once: true });
+} else {
+    initializeMarcBookAdmin();
+}
