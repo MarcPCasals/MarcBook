@@ -615,35 +615,64 @@
             slate: { name: "Gris", bg: "#f8fafc", primary: "slate", thumb: "#cbd5e1", hover: "#475569" }
         };
 
+        const halfHourSlot = (id, startH, startM) => {
+            const endMinutes = startH * 60 + startM + 30;
+            const endH = Math.floor(endMinutes / 60);
+            const endM = endMinutes % 60;
+            const formatTime = (h, m) => `${h}:${String(m).padStart(2, '0')}h`;
+            return { id, label: `${formatTime(startH, startM)} - ${formatTime(endH, endM)}`, type: "class", startH, startM, endH, endM };
+        };
+
+        const COMMON_AFTER_BREAK_SLOTS = [
+            halfHourSlot(3, 11, 0), halfHourSlot("11:30", 11, 30),
+            halfHourSlot(4, 12, 0), halfHourSlot("12:30", 12, 30),
+            halfHourSlot(5, 13, 0), halfHourSlot("13:30", 13, 30),
+            halfHourSlot(6, 14, 0), halfHourSlot("14:30", 14, 30),
+            halfHourSlot(7, 15, 0), halfHourSlot("15:30", 15, 30),
+            halfHourSlot(8, 16, 0), halfHourSlot("16:30", 16, 30),
+            halfHourSlot(9, 17, 0), halfHourSlot("17:30", 17, 30),
+            halfHourSlot(10, 18, 0), halfHourSlot("18:30", 18, 30)
+        ];
+
         const STANDARD_TIME_SLOTS = [
-            { id: 0, label: "8:30h - 9:30h", type: "class", endH: 9, endM: 30 },
-            { id: 1, label: "9:30h - 10:30h", type: "class", endH: 10, endM: 30 },
-            { id: 2, label: "10:30h - 11:00h", type: "break", name: "PATI", endH: 11, endM: 0 },
-            { id: 3, label: "11:00h - 12:00h", type: "class", endH: 12, endM: 0 },
-            { id: 4, label: "12:00h - 13:00h", type: "class", endH: 13, endM: 0 },
-            { id: 5, label: "13:00h - 14:00h", type: "class", endH: 14, endM: 0 },
-            { id: 6, label: "14:00h - 15:00h", type: "class", endH: 15, endM: 0 },
-            { id: 7, label: "15:00h - 16:00h", type: "class", endH: 16, endM: 0 },
-            { id: 8, label: "16:00h - 17:00h", type: "class", endH: 17, endM: 0 },
-            { id: 9, label: "17:00h - 18:00h", type: "class", endH: 18, endM: 0 },
-            { id: 10, label: "18:00h - 19:00h", type: "class", endH: 19, endM: 0 }
+            halfHourSlot(0, 8, 30), halfHourSlot("09:00", 9, 0),
+            halfHourSlot(1, 9, 30), halfHourSlot("10:00", 10, 0),
+            { id: 2, label: "10:30h - 11:00h", type: "break", name: "PATI", startH: 10, startM: 30, endH: 11, endM: 0 },
+            ...COMMON_AFTER_BREAK_SLOTS
         ];
 
         const VIP_MUSIC_TIME_SLOTS = [
-            { id: 0, label: "8:30h - 9:30h", type: "class", endH: 9, endM: 30 },
-            { id: 1, label: "9:30h - 10:30h", type: "class", endH: 10, endM: 30 },
-            { id: 2, label: "10:00h - 10:30h", type: "break", name: "PATI", endH: 10, endM: 30 },
-            { id: 3, label: "11:00h - 12:00h", type: "class", endH: 12, endM: 0 },
-            { id: 4, label: "12:00h - 13:00h", type: "class", endH: 13, endM: 0 },
-            { id: 5, label: "13:00h - 14:00h", type: "class", endH: 14, endM: 0 },
-            { id: 6, label: "14:00h - 15:00h", type: "class", endH: 15, endM: 0 },
-            { id: 7, label: "15:00h - 16:00h", type: "class", endH: 16, endM: 0 },
-            { id: 8, label: "16:00h - 17:00h", type: "class", endH: 17, endM: 0 },
-            { id: 9, label: "17:00h - 18:00h", type: "class", endH: 18, endM: 0 },
-            { id: 10, label: "18:00h - 19:00h", type: "class", endH: 19, endM: 0 }
+            halfHourSlot(0, 8, 30), halfHourSlot("09:00", 9, 0), halfHourSlot(1, 9, 30),
+            { id: 2, label: "10:00h - 10:30h", type: "break", name: "PATI", startH: 10, startM: 0, endH: 10, endM: 30 },
+            halfHourSlot("10:30", 10, 30),
+            ...COMMON_AFTER_BREAK_SLOTS
         ];
 
         const getTimeSlots = (config) => config?.vipMusicMode ? VIP_MUSIC_TIME_SLOTS : STANDARD_TIME_SLOTS;
+        const getDurationUnits = (duration) => duration === 2 ? 4 : (duration === 1.5 ? 3 : 2);
+        const getSessionDuration = (config, dayIndex, slotId) => config?.durations?.[`${dayIndex}-${slotId}`] || 1;
+        const getAvailableDurationUnits = (timeSlots, startIndex) => {
+            let units = 0;
+            for (let i = startIndex; i < timeSlots.length && timeSlots[i].type === 'class'; i++) units++;
+            return units;
+        };
+        const getSelectableTimeSlots = (timeSlots) => timeSlots.filter((slot, index) => slot.type === 'class' && getAvailableDurationUnits(timeSlots, index) >= 2);
+        const isTimeSlotCovered = (timeSlots, daySchedule, targetIndex, getDuration = () => 1) => {
+            for (let startIndex = targetIndex - 1; startIndex >= 0; startIndex--) {
+                const startSlot = timeSlots[startIndex];
+                if (startSlot.type !== 'class') break;
+                if (!daySchedule?.[startSlot.id]) continue;
+                const duration = getDuration(startSlot.id);
+                if (startIndex + getDurationUnits(duration) > targetIndex) return true;
+            }
+            return false;
+        };
+        const formatSessionSlot = (slot, duration) => {
+            const startMinutes = slot.startH * 60 + slot.startM;
+            const endMinutes = startMinutes + Math.round(duration * 60);
+            const formatTime = (minutes) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}h`;
+            return { ...slot, label: `${formatTime(startMinutes)} - ${formatTime(endMinutes)}`, endH: Math.floor(endMinutes / 60), endM: endMinutes % 60 };
+        };
 
         const WORK_DAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres"];
         const WEEKEND_DAYS = ["Dissabte", "Diumenge"];
@@ -778,8 +807,20 @@
 
             const updateSchedule = (dayIndex, slotId, classId) => {
                 setLocalConfig(prev => {
-                    const newSchedule = { ...prev.schedule };
-                    if (!newSchedule[dayIndex]) newSchedule[dayIndex] = {};
+                    const activeSlots = getTimeSlots(prev);
+                    const slotIndex = activeSlots.findIndex(slot => String(slot.id) === String(slotId));
+                    if (classId && getAvailableDurationUnits(activeSlots, slotIndex) < 2) return prev;
+
+                    const newSchedule = { ...prev.schedule, [dayIndex]: { ...(prev.schedule?.[dayIndex] || {}) } };
+                    if (classId) {
+                        const duration = getSessionDuration(prev, dayIndex, slotId);
+                        const coveredUnits = Math.min(getDurationUnits(duration), getAvailableDurationUnits(activeSlots, slotIndex));
+                        const overlapsAnotherClass = activeSlots.slice(slotIndex + 1, slotIndex + coveredUnits).some(coveredSlot => newSchedule[dayIndex][coveredSlot.id]);
+                        if (overlapsAnotherClass) {
+                            alert("Aquest espai ja està ocupat per una altra sessió. Elimina-la o canvia-la abans.");
+                            return prev;
+                        }
+                    }
                     newSchedule[dayIndex][slotId] = classId;
                     return { ...prev, schedule: newSchedule };
                 });
@@ -787,17 +828,28 @@
 
             const toggleDuration = (dayIndex, slotId) => {
                 setLocalConfig(prev => {
+                    const activeSlots = getTimeSlots(prev);
+                    const slotIndex = activeSlots.findIndex(slot => String(slot.id) === String(slotId));
+                    const availableUnits = getAvailableDurationUnits(activeSlots, slotIndex);
+                    const validDurations = [1, 1.5, 2].filter(duration => getDurationUnits(duration) <= availableUnits);
                     const key = `${dayIndex}-${slotId}`;
                     const currentDurations = prev.durations || {};
                     const currentDuration = currentDurations[key] || 1;
-                    const newDurations = { ...currentDurations };
-                    if (currentDuration === 1) {
-                        newDurations[key] = 1.5;
-                    } else if (currentDuration === 1.5) {
-                        newDurations[key] = 2;
-                    } else {
-                        delete newDurations[key];
+                    const currentIndex = validDurations.indexOf(currentDuration);
+                    const nextDuration = validDurations[(currentIndex + 1) % validDurations.length] || 1;
+                    if (nextDuration > currentDuration) {
+                        const overlapsAnotherClass = activeSlots
+                            .slice(slotIndex + getDurationUnits(currentDuration), slotIndex + getDurationUnits(nextDuration))
+                            .some(coveredSlot => prev.schedule?.[dayIndex]?.[coveredSlot.id]);
+                        if (overlapsAnotherClass) {
+                            alert("No es pot ampliar perquè hi ha una altra sessió a continuació.");
+                            return prev;
+                        }
                     }
+                    const newDurations = { ...currentDurations };
+                    if (nextDuration === 1) delete newDurations[key];
+                    else newDurations[key] = nextDuration;
+
                     return { ...prev, durations: newDurations };
                 });
             };
@@ -925,9 +977,7 @@
                                             <td colSpan={5} className="py-3 bg-gray-100 text-center text-gray-400 font-bold tracking-widest text-xs">☕ {slot.name}</td>
                                         ) : (
                                             WORK_DAYS.map((_, dayIndex) => {
-                                                const prevSlot = timeSlots[index - 1];
-                                                const prevKey = prevSlot ? `${dayIndex}-${prevSlot.id}` : null;
-                                                const isCovered = prevSlot && (localConfig.durations?.[prevKey] || 1) > 1;
+                                                const isCovered = isTimeSlotCovered(timeSlots, localConfig.schedule[dayIndex], index, startSlotId => getSessionDuration(localConfig, dayIndex, startSlotId));
 
                                                 if (isCovered) return null;
 
@@ -937,13 +987,17 @@
                                                 const currentKey = `${dayIndex}-${slot.id}`;
                                                 const sessionDuration = localConfig.durations?.[currentKey] || 1;
                                                 const isExtended = sessionDuration > 1;
-                                                const nextSlot = timeSlots[index + 1];
-                                                const canExtend = nextSlot && nextSlot.type === 'class';
+                                                const availableUnits = getAvailableDurationUnits(timeSlots, index);
+                                                const selectable = availableUnits >= 2;
+                                                const durationUnits = currentClassId ? Math.min(getDurationUnits(sessionDuration), availableUnits) : 1;
+                                                const validDurations = [1, 1.5, 2].filter(duration => getDurationUnits(duration) <= availableUnits);
+                                                const canExtend = !!currentClassId && validDurations.length > 1;
+                                                const nextDuration = validDurations[(validDurations.indexOf(sessionDuration) + 1) % validDurations.length] || 1;
 
                                                 return (
-                                                    <td key={dayIndex} rowSpan={isExtended ? 2 : 1} className={`p-1 border-r border-gray-100 relative ${currentClass ? currentClass.color.split(' ')[0] : ''}`}>
+                                                    <td key={dayIndex} rowSpan={durationUnits} className={`p-1 border-r border-gray-100 relative ${currentClass ? currentClass.color.split(' ')[0] : ''} ${!selectable && !currentClassId ? 'bg-gray-100' : ''}`}>
                                                         <div className="flex items-center gap-1">
-                                                            <select className="w-full p-2 bg-transparent border-none text-center cursor-pointer appearance-none font-medium" value={currentClassId || ""} onChange={(e) => updateSchedule(dayIndex, slot.id, e.target.value)}>
+                                                            <select disabled={!selectable && !currentClassId} className="w-full p-2 bg-transparent border-none text-center cursor-pointer appearance-none font-medium disabled:cursor-not-allowed disabled:text-gray-300" value={currentClassId || ""} onChange={(e) => updateSchedule(dayIndex, slot.id, e.target.value)}>
                                                                 <option value="">-</option>
                                                                 {localConfig.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                                             </select>
@@ -951,7 +1005,7 @@
                                                                 <button
                                                                     onClick={() => toggleDuration(dayIndex, slot.id)}
                                                                     className={`text-[10px] min-w-[34px] px-1 py-0.5 rounded hover:bg-black/10 ${isExtended ? 'text-blue-600 font-bold bg-blue-100' : 'text-gray-400'}`}
-                                                                    title={sessionDuration === 1 ? "Ampliar a 1 h 30 min" : (sessionDuration === 1.5 ? "Ampliar a 2 h" : "Reduir a 1 h")}
+                                                                    title={nextDuration === 1 ? "Reduir a 1 h" : (nextDuration === 1.5 ? "Ampliar a 1 h 30 min" : "Ampliar a 2 h")}
                                                                 >
                                                                     {sessionDuration === 1 ? '1h' : (sessionDuration === 1.5 ? '1:30' : '2h')}
                                                                 </button>
@@ -1862,7 +1916,15 @@
 
         const DailyNotepadModal = ({ dayIndex, dayName, config, planData, extraClasses, onClose, onSave }) => {
             const timeSlots = getTimeSlots(config);
-            const daySlots = timeSlots.filter(slot => slot.type !== 'break' && (config.schedule[dayIndex]?.[slot.id] || extraClasses?.[dayIndex]?.[slot.id]));
+            const combinedSchedule = { ...(config.schedule[dayIndex] || {}), ...(extraClasses?.[dayIndex] || {}) };
+            const daySlots = timeSlots
+                .filter((slot, index) => slot.type !== 'break' && combinedSchedule[slot.id] && !isTimeSlotCovered(
+                    timeSlots,
+                    combinedSchedule,
+                    index,
+                    startSlotId => extraClasses?.[dayIndex]?.[startSlotId] ? 1 : getSessionDuration(config, dayIndex, startSlotId)
+                ))
+                .map(slot => formatSessionSlot(slot, extraClasses?.[dayIndex]?.[slot.id] ? 1 : getSessionDuration(config, dayIndex, slot.id)));
 
             const [formData, setFormData] = useState(() => {
                 const init = {};
@@ -2407,9 +2469,9 @@
             };
 
             const findNextSession = (d, s, cid) => {
-                const currentDuration = (config.durations?.[`${d}-${s}`] || 1) > 1 ? 2 : 1;
-                const currentSlotIndex = timeSlots.findIndex(slot => slot.id === s);
-                const startSlotIndex = Math.max(0, currentSlotIndex + currentDuration);
+                const currentDuration = getSessionDuration(config, d, s);
+                const currentSlotIndex = timeSlots.findIndex(slot => String(slot.id) === String(s));
+                const startSlotIndex = Math.max(0, currentSlotIndex + getDurationUnits(currentDuration));
 
                 for (let i = d; i < 5; i++) {
                     if ((planData.holidayDays || []).includes(i)) continue;
@@ -2551,6 +2613,19 @@
                 if (!newExtra.classId) return;
                 if ((planData.holidayDays || []).includes(newExtra.day)) {
                     alert("Aquest dia està marcat com a no lectiu. Desmarca'l abans d'afegir-hi una classe extra.");
+                    return;
+                }
+                const slotIndex = timeSlots.findIndex(slot => String(slot.id) === String(newExtra.slot));
+                const combinedSchedule = { ...(config.schedule[newExtra.day] || {}), ...(planData.extraClasses?.[newExtra.day] || {}) };
+                const isCovered = isTimeSlotCovered(
+                    timeSlots,
+                    combinedSchedule,
+                    slotIndex,
+                    startSlotId => planData.extraClasses?.[newExtra.day]?.[startSlotId] ? 1 : getSessionDuration(config, newExtra.day, startSlotId)
+                );
+                const overlapsNextHalfHour = timeSlots[slotIndex + 1] && combinedSchedule[timeSlots[slotIndex + 1].id];
+                if (combinedSchedule[newExtra.slot] || isCovered || overlapsNextHalfHour) {
+                    alert("Aquest espai ja està ocupat per una altra sessió.");
                     return;
                 }
                 const newExtraClasses = { ...(planData.extraClasses || {}) };
@@ -2700,26 +2775,7 @@
                 setShowExportModal(false);
             };
 
-            const visibleSlots = timeSlots.filter((slot, index) => {
-                if (slot.type === 'break') return false;
-
-                const hasAnySchedule = viewDays.some((_, d) => timeSlots.some(s => config.schedule[d]?.[s.id] || planData.extraClasses?.[d]?.[s.id]));
-                if (!hasAnySchedule) return true;
-
-                const hasClass = viewDays.some((_, d) => config.schedule[d]?.[slot.id] || planData.extraClasses?.[d]?.[slot.id]);
-                if (hasClass) return true;
-
-                const prevSlotIndex = index - 1;
-                if (prevSlotIndex >= 0) {
-                    const prevSlot = timeSlots[prevSlotIndex];
-                    if (prevSlot && prevSlot.type === 'class') {
-                        const isCovered = viewDays.some((_, d) => (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1);
-                        if (isCovered) return true;
-                    }
-                }
-
-                return false;
-            });
+            const visibleSlots = timeSlots.filter(slot => slot.type !== 'break');
 
             return (
                 <div className="max-w-full mx-auto p-4 fade-in pb-20">
@@ -2795,7 +2851,7 @@
 
                             {visibleSlots.map((slot, visibleIndex) => (
                                 <React.Fragment key={slot.id}>
-                                    <div className="sticky left-0 z-10 p-2 border-r border-b border-gray-200 bg-gray-50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[160px]">{slot.label}</div>
+                                    <div className="sticky left-0 z-10 p-2 border-r border-b border-gray-200 bg-gray-50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[80px]">{slot.label}</div>
 
                                     {viewDays.map((_, d) => {
                                         if (d > 4) {
@@ -2818,17 +2874,21 @@
                                         }
 
                                         const isDayHoliday = (planData.holidayDays || []).includes(d);
-                                        const prevSlot = visibleSlots[visibleIndex - 1];
-                                        const isSequential = prevSlot && (slot.id === prevSlot.id + 1);
-                                        const prevKey = prevSlot ? `${d}-${prevSlot.id}` : null;
-                                        const isCovered = !isDayHoliday && isSequential && (config.durations?.[prevKey] || 1) > 1;
+                                        const originalSlotIndex = timeSlots.findIndex(timeSlot => timeSlot.id === slot.id);
+                                        const combinedSchedule = { ...(config.schedule[d] || {}), ...(planData.extraClasses?.[d] || {}) };
+                                        const isCovered = !isDayHoliday && isTimeSlotCovered(
+                                            timeSlots,
+                                            combinedSchedule,
+                                            originalSlotIndex,
+                                            startSlotId => planData.extraClasses?.[d]?.[startSlotId] ? 1 : getSessionDuration(config, d, startSlotId)
+                                        );
 
                                         if (isCovered) return null;
 
                                         if (isDayHoliday) {
                                             const holidayReason = planData.holidayDayReasons?.[d] || "Dia no lectiu";
                                             return (
-                                                <div key={d} className="border-r border-b border-gray-300 bg-gray-100 min-h-[160px] flex items-center justify-center">
+                                                <div key={d} className="border-r border-b border-gray-300 bg-gray-100 min-h-[80px] flex items-center justify-center">
                                                     {visibleIndex === 0 && (
                                                         <button
                                                             onClick={() => editHolidayDayReason(d)}
@@ -2846,12 +2906,14 @@
                                         const extraClassId = planData.extraClasses?.[d]?.[slot.id];
                                         const cid = globalClassId || extraClassId;
                                         const isExtraClass = !!extraClassId;
+                                        const sessionDuration = isExtraClass ? 1 : getSessionDuration(config, d, slot.id);
+                                        const sessionSlot = formatSessionSlot(slot, sessionDuration);
 
                                         const now = new Date();
                                         const dateStr = addDays(weekId, d);
                                         const isToday = dateStr === getLocalISODate(new Date());
                                         const [y, m, day] = dateStr.split('-');
-                                        const cellEndTime = new Date(y, m - 1, day, slot.endH, slot.endM, 0);
+                                        const cellEndTime = new Date(y, m - 1, day, sessionSlot.endH, sessionSlot.endM, 0);
                                         const isPast = now > cellEndTime;
 
                                         if (!cid) return <div key={d} className={`border-r border-b border-gray-100 ${isPast ? 'bg-gray-100 opacity-60' : (isToday ? `bg-${theme}-50/30` : 'bg-gray-50/30')}`}></div>;
@@ -2862,7 +2924,6 @@
                                         const isZzz = data.status === 'zzz';
                                         const tasks = getTasks(d, slot.id);
                                         const totalTime = getTotalTime(d, slot.id);
-                                        const sessionDuration = config.durations?.[key] || 1;
                                         const isExtended = sessionDuration > 1 && !isExtraClass;
                                         const hasContent = data.materials?.trim() || data.notes?.trim() || data.links?.length > 0;
 
@@ -2872,7 +2933,7 @@
                                         }
 
                                         return (
-                                            <div key={d} style={isExtended ? { gridRow: 'span 2' } : {}} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
+                                            <div key={d} style={{ gridRow: `span ${getDurationUnits(sessionDuration)}` }} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
                                                 <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-1 shadow-sm ${cinfo.color} ${isZzz ? 'opacity-50 grayscale' : ''}`}>
                                                     <div className="flex items-center gap-1 overflow-hidden">
                                                         <span className="truncate">{cinfo.name} {isExtended && (sessionDuration === 1.5 ? "(1:30h)" : "(2h)")}</span>
@@ -2880,7 +2941,7 @@
                                                             <button onClick={() => handleRemoveExtraClass(d, slot.id)} className="ml-1 text-red-500 hover:text-red-700" title="Eliminar classe extra puntual"><Icons.XCircle size={12} /></button>
                                                         )}
                                                         <button
-                                                            onClick={() => setActiveSessionNotepad({ dayIndex: d, slotId: slot.id, className: cinfo.name, slotLabel: slot.label })}
+                                                            onClick={() => setActiveSessionNotepad({ dayIndex: d, slotId: slot.id, className: cinfo.name, slotLabel: sessionSlot.label })}
                                                             className={`p-0.5 rounded ml-1 transition-colors ${hasContent ? 'text-orange-500 hover:bg-orange-50' : 'text-inherit hover:bg-black/10'}`}
                                                             title={hasContent ? "Notes (amb contingut)" : "Notes de sessió"}
                                                         >
@@ -3078,8 +3139,8 @@
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hora</label>
-                                        <select className="w-full border p-2 rounded" value={newExtra.slot} onChange={e => setNewExtra({ ...newExtra, slot: parseInt(e.target.value) })}>
-                                            {timeSlots.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                        <select className="w-full border p-2 rounded" value={newExtra.slot} onChange={e => setNewExtra({ ...newExtra, slot: e.target.value })}>
+                                            {getSelectableTimeSlots(timeSlots).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                                         </select>
                                     </div>
                                     <div>
@@ -3116,7 +3177,7 @@
                                         <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
                                         <div className="flex gap-2 mb-2">
                                             <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
-                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{timeSlots.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(e.target.value)}>{getSelectableTimeSlots(timeSlots).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                                         </div>
                                         <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">Enganxar Aquí</button>
                                     </div>
@@ -3217,9 +3278,17 @@
                             const isExtra = wData.extraClasses?.[d]?.[slot.id] === classId;
 
                             if (isGlobal || isExtra) {
-                                const prevSlot = timeSlots[s - 1];
-                                const isCovered = prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId;
+                                const combinedSchedule = { ...(config.schedule[d] || {}), ...(wData.extraClasses?.[d] || {}) };
+                                const isCovered = isTimeSlotCovered(
+                                    timeSlots,
+                                    combinedSchedule,
+                                    s,
+                                    startSlotId => wData.extraClasses?.[d]?.[startSlotId] ? 1 : getSessionDuration(config, d, startSlotId)
+                                );
                                 if (isCovered) continue;
+
+                                const duration = isExtra ? 1 : getSessionDuration(config, d, slot.id);
+                                const sessionSlot = formatSessionSlot(slot, duration);
 
                                 const dateStr = addDays(w.id, d);
                                 const cellData = wData[`${d}-${slot.id}`] || {};
@@ -3232,14 +3301,14 @@
 
                                 const now = new Date();
                                 const [y, m, day] = dateStr.split('-');
-                                const cellEndTime = new Date(y, m - 1, day, slot.endH, slot.endM, 0);
+                                const cellEndTime = new Date(y, m - 1, day, sessionSlot.endH, sessionSlot.endM, 0);
                                 const isPast = now > cellEndTime;
 
                                 sessions.push({
                                     weekId: w.id,
                                     weekLabel: w.label,
                                     dayIndex: d,
-                                    slot: slot,
+                                    slot: sessionSlot,
                                     dateStr: dateStr,
                                     sessionNumber: sessionNumber,
                                     isHoliday: isHoliday,
@@ -3917,7 +3986,7 @@
                                         <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
                                         <div className="flex gap-2 mb-2">
                                             <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
-                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{timeSlots.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(e.target.value)}>{getSelectableTimeSlots(timeSlots).map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                                         </div>
                                         <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 transition-colors">Enganxar Aquí</button>
                                     </div>
@@ -4012,8 +4081,13 @@
                             const isGlobal = config.schedule[d]?.[slot.id] === classId;
                             const isExtra = dataToCheck[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                             if (!(isGlobal || isExtra)) continue;
-                            const prevSlot = timeSlots[s - 1];
-                            if (prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId) continue;
+                            const combinedSchedule = { ...(config.schedule[d] || {}), ...(dataToCheck[w.id]?.extraClasses?.[d] || {}) };
+                            if (isTimeSlotCovered(
+                                timeSlots,
+                                combinedSchedule,
+                                s,
+                                startSlotId => dataToCheck[w.id]?.extraClasses?.[d]?.[startSlotId] ? 1 : getSessionDuration(config, d, startSlotId)
+                            )) continue;
                             const dateStr = addDays(w.id, d);
                             const [y2, m2, day] = dateStr.split('-');
                             const sessionDate = new Date(parseInt(y2), parseInt(m2) - 1, parseInt(day), 12, 0, 0);
@@ -4055,9 +4129,13 @@
                                 const isGlobal = config.schedule[d]?.[slot.id] === classId;
                                 const isExtra = weeksData[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                                 if (!(isGlobal || isExtra)) continue;
-                                const prevSlot = timeSlots[s - 1];
-                                const isCovered = prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId;
-                                if (isCovered) continue;
+                                const combinedSchedule = { ...(config.schedule[d] || {}), ...(weeksData[w.id]?.extraClasses?.[d] || {}) };
+                                if (isTimeSlotCovered(
+                                    timeSlots,
+                                    combinedSchedule,
+                                    s,
+                                    startSlotId => weeksData[w.id]?.extraClasses?.[d]?.[startSlotId] ? 1 : getSessionDuration(config, d, startSlotId)
+                                )) continue;
                                 const dateStr = addDays(w.id, d);
                                 const [y, m, day] = dateStr.split('-');
                                 const sessionDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(day), 12, 0, 0);
@@ -4130,9 +4208,13 @@
                             const isGlobal = config.schedule[d]?.[slot.id] === classId;
                             const isExtra = newWeeksData[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                             if (!(isGlobal || isExtra)) continue;
-                            const prevSlot = timeSlots[s - 1];
-                            const isCovered = prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId;
-                            if (isCovered) continue;
+                            const combinedSchedule = { ...(config.schedule[d] || {}), ...(newWeeksData[w.id]?.extraClasses?.[d] || {}) };
+                            if (isTimeSlotCovered(
+                                timeSlots,
+                                combinedSchedule,
+                                s,
+                                startSlotId => newWeeksData[w.id]?.extraClasses?.[d]?.[startSlotId] ? 1 : getSessionDuration(config, d, startSlotId)
+                            )) continue;
                             const dateStr = addDays(w.id, d);
                             const [y, m, day] = dateStr.split('-');
                             const sessionDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(day), 12, 0, 0);
