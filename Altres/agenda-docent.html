@@ -2257,10 +2257,39 @@
 
             const toggleHolidayDay = (dayIndex) => {
                 const currentHolidayDays = planData.holidayDays || [];
-                const holidayDays = currentHolidayDays.includes(dayIndex)
-                    ? currentHolidayDays.filter(d => d !== dayIndex)
-                    : [...currentHolidayDays, dayIndex].sort((a, b) => a - b);
-                updatePlanData({ ...planData, holidayDays });
+                const holidayDayReasons = { ...(planData.holidayDayReasons || {}) };
+
+                if (currentHolidayDays.includes(dayIndex)) {
+                    const holidayDays = currentHolidayDays.filter(d => d !== dayIndex);
+                    delete holidayDayReasons[dayIndex];
+                    updatePlanData({ ...planData, holidayDays, holidayDayReasons });
+                    return;
+                }
+
+                const reason = prompt("Quin és el motiu del dia no lectiu?\n\nExemples: festa nacional, formació, sortida...", holidayDayReasons[dayIndex] || "");
+                if (reason === null) return;
+                if (!reason.trim()) {
+                    alert("Escriu un motiu abans de marcar tot el dia com a no lectiu.");
+                    return;
+                }
+
+                holidayDayReasons[dayIndex] = reason.trim();
+                const holidayDays = [...currentHolidayDays, dayIndex].sort((a, b) => a - b);
+                updatePlanData({ ...planData, holidayDays, holidayDayReasons });
+            };
+
+            const editHolidayDayReason = (dayIndex) => {
+                const currentReason = planData.holidayDayReasons?.[dayIndex] || "";
+                const reason = prompt("Edita el motiu del dia no lectiu:", currentReason);
+                if (reason === null) return;
+                if (!reason.trim()) {
+                    alert("El motiu no pot quedar buit.");
+                    return;
+                }
+                updatePlanData({
+                    ...planData,
+                    holidayDayReasons: { ...(planData.holidayDayReasons || {}), [dayIndex]: reason.trim() }
+                });
             };
 
             const handleUndo = () => {
@@ -2521,7 +2550,7 @@
             const handleAddExtraClass = () => {
                 if (!newExtra.classId) return;
                 if ((planData.holidayDays || []).includes(newExtra.day)) {
-                    alert("Aquest dia està marcat com a vacances. Desmarca'l abans d'afegir-hi una classe extra.");
+                    alert("Aquest dia està marcat com a no lectiu. Desmarca'l abans d'afegir-hi una classe extra.");
                     return;
                 }
                 const newExtraClasses = { ...(planData.extraClasses || {}) };
@@ -2556,7 +2585,7 @@
                 if (targetType === 'next_same') found = findNextSession(copySource.day, copySource.slot, copySource.classId);
                 else if (targetType === 'next_other') { if (!targetClassId) return alert("Selecciona un grup."); found = findNextSession(copySource.day, copySource.slot, targetClassId); }
                 else if (targetType === 'manual') {
-                    if ((planData.holidayDays || []).includes(targetDay)) return alert("No pots copiar una sessió a un dia marcat com a vacances.");
+                    if ((planData.holidayDays || []).includes(targetDay)) return alert("No pots copiar una sessió a un dia marcat com a no lectiu.");
                     found = { d: targetDay, s: targetSlot, weekId };
                 }
 
@@ -2734,14 +2763,14 @@
                                 const hasReminder = reminders && reminders[dateStr] && reminders[dateStr].length > 0;
                                 const isDayHoliday = i < 5 && (planData.holidayDays || []).includes(i);
                                 return (
-                                    <div key={i} className={`sticky top-0 z-20 p-3 border-r border-b text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group ${isDayHoliday ? 'bg-purple-100 text-purple-800 border-purple-300 font-extrabold shadow-inner' : (isToday ? `bg-${theme}-100 text-${theme}-800 font-extrabold border-${theme}-300 shadow-inner` : 'border-gray-200 bg-gray-50 text-gray-700 font-bold')}`}>
+                                    <div key={i} className={`sticky top-0 z-20 p-3 border-r border-b text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group ${isDayHoliday ? 'bg-gray-200 text-gray-700 border-gray-300 font-extrabold shadow-inner' : (isToday ? `bg-${theme}-100 text-${theme}-800 font-extrabold border-${theme}-300 shadow-inner` : 'border-gray-200 bg-gray-50 text-gray-700 font-bold')}`}>
                                         {d} {parseInt(dateStr.split('-')[2])}
                                         {i < 5 && (
                                             <button
                                                 onClick={() => toggleHolidayDay(i)}
-                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${isDayHoliday ? 'bg-purple-600 text-white shadow' : 'text-gray-300 hover:bg-purple-100 hover:text-purple-600'}`}
-                                                title={isDayHoliday ? "Desmarcar dia de vacances" : "Marcar tot el dia com a vacances"}
-                                                aria-label={isDayHoliday ? `Desmarcar ${d} com a vacances` : `Marcar ${d} com a vacances`}
+                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${isDayHoliday ? 'bg-gray-600 text-white shadow' : 'text-gray-300 hover:bg-gray-200 hover:text-gray-600'}`}
+                                                title={isDayHoliday ? "Desmarcar dia no lectiu" : "Marcar tot el dia com a no lectiu"}
+                                                aria-label={isDayHoliday ? `Desmarcar ${d} com a dia no lectiu` : `Marcar ${d} com a dia no lectiu`}
                                             >
                                                 <Icons.Moon size={16} />
                                             </button>
@@ -2797,9 +2826,18 @@
                                         if (isCovered) return null;
 
                                         if (isDayHoliday) {
+                                            const holidayReason = planData.holidayDayReasons?.[d] || "Dia no lectiu";
                                             return (
-                                                <div key={d} className="border-r border-b border-purple-200 bg-purple-50/80 min-h-[160px] flex items-center justify-center">
-                                                    {visibleIndex === 0 && <span className="px-3 py-1.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5"><Icons.Moon size={14} /> Vacances</span>}
+                                                <div key={d} className="border-r border-b border-gray-300 bg-gray-100 min-h-[160px] flex items-center justify-center">
+                                                    {visibleIndex === 0 && (
+                                                        <button
+                                                            onClick={() => editHolidayDayReason(d)}
+                                                            className="px-3 py-1.5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 border border-gray-300 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 transition-colors"
+                                                            title="Editar el motiu del dia no lectiu"
+                                                        >
+                                                            <Icons.Moon size={14} /> {holidayReason}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             );
                                         }
@@ -3170,6 +3208,7 @@
 
                     for (let d = 0; d < 5; d++) {
                         const isHoliday = isHolidayWeek || (wData.holidayDays || []).includes(d);
+                        const holidayReason = isHolidayWeek ? "Vacances" : (wData.holidayDayReasons?.[d] || "Dia no lectiu");
                         for (let s = 0; s < timeSlots.length; s++) {
                             const slot = timeSlots[s];
                             if (slot.type === 'break') continue;
@@ -3204,6 +3243,7 @@
                                     dateStr: dateStr,
                                     sessionNumber: sessionNumber,
                                     isHoliday: isHoliday,
+                                    holidayReason: holidayReason,
                                     isZzz: isZzz,
                                     isExtra: isExtra,
                                     isPast: isPast,
@@ -3438,7 +3478,7 @@
                     }
                 } else if (targetType === 'manual') {
                     if ((weeksData[copySource.weekId]?.holidayDays || []).includes(targetDay)) {
-                        alert("No pots copiar una sessió a un dia marcat com a vacances.");
+                        alert("No pots copiar una sessió a un dia marcat com a no lectiu.");
                         return;
                     }
                     targetSession = { weekId: copySource.weekId, dayIndex: targetDay, slot: { id: targetSlot } };
@@ -3654,7 +3694,7 @@
                                                     <div key={`${w.id}-${sess.dayIndex}-${sess.slot.id}`} className={`min-w-[300px] max-w-[320px] shrink-0 border border-gray-200 rounded-lg flex flex-col relative group transition-all ${cellBgClass} shadow-sm`}>
                                                         <div className="bg-gray-50 border-b border-gray-200 px-3 py-1.5 flex justify-between items-center rounded-t-lg">
                                                             <span className={`text-xs font-extrabold uppercase ${sess.sessionNumber ? 'text-blue-700' : 'text-gray-400'}`}>
-                                                                {sess.sessionNumber ? `Sessió ${sess.sessionNumber}` : (isHoliday ? 'Festiu 🎉' : 'No Lectiu')}
+                                                                {sess.sessionNumber ? `Sessió ${sess.sessionNumber}` : (isHoliday ? sess.holidayReason : 'No Lectiu')}
                                                             </span>
                                                             <span className="text-[10px] text-gray-500 font-mono font-bold">
                                                                 {new Date(sess.dateStr).toLocaleDateString('ca-ES', { weekday: 'short', day: 'numeric', month: 'short' })} | {sess.slot.label.split(' - ')[0]}
