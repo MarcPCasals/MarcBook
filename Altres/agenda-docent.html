@@ -649,8 +649,8 @@
         ];
 
         const getTimeSlots = (config) => config?.vipMusicMode ? VIP_MUSIC_TIME_SLOTS : STANDARD_TIME_SLOTS;
-        const getDurationUnits = (duration) => duration === 2 ? 4 : (duration === 1.5 ? 3 : 2);
-        const getSessionDuration = (config, dayIndex, slotId) => config?.durations?.[`${dayIndex}-${slotId}`] || 1;
+        const getDurationUnits = (duration) => Number(duration) === 2 ? 4 : (Number(duration) === 1.5 ? 3 : 2);
+        const getSessionDuration = (config, dayIndex, slotId) => Number(config?.durations?.[`${dayIndex}-${slotId}`]) || 1;
         const getAvailableDurationUnits = (timeSlots, startIndex) => {
             let units = 0;
             for (let i = startIndex; i < timeSlots.length && timeSlots[i].type === 'class'; i++) units++;
@@ -672,6 +672,53 @@
             const endMinutes = startMinutes + Math.round(duration * 60);
             const formatTime = (minutes) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}h`;
             return { ...slot, label: `${formatTime(startMinutes)} - ${formatTime(endMinutes)}`, endH: Math.floor(endMinutes / 60), endM: endMinutes % 60 };
+        };
+        const sanitizeScheduleConfig = (config) => {
+            const validClassIds = new Set((config?.classes || []).map(c => String(c.id)));
+            const activeSlots = getTimeSlots(config);
+            const rawDurations = config?.durations || {};
+            const cleanSchedule = {};
+            Object.entries(config?.schedule || {}).forEach(([dayIndex, daySchedule]) => {
+                const cleanDay = {};
+                activeSlots.forEach((slot, slotIndex) => {
+                    if (slot.type !== 'class') return;
+                    const classId = daySchedule?.[slot.id];
+                    if (!classId || !validClassIds.has(String(classId))) return;
+                    const isHiddenByPreviousSession = isTimeSlotCovered(
+                        activeSlots,
+                        cleanDay,
+                        slotIndex,
+                        startSlotId => rawDurations[`${dayIndex}-${startSlotId}`] || 1
+                    );
+                    if (!isHiddenByPreviousSession) cleanDay[slot.id] = classId;
+                });
+                if (Object.keys(cleanDay).length > 0) cleanSchedule[dayIndex] = cleanDay;
+            });
+
+            const cleanDurations = {};
+            Object.entries(config?.durations || {}).forEach(([key, duration]) => {
+                const separatorIndex = key.indexOf('-');
+                const dayIndex = key.slice(0, separatorIndex);
+                const slotId = key.slice(separatorIndex + 1);
+                const numericDuration = Number(duration);
+                if (separatorIndex > 0 && cleanSchedule[dayIndex]?.[slotId] && (numericDuration === 1.5 || numericDuration === 2)) cleanDurations[key] = numericDuration;
+            });
+
+            return { ...config, schedule: cleanSchedule, durations: cleanDurations };
+        };
+        const sanitizeWeeksDataForConfig = (weeksData, config) => {
+            const validClassIds = new Set((config?.classes || []).map(c => String(c.id)));
+            return Object.fromEntries(Object.entries(weeksData || {}).map(([weekId, weekData]) => {
+                const cleanExtraClasses = {};
+                Object.entries(weekData?.extraClasses || {}).forEach(([dayIndex, dayExtras]) => {
+                    const cleanDay = {};
+                    Object.entries(dayExtras || {}).forEach(([slotId, classId]) => {
+                        if (classId && validClassIds.has(String(classId))) cleanDay[slotId] = classId;
+                    });
+                    if (Object.keys(cleanDay).length > 0) cleanExtraClasses[dayIndex] = cleanDay;
+                });
+                return [weekId, { ...weekData, extraClasses: cleanExtraClasses }];
+            }));
         };
 
         const WORK_DAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres"];
@@ -795,7 +842,7 @@
             };
 
             const removeClass = (id) => {
-                setLocalConfig(prev => ({ ...prev, classes: prev.classes.filter(c => c.id !== id) }));
+                setLocalConfig(prev => sanitizeScheduleConfig({ ...prev, classes: prev.classes.filter(c => c.id !== id) }));
             };
 
             const updateClassColor = (id, color) => {
@@ -812,6 +859,13 @@
                     if (classId && getAvailableDurationUnits(activeSlots, slotIndex) < 2) return prev;
 
                     const newSchedule = { ...prev.schedule, [dayIndex]: { ...(prev.schedule?.[dayIndex] || {}) } };
+                    const newDurations = { ...(prev.durations || {}) };
+                    const durationKey = `${dayIndex}-${slotId}`;
+                    if (!classId) {
+                        delete newSchedule[dayIndex][slotId];
+                        delete newDurations[durationKey];
+                        return { ...prev, schedule: newSchedule, durations: newDurations };
+                    }
                     if (classId) {
                         const duration = getSessionDuration(prev, dayIndex, slotId);
                         const coveredUnits = Math.min(getDurationUnits(duration), getAvailableDurationUnits(activeSlots, slotIndex));
@@ -822,7 +876,7 @@
                         }
                     }
                     newSchedule[dayIndex][slotId] = classId;
-                    return { ...prev, schedule: newSchedule };
+                    return { ...prev, schedule: newSchedule, durations: newDurations };
                 });
             };
 
@@ -2810,8 +2864,8 @@
                     </div>
 
                     <div className="bg-white rounded-xl shadow border border-gray-200 overflow-auto h-[calc(100vh-140px)] custom-scroll relative">
-                        <div className={`min-w-[1200px] grid`} style={{ gridTemplateColumns: `6rem repeat(${viewDays.length}, minmax(0, 1fr))` }}>
-                            <div className="sticky top-0 left-0 z-30 p-3 border-r border-b border-gray-200 bg-gray-100 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex items-center justify-center">Hores</div>
+                        <div className={`min-w-[1200px] grid`} style={{ gridTemplateColumns: `6rem repeat(${viewDays.length}, minmax(0, 1fr))`, gridTemplateRows: 'auto', gridAutoRows: 'minmax(80px, auto)' }}>
+                            <div style={{ gridColumn: 1, gridRow: 1 }} className="sticky top-0 left-0 z-30 p-3 border-r border-b border-gray-200 bg-gray-100 text-gray-700 font-bold text-center uppercase text-sm tracking-wider flex items-center justify-center">Hores</div>
 
                             {viewDays.map((d, i) => {
                                 const dateStr = addDays(weekId, i);
@@ -2819,7 +2873,7 @@
                                 const hasReminder = reminders && reminders[dateStr] && reminders[dateStr].length > 0;
                                 const isDayHoliday = i < 5 && (planData.holidayDays || []).includes(i);
                                 return (
-                                    <div key={i} className={`sticky top-0 z-20 p-3 border-r border-b text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group ${isDayHoliday ? 'bg-gray-200 text-gray-700 border-gray-300 font-extrabold shadow-inner' : (isToday ? `bg-${theme}-100 text-${theme}-800 font-extrabold border-${theme}-300 shadow-inner` : 'border-gray-200 bg-gray-50 text-gray-700 font-bold')}`}>
+                                    <div key={i} style={{ gridColumn: i + 2, gridRow: 1 }} className={`sticky top-0 z-20 p-3 border-r border-b text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group ${isDayHoliday ? 'bg-gray-200 text-gray-700 border-gray-300 font-extrabold shadow-inner' : (isToday ? `bg-${theme}-100 text-${theme}-800 font-extrabold border-${theme}-300 shadow-inner` : 'border-gray-200 bg-gray-50 text-gray-700 font-bold')}`}>
                                         {d} {parseInt(dateStr.split('-')[2])}
                                         {i < 5 && (
                                             <button
@@ -2851,7 +2905,7 @@
 
                             {visibleSlots.map((slot, visibleIndex) => (
                                 <React.Fragment key={slot.id}>
-                                    <div className="sticky left-0 z-10 p-2 border-r border-b border-gray-200 bg-gray-50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[80px]">{slot.label}</div>
+                                    <div style={{ gridColumn: 1, gridRow: visibleIndex + 2 }} className="sticky left-0 z-10 p-2 border-r border-b border-gray-200 bg-gray-50 text-xs font-mono font-bold flex items-center justify-center text-gray-500 min-h-[80px]">{slot.label}</div>
 
                                     {viewDays.map((_, d) => {
                                         if (d > 4) {
@@ -2861,7 +2915,7 @@
                                                 const tasks = getTasks(d, 'weekend');
 
                                                 return (
-                                                    <div key={d} style={{ gridRow: `span ${visibleSlots.length}` }} className="border-r border-b border-gray-100 p-3 flex flex-col gap-2 relative group bg-white hover:bg-gray-50/50 transition-colors">
+                                                    <div key={d} style={{ gridColumn: d + 2, gridRow: `2 / span ${visibleSlots.length}` }} className="border-r border-b border-gray-100 p-3 flex flex-col gap-2 relative group bg-white hover:bg-gray-50/50 transition-colors">
                                                         <div className="text-xs font-bold text-gray-400 mb-2 mt-1 text-center italic tracking-wider uppercase">{DAYS[d]} (Tasca Lliure)</div>
                                                         <div className="flex-1 overflow-y-auto custom-scroll">
                                                             <TaskListInput tasks={tasks} onChange={(t) => handleTasksChange(d, 'weekend', t)} onAction={(task, action) => handleTaskAction(d, 'weekend', null, task, action)} disabled={false} theme={theme} />
@@ -2888,7 +2942,7 @@
                                         if (isDayHoliday) {
                                             const holidayReason = planData.holidayDayReasons?.[d] || "Dia no lectiu";
                                             return (
-                                                <div key={d} className="border-r border-b border-gray-300 bg-gray-100 min-h-[80px] flex items-center justify-center">
+                                                <div key={d} style={{ gridColumn: d + 2, gridRow: visibleIndex + 2 }} className="border-r border-b border-gray-300 bg-gray-100 min-h-[80px] flex items-center justify-center">
                                                     {visibleIndex === 0 && (
                                                         <button
                                                             onClick={() => editHolidayDayReason(d)}
@@ -2916,7 +2970,7 @@
                                         const cellEndTime = new Date(y, m - 1, day, sessionSlot.endH, sessionSlot.endM, 0);
                                         const isPast = now > cellEndTime;
 
-                                        if (!cid) return <div key={d} className={`border-r border-b border-gray-100 ${isPast ? 'bg-gray-100 opacity-60' : (isToday ? `bg-${theme}-50/30` : 'bg-gray-50/30')}`}></div>;
+                                        if (!cid) return <div key={d} style={{ gridColumn: d + 2, gridRow: visibleIndex + 2 }} className={`border-r border-b border-gray-100 ${isPast ? 'bg-gray-100 opacity-60' : (isToday ? `bg-${theme}-50/30` : 'bg-gray-50/30')}`}></div>;
 
                                         const cinfo = config.classes.find(c => c.id === cid) || { name: "Extra", color: "bg-gray-100 text-gray-800 border-gray-300" };
                                         const key = `${d}-${slot.id}`;
@@ -2933,7 +2987,7 @@
                                         }
 
                                         return (
-                                            <div key={d} style={{ gridRow: `span ${getDurationUnits(sessionDuration)}` }} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
+                                            <div key={d} style={{ gridColumn: d + 2, gridRow: `${visibleIndex + 2} / span ${getDurationUnits(sessionDuration)}` }} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
                                                 <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-1 shadow-sm ${cinfo.color} ${isZzz ? 'opacity-50 grayscale' : ''}`}>
                                                     <div className="flex items-center gap-1 overflow-hidden">
                                                         <span className="truncate">{cinfo.name} {isExtended && (sessionDuration === 1.5 ? "(1:30h)" : "(2h)")}</span>
@@ -4628,8 +4682,9 @@
             useEffect(() => {
                 const handleFirebaseReady = () => {
                     if (window.cloudAgendaData) {
-                        setConfigState(window.cloudAgendaData.config || config);
-                        setWeeksData(window.cloudAgendaData.weeksData || {});
+                        const cleanConfig = sanitizeScheduleConfig(window.cloudAgendaData.config || config);
+                        setConfigState(cleanConfig);
+                        setWeeksData(sanitizeWeeksDataForConfig(window.cloudAgendaData.weeksData || {}, cleanConfig));
                         setRadar(window.cloudAgendaData.radar || []);
                         setHolidayWeeks(window.cloudAgendaData.holidayWeeks || []);
                         setReminders(window.cloudAgendaData.reminders || {});
@@ -4698,14 +4753,19 @@
             }, [config.classes, pendingImportData]);
 
             const saveData = (newConfig, newWeeks, newRadar, newHolidays, newReminders) => {
-                const dataToSave = { config: newConfig, weeksData: newWeeks, radar: newRadar, holidayWeeks: newHolidays, reminders: newReminders };
+                const cleanConfig = sanitizeScheduleConfig(newConfig);
+                const cleanWeeks = sanitizeWeeksDataForConfig(newWeeks, cleanConfig);
+                const dataToSave = { config: cleanConfig, weeksData: cleanWeeks, radar: newRadar, holidayWeeks: newHolidays, reminders: newReminders };
                 window.currentAgendaData = JSON.stringify(dataToSave);
                 if (window.saveAgendaToCloud) window.saveAgendaToCloud(dataToSave);
             };
 
             const setConfig = (newConfig) => {
-                setConfigState(newConfig);
-                saveData(newConfig, weeksData, radar, holidayWeeks, reminders);
+                const cleanConfig = sanitizeScheduleConfig(newConfig);
+                const cleanWeeks = sanitizeWeeksDataForConfig(weeksData, cleanConfig);
+                setConfigState(cleanConfig);
+                setWeeksData(cleanWeeks);
+                saveData(cleanConfig, cleanWeeks, radar, holidayWeeks, reminders);
                 if (view === 'config') setView('dashboard');
             };
 
@@ -4742,12 +4802,14 @@
                     try {
                         const imported = JSON.parse(evt.target.result);
                         if (imported.config) {
-                            setConfigState(imported.config);
-                            setWeeksData(imported.weeksData || {});
+                            const cleanConfig = sanitizeScheduleConfig(imported.config);
+                            const cleanWeeks = sanitizeWeeksDataForConfig(imported.weeksData || {}, cleanConfig);
+                            setConfigState(cleanConfig);
+                            setWeeksData(cleanWeeks);
                             setRadar(imported.radar || []);
                             setHolidayWeeks(imported.holidayWeeks || []);
                             setReminders(imported.reminders || {});
-                            saveData(imported.config, imported.weeksData || {}, imported.radar || [], imported.holidayWeeks || [], imported.reminders || {});
+                            saveData(cleanConfig, cleanWeeks, imported.radar || [], imported.holidayWeeks || [], imported.reminders || {});
                             alert("Dades carregades correctament!");
                             setView('dashboard');
                         } else { alert("Format d'arxiu incorrecte."); }
