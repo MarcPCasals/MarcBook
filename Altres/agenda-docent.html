@@ -270,8 +270,10 @@
                 console.error("Error de login:", e);
                 if (e.code === 'auth/configuration-not-found') {
                     alert("⚠️ ACCÉS AMB GOOGLE DESACTIVAT A FIREBASE ⚠️\n\nAquest error passa perquè has de configurar Firebase. Segueix aquests passos:\n\n1. Ves a console.firebase.google.com i entra al teu projecte.\n2. Al menú lateral, clica a 'Authentication' i després a la pestanya 'Sign-in method'.\n3. Clica 'Add new provider', selecciona 'Google', activa'l (Enable) i posa el teu correu de suport.\n4. Guarda els canvis.\n\nSi ja ho has fet, recorda també afegir la teva URL de GitHub a 'Authorized domains' a la pestanya 'Settings' de Authentication.");
-                } else if (window.location.protocol === 'file:' || e.code === 'auth/unauthorized-domain') {
-                    alert("⚠️ DOMINI NO AUTORITZAT O ARXIU LOCAL\n\nPerquè funcioni a GitHub, has d'autoritzar el teu domini.\n\n1. Ves a Firebase Console -> Authentication -> Settings -> Authorized domains.\n2. Afegeix la teva adreça de GitHub (sense https:// ni rutes finals, només ex: elteunom.github.io).");
+                } else if (window.location.protocol === 'file:') {
+                    alert("⚠️ L’AGENDA S’HA OBERT COM A FITXER LOCAL\n\nGoogle no permet iniciar sessió des d’una adreça que comença per file://. Això no vol dir que el domini de GitHub estigui mal configurat.\n\nObre l’Agenda des de la seva adreça web de GitHub Pages o des d’un servidor local autoritzat.");
+                } else if (e.code === 'auth/unauthorized-domain') {
+                    alert("⚠️ DOMINI NO AUTORITZAT\n\nVes a Firebase Console -> Authentication -> Settings -> Authorized domains i afegeix només el domini des d’on has obert l’Agenda (sense https:// ni rutes finals).");
                 } else if (e.code === 'auth/popup-blocked') {
                     alert("⚠️ El navegador ha bloquejat la finestra emergent. Si us plau, permet els popups a la barra d'adreces per poder iniciar sessió.");
                 } else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
@@ -613,7 +615,7 @@
             slate: { name: "Gris", bg: "#f8fafc", primary: "slate", thumb: "#cbd5e1", hover: "#475569" }
         };
 
-        const TIME_SLOTS = [
+        const STANDARD_TIME_SLOTS = [
             { id: 0, label: "8:30h - 9:30h", type: "class", endH: 9, endM: 30 },
             { id: 1, label: "9:30h - 10:30h", type: "class", endH: 10, endM: 30 },
             { id: 2, label: "10:30h - 11:00h", type: "break", name: "PATI", endH: 11, endM: 0 },
@@ -626,6 +628,19 @@
             { id: 9, label: "17:00h - 18:00h", type: "class", endH: 18, endM: 0 },
             { id: 10, label: "18:00h - 19:00h", type: "class", endH: 19, endM: 0 }
         ];
+
+        const VIP_MUSIC_TIME_SLOTS = [
+            { id: 0, label: "8:30h - 10:00h", type: "class", endH: 10, endM: 0 },
+            { id: 2, label: "10:00h - 10:30h", type: "break", name: "PATI", endH: 10, endM: 30 },
+            { id: 3, label: "10:30h - 12:00h", type: "class", endH: 12, endM: 0 },
+            { id: 4, label: "12:00h - 13:30h", type: "class", endH: 13, endM: 30 },
+            { id: 5, label: "13:30h - 15:00h", type: "class", endH: 15, endM: 0 },
+            { id: 6, label: "15:00h - 16:30h", type: "class", endH: 16, endM: 30 },
+            { id: 7, label: "16:30h - 18:00h", type: "class", endH: 18, endM: 0 },
+            { id: 8, label: "18:00h - 19:30h", type: "class", endH: 19, endM: 30 }
+        ];
+
+        const getTimeSlots = (config) => config?.vipMusicMode ? VIP_MUSIC_TIME_SLOTS : STANDARD_TIME_SLOTS;
 
         const WORK_DAYS = ["Dilluns", "Dimarts", "Dimecres", "Dijous", "Divendres"];
         const WEEKEND_DAYS = ["Dissabte", "Diumenge"];
@@ -736,6 +751,7 @@
             const [newUT, setNewUT] = useState({ name: "", date: "" });
 
             const theme = localConfig.theme || 'orange';
+            const timeSlots = getTimeSlots(localConfig);
 
             const addClass = () => {
                 if (!newClass.name) return;
@@ -748,6 +764,13 @@
 
             const removeClass = (id) => {
                 setLocalConfig(prev => ({ ...prev, classes: prev.classes.filter(c => c.id !== id) }));
+            };
+
+            const updateClassColor = (id, color) => {
+                setLocalConfig(prev => ({
+                    ...prev,
+                    classes: prev.classes.map(c => c.id === id ? { ...c, color } : c)
+                }));
             };
 
             const updateSchedule = (dayIndex, slotId, classId) => {
@@ -842,12 +865,16 @@
 
                     <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
                         <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-800"><Icons.Table /> Les meves classes</h2>
-                        <div className="flex flex-wrap gap-2 mb-6">
+                        <div className="flex flex-col gap-2 mb-6">
                             {localConfig.classes.length === 0 && <span className="text-gray-400 italic">No has creat cap grup encara.</span>}
                             {localConfig.classes.map(c => (
-                                <span key={c.id} className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 shadow-sm ${c.color}`}>
-                                    {c.name} <button onClick={() => removeClass(c.id)} className="hover:bg-black/10 rounded-full w-5 h-5 flex justify-center items-center">×</button>
-                                </span>
+                                <div key={c.id} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
+                                    <span className={`px-3 py-2 rounded-md text-sm font-medium flex-1 border ${c.color}`}>{c.name}</span>
+                                    <div className="w-full sm:w-48">
+                                        <ColorSelect value={c.color} onChange={(color) => updateClassColor(c.id, color)} />
+                                    </div>
+                                    <button onClick={() => removeClass(c.id)} className="hover:bg-red-50 text-red-500 rounded-md w-9 h-9 flex justify-center items-center" title="Eliminar classe">×</button>
+                                </div>
                             ))}
                         </div>
                         <div className="flex flex-col md:flex-row gap-4 items-end bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
@@ -862,22 +889,36 @@
                             <button onClick={addClass} className={`bg-${theme}-600 text-white px-6 py-2 rounded-md hover:bg-${theme}-700 font-medium transition-colors`}>Afegir</button>
                         </div>
                     </div>
+                    <div className={`mb-8 p-5 rounded-xl border transition-colors ${localConfig.vipMusicMode ? 'bg-indigo-50 border-indigo-300' : 'bg-gray-50 border-gray-200'}`}>
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="mt-1 w-5 h-5 accent-indigo-600"
+                                checked={!!localConfig.vipMusicMode}
+                                onChange={(e) => setLocalConfig({ ...localConfig, vipMusicMode: e.target.checked })}
+                            />
+                            <span>
+                                <span className="block font-bold text-gray-800">Soc docent de VIP/Música</span>
+                                <span className="block text-sm text-gray-600 mt-1">Activa sessions d’1 h 30 min i avança el pati a les 10.00 h.</span>
+                            </span>
+                        </label>
+                    </div>
                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm mb-6">
                         <table className="min-w-full bg-white">
                             <thead>
                                 <tr className="bg-gray-100 text-gray-700 text-xs uppercase"><th className="py-3 px-4 text-left w-32 border-b">Hora</th>{WORK_DAYS.map((day, i) => <th key={i} className="py-3 px-4 text-center border-b">{day}</th>)}</tr>
                             </thead>
                             <tbody className="text-gray-600 text-sm">
-                                {TIME_SLOTS.map((slot, index) => (
+                                {timeSlots.map((slot, index) => (
                                     <tr key={slot.id} className="border-b hover:bg-gray-50">
                                         <td className="py-2 px-4 border-r font-mono text-xs font-bold text-gray-500">{slot.label}</td>
                                         {slot.type === 'break' ? (
                                             <td colSpan={5} className="py-3 bg-gray-100 text-center text-gray-400 font-bold tracking-widest text-xs">☕ {slot.name}</td>
                                         ) : (
                                             WORK_DAYS.map((_, dayIndex) => {
-                                                const prevSlot = TIME_SLOTS[index - 1];
+                                                const prevSlot = timeSlots[index - 1];
                                                 const prevKey = prevSlot ? `${dayIndex}-${prevSlot.id}` : null;
-                                                const isCovered = prevSlot && localConfig.durations?.[prevKey] === 2;
+                                                const isCovered = !localConfig.vipMusicMode && prevSlot && localConfig.durations?.[prevKey] === 2;
 
                                                 if (isCovered) return null;
 
@@ -885,9 +926,9 @@
                                                 const currentClass = localConfig.classes.find(c => c.id === currentClassId);
 
                                                 const currentKey = `${dayIndex}-${slot.id}`;
-                                                const is2h = localConfig.durations?.[currentKey] === 2;
-                                                const nextSlot = TIME_SLOTS[index + 1];
-                                                const canExtend = nextSlot && nextSlot.type === 'class';
+                                                const is2h = !localConfig.vipMusicMode && localConfig.durations?.[currentKey] === 2;
+                                                const nextSlot = timeSlots[index + 1];
+                                                const canExtend = !localConfig.vipMusicMode && nextSlot && nextSlot.type === 'class';
 
                                                 return (
                                                     <td key={dayIndex} rowSpan={is2h ? 2 : 1} className={`p-1 border-r border-gray-100 relative ${currentClass ? currentClass.color.split(' ')[0] : ''}`}>
@@ -1810,7 +1851,8 @@
         };
 
         const DailyNotepadModal = ({ dayIndex, dayName, config, planData, extraClasses, onClose, onSave }) => {
-            const daySlots = TIME_SLOTS.filter(slot => slot.type !== 'break' && (config.schedule[dayIndex]?.[slot.id] || extraClasses?.[dayIndex]?.[slot.id]));
+            const timeSlots = getTimeSlots(config);
+            const daySlots = timeSlots.filter(slot => slot.type !== 'break' && (config.schedule[dayIndex]?.[slot.id] || extraClasses?.[dayIndex]?.[slot.id]));
 
             const [formData, setFormData] = useState(() => {
                 const init = {};
@@ -2158,6 +2200,7 @@
         };
 
         const PlannerScreen = ({ weekId, weeksData, config, onConfigChange, onUpdateWeekData, onBack, onAddToRadar, allWeeks, holidayWeeks, reminders, onSaveReminder, onChangeWeek }) => {
+            const timeSlots = getTimeSlots(config);
             const [planData, setPlanData] = useState(weeksData[weekId] || {});
             const [history, setHistory] = useState([]);
             const [future, setFuture] = useState([]);
@@ -2201,6 +2244,14 @@
                 setPlanData(newData);
                 onUpdateWeekData(weekId, newData);
             }
+
+            const toggleHolidayDay = (dayIndex) => {
+                const currentHolidayDays = planData.holidayDays || [];
+                const holidayDays = currentHolidayDays.includes(dayIndex)
+                    ? currentHolidayDays.filter(d => d !== dayIndex)
+                    : [...currentHolidayDays, dayIndex].sort((a, b) => a - b);
+                updatePlanData({ ...planData, holidayDays });
+            };
 
             const handleUndo = () => {
                 if (history.length === 0) return;
@@ -2317,26 +2368,33 @@
             };
 
             const findNextSession = (d, s, cid) => {
-                let found = null;
-                const currentDuration = config.durations?.[`${d}-${s}`] === 2 ? 2 : 1;
-                let startSlot = s + currentDuration;
+                const currentDuration = !config.vipMusicMode && config.durations?.[`${d}-${s}`] === 2 ? 2 : 1;
+                const currentSlotIndex = timeSlots.findIndex(slot => slot.id === s);
+                const startSlotIndex = Math.max(0, currentSlotIndex + currentDuration);
 
                 for (let i = d; i < 5; i++) {
-                    for (let j = 0; j < TIME_SLOTS.length; j++) {
-                        if (i === d && j < startSlot) continue;
-                        if (config.schedule[i]?.[j] === cid) { found = { d: i, s: j, w: 0 }; break; }
+                    if ((planData.holidayDays || []).includes(i)) continue;
+                    for (let j = 0; j < timeSlots.length; j++) {
+                        if (i === d && j < startSlotIndex) continue;
+                        const slotId = timeSlots[j].id;
+                        if (config.schedule[i]?.[slotId] === cid) return { d: i, s: slotId, weekId };
                     }
-                    if (found) break;
                 }
-                if (!found) {
+
+                const currentWeekIndex = allWeeks.findIndex(w => w.id === weekId);
+                for (let wi = currentWeekIndex + 1; wi < allWeeks.length; wi++) {
+                    const candidateWeekId = allWeeks[wi].id;
+                    if (holidayWeeks.includes(candidateWeekId)) continue;
+                    const candidateWeekData = weeksData[candidateWeekId] || {};
                     for (let i = 0; i < 5; i++) {
-                        for (let j = 0; j < TIME_SLOTS.length; j++) {
-                            if (config.schedule[i]?.[j] === cid) { found = { d: i, s: j, w: 1 }; break; }
+                        if ((candidateWeekData.holidayDays || []).includes(i)) continue;
+                        for (let j = 0; j < timeSlots.length; j++) {
+                            const slotId = timeSlots[j].id;
+                            if (config.schedule[i]?.[slotId] === cid) return { d: i, s: slotId, weekId: candidateWeekId };
                         }
-                        if (found) break;
                     }
                 }
-                return found;
+                return null;
             };
 
             const handleTaskAction = (d, s, cid, task, action) => {
@@ -2374,7 +2432,7 @@
                         tag: type === 'skipped' ? 'skipped' : 'unfinished'
                     };
 
-                    if (found.w === 0) {
+                    if (found.weekId === weekId) {
                         const targetKey = `${found.d}-${found.s}`;
                         const targetTasks = getTasks(found.d, found.s, newPlanData);
                         const newTargetTasks = [newTaskObj, ...targetTasks];
@@ -2384,19 +2442,7 @@
                     } else {
                         updatePlanData(newPlanData);
 
-                        const getNextActiveWeekId = (currentWid) => {
-                            const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
-                            if (currentIndex === -1) return null;
-                            let nextIndex = currentIndex + 1;
-                            while (nextIndex < allWeeks.length) {
-                                const w = allWeeks[nextIndex];
-                                if (!holidayWeeks.includes(w.id)) return w.id;
-                                nextIndex++;
-                            }
-                            return null;
-                        };
-
-                        const nextWeekId = getNextActiveWeekId(weekId);
+                        const nextWeekId = found.weekId;
                         if (nextWeekId) {
                             const nextWeekData = weeksData[nextWeekId] || {};
                             const targetKey = `${found.d}-${found.s}`;
@@ -2433,7 +2479,7 @@
                     if (found) {
                         const movedTasks = currentTasks.map(t => ({ ...t, text: `(Del ${DAYS[d]}) ${t.text}`, status: null }));
 
-                        if (found.w === 0) {
+                        if (found.weekId === weekId) {
                             const targetKey = `${found.d}-${found.s}`;
                             const targetTasks = getTasks(found.d, found.s, planData);
                             newData[targetKey] = {
@@ -2442,19 +2488,7 @@
                             };
                             alert(`Classe cancel·lada. Mogut a ${DAYS[found.d]}.`);
                         } else {
-                            const getNextActiveWeekId = (currentWid) => {
-                                const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
-                                if (currentIndex === -1) return null;
-                                let nextIndex = currentIndex + 1;
-                                while (nextIndex < allWeeks.length) {
-                                    const w = allWeeks[nextIndex];
-                                    if (!holidayWeeks.includes(w.id)) return w.id;
-                                    nextIndex++;
-                                }
-                                return null;
-                            };
-
-                            const nextWeekId = getNextActiveWeekId(weekId);
+                            const nextWeekId = found.weekId;
                             if (nextWeekId) {
                                 const nextWeekData = weeksData[nextWeekId] || {};
                                 const targetKey = `${found.d}-${found.s}`;
@@ -2476,6 +2510,10 @@
 
             const handleAddExtraClass = () => {
                 if (!newExtra.classId) return;
+                if ((planData.holidayDays || []).includes(newExtra.day)) {
+                    alert("Aquest dia està marcat com a vacances. Desmarca'l abans d'afegir-hi una classe extra.");
+                    return;
+                }
                 const newExtraClasses = { ...(planData.extraClasses || {}) };
                 if (!newExtraClasses[newExtra.day]) newExtraClasses[newExtra.day] = {};
                 newExtraClasses[newExtra.day][newExtra.slot] = newExtra.classId;
@@ -2501,35 +2539,26 @@
                 setShowCopyModal(true);
             };
 
-            const getNextActiveWeekId = (currentWid) => {
-                const currentIndex = allWeeks.findIndex(w => w.id === currentWid);
-                if (currentIndex === -1) return null;
-                let nextIndex = currentIndex + 1;
-                while (nextIndex < allWeeks.length) {
-                    const w = allWeeks[nextIndex];
-                    if (!holidayWeeks.includes(w.id)) return w.id;
-                    nextIndex++;
-                }
-                return null;
-            };
-
             const executeCopy = (targetType) => {
                 const sourceTasks = getTasks(copySource.day, copySource.slot).filter(t => t.text.trim());
                 if (sourceTasks.length === 0) { alert("No hi ha activitats."); setShowCopyModal(false); return; }
                 let found = null;
                 if (targetType === 'next_same') found = findNextSession(copySource.day, copySource.slot, copySource.classId);
                 else if (targetType === 'next_other') { if (!targetClassId) return alert("Selecciona un grup."); found = findNextSession(copySource.day, copySource.slot, targetClassId); }
-                else if (targetType === 'manual') found = { d: targetDay, s: targetSlot, w: 0 };
+                else if (targetType === 'manual') {
+                    if ((planData.holidayDays || []).includes(targetDay)) return alert("No pots copiar una sessió a un dia marcat com a vacances.");
+                    found = { d: targetDay, s: targetSlot, weekId };
+                }
 
-                if (found && found.w === 0) {
+                if (found && found.weekId === weekId) {
                     const existingTasks = getTasks(found.d, found.s);
                     const combined = [...existingTasks.filter(t => t.text.trim()), ...sourceTasks.map(t => ({ ...t, status: null }))];
                     while (combined.length < 3) combined.push({ text: "", time: "", status: null });
                     handleTasksChange(found.d, found.s, combined);
                     alert("Copiades!");
                     setShowCopyModal(false);
-                } else if (found && found.w === 1) {
-                    const nextWeekId = getNextActiveWeekId(weekId);
+                } else if (found) {
+                    const nextWeekId = found.weekId;
                     if (nextWeekId) {
                         const nextWeekData = weeksData[nextWeekId] || {};
                         const targetKey = `${found.d}-${found.s}`;
@@ -2566,7 +2595,8 @@
                 let html = onlyRows ? '' : `<table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif;"><tbody>`;
 
                 WORK_DAYS.forEach((day, d) => {
-                    TIME_SLOTS.forEach((slot, s) => {
+                    if ((planData.holidayDays || []).includes(d)) return;
+                    timeSlots.forEach((slot, s) => {
                         const cid = config.schedule[d]?.[slot.id] || planData.extraClasses?.[d]?.[slot.id];
                         if (cid && slot.type !== 'break' && (!exportClassId || cid === exportClassId)) {
                             const data = planData[`${d}-${slot.id}`] || {};
@@ -2631,20 +2661,20 @@
                 setShowExportModal(false);
             };
 
-            const visibleSlots = TIME_SLOTS.filter((slot, index) => {
+            const visibleSlots = timeSlots.filter((slot, index) => {
                 if (slot.type === 'break') return false;
 
-                const hasAnySchedule = viewDays.some((_, d) => TIME_SLOTS.some(s => config.schedule[d]?.[s.id] || planData.extraClasses?.[d]?.[s.id]));
+                const hasAnySchedule = viewDays.some((_, d) => timeSlots.some(s => config.schedule[d]?.[s.id] || planData.extraClasses?.[d]?.[s.id]));
                 if (!hasAnySchedule) return true;
 
                 const hasClass = viewDays.some((_, d) => config.schedule[d]?.[slot.id] || planData.extraClasses?.[d]?.[slot.id]);
                 if (hasClass) return true;
 
-                const prevSlotIndex = slot.id - 1;
+                const prevSlotIndex = index - 1;
                 if (prevSlotIndex >= 0) {
-                    const prevSlot = TIME_SLOTS[prevSlotIndex];
+                    const prevSlot = timeSlots[prevSlotIndex];
                     if (prevSlot && prevSlot.type === 'class') {
-                        const isCovered = viewDays.some((_, d) => config.durations?.[`${d}-${prevSlot.id}`] === 2);
+                        const isCovered = !config.vipMusicMode && viewDays.some((_, d) => config.durations?.[`${d}-${prevSlot.id}`] === 2);
                         if (isCovered) return true;
                     }
                 }
@@ -2692,9 +2722,20 @@
                                 const dateStr = addDays(weekId, i);
                                 const isToday = dateStr === getLocalISODate(new Date());
                                 const hasReminder = reminders && reminders[dateStr] && reminders[dateStr].length > 0;
+                                const isDayHoliday = i < 5 && (planData.holidayDays || []).includes(i);
                                 return (
-                                    <div key={i} className={`sticky top-0 z-20 p-3 border-r border-b text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group ${isToday ? `bg-${theme}-100 text-${theme}-800 font-extrabold border-${theme}-300 shadow-inner` : 'border-gray-200 bg-gray-50 text-gray-700 font-bold'}`}>
+                                    <div key={i} className={`sticky top-0 z-20 p-3 border-r border-b text-center uppercase text-sm tracking-wider flex justify-center items-center gap-2 group ${isDayHoliday ? 'bg-purple-100 text-purple-800 border-purple-300 font-extrabold shadow-inner' : (isToday ? `bg-${theme}-100 text-${theme}-800 font-extrabold border-${theme}-300 shadow-inner` : 'border-gray-200 bg-gray-50 text-gray-700 font-bold')}`}>
                                         {d} {parseInt(dateStr.split('-')[2])}
+                                        {i < 5 && (
+                                            <button
+                                                onClick={() => toggleHolidayDay(i)}
+                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${isDayHoliday ? 'bg-purple-600 text-white shadow' : 'text-gray-300 hover:bg-purple-100 hover:text-purple-600'}`}
+                                                title={isDayHoliday ? "Desmarcar dia de vacances" : "Marcar tot el dia com a vacances"}
+                                                aria-label={isDayHoliday ? `Desmarcar ${d} com a vacances` : `Marcar ${d} com a vacances`}
+                                            >
+                                                <Icons.Moon size={16} />
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => setActiveDayNotepad({ dayIndex: i })}
                                             className={`text-gray-400 hover:text-${theme}-600 transition-colors`}
@@ -2737,12 +2778,21 @@
                                             }
                                         }
 
+                                        const isDayHoliday = (planData.holidayDays || []).includes(d);
                                         const prevSlot = visibleSlots[visibleIndex - 1];
                                         const isSequential = prevSlot && (slot.id === prevSlot.id + 1);
                                         const prevKey = prevSlot ? `${d}-${prevSlot.id}` : null;
-                                        const isCovered = isSequential && config.durations?.[prevKey] === 2;
+                                        const isCovered = !isDayHoliday && !config.vipMusicMode && isSequential && config.durations?.[prevKey] === 2;
 
                                         if (isCovered) return null;
+
+                                        if (isDayHoliday) {
+                                            return (
+                                                <div key={d} className="border-r border-b border-purple-200 bg-purple-50/80 min-h-[160px] flex items-center justify-center">
+                                                    {visibleIndex === 0 && <span className="px-3 py-1.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold uppercase tracking-wide flex items-center gap-1.5"><Icons.Moon size={14} /> Vacances</span>}
+                                                </div>
+                                            );
+                                        }
 
                                         const globalClassId = config.schedule[d]?.[slot.id];
                                         const extraClassId = planData.extraClasses?.[d]?.[slot.id];
@@ -2764,7 +2814,7 @@
                                         const isZzz = data.status === 'zzz';
                                         const tasks = getTasks(d, slot.id);
                                         const totalTime = getTotalTime(d, slot.id);
-                                        const is2h = config.durations?.[key] === 2 && !isExtraClass;
+                                        const is2h = !config.vipMusicMode && config.durations?.[key] === 2 && !isExtraClass;
                                         const hasContent = data.materials?.trim() || data.notes?.trim() || data.links?.length > 0;
 
                                         let cellBgClass = isZzz ? 'session-cancelled' : (isToday ? `bg-${theme}-50/50 hover:bg-${theme}-100/60` : `bg-white hover:bg-${theme}-50/10`);
@@ -2980,7 +3030,7 @@
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hora</label>
                                         <select className="w-full border p-2 rounded" value={newExtra.slot} onChange={e => setNewExtra({ ...newExtra, slot: parseInt(e.target.value) })}>
-                                            {TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                            {timeSlots.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                                         </select>
                                     </div>
                                     <div>
@@ -3017,7 +3067,7 @@
                                         <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
                                         <div className="flex gap-2 mb-2">
                                             <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
-                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{timeSlots.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                                         </div>
                                         <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">Enganxar Aquí</button>
                                     </div>
@@ -3034,6 +3084,7 @@
         const ClassPlannerScreen = ({ classId, config, weeksData, allWeeks, holidayWeeks, onUpdateWeekData, onConfigChange, onBack, onAddToRadar, reminders, onSaveReminder }) => {
             const classInfo = config.classes.find(c => c.id === classId);
             const theme = config.theme || 'orange';
+            const timeSlots = getTimeSlots(config);
 
             // Guàrdia defensiva: si la classe no existeix, mostrar pantalla amb missatge en lloc de petar
             if (!classInfo) {
@@ -3104,19 +3155,20 @@
                 const sessions = [];
                 visibleWeeks.forEach(w => {
                     const wData = weeksData[w.id] || {};
-                    const isHoliday = holidayWeeks?.includes(w.id);
+                    const isHolidayWeek = holidayWeeks?.includes(w.id);
 
                     for (let d = 0; d < 5; d++) {
-                        for (let s = 0; s < TIME_SLOTS.length; s++) {
-                            const slot = TIME_SLOTS[s];
+                        const isHoliday = isHolidayWeek || (wData.holidayDays || []).includes(d);
+                        for (let s = 0; s < timeSlots.length; s++) {
+                            const slot = timeSlots[s];
                             if (slot.type === 'break') continue;
 
                             const isGlobal = config.schedule[d]?.[slot.id] === classId;
                             const isExtra = wData.extraClasses?.[d]?.[slot.id] === classId;
 
                             if (isGlobal || isExtra) {
-                                const prevSlot = TIME_SLOTS[s - 1];
-                                const isCovered = prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                                const prevSlot = timeSlots[s - 1];
+                                const isCovered = !config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
                                 if (isCovered) continue;
 
                                 const dateStr = addDays(w.id, d);
@@ -3374,6 +3426,10 @@
                         }
                     }
                 } else if (targetType === 'manual') {
+                    if ((weeksData[copySource.weekId]?.holidayDays || []).includes(targetDay)) {
+                        alert("No pots copiar una sessió a un dia marcat com a vacances.");
+                        return;
+                    }
                     targetSession = { weekId: copySource.weekId, dayIndex: targetDay, slot: { id: targetSlot } };
                 }
 
@@ -3810,7 +3866,7 @@
                                         <p className="text-xs font-bold text-gray-500 mb-2 uppercase">3. Enganxar manualment a:</p>
                                         <div className="flex gap-2 mb-2">
                                             <select className="flex-1 p-2 border rounded text-sm" value={targetDay} onChange={(e) => setTargetDay(parseInt(e.target.value))}>{WORK_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
-                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{TIME_SLOTS.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                                            <select className="flex-1 p-2 border rounded text-sm" value={targetSlot} onChange={(e) => setTargetSlot(parseInt(e.target.value))}>{timeSlots.filter(s => s.type !== 'break').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                                         </div>
                                         <button onClick={() => executeCopy('manual')} className="w-full px-3 py-2 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 transition-colors">Enganxar Aquí</button>
                                     </div>
@@ -3828,6 +3884,7 @@
         const IntelligentImportModal = ({ data, config, weeksData, holidayWeeks, onConfirm, onClose }) => {
             const [processing, setProcessing] = useState(false);
             const [previewInfo, setPreviewInfo] = useState(null);
+            const timeSlots = getTimeSlots(config);
 
             // Llista de UTs ordenades per data
             const sortedUTs = useMemo(() =>
@@ -3897,14 +3954,15 @@
                 allWeeks.forEach(w => {
                     if (holidayWeeks?.includes(w.id)) return;
                     for (let d = 0; d < 5; d++) {
-                        for (let s = 0; s < TIME_SLOTS.length; s++) {
-                            const slot = TIME_SLOTS[s];
+                        if ((dataToCheck[w.id]?.holidayDays || []).includes(d)) continue;
+                        for (let s = 0; s < timeSlots.length; s++) {
+                            const slot = timeSlots[s];
                             if (slot.type === 'break') continue;
                             const isGlobal = config.schedule[d]?.[slot.id] === classId;
                             const isExtra = dataToCheck[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                             if (!(isGlobal || isExtra)) continue;
-                            const prevSlot = TIME_SLOTS[s - 1];
-                            if (prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId) continue;
+                            const prevSlot = timeSlots[s - 1];
+                            if (!config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId) continue;
                             const dateStr = addDays(w.id, d);
                             const [y2, m2, day] = dateStr.split('-');
                             const sessionDate = new Date(parseInt(y2), parseInt(m2) - 1, parseInt(day), 12, 0, 0);
@@ -3935,18 +3993,19 @@
                     for (let wi = 0; wi < allWeeks.length; wi++) {
                         if (utSessionNum >= numToImport) break;
                         const w = allWeeks[wi];
-                        const isHoliday = holidayWeeks?.includes(w.id);
+                        const isHolidayWeek = holidayWeeks?.includes(w.id);
                         for (let d = 0; d < 5; d++) {
                             if (utSessionNum >= numToImport) break;
-                            for (let s = 0; s < TIME_SLOTS.length; s++) {
+                            const isHoliday = isHolidayWeek || (weeksData[w.id]?.holidayDays || []).includes(d);
+                            for (let s = 0; s < timeSlots.length; s++) {
                                 if (utSessionNum >= numToImport) break;
-                                const slot = TIME_SLOTS[s];
+                                const slot = timeSlots[s];
                                 if (slot.type === 'break') continue;
                                 const isGlobal = config.schedule[d]?.[slot.id] === classId;
                                 const isExtra = weeksData[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                                 if (!(isGlobal || isExtra)) continue;
-                                const prevSlot = TIME_SLOTS[s - 1];
-                                const isCovered = prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                                const prevSlot = timeSlots[s - 1];
+                                const isCovered = !config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
                                 if (isCovered) continue;
                                 const dateStr = addDays(w.id, d);
                                 const [y, m, day] = dateStr.split('-');
@@ -4011,16 +4070,17 @@
 
                 const classSessions = [];
                 allWeeks.forEach(w => {
-                    const isHoliday = holidayWeeks?.includes(w.id);
+                    const isHolidayWeek = holidayWeeks?.includes(w.id);
                     for (let d = 0; d < 5; d++) {
-                        for (let s = 0; s < TIME_SLOTS.length; s++) {
-                            const slot = TIME_SLOTS[s];
+                        const isHoliday = isHolidayWeek || (newWeeksData[w.id]?.holidayDays || []).includes(d);
+                        for (let s = 0; s < timeSlots.length; s++) {
+                            const slot = timeSlots[s];
                             if (slot.type === 'break') continue;
                             const isGlobal = config.schedule[d]?.[slot.id] === classId;
                             const isExtra = newWeeksData[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                             if (!(isGlobal || isExtra)) continue;
-                            const prevSlot = TIME_SLOTS[s - 1];
-                            const isCovered = prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                            const prevSlot = timeSlots[s - 1];
+                            const isCovered = !config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
                             if (isCovered) continue;
                             const dateStr = addDays(w.id, d);
                             const [y, m, day] = dateStr.split('-');
@@ -4422,6 +4482,7 @@
                 utDates: [],
                 googleSheetUrl: "",
                 taskTrackingUrl: "",
+                vipMusicMode: false,
                 classMaterials: {}
             });
             const [weeksData, setWeeksData] = useState({});
@@ -4563,12 +4624,12 @@
             };
 
             const handleReset = () => {
-                setConfigState({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], classMaterials: {} });
+                setConfigState({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], vipMusicMode: false, classMaterials: {} });
                 setWeeksData({});
                 setRadar([]);
                 setHolidayWeeks([]);
                 setReminders({});
-                saveData({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], classMaterials: {} }, {}, [], [], {});
+                saveData({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], vipMusicMode: false, classMaterials: {} }, {}, [], [], {});
                 setView('config');
             };
 
