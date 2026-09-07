@@ -630,14 +630,17 @@
         ];
 
         const VIP_MUSIC_TIME_SLOTS = [
-            { id: 0, label: "8:30h - 10:00h", type: "class", endH: 10, endM: 0 },
+            { id: 0, label: "8:30h - 9:30h", type: "class", endH: 9, endM: 30 },
+            { id: 1, label: "9:30h - 10:30h", type: "class", endH: 10, endM: 30 },
             { id: 2, label: "10:00h - 10:30h", type: "break", name: "PATI", endH: 10, endM: 30 },
-            { id: 3, label: "10:30h - 12:00h", type: "class", endH: 12, endM: 0 },
-            { id: 4, label: "12:00h - 13:30h", type: "class", endH: 13, endM: 30 },
-            { id: 5, label: "13:30h - 15:00h", type: "class", endH: 15, endM: 0 },
-            { id: 6, label: "15:00h - 16:30h", type: "class", endH: 16, endM: 30 },
-            { id: 7, label: "16:30h - 18:00h", type: "class", endH: 18, endM: 0 },
-            { id: 8, label: "18:00h - 19:30h", type: "class", endH: 19, endM: 30 }
+            { id: 3, label: "11:00h - 12:00h", type: "class", endH: 12, endM: 0 },
+            { id: 4, label: "12:00h - 13:00h", type: "class", endH: 13, endM: 0 },
+            { id: 5, label: "13:00h - 14:00h", type: "class", endH: 14, endM: 0 },
+            { id: 6, label: "14:00h - 15:00h", type: "class", endH: 15, endM: 0 },
+            { id: 7, label: "15:00h - 16:00h", type: "class", endH: 16, endM: 0 },
+            { id: 8, label: "16:00h - 17:00h", type: "class", endH: 17, endM: 0 },
+            { id: 9, label: "17:00h - 18:00h", type: "class", endH: 18, endM: 0 },
+            { id: 10, label: "18:00h - 19:00h", type: "class", endH: 19, endM: 0 }
         ];
 
         const getTimeSlots = (config) => config?.vipMusicMode ? VIP_MUSIC_TIME_SLOTS : STANDARD_TIME_SLOTS;
@@ -786,9 +789,15 @@
                 setLocalConfig(prev => {
                     const key = `${dayIndex}-${slotId}`;
                     const currentDurations = prev.durations || {};
-                    const is2h = currentDurations[key] === 2;
+                    const currentDuration = currentDurations[key] || 1;
                     const newDurations = { ...currentDurations };
-                    if (is2h) { delete newDurations[key]; } else { newDurations[key] = 2; }
+                    if (currentDuration === 1) {
+                        newDurations[key] = 1.5;
+                    } else if (currentDuration === 1.5) {
+                        newDurations[key] = 2;
+                    } else {
+                        delete newDurations[key];
+                    }
                     return { ...prev, durations: newDurations };
                 });
             };
@@ -899,7 +908,7 @@
                             />
                             <span>
                                 <span className="block font-bold text-gray-800">Soc docent de VIP/Música</span>
-                                <span className="block text-sm text-gray-600 mt-1">Activa sessions d’1 h 30 min i avança el pati a les 10.00 h.</span>
+                                <span className="block text-sm text-gray-600 mt-1">Avança el pati a les 10.00 h. Les sessions mantenen la durada habitual d’1 hora.</span>
                             </span>
                         </label>
                     </div>
@@ -918,7 +927,7 @@
                                             WORK_DAYS.map((_, dayIndex) => {
                                                 const prevSlot = timeSlots[index - 1];
                                                 const prevKey = prevSlot ? `${dayIndex}-${prevSlot.id}` : null;
-                                                const isCovered = !localConfig.vipMusicMode && prevSlot && localConfig.durations?.[prevKey] === 2;
+                                                const isCovered = prevSlot && (localConfig.durations?.[prevKey] || 1) > 1;
 
                                                 if (isCovered) return null;
 
@@ -926,12 +935,13 @@
                                                 const currentClass = localConfig.classes.find(c => c.id === currentClassId);
 
                                                 const currentKey = `${dayIndex}-${slot.id}`;
-                                                const is2h = !localConfig.vipMusicMode && localConfig.durations?.[currentKey] === 2;
+                                                const sessionDuration = localConfig.durations?.[currentKey] || 1;
+                                                const isExtended = sessionDuration > 1;
                                                 const nextSlot = timeSlots[index + 1];
-                                                const canExtend = !localConfig.vipMusicMode && nextSlot && nextSlot.type === 'class';
+                                                const canExtend = nextSlot && nextSlot.type === 'class';
 
                                                 return (
-                                                    <td key={dayIndex} rowSpan={is2h ? 2 : 1} className={`p-1 border-r border-gray-100 relative ${currentClass ? currentClass.color.split(' ')[0] : ''}`}>
+                                                    <td key={dayIndex} rowSpan={isExtended ? 2 : 1} className={`p-1 border-r border-gray-100 relative ${currentClass ? currentClass.color.split(' ')[0] : ''}`}>
                                                         <div className="flex items-center gap-1">
                                                             <select className="w-full p-2 bg-transparent border-none text-center cursor-pointer appearance-none font-medium" value={currentClassId || ""} onChange={(e) => updateSchedule(dayIndex, slot.id, e.target.value)}>
                                                                 <option value="">-</option>
@@ -940,10 +950,10 @@
                                                             {canExtend && (
                                                                 <button
                                                                     onClick={() => toggleDuration(dayIndex, slot.id)}
-                                                                    className={`text-[10px] px-1 rounded hover:bg-black/10 ${is2h ? 'text-blue-600 font-bold bg-blue-100' : 'text-gray-400'}`}
-                                                                    title={is2h ? "Reduir a 1h" : "Ampliar a 2h"}
+                                                                    className={`text-[10px] min-w-[34px] px-1 py-0.5 rounded hover:bg-black/10 ${isExtended ? 'text-blue-600 font-bold bg-blue-100' : 'text-gray-400'}`}
+                                                                    title={sessionDuration === 1 ? "Ampliar a 1 h 30 min" : (sessionDuration === 1.5 ? "Ampliar a 2 h" : "Reduir a 1 h")}
                                                                 >
-                                                                    ↓
+                                                                    {sessionDuration === 1 ? '1h' : (sessionDuration === 1.5 ? '1:30' : '2h')}
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2368,7 +2378,7 @@
             };
 
             const findNextSession = (d, s, cid) => {
-                const currentDuration = !config.vipMusicMode && config.durations?.[`${d}-${s}`] === 2 ? 2 : 1;
+                const currentDuration = (config.durations?.[`${d}-${s}`] || 1) > 1 ? 2 : 1;
                 const currentSlotIndex = timeSlots.findIndex(slot => slot.id === s);
                 const startSlotIndex = Math.max(0, currentSlotIndex + currentDuration);
 
@@ -2674,7 +2684,7 @@
                 if (prevSlotIndex >= 0) {
                     const prevSlot = timeSlots[prevSlotIndex];
                     if (prevSlot && prevSlot.type === 'class') {
-                        const isCovered = !config.vipMusicMode && viewDays.some((_, d) => config.durations?.[`${d}-${prevSlot.id}`] === 2);
+                        const isCovered = viewDays.some((_, d) => (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1);
                         if (isCovered) return true;
                     }
                 }
@@ -2782,7 +2792,7 @@
                                         const prevSlot = visibleSlots[visibleIndex - 1];
                                         const isSequential = prevSlot && (slot.id === prevSlot.id + 1);
                                         const prevKey = prevSlot ? `${d}-${prevSlot.id}` : null;
-                                        const isCovered = !isDayHoliday && !config.vipMusicMode && isSequential && config.durations?.[prevKey] === 2;
+                                        const isCovered = !isDayHoliday && isSequential && (config.durations?.[prevKey] || 1) > 1;
 
                                         if (isCovered) return null;
 
@@ -2814,7 +2824,8 @@
                                         const isZzz = data.status === 'zzz';
                                         const tasks = getTasks(d, slot.id);
                                         const totalTime = getTotalTime(d, slot.id);
-                                        const is2h = !config.vipMusicMode && config.durations?.[key] === 2 && !isExtraClass;
+                                        const sessionDuration = config.durations?.[key] || 1;
+                                        const isExtended = sessionDuration > 1 && !isExtraClass;
                                         const hasContent = data.materials?.trim() || data.notes?.trim() || data.links?.length > 0;
 
                                         let cellBgClass = isZzz ? 'session-cancelled' : (isToday ? `bg-${theme}-50/50 hover:bg-${theme}-100/60` : `bg-white hover:bg-${theme}-50/10`);
@@ -2823,10 +2834,10 @@
                                         }
 
                                         return (
-                                            <div key={d} style={is2h ? { gridRow: 'span 2' } : {}} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
+                                            <div key={d} style={isExtended ? { gridRow: 'span 2' } : {}} className={`border-r border-b border-gray-100 p-2 flex flex-col gap-1 relative group transition-all ${cellBgClass}`}>
                                                 <div className={`flex justify-between items-center px-2 py-1.5 rounded text-xs font-bold mb-1 shadow-sm ${cinfo.color} ${isZzz ? 'opacity-50 grayscale' : ''}`}>
                                                     <div className="flex items-center gap-1 overflow-hidden">
-                                                        <span className="truncate">{cinfo.name} {is2h && "(2h)"}</span>
+                                                        <span className="truncate">{cinfo.name} {isExtended && (sessionDuration === 1.5 ? "(1:30h)" : "(2h)")}</span>
                                                         {isExtraClass && (
                                                             <button onClick={() => handleRemoveExtraClass(d, slot.id)} className="ml-1 text-red-500 hover:text-red-700" title="Eliminar classe extra puntual"><Icons.XCircle size={12} /></button>
                                                         )}
@@ -3168,7 +3179,7 @@
 
                             if (isGlobal || isExtra) {
                                 const prevSlot = timeSlots[s - 1];
-                                const isCovered = !config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                                const isCovered = prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId;
                                 if (isCovered) continue;
 
                                 const dateStr = addDays(w.id, d);
@@ -3962,7 +3973,7 @@
                             const isExtra = dataToCheck[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                             if (!(isGlobal || isExtra)) continue;
                             const prevSlot = timeSlots[s - 1];
-                            if (!config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId) continue;
+                            if (prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId) continue;
                             const dateStr = addDays(w.id, d);
                             const [y2, m2, day] = dateStr.split('-');
                             const sessionDate = new Date(parseInt(y2), parseInt(m2) - 1, parseInt(day), 12, 0, 0);
@@ -4005,7 +4016,7 @@
                                 const isExtra = weeksData[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                                 if (!(isGlobal || isExtra)) continue;
                                 const prevSlot = timeSlots[s - 1];
-                                const isCovered = !config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                                const isCovered = prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId;
                                 if (isCovered) continue;
                                 const dateStr = addDays(w.id, d);
                                 const [y, m, day] = dateStr.split('-');
@@ -4080,7 +4091,7 @@
                             const isExtra = newWeeksData[w.id]?.extraClasses?.[d]?.[slot.id] === classId;
                             if (!(isGlobal || isExtra)) continue;
                             const prevSlot = timeSlots[s - 1];
-                            const isCovered = !config.vipMusicMode && prevSlot && !isExtra && config.durations?.[`${d}-${prevSlot.id}`] === 2 && config.schedule[d]?.[prevSlot.id] === classId;
+                            const isCovered = prevSlot && !isExtra && (config.durations?.[`${d}-${prevSlot.id}`] || 1) > 1 && config.schedule[d]?.[prevSlot.id] === classId;
                             if (isCovered) continue;
                             const dateStr = addDays(w.id, d);
                             const [y, m, day] = dateStr.split('-');
