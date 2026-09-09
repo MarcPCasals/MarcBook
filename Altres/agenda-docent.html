@@ -1089,15 +1089,18 @@
             const [showRadarHistory, setShowRadarHistory] = useState(false);
             const [backupHistory, setBackupHistory] = useState([]);
             const [editingLink, setEditingLink] = useState(false);
-            const [tempLink, setTempLink] = useState(config.googleSheetUrl || "");
-            const [editingTaskLink, setEditingTaskLink] = useState(false);
-            const [tempTaskLink, setTempTaskLink] = useState(config.taskTrackingUrl || "");
+            const [editingLinkId, setEditingLinkId] = useState(null);
+            const [linkForm, setLinkForm] = useState({ title: "", url: "" });
             const fileInputRef = useRef(null);
 
             const [newRadarText, setNewRadarText] = useState("");
             const [newRadarDate, setNewRadarDate] = useState("");
 
             const theme = config.theme || 'orange';
+            const programmingLinks = (config.programmingLinks?.length
+                ? config.programmingLinks
+                : (config.googleSheetUrl ? [{ id: 'legacy-programming-link', title: 'Programació', url: config.googleSheetUrl }] : [])
+            ).filter(link => link?.url);
 
             const allWeeks = useMemo(() => generateAllWeeks(config.schoolYear), [config.schoolYear]);
             const currentMonthWeeks = allWeeks.filter(w => w.month === currentViewDate.getMonth() && w.year === currentViewDate.getFullYear());
@@ -1169,14 +1172,38 @@
             const handleImportClick = () => setShowImportModal(true);
             const confirmImport = () => { setShowImportModal(false); if (fileInputRef.current) fileInputRef.current.click(); };
 
-            const handleSaveLink = () => {
-                onSaveConfig({ ...config, googleSheetUrl: tempLink });
-                setEditingLink(false);
+            const openNewLinkForm = () => {
+                setEditingLinkId(null);
+                setLinkForm({ title: "", url: "" });
+                setEditingLink(true);
             };
 
-            const handleSaveTaskLink = () => {
-                onSaveConfig({ ...config, taskTrackingUrl: tempTaskLink });
-                setEditingTaskLink(false);
+            const openEditLinkForm = (link) => {
+                setEditingLinkId(link.id);
+                setLinkForm({ title: link.title || "", url: link.url || "" });
+                setEditingLink(true);
+            };
+
+            const handleSaveLink = () => {
+                const title = linkForm.title.trim();
+                const url = linkForm.url.trim();
+                if (!title || !url) return;
+                const nextLinks = editingLinkId
+                    ? programmingLinks.map(link => link.id === editingLinkId ? { ...link, title, url } : link)
+                    : [...programmingLinks, { id: Date.now().toString(), title, url }];
+                const previousPrimary = config.googleSheetUrl;
+                const editedPrimary = editingLinkId && programmingLinks.find(link => link.id === editingLinkId)?.url === previousPrimary;
+                onSaveConfig({ ...config, programmingLinks: nextLinks, googleSheetUrl: editedPrimary ? url : (previousPrimary || nextLinks[0]?.url || "") });
+                setEditingLink(false);
+                setEditingLinkId(null);
+                setLinkForm({ title: "", url: "" });
+            };
+
+            const handleRemoveLink = (id) => {
+                const removedLink = programmingLinks.find(link => link.id === id);
+                const nextLinks = programmingLinks.filter(link => link.id !== id);
+                const nextPrimaryUrl = removedLink?.url === config.googleSheetUrl ? (nextLinks[0]?.url || "") : config.googleSheetUrl;
+                onSaveConfig({ ...config, programmingLinks: nextLinks, googleSheetUrl: nextPrimaryUrl });
             };
 
             const getUTForWeek = (week) => {
@@ -1435,60 +1462,50 @@
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                                    <div className="bg-blue-600 text-white p-3 flex justify-between items-center">
-                                        <h2 className="font-bold flex items-center gap-1 text-sm"><Icons.CheckCircle size={16} /> Seguiment</h2>
-                                        <button onClick={() => setEditingTaskLink(!editingTaskLink)} className="text-white hover:text-blue-100"><Icons.Edit size={14} /></button>
-                                    </div>
-                                    <div className="p-3 bg-blue-50 text-center h-24 flex items-center justify-center">
-                                        {editingTaskLink ? (
-                                            <div className="flex flex-col gap-2 w-full">
-                                                <input
-                                                    type="text"
-                                                    className="w-full p-1 border rounded text-xs focus:outline-none focus:border-blue-500"
-                                                    placeholder="URL..."
-                                                    value={tempTaskLink}
-                                                    onChange={(e) => setTempTaskLink(e.target.value)}
-                                                />
-                                                <button onClick={handleSaveTaskLink} className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs font-bold hover:bg-blue-700">Guardar</button>
-                                            </div>
-                                        ) : (
-                                            config.taskTrackingUrl ? (
-                                                <a href={config.taskTrackingUrl} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-1 text-blue-700 font-bold hover:text-blue-900 text-xs">
-                                                    <Icons.Link size={24} /> Obrir
-                                                </a>
-                                            ) : (
-                                                <span className="text-xs text-gray-400 italic cursor-pointer" onClick={() => setEditingTaskLink(true)}>Afegir Link</span>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-
+                            <div>
                                 <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                                     <div className="bg-green-600 text-white p-3 flex justify-between items-center">
                                         <h2 className="font-bold flex items-center gap-1 text-sm"><Icons.Link size={16} /> Programació</h2>
-                                        <button onClick={() => setEditingLink(!editingLink)} className="text-white hover:text-green-100"><Icons.Edit size={14} /></button>
+                                        <button onClick={openNewLinkForm} className="text-white hover:text-green-100 flex items-center gap-1 text-xs font-bold" title="Afegir enllaç"><Icons.Plus size={15} /> Afegir</button>
                                     </div>
-                                    <div className="p-3 bg-green-50 text-center h-24 flex items-center justify-center">
+                                    <div className="p-3 bg-green-50 min-h-24">
                                         {editingLink ? (
-                                            <div className="flex flex-col gap-2 w-full">
+                                            <div className="flex flex-col gap-2 w-full bg-white p-3 rounded-lg border border-green-200">
                                                 <input
                                                     type="text"
-                                                    className="w-full p-1 border rounded text-xs focus:outline-none focus:border-green-500"
-                                                    placeholder="URL..."
-                                                    value={tempLink}
-                                                    onChange={(e) => setTempLink(e.target.value)}
+                                                    className="w-full p-2 border rounded text-xs focus:outline-none focus:border-green-500"
+                                                    placeholder="Títol de l’enllaç"
+                                                    value={linkForm.title}
+                                                    onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })}
                                                 />
-                                                <button onClick={handleSaveLink} className="bg-green-600 text-white px-2 py-0.5 rounded text-xs font-bold hover:bg-green-700">Guardar</button>
+                                                <input
+                                                    type="url"
+                                                    className="w-full p-2 border rounded text-xs focus:outline-none focus:border-green-500"
+                                                    placeholder="URL..."
+                                                    value={linkForm.url}
+                                                    onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })}
+                                                />
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => setEditingLink(false)} className="px-3 py-1.5 rounded text-xs font-bold text-gray-500 hover:bg-gray-100">Cancel·lar</button>
+                                                    <button onClick={handleSaveLink} disabled={!linkForm.title.trim() || !linkForm.url.trim()} className="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-700 disabled:opacity-40">Guardar</button>
+                                                </div>
                                             </div>
                                         ) : (
-                                            config.googleSheetUrl ? (
-                                                <a href={config.googleSheetUrl} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-1 text-green-700 font-bold hover:text-green-900 text-xs">
-                                                    <Icons.Link size={24} /> Obrir
-                                                </a>
+                                            programmingLinks.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {programmingLinks.map(link => (
+                                                        <div key={link.id} className="flex items-center gap-2 bg-white border border-green-200 rounded-lg p-2 shadow-sm">
+                                                            <a href={link.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0 flex items-center gap-2 text-green-800 hover:text-green-950 font-bold text-sm" title={link.url}>
+                                                                <Icons.Link size={18} className="shrink-0" />
+                                                                <span className="truncate">{link.title || "Programació"}</span>
+                                                            </a>
+                                                            <button onClick={() => openEditLinkForm(link)} className="p-1 text-gray-400 hover:text-green-700" title="Editar"><Icons.Edit size={14} /></button>
+                                                            <button onClick={() => handleRemoveLink(link.id)} className="p-1 text-gray-400 hover:text-red-600" title="Eliminar"><Icons.Trash size={14} /></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             ) : (
-                                                <span className="text-xs text-gray-400 italic cursor-pointer" onClick={() => setEditingLink(true)}>Afegir Link</span>
+                                                <button onClick={openNewLinkForm} className="w-full h-20 flex flex-col items-center justify-center gap-1 text-sm text-gray-400 italic hover:text-green-700"><Icons.Link size={22} /> Afegir un enllaç</button>
                                             )
                                         )}
                                     </div>
@@ -4668,6 +4685,7 @@
                 durations: {},
                 utDates: [],
                 googleSheetUrl: "",
+                programmingLinks: [],
                 taskTrackingUrl: "",
                 vipMusicMode: false,
                 classMaterials: {}
@@ -4819,12 +4837,12 @@
             };
 
             const handleReset = () => {
-                setConfigState({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], vipMusicMode: false, classMaterials: {} });
+                setConfigState({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], googleSheetUrl: "", programmingLinks: [], taskTrackingUrl: "", vipMusicMode: false, classMaterials: {} });
                 setWeeksData({});
                 setRadar([]);
                 setHolidayWeeks([]);
                 setReminders({});
-                saveData({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], vipMusicMode: false, classMaterials: {} }, {}, [], [], {});
+                saveData({ schoolYear: new Date().getFullYear().toString(), teacherName: "", theme: "orange", classes: [], schedule: {}, durations: {}, utDates: [], googleSheetUrl: "", programmingLinks: [], taskTrackingUrl: "", vipMusicMode: false, classMaterials: {} }, {}, [], [], {});
                 setView('config');
             };
 
