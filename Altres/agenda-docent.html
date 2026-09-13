@@ -673,6 +673,69 @@
             const formatTime = (minutes) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}h`;
             return { ...slot, label: `${formatTime(startMinutes)} - ${formatTime(endMinutes)}`, endH: Math.floor(endMinutes / 60), endM: endMinutes % 60 };
         };
+        const getCopyableSessionEntries = (cellData = {}) => {
+            const tasks = Array.isArray(cellData.tasks)
+                ? cellData.tasks.filter(task => task && typeof task.text === 'string' && task.text.trim())
+                : [];
+            const activityNotes = Array.isArray(cellData.activityNotes) ? cellData.activityNotes : [];
+            const activityObservations = Array.isArray(cellData.activityObservations) ? cellData.activityObservations : [];
+
+            return tasks.map((task, index) => ({
+                task,
+                note: activityNotes[index] || "",
+                observation: activityObservations[index] || ""
+            }));
+        };
+        const hasCopyableSessionContent = (cellData = {}) => (
+            getCopyableSessionEntries(cellData).length > 0 ||
+            (typeof cellData.notes === 'string' && cellData.notes.trim()) ||
+            (typeof cellData.materials === 'string' && cellData.materials.trim()) ||
+            (Array.isArray(cellData.links) && cellData.links.length > 0) ||
+            (Array.isArray(cellData.activityNotes) && cellData.activityNotes.some(note => typeof note === 'string' && note.trim())) ||
+            (Array.isArray(cellData.activityObservations) && cellData.activityObservations.some(note => typeof note === 'string' && note.trim()))
+        );
+        const appendCopiedText = (targetValue, sourceValue) => {
+            const target = typeof targetValue === 'string' ? targetValue.trim() : "";
+            const source = typeof sourceValue === 'string' ? sourceValue.trim() : "";
+            if (!target) return source;
+            if (!source) return target;
+            return `${target}\n\n${source}`;
+        };
+        const mergeCopiedLinks = (targetLinks, sourceLinks) => {
+            const merged = [];
+            const seen = new Set();
+            [...(Array.isArray(targetLinks) ? targetLinks : []), ...(Array.isArray(sourceLinks) ? sourceLinks : [])].forEach(link => {
+                if (!link) return;
+                const clonedLink = typeof link === 'string' ? link : { ...link };
+                const key = typeof clonedLink === 'string'
+                    ? clonedLink.trim()
+                    : `${String(clonedLink.url || '').trim()}|${String(clonedLink.title || '').trim()}`;
+                if (!key || seen.has(key)) return;
+                seen.add(key);
+                merged.push(clonedLink);
+            });
+            return merged;
+        };
+        const mergeCopiedSessionContent = (targetCell = {}, sourceCell = {}) => {
+            const targetEntries = getCopyableSessionEntries(targetCell);
+            const sourceEntries = getCopyableSessionEntries(sourceCell).map(entry => ({
+                ...entry,
+                task: { ...entry.task, status: null }
+            }));
+            const entries = [...targetEntries, ...sourceEntries];
+            const tasks = entries.map(entry => ({ ...entry.task }));
+            while (tasks.length < 3) tasks.push({ text: "", time: "", status: null });
+
+            return {
+                ...targetCell,
+                tasks,
+                notes: appendCopiedText(targetCell.notes, sourceCell.notes),
+                materials: appendCopiedText(targetCell.materials, sourceCell.materials),
+                links: mergeCopiedLinks(targetCell.links, sourceCell.links),
+                activityNotes: entries.map(entry => entry.note),
+                activityObservations: entries.map(entry => entry.observation)
+            };
+        };
         const sanitizeScheduleConfig = (config) => {
             const validClassIds = new Set((config?.classes || []).map(c => String(c.id)));
             const activeSlots = getTimeSlots(config);
@@ -2725,8 +2788,9 @@
             };
 
             const executeCopy = (targetType) => {
-                const sourceTasks = getTasks(copySource.day, copySource.slot).filter(t => t.text.trim());
-                if (sourceTasks.length === 0) { alert("No hi ha activitats."); setShowCopyModal(false); return; }
+                const sourceKey = `${copySource.day}-${copySource.slot}`;
+                const sourceCell = planData[sourceKey] || {};
+                if (!hasCopyableSessionContent(sourceCell)) { alert("No hi ha contingut per copiar."); setShowCopyModal(false); return; }
                 let found = null;
                 if (targetType === 'next_same') found = findNextSession(copySource.day, copySource.slot, copySource.classId);
                 else if (targetType === 'next_other') { if (!targetClassId) return alert("Selecciona un grup."); found = findNextSession(copySource.day, copySource.slot, targetClassId); }
@@ -2736,23 +2800,25 @@
                 }
 
                 if (found && found.weekId === weekId) {
-                    const existingTasks = getTasks(found.d, found.s);
-                    const combined = [...existingTasks.filter(t => t.text.trim()), ...sourceTasks.map(t => ({ ...t, status: null }))];
-                    while (combined.length < 3) combined.push({ text: "", time: "", status: null });
-                    handleTasksChange(found.d, found.s, combined);
-                    alert("Copiades!");
+                    const targetKey = `${found.d}-${found.s}`;
+                    const newData = {
+                        ...planData,
+                        [targetKey]: mergeCopiedSessionContent(planData[targetKey] || {}, sourceCell)
+                    };
+                    updatePlanData(newData);
+                    alert("Sessió copiada amb tot el contingut!");
                     setShowCopyModal(false);
                 } else if (found) {
                     const nextWeekId = found.weekId;
                     if (nextWeekId) {
                         const nextWeekData = weeksData[nextWeekId] || {};
                         const targetKey = `${found.d}-${found.s}`;
-                        const existingTasks = getTasks(found.d, found.s, nextWeekData).filter(t => t.text.trim());
-                        const combined = [...existingTasks, ...sourceTasks.map(t => ({ ...t, status: null }))];
-                        while (combined.length < 3) combined.push({ text: "", time: "", status: null });
-                        const updatedNextWeekData = { ...nextWeekData, [targetKey]: { ...(nextWeekData[targetKey] || {}), tasks: combined } };
+                        const updatedNextWeekData = {
+                            ...nextWeekData,
+                            [targetKey]: mergeCopiedSessionContent(nextWeekData[targetKey] || {}, sourceCell)
+                        };
                         onUpdateWeekData(nextWeekId, updatedNextWeekData);
-                        alert("Copiades a la setmana vinent!");
+                        alert("Sessió copiada amb tot el contingut a la setmana vinent!");
                         setShowCopyModal(false);
                     } else {
                         alert("No s'ha trobat cap setmana lectiva disponible.");
@@ -3602,13 +3668,52 @@
                 setShowCopyModal(true);
             };
 
+            const findNextSessionForClass = (source, targetCid) => {
+                const sourceWeekIndex = allWeeks.findIndex(week => week.id === source.weekId);
+                const sourceSlotIndex = timeSlots.findIndex(slot => String(slot.id) === String(source.slot));
+                const sourceDuration = getSessionDuration(config, source.day, source.slot);
+                const firstAvailableSlotIndex = sourceSlotIndex + getDurationUnits(sourceDuration);
+
+                for (let weekIndex = sourceWeekIndex; weekIndex < allWeeks.length; weekIndex++) {
+                    const candidateWeek = allWeeks[weekIndex];
+                    if (!candidateWeek || holidayWeeks?.includes(candidateWeek.id)) continue;
+                    const candidateData = weeksData[candidateWeek.id] || {};
+
+                    for (let dayIndex = weekIndex === sourceWeekIndex ? source.day : 0; dayIndex < 5; dayIndex++) {
+                        if ((candidateData.holidayDays || []).includes(dayIndex)) continue;
+                        const combinedSchedule = { ...(config.schedule[dayIndex] || {}), ...(candidateData.extraClasses?.[dayIndex] || {}) };
+
+                        for (let slotIndex = 0; slotIndex < timeSlots.length; slotIndex++) {
+                            if (weekIndex === sourceWeekIndex && dayIndex === source.day && slotIndex < firstAvailableSlotIndex) continue;
+                            const slot = timeSlots[slotIndex];
+                            if (slot.type === 'break') continue;
+                            const isGlobal = config.schedule[dayIndex]?.[slot.id] === targetCid;
+                            const isExtra = candidateData.extraClasses?.[dayIndex]?.[slot.id] === targetCid;
+                            if (!isGlobal && !isExtra) continue;
+
+                            const isCovered = isTimeSlotCovered(
+                                timeSlots,
+                                combinedSchedule,
+                                slotIndex,
+                                startSlotId => candidateData.extraClasses?.[dayIndex]?.[startSlotId] ? 1 : getSessionDuration(config, dayIndex, startSlotId)
+                            );
+                            if (isCovered || candidateData[`${dayIndex}-${slot.id}`]?.status === 'zzz') continue;
+                            return { weekId: candidateWeek.id, dayIndex, slot };
+                        }
+                    }
+                }
+                return null;
+            };
+
             const executeCopy = (targetType) => {
-                const sourceTasks = getTasks(copySource.weekId, copySource.day, copySource.slot).filter(t => t.text.trim());
-                if (sourceTasks.length === 0) { alert("No hi ha activitats."); setShowCopyModal(false); return; }
+                const sourceWData = weeksData[copySource.weekId] || {};
+                const sourceKey = `${copySource.day}-${copySource.slot}`;
+                const sourceCell = sourceWData[sourceKey] || {};
+                if (!hasCopyableSessionContent(sourceCell)) { alert("No hi ha contingut per copiar."); setShowCopyModal(false); return; }
 
                 let targetSession = null;
 
-                if (targetType === 'next_same' || targetType === 'next_other') {
+                if (targetType === 'next_same') {
                     const currentIdx = allClassSessions.findIndex(sess => sess.weekId === copySource.weekId && sess.dayIndex === copySource.day && sess.slot.id === copySource.slot);
                     for (let i = currentIdx + 1; i < allClassSessions.length; i++) {
                         if (!allClassSessions[i].isZzz && !allClassSessions[i].isHoliday) {
@@ -3616,6 +3721,9 @@
                             break;
                         }
                     }
+                } else if (targetType === 'next_other') {
+                    if (!targetClassId) return alert("Selecciona un grup.");
+                    targetSession = findNextSessionForClass(copySource, targetClassId);
                 } else if (targetType === 'manual') {
                     if ((weeksData[copySource.weekId]?.holidayDays || []).includes(targetDay)) {
                         alert("No pots copiar una sessió a un dia marcat com a no lectiu.");
@@ -3626,21 +3734,15 @@
 
                 if (targetSession) {
                     const targetWData = { ...(weeksData[targetSession.weekId] || {}) };
-                    const existingTasks = getTasks(targetSession.weekId, targetSession.dayIndex, targetSession.slot.id);
-                    const combined = [...existingTasks.filter(t => t.text.trim()), ...sourceTasks.map(t => ({ ...t, status: null }))];
-                    while (combined.length < 3) combined.push({ text: "", time: "", status: null });
-
-                    targetWData[`${targetSession.dayIndex}-${targetSession.slot.id}`] = {
-                        ...(targetWData[`${targetSession.dayIndex}-${targetSession.slot.id}`] || {}),
-                        tasks: combined
-                    };
+                    const targetKey = `${targetSession.dayIndex}-${targetSession.slot.id}`;
+                    targetWData[targetKey] = mergeCopiedSessionContent(targetWData[targetKey] || {}, sourceCell);
 
                     if (targetSession.weekId === copySource.weekId) {
                         updatePlanData(targetSession.weekId, targetWData);
                     } else {
                         onUpdateWeekData(targetSession.weekId, targetWData);
                     }
-                    alert("Copiades!");
+                    alert("Sessió copiada amb tot el contingut!");
                     setShowCopyModal(false);
                 } else {
                     alert("No s'ha trobat cap sessió de destí.");
