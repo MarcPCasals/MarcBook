@@ -8,7 +8,9 @@ S’han llegit íntegrament les nou guies de Google Docs facilitades per Marc: C
 
 Les onze altres activitats de ciències parteixen dels seus HTML a `CFN/`. Les cinc fitxes docents es basen en `Altres/agenda-docent.html`, `programador.html`, `seguidor-tasques.html`, `metacognicio-carta.html` i el README de la versió actual d’AvaluaPro. Només s’ha llegit codi i documentació; no s’han consultat dades d’alumnat ni comptes autenticats.
 
-Cada fitxa conté una descripció de targeta, una introducció, un valor pedagògic breu, dos o tres objectius, tres passos d’ús, una o dues evidències i els materials necessaris. La majoria d’introduccions tenen 40–65 paraules. El conjunt dels camps de cada recurs, inclosa la targeta, té 168–228 paraules. Les propostes d’ús i d’avaluació es presenten com a orientacions adaptables.
+Cada fitxa conté una descripció de targeta, una introducció, un valor pedagògic breu, dos o tres objectius, tres passos d’ús, una o dues evidències i els materials necessaris. La majoria d’introduccions tenen 40–65 paraules. Les propostes d’ús i d’avaluació es presenten com a orientacions adaptables.
+
+MarcBook s’adreça al professorat. Les descripcions presenten la funció educativa i els passos indiquen què pot proposar, acompanyar o recollir el docent. S’han reorientat els 63 passos de les vint activitats de ciències i de la carta metacognitiva, i vint descripcions; les quatre eines de gestió ja tenien l’orientació adequada. Es mantenen els objectius d’aprenentatge de l’alumnat i les funcionalitats contrastades amb les fonts. Les instruccions dels artefactes originals no s’han modificat.
 
 ## Precisió respecte dels recursos actuals
 
@@ -23,10 +25,10 @@ Cada fitxa conté una descripció de targeta, una introducció, un valor pedagò
 
 ## Editor i comprovacions
 
-El nou camp opcional `teachingValue` apareix com a «Per què és útil?» a la fitxa, a l’editor i a la previsualització. La validació el normalitza i el conserva en còpies, esborranys i publicació. Les eines docents tenen preguntes adaptades; la carta de reflexió manté les orientacions per a l’alumnat.
+El nou camp opcional `teachingValue` apareix com a «Per què és útil?» a la fitxa, a l’editor i a la previsualització. La validació el normalitza i el conserva en còpies, esborranys i publicació. Les eines docents tenen preguntes adaptades; les activitats, inclosa la carta de reflexió, utilitzen «Què pot treballar l’alumnat?» i orientacions per al professorat. L’editor recorda a qui s’adrecen el resum, l’explicació i els passos d’ús.
 
 Les 30 proves passen, incloent-hi la conservació del camp nou en importació, exportació, esborranys i enviament a GitHub. La compilació de producció i la preparació de Pages passen. Una comprovació del catàleg confirma que només canvien els set camps explicatius i que es mantenen IDs, il·lustracions, classificacions, visibilitat, ordre i accessos originals. No hi ha PI ni URL dins de les explicacions.
 
-Al navegador local s’han comprovat la fitxa dels nutrients, la d’Agenda docent i el camp editable amb la seva previsualització. El contingut apareix dins de la pàgina i no ofereix enllaços a Google Docs. Les mesures de la pàgina no mostren desbordament horitzontal a 513 ni a 1440 px d’amplada. `qa/explanation-nutrients-narrow.png` mostra la introducció a la mida real del panell; no és una captura d’un dispositiu físic.
+Al navegador local s’han comprovat la fitxa dels nutrients, la d’Agenda docent i el camp editable amb la seva previsualització. La revisió de l’audiència també comprova la carta metacognitiva, la portada, el catàleg i les indicacions de l’editor. El contingut apareix dins de la pàgina i no ofereix enllaços a Google Docs. Les mesures de la pàgina no mostren desbordament horitzontal a 513 ni a 1440 px d’amplada. `qa/explanation-nutrients-narrow.png` documenta la introducció anterior a la correcció de l’audiència; no és una captura d’un dispositiu físic.
 
 La comprovació final de publicació compara la portada, el catàleg canònic i els fitxers compilats amb els servits per GitHub Pages.

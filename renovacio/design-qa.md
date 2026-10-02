@@ -4,9 +4,17 @@ Source visual truth: `/Users/marc/.codex/generated_images/01a0fd34-39f3-7b82-849
 
 Implementation: `http://localhost:5173/`
 
+## Current teacher audience correction — 2026-10-02
+
+Marc clarified that the resource bank addresses teachers. The homepage, science catalog, About copy, activity headings and editor guidance now use that audience consistently. Twenty descriptions and the 63 classroom steps of 21 activities were rewritten; the other four ready teacher tools were already addressed to teachers. Learner objectives remain valid under “Què pot treballar l’alumnat?”. Canonical comparison confirms that only description and step fields changed, preserving every resource identity, link, illustration and classification. An independent content review found no remaining pupil-as-reader copy in the 25 available public resources. Original artifacts remain untouched.
+
+All 30 tests and the production build pass. Local browser checks confirm the nutrient, reflection-letter and Agenda detail headings, teacher instructions in the editor preview, all 31 catalog cards and the revised homepage search. DOM checks show no horizontal overflow at 513 and 1440 CSS px. No explanatory Google Docs links appear. Earlier screenshots below retain their historical copy.
+
+Marc also requested removing the portrait's notebook and its message. A built-in image edit preserves the approved illustrated character and classroom; the new `hero-marc-classroom.webp` is used on both home and About, with updated alt text. The original asset remains intact. The generated PNG, optimized WebP and actual local home rendering were visually checked. `qa/home-teacher-audience-narrow.png` shows the final teacher-facing subtitle and notebook-free portrait at the actual 513 CSS px pane width, without overflow or unloaded hero artwork. This is not a physical-device capture.
+
 ## Current explanation update — 2026-10-02
 
-The 25 available educational resources now have concise, source-grounded explanations in the website itself. Nine supplied Google Docs were read in full and checked against the current artifacts; the other sixteen summaries use actual artifact sources and the current AvaluaPro README. No explanatory document links were added. The optional `teachingValue` field is searchable and survives editing, previews, drafts, import/export and publication. Teacher-tool headings are adapted to their purpose; the reflection letter keeps student-facing headings.
+The 25 available educational resources now have concise, source-grounded explanations in the website itself. Nine supplied Google Docs were read in full and checked against the current artifacts; the other sixteen summaries use actual artifact sources and the current AvaluaPro README. No explanatory document links were added. The optional `teachingValue` field is searchable and survives editing, previews, drafts, import/export and publication. Teacher-tool headings are adapted to their purpose; all classroom activity headings, including the reflection letter, now address teachers.
 
 All 30 tests, the production build and Pages preparation pass. Catalog comparison proves only the seven explanatory fields changed; original resource links and all illustrations are preserved. Local browser checks confirm the nutrient and Agenda detail pages, the new editor textarea and its preview. DOM checks report no horizontal overflow at 513 and 1440 CSS px; the saved narrow capture records the actual pane rather than a physical device. See `explanations-review.md` and `qa/explanation-nutrients-narrow.png`. No authenticated artifact or student data was inspected.
 

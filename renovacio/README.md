@@ -2,6 +2,8 @@
 
 Codi font de la nova portada i del catàleg de MarcBook. La compilació es publica a l’adreça habitual de GitHub Pages; les eines existents es conserven.
 
+MarcBook és un banc de recursos per al professorat. La portada, les descripcions i les propostes d’ús s’adrecen al docent: què pot treballar l’alumnat, com portar l’activitat a l’aula i quines evidències recollir. Les instruccions internes dels artefactes continuen dirigides als seus usuaris originals.
+
 ## Què inclou
 
 - Portada fidel al disseny aprovat: porpra i taronja, il·lustracions d’aquarel·la i el personatge d’en Marc.

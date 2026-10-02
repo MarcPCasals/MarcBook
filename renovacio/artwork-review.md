@@ -1,5 +1,13 @@
 # Il·lustracions temàtiques de MarcBook
 
+## Retrat sense llibreta — 2 d’octubre de 2026
+
+Per indicació de Marc, s’ha editat el retrat amb l’eina integrada `image_gen` per eliminar la llibreta vertical i el missatge «Ciència per a un món millor». La samarreta clara i les mans es reconstrueixen amb una postura natural. Es conserven el personatge aprovat, la jaqueta taronja, l’estil d’aquarel·la i l’aula, inclosa la pissarra. La imatge revisada és `public/assets/hero-marc-classroom.webp`, de 1440 × 811 px i 140.432 bytes; s’utilitza a la portada i a Sobre MarcBook. El nom nou permet carregar l’edició sense reutilitzar una còpia antiga del navegador. L’original es conserva.
+
+`artwork-hero-edit.json` registra la font, el resultat i el prompt complet de l’edició. S’han inspeccionat el PNG generat, la versió WebP i el resultat a la portada local. `qa/home-teacher-audience-narrow.png` mostra la portada real al panell estret, amb els textos adreçats al professorat i sense la llibreta.
+
+## Cobertes dels recursos
+
 Actualització del 2 d’octubre de 2026: cada una de les 31 fitxes públiques té una coberta pròpia. S’han creat 26 il·lustracions amb l’eina integrada `image_gen` i s’han conservat les cinc que Marc va valorar positivament. Les escenes parteixen del contingut dels HTML dels artefactes, amb traç fi, aquarel·la, porpra i taronja. Les sis eines en preparació tenen una representació de la disciplina, sense atribuir-los funcionalitats encara inexistents.
 
 ## Imatges conservades
