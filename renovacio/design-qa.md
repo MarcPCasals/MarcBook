@@ -16,7 +16,15 @@ Marc authorized completing and publishing the redesign step by step on 2026-10-0
 - 28 domain, publication, draft, packaging and preserved Sites tests pass. Publication network responses are mocked in automated tests; no real publication key was placed in the browser for testing. The production build and dry-run packaging pass.
 - GitHub Pages release preparation preserves original tools, the root PI directory and unrelated `c2/`. The original homepage is archived as `index-anterior.html`; the canonical JSON cannot be overwritten by the packaging script.
 
-The acceptance sections below describe earlier stages; their preview-only publication status is historical. Real release verification is recorded after deployment.
+### Public release verification — 2026-10-02
+
+- GitHub Pages completed its production deployment for commit `5da6aa2fa629af1c220a9ecf73afbe312d2b9c2e` (workflow run `37043023592`, status `built`, no build error).
+- The published homepage and canonical JSON at `https://marcpcasals.github.io/MarcBook/` match the release files byte for byte. The real publication module read both GitHub and public Pages without a key: 34 records on each side, matching normalized contents.
+- Public browser checks: the homepage renders with all images loaded and no horizontal overflow; the catalog shows 31 cards and no PI filter; searching QuimiLab returns one result; its detail route shows objectives, classroom guidance, evidence, materials and the two actual language links.
+- The published editor opens without signing in, lists 34 records including personal entries and shows an up-to-date publication review. Its key field is empty, and confirmation is disabled until there are changes and publication authorization. No authenticated browser write was performed; the owner must supply their own restricted GitHub key or use the manual upload alternative.
+- `qa/home-release-desktop.jpg`, `qa/home-release-tablet.jpg` and `qa/home-release-mobile.jpg` record the final packaged layout at desktop, tablet and mobile viewport sizes. These are browser viewport checks, not tests on physical Safari/iPad devices.
+
+The acceptance sections below describe earlier stages; their preview-only publication status and outstanding decisions are historical.
 
 ## Current acceptance — PI excluded
 
@@ -61,7 +69,7 @@ Source: 1486 × 1059 px. Desktop browser viewport: 1487 × 1060 CSS px, screensh
 - Production build passes. Original root site unchanged; unrelated `c2/` untouched.
 - Browser error/warning console checked: none at the time of the editor checks. Final error/warning console check also returned an empty list.
 
-## Remaining decisions and gaps
+## Historical decisions and gaps before release
 
 Public publishing from the editor is deliberately unconfigured pending Marc’s choice; local save never claims to publish. The current published site has not been replaced. Existing artifacts retain their original storage and access behavior. Full end-to-end testing of all 28 tools is outside this catalog redesign; every original link was checked against repository files.
 
