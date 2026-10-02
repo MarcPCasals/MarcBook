@@ -12,7 +12,7 @@ const original = [{
   image: 'assets/resource-chemistry.webp', detail: 'Molècules i reaccions.', objectives: ['Observa i explica.'],
   steps: [], evidence: [], materials: [], tags: 'química', visible: true, order: 1,
 }];
-const changed = [{ ...original[0], title: 'Química: àtoms, molècules i acció 🧪', description: 'L’alumnat observa i aprèn.' }];
+const changed = [{ ...original[0], title: 'Química: àtoms, molècules i acció 🧪', description: 'L’alumnat observa i aprèn.', teachingValue:'Relaciona fórmules i observacions per construir una explicació pròpia.' }];
 const repositoryResponse = resources => new Response(JSON.stringify({ type: 'file', encoding: 'base64', sha: OLD_SHA, content: Buffer.from(exportCatalog(resources), 'utf8').toString('base64') }), { status: 200 });
 const successResponse = () => new Response(JSON.stringify({ content: { sha: NEW_SHA }, commit: { sha: COMMIT_SHA, html_url: 'https://untrusted.example/' } }), { status: 200 });
 const rejectsCode = code => error => error instanceof PublishingError && error.code === code && !error.message.includes(TOKEN);
@@ -33,8 +33,10 @@ test('Publishes one canonical file after checking the original catalog; preserve
   assert.equal(body.branch, 'main'); assert.equal(body.sha, OLD_SHA);
   const decoded = JSON.parse(Buffer.from(body.content, 'base64').toString('utf8'));
   assert.equal(decoded.resources[0].title, changed[0].title);
+  assert.equal(decoded.resources[0].teachingValue, changed[0].teachingValue);
   assert.equal(body.content.includes(TOKEN), false);
   assert.equal(result.resources[0].description, changed[0].description);
+  assert.equal(result.resources[0].teachingValue, changed[0].teachingValue);
   assert.equal(result.commit.url, `https://github.com/MarcPCasals/MarcBook/commit/${COMMIT_SHA}`);
   assert.equal(JSON.stringify(result).includes(TOKEN), false);
 });

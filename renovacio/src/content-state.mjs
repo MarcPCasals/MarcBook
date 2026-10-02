@@ -25,7 +25,7 @@ export function readEditorDraft(content) {
   if (typeof data.baseCatalog === 'string') {
     try { baseCatalog = exportCatalog(importCatalog(data.baseCatalog)); } catch { /* Require a review of older drafts with no known baseline. */ }
   }
-  return { selected: data.selected, form: data.form, baseCatalog };
+  return { selected: data.selected, form: { ...data.form, teachingValue: typeof data.form.teachingValue === 'string' ? data.form.teachingValue : '' }, baseCatalog };
 }
 
 export function serializeEditorDraft(selected, form, baseCatalog) {

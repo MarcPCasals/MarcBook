@@ -24,6 +24,18 @@ test('Older drafts are preserved without silently claiming a known baseline', ()
   assert.equal(readLocalDraft(JSON.stringify({...JSON.parse(exportCatalog(catalog)),baseCatalog:'invalid'})).baseCatalog, null);
 });
 
+test('Educational value survives saved and unsaved drafts while older forms remain editable', () => {
+  const baseline=exportCatalog(catalog);
+  const form={...catalog[0],teachingValue:'Ajuda a connectar les observacions amb una explicació pròpia.'};
+  const loaded=readLocalDraft(serializeLocalDraft([form,...catalog.slice(1)],baseline));
+  assert.equal(loaded.resources[0].teachingValue,form.teachingValue);
+  const recovered=readEditorDraft(serializeEditorDraft(form.id,form,baseline));
+  assert.equal(recovered.form.teachingValue,form.teachingValue);
+  const {teachingValue:_,...legacy}=form;
+  assert.equal(readEditorDraft(JSON.stringify({selected:legacy.id,form:legacy})).form.teachingValue,'');
+  assert.deepEqual(catalogChanges(catalog,loaded.resources),[{id:form.id,title:form.title,action:'Actualitzar'}]);
+});
+
 test('The publication review identifies additions, hidden cards and removals', () => {
   const next = [...catalog.slice(1).map((r,i)=>i ? r : {...r,visible:false}), {...catalog[0],id:'recurs-nou',title:'Nou recurs'}];
   const changes = catalogChanges(catalog,next);

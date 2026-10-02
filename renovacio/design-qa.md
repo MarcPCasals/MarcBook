@@ -4,6 +4,12 @@ Source visual truth: `/Users/marc/.codex/generated_images/01a0fd34-39f3-7b82-849
 
 Implementation: `http://localhost:5173/`
 
+## Current explanation update — 2026-10-02
+
+The 25 available educational resources now have concise, source-grounded explanations in the website itself. Nine supplied Google Docs were read in full and checked against the current artifacts; the other sixteen summaries use actual artifact sources and the current AvaluaPro README. No explanatory document links were added. The optional `teachingValue` field is searchable and survives editing, previews, drafts, import/export and publication. Teacher-tool headings are adapted to their purpose; the reflection letter keeps student-facing headings.
+
+All 30 tests, the production build and Pages preparation pass. Catalog comparison proves only the seven explanatory fields changed; original resource links and all illustrations are preserved. Local browser checks confirm the nutrient and Agenda detail pages, the new editor textarea and its preview. DOM checks report no horizontal overflow at 513 and 1440 CSS px; the saved narrow capture records the actual pane rather than a physical device. See `explanations-review.md` and `qa/explanation-nutrients-narrow.png`. No authenticated artifact or student data was inspected.
+
 ## Current artwork update — 2026-10-02
 
 Marc requested resource-specific drawings after finding that different artifacts reused generic covers. The 31 public cards now have 31 distinct images: 26 new built-in image_gen illustrations based on the actual artifact sources and the 5 explicitly praised illustrations preserved byte for byte. `artwork-review.md` lists the mappings, source/prompt manifests and individual visual reviews. The catalog change affects only the 26 image fields. The illustration dropdown derives resource-specific choices from the canonical bundled catalog. Personal access covers, original resource files and PI exclusion remain unchanged.

@@ -20,7 +20,7 @@ export function filterResources(resources, filters = {}) {
     && (!filters.kind || r.kind === filters.kind)
     && (!filters.topic || r.topic === filters.topic)
     && (!filters.status || r.status === filters.status)
-    && words.every(word => normalize([r.title, r.description, r.detail, r.tags, r.topic, r.unit, r.course, ...r.languages].join(' ')).includes(word))).sort((a,b)=>(a.order || 0)-(b.order || 0));
+    && words.every(word => normalize([r.title, r.description, r.detail, r.teachingValue, r.tags, r.topic, r.unit, r.course, ...r.languages].join(' ')).includes(word))).sort((a,b)=>(a.order || 0)-(b.order || 0));
 }
 export function validLink(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password; }
@@ -48,7 +48,7 @@ export function validateResource(raw) {
   if (raw.course && !['1r','2n','3r','4t'].includes(raw.course)) throw new Error('El curs no és vàlid.');
   return { id, title, description, subject: raw.subject, course: text(raw.course, 10), unit: text(raw.unit, 30),
     topic: text(raw.topic, 100), kind: raw.kind, status: raw.status, languages: [...new Set(languages)], links,
-    image: raw.image, detail: text(raw.detail), objectives: lines(raw.objectives), steps: lines(raw.steps),
+    image: raw.image, detail: text(raw.detail), teachingValue: text(raw.teachingValue, 1000), objectives: lines(raw.objectives), steps: lines(raw.steps),
     evidence: lines(raw.evidence), materials: lines(raw.materials), tags: text(raw.tags, 600), badge: text(raw.badge, 80),
     visible: raw.visible !== false, order: Number.isFinite(raw.order) ? raw.order : 999 };
 }

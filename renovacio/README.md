@@ -7,7 +7,7 @@ Codi font de la nova portada i del catàleg de MarcBook. La compilació es publi
 - Portada fidel al disseny aprovat: porpra i taronja, il·lustracions d’aquarel·la i el personatge d’en Marc.
 - Catàleg de 34 fitxes: 25 recursos educatius disponibles, 6 en preparació i 3 accessos personals.
 - Cerca sense distinció d’accents i filtres combinables d’àmbit, curs, UT, llengua, tema, tipus i disponibilitat.
-- Vista de targetes/llista; fitxes compartibles i imprimibles amb objectius, orientacions d’aula, evidències, materials i recursos relacionats.
+- Vista de targetes/llista; fitxes compartibles i imprimibles amb explicació breu, valor pedagògic, objectius, orientacions d’aula, evidències, materials i recursos relacionats.
 - Eines docents, presentació d’en Marc i accessos personals al peu.
 - Editor web: crear/editar/ocultar fitxes, previsualitzar, guardar localment, exportar/importar JSON, recuperar una fitxa pendent d’edició i publicar el catàleg a GitHub.
 
@@ -16,6 +16,8 @@ Codi font de la nova portada i del catàleg de MarcBook. La compilació es publi
 El catàleg canònic (`../marcbook-catalog.json`) deriva dels accessos de la web pública del 2 d’octubre de 2026 i es carrega en temps d’execució. Els artefactes de PI s’exclouen per indicació de Marc. S’han comprovat les llengües i els 42 enllaços; el Laboratori de roques i el Cicle tenen accessos diferenciats, i AvaluaPro ofereix la versió actual i la V1 identificada. Les còpies locals i els fitxers antics s’importen excloent-ne el PI i conservant els altres canvis. Les orientacions pedagògiques són propostes adaptables; no atribueixen funcions noves a les eines originals. Les fitxes incompletes apareixen com a «En preparació» i no ofereixen un accés inexistent. Vegeu `catalog-audit.md`.
 
 Guardar a l’editor canvia només la vista del navegador actual. Exportar crea un catàleg amb `schemaVersion: 1`; importar valida totes les fitxes abans de substituir la còpia local. Un avís permet alternar entre els canvis locals i el catàleg publicat. Les còpies locals noves conserven també la versió de partida per detectar canvis fets des d’altres dispositius.
+
+Les 25 fitxes disponibles tenen resums propis dins de MarcBook: les nou guies docents facilitades per Marc s’han resumit i contrastat amb els artefactes actuals, i les altres setze explicacions parteixen dels seus continguts. No s’afegeixen enllaços als documents explicatius. El camp opcional `teachingValue` es mostra com a «Per què és útil?» i es pot editar, previsualitzar, cercar, desar i publicar des del web. Els catàlegs i esborranys antics continuen funcionant. Vegeu `explanations-review.md`.
 
 Per publicar des de la web:
 

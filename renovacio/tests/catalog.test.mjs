@@ -24,6 +24,17 @@ test('Round-trip export retains explanations, original links and hidden state',(
   assert.deepEqual(loaded.find(r=>r.id==='quimilab').links,resources.find(r=>r.id==='quimilab').links);
   assert.deepEqual(loaded.find(r=>r.id==='quimilab').steps,resources.find(r=>r.id==='quimilab').steps);
 });
+test('Optional educational value is normalized, retained in backups and searchable',()=>{
+  const {teachingValue:_,...legacy}=catalog[0];
+  assert.equal(validateResource(legacy).teachingValue,'');
+  assert.equal(validateResource({...legacy,teachingValue:{unexpected:'object'}}).teachingValue,'');
+  assert.equal(validateResource({...legacy,teachingValue:'x'.repeat(1001)}).teachingValue.length,1000);
+  const source={...legacy,teachingValue:'  Contrasta hipòtesis amb evidències observables.  '};
+  const loaded=importCatalog(exportCatalog([source]));
+  assert.equal(loaded[0].teachingValue,'Contrasta hipòtesis amb evidències observables.');
+  assert.equal(filterResources(loaded,{q:'hipotesis observables'}).length,1);
+  assert.deepEqual(loaded[0].links,legacy.links);
+});
 test('PI cannot return through older local catalogs, imports, exports or a changed category',()=>{
   const legacyPI={...catalog[0],id:'planificador-de-pi',subject:'pi',links:[{label:'Català',url:'https://marcpcasals.github.io/MarcBook/PI/planificador-pi.html'}]};
   const edited={...catalog[0],description:'Canvi local que cal conservar.'};
