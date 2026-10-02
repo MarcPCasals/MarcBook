@@ -1,0 +1,17 @@
+# Prototype Instructions
+
+Run the local server yourself and open the preview in the browser available to this environment. Do not give the user server-start instructions when you can run it.
+
+Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.
+
+When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
+
+Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
+
+## Approved MarcBook redesign
+
+Marc approved the generated mock at `/Users/marc/.codex/generated_images/01a0fd34-39f3-7b82-849d-ce0b76254b12/exec-62a25e01-2d0c-40f3-b2e5-c92a9108da41.png` on 2026-10-02. Use deep purple as primary and orange as the second most visible color, ivory backgrounds, apricot pathways and a lavender chemistry itinerary. Artwork must be descriptive, drawn with fine ink and watercolor in a hand-painted animation style. Use the approved illustrated Marc (round face, large round dark glasses, short dark hair, light stubble, orange jacket); avoid photorealistic portraits. Not every image needs a person. Keep personal apps discreet in the footer. Visitors need no authentication; the new catalog needs no database. Preserve browser-based editing with local drafts and JSON import/export. Public publication method remains a user decision: saving locally must never claim to publish. Keep the current root website untouched during preview. Preserve unrelated `c2/` work.
+
+Marc explicitly excluded all PI artifacts on 2026-10-02. Do not include Avaluador de PI, Planificador de PI, Metacognició final de PI, their category, home pathway, nav item, filters, detail pages or editor options. Exclude PI entries when loading older local drafts or importing/exporting backups while retaining unrelated local changes. The homepage has two pathways: Ciències and Eines docents. Preserve original files in the repository’s root PI directory.
+
+Marc authorized completing the redesign and publishing it step by step on 2026-10-02. The preview-only restriction above is superseded for this release. Use the existing GitHub Pages address and preserve all original resource files, the original homepage archive, and unrelated c2 work. The canonical catalog is ../marcbook-catalog.json, fetched at runtime; do not regenerate it from an older bundled copy. Only the owner needs GitHub write authorization for publication. Never save a publication key in browser storage or source files.
