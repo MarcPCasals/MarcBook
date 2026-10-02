@@ -28,7 +28,7 @@ Hi ha una alternativa sense clau: descarregar `marcbook-catalog.json` des del ma
 
 Referències: [claus personals de GitHub](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens), [actualització de fitxers](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents).
 
-Les imatges servides són WebP (menys d’1 MB en conjunt). Els PNG de treball queden en `.artwork-originals/`, fora del lliurable i del control de versions. No es publiquen les fotografies de referència.
+Cada fitxa pública té una il·lustració temàtica pròpia: 26 dibuixos nous basats en els artefactes reals i les 5 imatges que Marc va valorar positivament. Les noves imatges són WebP de 900 × 507 px; la biblioteca completa, incloses les imatges anteriors que es conserven, ocupa aproximadament 3 MB. Les targetes carreguen les imatges quan s’apropen a la vista. Els PNG de treball queden en `.artwork-originals/`, fora del lliurable i del control de versions. No es publiquen les fotografies de referència. La correspondència, els prompts i la revisió es documenten a `artwork-review.md` i als quatre manifests `artwork-*.json`.
 
 ## Desenvolupament i comprovacions
 

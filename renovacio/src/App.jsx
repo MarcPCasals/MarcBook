@@ -6,7 +6,8 @@ import { PublishingPanel } from './PublishingPanel.jsx';
 import { readLocalDraft, serializeLocalDraft, readEditorDraft, serializeEditorDraft, combineDraftBases } from './content-state.mjs';
 import { STORAGE_KEY, SUBJECTS, KINDS, LANGUAGES, asset, filterResources, importCatalog, exportCatalog, validateResource, uniqueId, parseRoute, route, isPIResource } from './catalog.mjs';
 
-const DRAWINGS = { 'path-science':'Ciències', 'path-teacher':'Eines docents', 'resource-molecules':'Molècules', 'resource-chemistry':'Química', 'resource-reactions':'Reaccions', 'resource-newton':'Forces', 'resource-universe':'Univers', 'resource-food':'Alimentació', 'resource-cells':'Cèl·lules', 'resource-earth':'Geologia' };
+const DRAWINGS = { 'path-science':'Ciències', 'path-teacher':'Eines docents', 'resource-molecules':'Molècules', 'resource-chemistry':'Química', 'resource-reactions':'Reaccions', 'resource-newton':'Forces', 'resource-universe':'Univers', 'resource-food':'Alimentació', 'resource-cells':'Cèl·lules', 'resource-earth':'Geologia',
+  ...Object.fromEntries(bundledCatalog.resources.filter(r => r.subject !== 'personal' && /^assets\/resource-[a-z0-9-]+\.webp$/.test(r.image)).map(r => [r.image.slice(7, -5), r.title])) };
 const EMPTY = { id:'', title:'', description:'', detail:'', subject:'science', course:'', unit:'', topic:'', kind:'Activitat', languages:['Català'], links:[{ label:'Català', url:'' }], image:'assets/path-science.webp', objectives:[], steps:[], evidence:[], materials:['Dispositiu amb navegador'], tags:'', status:'ready', visible:true, order:999 };
 const IMG = ({ path, alt = '', ...props }) => <img src={path.startsWith('assets/') ? asset(path) : path} alt={alt} {...props} />;
 const Button = ({ children, className = '', ...props }) => <button className={`button ${className}`} {...props}>{children}</button>;

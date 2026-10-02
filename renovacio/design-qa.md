@@ -4,6 +4,12 @@ Source visual truth: `/Users/marc/.codex/generated_images/01a0fd34-39f3-7b82-849
 
 Implementation: `http://localhost:5173/`
 
+## Current artwork update — 2026-10-02
+
+Marc requested resource-specific drawings after finding that different artifacts reused generic covers. The 31 public cards now have 31 distinct images: 26 new built-in image_gen illustrations based on the actual artifact sources and the 5 explicitly praised illustrations preserved byte for byte. `artwork-review.md` lists the mappings, source/prompt manifests and individual visual reviews. The catalog change affects only the 26 image fields. The illustration dropdown derives resource-specific choices from the canonical bundled catalog. Personal access covers, original resource files and PI exclusion remain unchanged.
+
+All new files were inspected at full resolution and after WebP optimization. Independent checks prompted repairs of digestive arrows, label units, cycle-wheel colors, observation tallies, ambiguous molecular sketches and a neural/endocrine pathway. Final scientific reviews found no material defect in the repaired images. Coverage and preservation checks, 28 tests, the production build and Pages packaging pass. Interactive local browser checks experienced repeated connection deadlines, including a new tab; this update does not claim fresh desktop/mobile browser screenshots. Earlier screenshots and their layout findings below remain historical evidence. Production asset verification is performed against the public release.
+
 ## Release review — canonical catalog and web publication
 
 Marc authorized completing and publishing the redesign step by step on 2026-10-02. The canonical catalog is now `../marcbook-catalog.json`; the app fetches it at runtime, so publishing content does not require rebuilding the frontend. The audited counts remain 34 total records and 31 public cards, with 25 available educational tools, 6 in preparation and 3 personal accesses. Eines docents now has 5 resources, including the transversal letter reflection. All 42 unique links respond HTTP 200; see `catalog-audit.md` for source-backed content corrections.
