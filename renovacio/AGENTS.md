@@ -27,3 +27,5 @@ Marc requested removing the notebook and its motivational message from the hero 
 Marc clarified on 2026-10-03 that language versions of the same resource belong in one catalog card, with a separate launch link for each language under Versions disponibles. Do not create separate publications solely for different languages.
 
 Marc clarified on 2026-10-03 that evaluation buttons and rubric guidance are always in Catalan, including within French and Spanish activities. Corrections and reference answers follow the worksheet language. Preserve meaningful bold emphasis for readability and allow marking several words in one text selection rather than requiring a click on each word.
+
+Marc requested on 2026-10-03 that the iodine resource description and teacher-facing catalog detail show both unlock codes: 0000 for exercises 3 and 4, and 2421 for the teacher correction, in both language versions.
