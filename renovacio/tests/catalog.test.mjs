@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { SUBJECTS, filterResources, importCatalog, exportCatalog, validateResource, validLink, uniqueId, parseRoute, route } from '../src/catalog.mjs';
 const catalog=importCatalog(fs.readFileSync(new URL('../../marcbook-catalog.json',import.meta.url),'utf8'));
-test('Preserves the 34 retained cards and their original links',()=>{
-  assert.equal(catalog.length,34);
-  assert.equal(new Set(catalog.map(r=>r.id)).size,34);
+test('Preserves the 34 retained cards and two iodine activities and their original links',()=>{
+  assert.equal(catalog.length,36);
+  assert.equal(new Set(catalog.map(r=>r.id)).size,36);
   assert.equal(catalog.filter(r=>r.subject==='personal').length,3);
   for(const r of catalog){validateResource(r);for(const l of r.links){if(new URL(l.url).origin!=='https://marcpcasals.github.io')continue;const path=decodeURIComponent(new URL(l.url).pathname.replace(/^\/MarcBook\//,''));assert.ok(fs.existsSync(new URL('../../'+path,import.meta.url)),`Missing original tool: ${l.url}`);}}
 });
@@ -20,7 +20,7 @@ test('Search combines words, accents and every filter; personal and hidden resou
 test('Round-trip export retains explanations, original links and hidden state',()=>{
   const resources=catalog.map((r,i)=>({...r,visible:i!==0}));
   const loaded=importCatalog(exportCatalog(resources));
-  assert.equal(loaded.length,34);assert.equal(loaded[0].visible,false);
+  assert.equal(loaded.length,36);assert.equal(loaded[0].visible,false);
   assert.deepEqual(loaded.find(r=>r.id==='quimilab').links,resources.find(r=>r.id==='quimilab').links);
   assert.deepEqual(loaded.find(r=>r.id==='quimilab').steps,resources.find(r=>r.id==='quimilab').steps);
 });
@@ -40,7 +40,7 @@ test('PI cannot return through older local catalogs, imports, exports or a chang
   const edited={...catalog[0],description:'Canvi local que cal conservar.'};
   const oldLocal=JSON.stringify({schemaVersion:1,resources:[edited,...catalog.slice(1),legacyPI]});
   const imported=importCatalog(oldLocal);
-  assert.equal(imported.length,34);
+  assert.equal(imported.length,36);
   assert.equal(imported[0].description,edited.description);
   assert.equal(imported.some(r=>r.id===legacyPI.id),false);
   assert.equal(Object.hasOwn(SUBJECTS,'pi'),false);
