@@ -1,3 +1,4 @@
+import {assessments} from './assessments.mjs';
 import {decryptPayload,assessAnswers} from './crypto.mjs';
 const lang=document.body.dataset.language,fr=lang==='fr';
 const text=JSON.parse(document.querySelector('#ui-text').textContent);
@@ -63,7 +64,7 @@ function downloadSubmission(feedback){
   const copy=sheet.cloneNode(true);
   copy.querySelectorAll('img').forEach(img=>{if(!img.src.startsWith('data:'))img.src=new URL(img.getAttribute('src'),location.href).href;});
   copy.querySelectorAll('[data-answer]').forEach(el=>{const value=answers[el.dataset.answer];if(el.type==='checkbox'||el.type==='radio'){const mark=doc.createElement('span');mark.textContent=(el.type==='checkbox'?value===true:value===el.value)?'☑ ':'☐ ';el.replaceWith(mark);}else{const p=doc.createElement('p');p.className='print-value';p.textContent=el.tagName==='SELECT'?([...el.options].find(o=>o.value===value)?.textContent||''):value||'—';el.replaceWith(p);}});
-  copy.querySelectorAll('.palette,.hint').forEach(el=>el.remove());copy.querySelectorAll('.word').forEach(el=>{const span=doc.createElement('span');span.className=el.className;span.textContent=el.textContent+' ';el.replaceWith(span);});doc.body.append(copy);
+  copy.querySelectorAll('.palette,.hint,.assessment-button').forEach(el=>el.remove());copy.querySelectorAll('.word').forEach(el=>{const span=doc.createElement('span');span.className=el.className;span.textContent=el.textContent+' ';el.replaceWith(span);});doc.body.append(copy);
  }
  const review=feedback.cloneNode(true);review.querySelector('button')?.remove();doc.body.append(review);
  download(new Blob(['<!doctype html>'+doc.documentElement.outerHTML],{type:'text/html;charset=utf-8'}),`iode-${lang}-fiche.html`);
@@ -75,3 +76,21 @@ function preparePrint(){document.querySelectorAll('.print-value').forEach(el=>el
 window.addEventListener('beforeprint',preparePrint);window.addEventListener('afterprint',()=>document.body.classList.remove('print-teacher'));
 document.querySelector('#print-student').addEventListener('click',()=>{document.body.classList.remove('print-teacher');window.print();});
 document.querySelector('#print-teacher').addEventListener('click',()=>{document.body.classList.add('print-teacher');window.print();});
+
+const assessmentDialog=document.querySelector('#assessment-dialog');
+document.addEventListener('click',event=>{
+ const button=event.target.closest('[data-assessment]');if(!button)return;
+ const inTeacher=button.closest('.teacher-guide');const locale=inTeacher?.lang==='ca'?'ca':lang;
+ const copy=assessments[locale],item=copy.items[button.dataset.assessment];if(!item)return;
+ assessmentDialog.lang=locale;
+ assessmentDialog.querySelector('.eyebrow').textContent=copy.heading;
+ document.querySelector('#assessment-title').textContent=item[0];
+ document.querySelector('#assessment-criterion').textContent=item[1];
+ document.querySelector('#assessment-evidence-title').textContent=copy.evidence;
+ const list=document.querySelector('#assessment-evidence');list.replaceChildren();
+ for(const evidence of item[2]){const li=document.createElement('li');li.textContent=evidence;list.append(li);}
+ document.querySelector('#assessment-scope').textContent=copy.scope+' : '+item[3];
+ document.querySelector('#assessment-close').setAttribute('aria-label',copy.close);
+ assessmentDialog.showModal();document.querySelector('#assessment-close').focus();
+});
+document.querySelector('#assessment-close').addEventListener('click',()=>assessmentDialog.close());

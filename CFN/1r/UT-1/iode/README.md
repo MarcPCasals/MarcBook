@@ -15,3 +15,5 @@ Fonts: els dos Word proporcionats per Marc el 3 d’octubre de 2026. Es conserve
 La nova coberta `assets/resource-iode.webp` s’ha creat amb l’eina integrada ImageGen. Prompt: cristalls grisos de iode en un plat i un flascó amb vapor violeta, dibuix de tinta fina i aquarel·la sobre fons ivori, porpra i taronja, sense text, refredament ni dipòsit sobre les parets. La coberta no revela la nova prova.
 
 Comprovacions: `node --test CFN/1r/UT-1/iode/activity.test.mjs` i les proves del catàleg de `renovacio`. La revisió de navegador comprova els codis incorrectes i correctes, la independència dels dos accessos, el desament, la correcció i la descàrrega.
+
+Cada pregunta o subpregunta té un botó d’avaluació amb el criteri de C1, les evidències observables esperades i els límits del que es pot valorar. La guia docent en té un per a cadascuna de les quatre preguntes. Font: «Rúbrica C1 UT 1.1 — La fórmula secreta (alumne — amb recursos)» aportada per Marc. Els textos adapten CA1 Rigor i CA2 Precisió al dossier sense exigir conservació de la massa, un experiment autònom o una representació corpuscular que no es demana. Les orientacions no contenen la solució de la predicció.
