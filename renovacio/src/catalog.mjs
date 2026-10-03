@@ -71,7 +71,9 @@ export function uniqueId(title, resources) {
 export function parseRoute(hash) {
   const [path, query = ''] = (hash || '#/inici').replace(/^#\/?/, '').split('?');
   const [page = 'inici', id] = path.split('/');
-  return { page, id, filters: Object.fromEntries(new URLSearchParams(query)) };
+  // Keep previously shared language-specific links pointing at the single resource.
+  const resourceId = page === 'recurs' && ['transformacions-iode-frances', 'transformacions-iode-castella'].includes(id) ? 'transformacions-iode' : id;
+  return { page, id: resourceId, filters: Object.fromEntries(new URLSearchParams(query)) };
 }
 export function route(page, filters = {}) {
   const params = new URLSearchParams(Object.entries(filters).filter(([,value]) => value));

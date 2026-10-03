@@ -23,3 +23,5 @@ Marc requested concise explanations inside every available classroom and teacher
 Marc clarified on 2026-10-02 that MarcBook is a resource bank for teachers. Address all portal copy, resource descriptions and classroom proposals to the teacher. Explain what pupils can work on, how the teacher can organize or accompany the activity and what evidence they can collect. Learning objectives describe pupil outcomes in third person or infinitives under a teacher-facing heading. This also applies to the metacognitive letter. Keep the linked artifacts' own pupil-facing instructions intact.
 
 Marc requested removing the notebook and its motivational message from the hero portrait on 2026-10-02. Keep the approved character, orange jacket, illustrated style and classroom setting; do not replace the notebook with another prop or slogan. Apply the same portrait to the homepage and About page.
+
+Marc clarified on 2026-10-03 that language versions of the same resource belong in one catalog card, with a separate launch link for each language under Versions disponibles. Do not create separate publications solely for different languages.
