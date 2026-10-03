@@ -14,8 +14,54 @@ hydrate();save();
 function invalidate(){document.querySelector('#feedback')?.remove();document.querySelector('#submit-sheet')?.removeAttribute('data-submitted');}
 document.querySelector('#student').addEventListener('input',event=>{const el=event.target;if(!el.dataset.answer||el.type==='radio'||el.type==='checkbox')return;answers[el.dataset.answer]=el.value;invalidate();save();});
 document.querySelector('#student').addEventListener('change',event=>{const el=event.target;if(!el.dataset.answer)return;answers[el.dataset.answer]=el.type==='checkbox'?el.checked:el.value;invalidate();save();});
-document.querySelectorAll('[data-color]').forEach(button=>button.addEventListener('click',()=>{color=button.dataset.color;document.querySelectorAll('[data-color]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));}));
-document.querySelectorAll('[data-word]').forEach(button=>button.addEventListener('click',()=>{const key=`word${button.dataset.word}`;answers[key]=color;hydrate();invalidate();save();}));
+const sentence=document.querySelector('.sentence');
+let selectedWords=[],pointerOrigin=null,suppressWordClick=false;
+const applyButton=document.querySelector('#apply-selection');
+function selectionWords(){
+ const selection=window.getSelection();
+ if(!selection||selection.isCollapsed||!selection.rangeCount)return [];
+ const range=selection.getRangeAt(0);
+ return [...sentence.querySelectorAll('[data-word]')].filter(word=>range.intersectsNode(word));
+}
+function wordsBetweenPoints(start,end){
+ const caretAt=point=>{
+  if(document.caretPositionFromPoint){const caret=document.caretPositionFromPoint(point.x,point.y);if(caret){const range=document.createRange();range.setStart(caret.offsetNode,caret.offset);range.collapse(true);return range;}}
+  return document.caretRangeFromPoint?.(point.x,point.y);
+ };
+ const first=caretAt(start),last=caretAt(end);
+ if(!first||!last||!sentence.contains(first.startContainer)||!sentence.contains(last.startContainer))return [];
+ const backwards=first.compareBoundaryPoints(Range.START_TO_START,last)>0;
+ const begin=backwards?last:first,finish=backwards?first:last,range=document.createRange();
+ range.setStart(begin.startContainer,begin.startOffset);range.setEnd(finish.startContainer,finish.startOffset);
+ if(range.collapsed)return [];
+ return [...sentence.querySelectorAll('[data-word]')].filter(word=>range.intersectsNode(word));
+}
+function clearSelection(){selectedWords=[];applyButton.disabled=true;window.getSelection()?.removeAllRanges();}
+function markWords(words){if(!words.length)return;for(const word of words)answers[`word${word.dataset.word}`]=color;hydrate();invalidate();save();clearSelection();}
+document.addEventListener('selectionchange',()=>{const words=selectionWords();if(words.length){selectedWords=words;applyButton.disabled=false;}});
+document.addEventListener('pointerdown',event=>{if(!event.target.closest('.sentence,.palette'))clearSelection();});
+sentence.addEventListener('pointerdown',event=>{selectedWords=[];applyButton.disabled=true;pointerOrigin={x:event.clientX,y:event.clientY,pointerId:event.pointerId,type:event.pointerType};});
+document.addEventListener('pointerup',event=>{
+ if(!pointerOrigin||pointerOrigin.pointerId!==event.pointerId)return;
+ const origin=pointerOrigin;pointerOrigin=null;
+ // Let native browser text selection handle mouse drags, including wrapped lines.
+ if(origin.type!=='mouse')return;
+ const moved=Math.hypot(event.clientX-origin.x,event.clientY-origin.y)>4;
+ if(moved){const endpoint={x:event.clientX,y:event.clientY};suppressWordClick=true;requestAnimationFrame(()=>{const words=selectionWords();markWords(words.length?words:wordsBetweenPoints(origin,endpoint));setTimeout(()=>{suppressWordClick=false;},0);});}
+});
+document.addEventListener('pointercancel',()=>{pointerOrigin=null;suppressWordClick=false;});
+document.querySelectorAll('[data-color]').forEach(button=>button.addEventListener('click',()=>{
+ const words=selectionWords().length?selectionWords():selectedWords;
+ color=button.dataset.color;
+ document.querySelectorAll('[data-color]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+ // A native touch selection can be marked by tapping a color as well.
+ if(words.length)markWords(words);
+}));
+applyButton.addEventListener('click',()=>markWords(selectionWords().length?selectionWords():selectedWords));
+document.querySelectorAll('[data-word]').forEach(word=>{
+ word.addEventListener('click',()=>{if(suppressWordClick||selectionWords().length)return;markWords([word]);});
+ word.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();markWords([word]);}});
+});
 const codeDialog=document.querySelector('#code-dialog'),teacherDialog=document.querySelector('#teacher-dialog');
 function ask(kind){target=kind;attempt++;document.querySelector('#code-form').reset();document.querySelector('#code-error').textContent='';document.querySelector('#code-title').textContent=kind==='student'?text.unlock:text.teacherunlock;document.querySelector('#code-submit').disabled=false;codeDialog.showModal();document.querySelector('#code').focus();}
 document.querySelector('#student-unlock').addEventListener('click',()=>ask('student'));
@@ -80,7 +126,7 @@ document.querySelector('#print-teacher').addEventListener('click',()=>{document.
 const assessmentDialog=document.querySelector('#assessment-dialog');
 document.addEventListener('click',event=>{
  const button=event.target.closest('[data-assessment]');if(!button)return;
- const inTeacher=button.closest('.teacher-guide');const locale=inTeacher?.lang==='ca'?'ca':lang;
+ const locale='ca';
  const copy=assessments[locale],item=copy.items[button.dataset.assessment];if(!item)return;
  assessmentDialog.lang=locale;
  assessmentDialog.querySelector('.eyebrow').textContent=copy.heading;

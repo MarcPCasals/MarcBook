@@ -1,6 +1,6 @@
 # Les transformacions del iode
 
-Dos artefactes de MarcBook amb la mateixa estructura: `transformations-iode.html` per a l’alumnat en francès i `transformaciones-yodo.html` en castellà. La guia docent francesa conserva el català i els exemples en francès del Word aportat; la castellana tradueix tota la guia.
+Dos artefactes de MarcBook amb la mateixa estructura: `transformations-iode.html` per a l’alumnat en francès i `transformaciones-yodo.html` en castellà. Les correccions docents i els retorns automàtics són en la llengua de cada fitxa. Els botons d’avaluació i totes les orientacions de la rúbrica són sempre en català.
 
 La primera part conté els exercicis 1 i 2. La segona part, amb els exercicis 3 i 4, la fotografia C i la clau de correcció automàtica, només es construeix al navegador després de desxifrar el paquet d’alumnat. El candau superior obre separadament el paquet docent. Els codis acordats es comuniquen fora de la web i no apareixen en aquests fitxers. Cada paquet té una sal i un vector independents i utilitza PBKDF2 SHA-256 amb 150.000 iteracions i AES-GCM. Un codi curt és un bloqueig didàctic; no substitueix autenticació per a informació confidencial.
 
@@ -19,3 +19,5 @@ Comprovacions: `node --test CFN/1r/UT-1/iode/activity.test.mjs` i les proves del
 Cada pregunta o subpregunta té un botó d’avaluació amb el criteri de C1, les evidències observables esperades i els límits del que es pot valorar. La guia docent en té un per a cadascuna de les quatre preguntes. Font: «Rúbrica C1 UT 1.1 — La fórmula secreta (alumne — amb recursos)» aportada per Marc. Els textos adapten CA1 Rigor i CA2 Precisió al dossier sense exigir conservació de la massa, un experiment autònom o una representació corpuscular que no es demana. Les orientacions no contenen la solució de la predicció.
 
 Les dues versions s’agrupen en una única fitxa de MarcBook, «Les transformacions del iode», amb els enllaços Castellà i Francès a Versions disponibles. Els accessos antics a les fitxes per idioma continuen obrint aquesta fitxa única.
+
+El marcatge de text admet selecció nativa arrossegant el cursor, també sobre línies diferents. El color triat s’aplica a totes les paraules seleccionades. Es manté el clic i el teclat per retocar una paraula; una selecció tàctil es pot marcar tocant un color o «Marcar la selecció». Les negretes destaquen conceptes i accions clau a l’activitat i la correcció.

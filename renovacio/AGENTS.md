@@ -25,3 +25,5 @@ Marc clarified on 2026-10-02 that MarcBook is a resource bank for teachers. Addr
 Marc requested removing the notebook and its motivational message from the hero portrait on 2026-10-02. Keep the approved character, orange jacket, illustrated style and classroom setting; do not replace the notebook with another prop or slogan. Apply the same portrait to the homepage and About page.
 
 Marc clarified on 2026-10-03 that language versions of the same resource belong in one catalog card, with a separate launch link for each language under Versions disponibles. Do not create separate publications solely for different languages.
+
+Marc clarified on 2026-10-03 that evaluation buttons and rubric guidance are always in Catalan, including within French and Spanish activities. Corrections and reference answers follow the worksheet language. Preserve meaningful bold emphasis for readability and allow marking several words in one text selection rather than requiring a click on each word.
