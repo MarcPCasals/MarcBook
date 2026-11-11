@@ -16,6 +16,9 @@
     
     <!-- Icones (Lucide) -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -52,6 +55,8 @@
         #toast-container { transition: all 0.3s ease; }
         .toast-show { transform: translateY(0); opacity: 1; }
         .toast-hide { transform: translateY(100%); opacity: 0; }
+        #observations-map { height: min(65vh, 540px); min-height: 320px; border-radius: 16px; z-index: 0; }
+        .leaflet-container { font-family: 'Inter', sans-serif; }
     </style>
 </head>
 <body class="text-gray-800 h-screen flex flex-col overflow-hidden bg-gray-50">
@@ -93,6 +98,7 @@
             </form>
             
             <div class="mt-6 text-center">
+                <button type="button" id="auth-google-btn" class="w-full bg-white text-gray-800 font-bold py-3 px-4 rounded-xl border border-gray-300 shadow-sm hover:bg-gray-50 mb-5">Continua amb Google</button>
                 <p class="text-sm text-gray-600">
                     <span id="auth-toggle-text">No tens compte?</span> 
                     <button type="button" id="auth-toggle-btn" class="text-emerald-600 font-bold hover:underline">Registra't aquí</button>
@@ -111,6 +117,7 @@
                 <h1 id="header-title" class="font-bold text-lg tracking-wide">Registre</h1>
             </div>
             <div class="flex items-center gap-3">
+                <button id="btn-link-google" class="hidden text-xs bg-white/20 px-2 py-1 rounded-lg" title="Vincula aquest compte amb Google">Vincula Google</button>
                 <button id="btn-stats" class="p-2 hover:bg-emerald-700 rounded-full transition-colors">
                     <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
                 </button>
@@ -137,6 +144,7 @@
                             <i data-lucide="filter" class="w-5 h-5"></i>
                         </button>
                     </div>
+                    <div class="mt-2"><select id="filter-location" class="w-full p-2 bg-gray-50 border rounded-lg text-sm"><option value="">Totes les ubicacions</option></select><div id="location-summary" class="text-xs text-emerald-800 mt-1"></div></div>
 
                     <!-- Filtres avançats ocults per defecte -->
                     <div id="advanced-filters" class="hidden mt-3 pt-3 border-t border-gray-100 space-y-3">
@@ -215,12 +223,18 @@
                             </div>
                         </div>
 
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">Mida de la mostra</label><select id="input-sample-size" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"><option value="">Sense categoria</option><option value="*">* · 0–5</option><option value="**">** · 5–10</option><option value="***">*** · més de 10</option><option value="ND">ND · no comptat</option></select></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">Horari</label><select id="input-time" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"><option value="">No indicat</option><option value="M">Matí</option><option value="T">Tarda</option></select></div>
+                        </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Ubicació</label>
                             <div class="relative">
                                 <i data-lucide="map-pin" class="absolute left-3 top-3.5 text-gray-400 w-4 h-4"></i>
                                 <input type="text" id="input-location" placeholder="Ex: PN Aiguamolls..." class="w-full pl-9 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
                             </div>
+                            <button type="button" id="btn-capture-gps" class="mt-2 text-sm font-bold text-emerald-700">📍 Desa la posició GPS exacta</button><span id="gps-status" class="block text-xs text-gray-500 mt-1">Sense coordenades</span>
                         </div>
 
                         <div class="flex items-center gap-2 mt-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
@@ -385,7 +399,11 @@
                         </label>
                         <input type="file" id="input-import" accept=".json" class="hidden">
                     </div>
+                    <label for="input-excel" class="block mt-3 bg-amber-50 text-amber-900 font-bold py-2 rounded-xl text-sm border border-amber-200 text-center cursor-pointer">Importar Excel d’avifauna</label>
+                    <input type="file" id="input-excel" accept=".xlsx,.xls" class="hidden">
                 </div>
+                <div id="dex-progress" class="mb-3 rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm text-emerald-900"></div>
+                <div class="flex gap-2 mb-3"><button id="guide-filter-all" class="flex-1 p-2 rounded-lg bg-emerald-600 text-white text-sm">Totes</button><button id="guide-filter-seen" class="flex-1 p-2 rounded-lg bg-white border text-sm">Vistes</button><button id="guide-filter-unseen" class="flex-1 p-2 rounded-lg bg-white border text-sm">Pendents</button></div>
                 
                 <div class="text-sm text-gray-500 mb-3 px-1 font-medium" id="guide-count-label"></div>
                 
@@ -393,6 +411,10 @@
                     <!-- Base de dades renderitzada aquí -->
                 </div>
             </div>
+
+            <div id="view-bird-detail" class="hidden p-4 fade-in"><button id="btn-back-guide" class="mb-4 text-emerald-700 font-bold">← Torna a l’Avitèdex</button><div id="bird-detail"></div></div>
+
+            <div id="view-map" class="hidden p-4 fade-in"><div class="bg-white p-3 rounded-xl border mb-3"><button id="btn-map-gps" class="bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-bold">Mostra la meva ubicació</button><p class="text-xs text-gray-500 mt-2">El mapa mostra els punts GPS de les teves observacions. Els llocs importats de l’Excel no tenen coordenades exactes.</p></div><div id="observations-map"></div><div id="map-summary" class="mt-3 text-sm text-gray-700"></div></div>
 
             <!-- MODAL ESTADÍSTIQUES -->
             <div id="modal-stats" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
@@ -471,8 +493,9 @@
             
             <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-guide">
                 <div class="icon-container"><i data-lucide="book-open" class="w-6 h-6"></i></div>
-                <span class="text-[10px] font-medium mt-1">Base dades</span>
+                <span class="text-[10px] font-medium mt-1">Avitèdex</span>
             </button>
+            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-map"><div class="icon-container"><i data-lucide="map" class="w-6 h-6"></i></div><span class="text-[10px] font-medium mt-1">Mapa</span></button>
         </nav>
         
         <!-- Toast de notificacions -->
@@ -487,11 +510,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
-            getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, 
+            getAuth, signInWithCustomToken, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup,
             signInWithEmailAndPassword, createUserWithEmailAndPassword 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
-            getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc 
+            getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // ==========================================
@@ -515,6 +538,9 @@
                 return v.toString(16);
             });
         };
+        const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const speciesKey = (bird) => norm(bird.scientificName || bird.species || bird.commonName);
 
         // ==========================================
         // 1. BASE DE DADES D'OCELLS (INCRUSTADA)
@@ -548,10 +574,22 @@
         ];
 
         let birdDb = [];
+        let guideFilter = 'all';
 
         const loadBirds = () => {
-            birdDb = [...birdDbBase, ...customBirds].sort((a, b) => a.commonName.localeCompare(b.commonName));
+            const merged = new Map();
+            [...birdDbBase, ...customBirds, ...state.catalog].forEach(b => merged.set(norm(b.commonName), b));
+            birdDb = [...merged.values()].sort((a, b) => a.commonName.localeCompare(b.commonName, 'ca'));
             if(document.getElementById('guide-list').innerHTML !== '') renderGuide();
+        };
+        const loadCatalog = async () => {
+            try {
+                const response = await fetch('./aviteca-catalog.json');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                state.catalog = await response.json();
+                loadBirds();
+                renderGuide();
+            } catch (err) { console.warn('No s’ha pogut carregar el catàleg complet:', err); }
         };
 
         // Algoritme de cerca amb tolerància (toLowerCase + includes)
@@ -574,8 +612,11 @@
         
         const state = {
             user: null,
+            activeUid: null,
             observations: [],
             checklists: [],
+            catalog: [],
+            gps: null,
             currentPhotoB64: null,
             editingObsId: null, // Per saber si estem editant
             checklistVisualItems: [], // Llista d'objectes {species, scientificName, count, family, order}
@@ -604,6 +645,8 @@
                 'view-checklists': document.getElementById('view-checklists'),
                 'view-new-checklist': document.getElementById('view-new-checklist'),
                 'view-guide': document.getElementById('view-guide')
+                ,'view-bird-detail': document.getElementById('view-bird-detail')
+                ,'view-map': document.getElementById('view-map')
             },
             navItems: document.querySelectorAll('.nav-item'),
             headerTitle: document.getElementById('header-title'),
@@ -631,6 +674,7 @@
                     }
                 });
                 if(title) UI.headerTitle.innerText = title;
+                if(viewId === 'view-map') setTimeout(renderMap, 60);
                 
                 // Netejar estat edició si sortim
                 if(viewId !== 'view-new-obs' && state.editingObsId) resetObservationForm();
@@ -670,12 +714,10 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                // Gestió Custom Token obligatori de l'entorn amb Try/Catch fort per si fa servir el seu propi firebase
+                // El token de l'entorn s'accepta si existeix. La sessió normal resta manual.
                 try {
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
                     }
                 } catch(errAuth) {
                     console.warn("L'accés silenciós està desactivat. S'utilitzarà el formulari per iniciar sessió.");
@@ -684,6 +726,13 @@
                 }
                 
                 onAuthStateChanged(auth, (user) => {
+                    clearDataListeners();
+                    if (state.activeUid !== user?.uid) {
+                        state.observations = [];
+                        state.checklists = [];
+                        state.activeUid = user?.uid || null;
+                        loadBirds();
+                    }
                     state.user = user;
                     if (user) {
                         UI.auth.classList.add('hidden');
@@ -694,8 +743,8 @@
                         if (window.lucide) lucide.createIcons();
                         setupDataListeners();
                         loadBirds(); // Carrega la base de dades local ràpida
+                        document.getElementById('btn-link-google').classList.toggle('hidden', user.providerData.some(p => p.providerId === 'google.com'));
                     } else {
-                        clearDataListeners();
                         UI.app.classList.add('hidden');
                         UI.app.classList.remove('flex');
                         UI.auth.classList.remove('hidden');
@@ -743,6 +792,24 @@
             }
         });
 
+        document.getElementById('auth-google-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('auth-google-btn');
+            btn.disabled = true;
+            try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+            catch (err) {
+                document.getElementById('auth-error').innerText = err.code === 'auth/unauthorized-domain' ? 'Cal autoritzar aquest domini a Firebase Authentication.' : `No s’ha pogut iniciar sessió amb Google: ${err.message}`;
+                document.getElementById('auth-error').classList.remove('hidden');
+            } finally { btn.disabled = false; }
+        });
+
+        document.getElementById('btn-link-google').addEventListener('click', async () => {
+            try {
+                await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
+                document.getElementById('btn-link-google').classList.add('hidden');
+                UI.showToast('Google vinculat al compte actual.');
+            } catch (err) { UI.showToast(`No s’ha pogut vincular Google: ${err.code || err.message}`); }
+        });
+
         document.getElementById('btn-logout').addEventListener('click', () => { if(confirm("Vols tancar la sessió?")) signOut(auth); });
 
         // LÒGICA DE DADES FIRESTORE
@@ -756,6 +823,9 @@
                 state.observations = snap.docs.map(d => d.data());
                 renderObservations();
                 updateStats();
+                renderGuide();
+                if (!UI.views['view-bird-detail'].classList.contains('hidden')) renderBirdDetail();
+                if (!UI.views['view-map'].classList.contains('hidden')) renderMap();
             }, (err) => {
                 console.error(err);
                 if (err.code === 'permission-denied') UI.showToast("⚠️ Firebase: Accés denegat. Cal actualitzar les Rules de Firestore.");
@@ -794,20 +864,28 @@
             const empty = document.getElementById('empty-state-registry');
             
             // Valors Filtres
-            const fText = document.getElementById('filter-text').value.toLowerCase();
+            const fText = norm(document.getElementById('filter-text').value);
             const fFam = document.getElementById('filter-family').value.toLowerCase();
             const fOrd = document.getElementById('filter-order').value.toLowerCase();
             const fDStart = document.getElementById('filter-date-start').value;
             const fDEnd = document.getElementById('filter-date-end').value;
+            const fLocation = document.getElementById('filter-location').value;
             
             let filtered = state.observations.filter(o => {
-                const textMatch = o.species.toLowerCase().includes(fText) || (o.location && o.location.toLowerCase().includes(fText));
+                const textMatch = norm(o.species).includes(fText) || norm(o.location).includes(fText);
                 const famMatch = !fFam || (o.family && o.family.toLowerCase().includes(fFam));
                 const ordMatch = !fOrd || (o.order && o.order.toLowerCase().includes(fOrd));
                 const dateStartMatch = !fDStart || new Date(o.date) >= new Date(fDStart);
                 const dateEndMatch = !fDEnd || new Date(o.date) <= new Date(fDEnd);
-                return textMatch && famMatch && ordMatch && dateStartMatch && dateEndMatch;
+                return textMatch && famMatch && ordMatch && dateStartMatch && dateEndMatch && (!fLocation || o.location === fLocation);
             });
+            const locationSelect = document.getElementById('filter-location');
+            const locations = [...new Set(state.observations.map(o => o.location).filter(Boolean))].sort((a,b) => a.localeCompare(b,'ca'));
+            if (locationSelect.options.length !== locations.length + 1 || locations.some((v,i) => locationSelect.options[i+1]?.value !== v)) {
+                locationSelect.replaceChildren(new Option('Totes les ubicacions',''), ...locations.map(v => new Option(v,v)));
+                locationSelect.value = locations.includes(fLocation) ? fLocation : '';
+            }
+            document.getElementById('location-summary').textContent = `${filtered.length} observacions · ${new Set(filtered.map(speciesKey)).size} espècies${fLocation ? ' en aquesta ubicació' : ''}`;
             
             filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -832,25 +910,25 @@
                     htmlStr += `<div class="space-y-3">`;
                     
                     obsArr.forEach(obs => {
-                        const isVisual = !obs.type || obs.type === 'visual';
-                        const typeIcon = isVisual ? 'eye' : 'ear';
+                        const isVisual = obs.type === 'visual';
+                        const typeIcon = !obs.type ? 'circle-help' : isVisual ? 'eye' : 'ear';
                         const famColor = getFamilyColorClass(obs.family);
 
                         htmlStr += `
                         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 relative overflow-hidden flex flex-col gap-3 card-hover group">
                             ${obs.photo ? `
                                 <div class="relative h-44 -mx-4 -mt-4 mb-1">
-                                    <img src="${obs.photo}" class="w-full h-full object-cover rounded-t-xl" alt="Foto">
+                                    <img src="${escapeHtml(obs.photo)}" class="w-full h-full object-cover rounded-t-xl" alt="Foto">
                                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                                     <div class="absolute bottom-3 left-4 right-4 flex justify-between items-end text-white">
                                         <div class="flex-1 min-w-0 pr-2">
                                             <h3 class="font-bold text-lg leading-tight flex items-center gap-2 truncate">
-                                                ${obs.species}
+                                                ${escapeHtml(obs.species)}
                                             </h3>
-                                            <p class="text-xs italic opacity-90 truncate">${obs.scientificName}</p>
+                                            <p class="text-xs italic opacity-90 truncate">${escapeHtml(obs.scientificName)}</p>
                                         </div>
                                         <div class="bg-emerald-500/90 font-bold px-3 py-1 rounded-full text-sm shadow-lg backdrop-blur-sm shrink-0">
-                                            ${obs.count}
+                                            ${obs.sampleSize ? escapeHtml(obs.sampleSize) : Number(obs.count || 1)}
                                         </div>
                                     </div>
                                     <div class="absolute top-3 right-3 flex gap-1">
@@ -864,24 +942,29 @@
                                 <div class="flex justify-between items-start">
                                     <div class="flex-1 min-w-0 pr-2">
                                         <h3 class="font-bold text-gray-800 text-lg leading-tight flex items-center gap-2 truncate">
-                                            ${obs.species}
-                                            <i data-lucide="${typeIcon}" class="w-4 h-4 text-emerald-600" title="${isVisual?'Visual':'Auditiva'}"></i>
+                                            ${escapeHtml(obs.species)}
+                                            <i data-lucide="${typeIcon}" class="w-4 h-4 text-emerald-600" title="${!obs.type ? 'No indicat' : isVisual ? 'Visual' : 'Auditiva'}"></i>
                                             ${obs.hide ? `<i data-lucide="eye-off" class="w-4 h-4 text-emerald-600" title="Des d'aguait"></i>` : ''}
                                         </h3>
-                                        <p class="text-sm italic text-gray-500 truncate">${obs.scientificName}</p>
+                                        <p class="text-sm italic text-gray-500 truncate">${escapeHtml(obs.scientificName)}</p>
                                     </div>
                                     <div class="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full text-sm shrink-0">
-                                        ${obs.count}
+                                        ${obs.sampleSize ? escapeHtml(obs.sampleSize) : Number(obs.count || 1)}
                                     </div>
                                 </div>
                             `}
                             
                             <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600">
-                                ${obs.location ? `<span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100"><i data-lucide="map-pin" class="w-3.5 h-3.5 text-gray-400"></i> ${obs.location}</span>` : ''}
-                                <span class="flex items-center gap-1 border border-transparent px-1 rounded ${famColor}">${obs.family}</span>
+                                ${obs.location ? `<span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100"><i data-lucide="map-pin" class="w-3.5 h-3.5 text-gray-400"></i> ${escapeHtml(obs.location)}</span>` : ''}
+                                ${obs.order ? `<span class="flex items-center gap-1 border border-transparent px-1 rounded bg-gray-100">${escapeHtml(obs.order)}</span>` : ''}
+                                ${obs.family ? `<span class="flex items-center gap-1 border border-transparent px-1 rounded ${famColor}">${escapeHtml(obs.family)}</span>` : ''}
+                                ${obs.sampleSize ? `<span class="bg-amber-50 px-2 py-1 rounded" title="Mida de la mostra">Mostra: ${escapeHtml(obs.sampleSize)}</span>` : ''}
+                                ${obs.isBimbo ? '<span class="bg-yellow-100 text-yellow-900 px-2 py-1 rounded font-bold">★ BIMBO</span>' : ''}
+                                ${obs.timeOfDay ? `<span class="bg-sky-50 px-2 py-1 rounded">${obs.timeOfDay === 'M' ? 'Matí' : obs.timeOfDay === 'T' ? 'Tarda' : escapeHtml(obs.timeOfDay)}</span>` : ''}
+                                ${obs.latitude != null && obs.longitude != null ? `<span class="text-emerald-700">GPS</span>` : ''}
                             </div>
                             
-                            ${obs.notes ? `<div class="text-xs bg-orange-50/50 p-2 rounded-lg text-gray-600 italic border border-orange-100">"${obs.notes}"</div>` : ''}
+                            ${obs.notes ? `<div class="text-xs bg-orange-50/50 p-2 rounded-lg text-gray-600 italic border border-orange-100">"${escapeHtml(obs.notes)}"</div>` : ''}
                             
                             <!-- Botons Acció ràpida (Edit/Duplicate/Delete) -->
                             <div class="mt-1 pt-2 border-t border-gray-50 flex justify-end items-center gap-2">
@@ -910,10 +993,11 @@
             document.getElementById('filter-date-start').value = '';
             document.getElementById('filter-date-end').value = '';
             document.getElementById('filter-text').value = '';
+            document.getElementById('filter-location').value = '';
             renderObservations();
         });
 
-        ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end'].forEach(id => {
+        ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end', 'filter-location'].forEach(id => {
             document.getElementById(id).addEventListener('input', renderObservations);
         });
 
@@ -952,37 +1036,51 @@
             }
         };
 
+        const seenSpecies = () => new Set(state.observations.map(o => norm(o.species)));
+        const hasObservedBird = bird => state.observations.some(o => norm(o.species) === norm(bird.commonName) || (o.scientificName && bird.scientificName && norm(o.scientificName) === norm(bird.scientificName)));
         const renderGuide = () => {
-            const list = document.getElementById('guide-list');
-            const filterText = document.getElementById('guide-search').value.toLowerCase();
-            const label = document.getElementById('guide-count-label');
-            
-            const filtered = birdDb.filter(b => 
-                b.commonName.toLowerCase().includes(filterText) || 
-                b.scientificName.toLowerCase().includes(filterText) ||
-                b.family.toLowerCase().includes(filterText)
-            );
-            
-            label.innerText = `Mostrant ${filtered.length} espècies`;
-            list.innerHTML = filtered.map(bird => {
-                const famColor = getFamilyColorClass(bird.family);
-                const isCustom = customBirds.some(cb => cb.commonName === bird.commonName);
-                return `
-                <div class="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex items-center gap-4 relative">
-                    ${isCustom ? `<div class="absolute -top-1 -right-1 bg-orange-400 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full" title="Afegida manualment">M</div>` : ''}
-                    <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0">
-                        <i data-lucide="bird" class="w-6 h-6"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <h4 class="font-bold text-gray-800 truncate">${bird.commonName}</h4>
-                        <p class="text-xs text-gray-500 italic truncate">${bird.scientificName || '-'}</p>
-                        <div class="flex gap-2 mt-1">
-                            <span class="text-[10px] px-2 py-0.5 rounded border ${famColor}">${bird.family || 'Sense Família'}</span>
-                        </div>
-                    </div>
-                </div>`}).join('');
+            const seen = seenSpecies();
+            const search = norm(document.getElementById('guide-search').value);
+            const filtered = birdDb.filter(b => {
+                const isSeen = hasObservedBird(b);
+                return (guideFilter === 'all' || (guideFilter === 'seen' ? isSeen : !isSeen)) &&
+                    [b.commonName, b.scientificName, b.order].some(x => norm(x).includes(search));
+            });
+            const milestones = [10,25,50,100,200];
+            const earned = milestones.filter(n => seen.size >= n);
+            const next = milestones.find(n => seen.size < n);
+            const progress = birdDb.length ? Math.min(100, Math.round(seen.size / birdDb.length * 100)) : 0;
+            document.getElementById('dex-progress').innerHTML = `<div class="font-bold">Avitèdex: ${seen.size} de ${birdDb.length} espècies descobertes</div><div class="h-2 bg-white rounded-full mt-2 overflow-hidden"><div class="h-full bg-emerald-600" style="width:${progress}%"></div></div><div class="mt-2 text-xs">${earned.length ? `Insígnies: ${earned.map(n => `${n} espècies`).join(' · ')}` : 'La primera insígnia arriba amb 10 espècies.'}${next ? ` · Següent objectiu: ${next}` : ''}</div>`;
+            document.getElementById('guide-count-label').textContent = `Mostrant ${filtered.length} espècies`;
+            document.getElementById('guide-list').innerHTML = filtered.map((b) => {
+                const index = birdDb.indexOf(b);
+                const isSeen = hasObservedBird(b);
+                return `<button type="button" data-bird-index="${index}" class="bird-card w-full text-left rounded-xl border p-3 flex items-center gap-3 ${isSeen ? 'bg-white border-emerald-200' : 'bg-gray-100 border-gray-200'}">
+                    <div class="w-14 h-14 rounded-lg flex items-center justify-center ${isSeen ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-400'}"><i data-lucide="${isSeen ? 'bird' : 'lock-keyhole'}" class="w-7 h-7"></i></div>
+                    <div class="min-w-0 flex-1"><div class="font-bold truncate">#${String(index + 1).padStart(3,'0')} ${escapeHtml(b.commonName)}</div><div class="text-xs italic text-gray-500 truncate">${escapeHtml(b.scientificName || 'Nom científic pendent')}</div><div class="text-xs mt-1">${escapeHtml(b.order || 'Ordre pendent')} · ${isSeen ? 'Vista' : 'Pendent'}</div></div></button>`;
+            }).join('');
+            document.querySelectorAll('.bird-card').forEach(el => el.addEventListener('click', () => {
+                state.selectedBirdIndex = Number(el.dataset.birdIndex);
+                renderBirdDetail();
+                UI.switchView('view-bird-detail', 'Fitxa de l’ocell');
+            }));
             if(window.lucide) lucide.createIcons();
         };
+
+        const renderBirdDetail = () => {
+            const bird = birdDb[state.selectedBirdIndex];
+            if (!bird) return;
+            const entries = state.observations.filter(o => norm(o.species) === norm(bird.commonName) || (o.scientificName && bird.scientificName && norm(o.scientificName) === norm(bird.scientificName))).sort((a,b) => String(b.date).localeCompare(String(a.date)));
+            const places = new Set(entries.map(o => norm(o.location)).filter(Boolean));
+            document.getElementById('bird-detail').innerHTML = `<div class="bg-white border rounded-2xl p-5 mb-4"><div class="w-24 h-24 rounded-xl bg-emerald-50 border border-dashed border-emerald-200 flex items-center justify-center text-emerald-600 mb-4"><i data-lucide="${entries.length ? 'bird' : 'lock-keyhole'}" class="w-12 h-12"></i></div><h2 class="text-2xl font-bold">${escapeHtml(bird.commonName)}</h2><p class="italic text-gray-500">${escapeHtml(bird.scientificName || '')}</p><p class="text-sm mt-2">${escapeHtml(bird.order || 'Ordre pendent')}</p><div class="grid grid-cols-3 gap-2 mt-5 text-center text-sm"><div class="bg-emerald-50 rounded-lg p-2"><b>${entries.length}</b><br>observacions</div><div class="bg-emerald-50 rounded-lg p-2"><b>${places.size}</b><br>llocs</div><div class="bg-emerald-50 rounded-lg p-2"><b>${new Set(entries.map(o=>o.date)).size}</b><br>dies</div></div></div><h3 class="font-bold mb-2">Historial</h3>${entries.length ? entries.map(o => `<div class="bg-white border rounded-xl p-3 mb-2 text-sm"><b>${escapeHtml(o.date)}</b> · ${escapeHtml(o.location || 'Lloc no indicat')} ${o.isBimbo ? '<b class="text-amber-700">★ BIMBO</b>' : ''}<div class="text-gray-600 mt-1">${o.sampleSize ? `Mostra ${escapeHtml(o.sampleSize)}` : `${Number(o.count || 1)} individus`} · ${o.timeOfDay === 'M' ? 'Matí' : o.timeOfDay === 'T' ? 'Tarda' : 'Horari no indicat'} · ${o.type === 'auditiva' ? 'Sentit' : o.type === 'visual' ? 'Vist' : 'No indicat'}${o.latitude != null ? ' · GPS' : ''}</div></div>`).join('') : '<p class="text-sm text-gray-500">Encara no hi ha observacions.</p>'}`;
+            if(window.lucide) lucide.createIcons();
+        };
+        ['all','seen','unseen'].forEach(value => document.getElementById(`guide-filter-${value}`).addEventListener('click', () => {
+            guideFilter = value;
+            ['all','seen','unseen'].forEach(v => document.getElementById(`guide-filter-${v}`).className = `flex-1 p-2 rounded-lg text-sm ${v === value ? 'bg-emerald-600 text-white' : 'bg-white border'}`);
+            renderGuide();
+        }));
+        document.getElementById('btn-back-guide').addEventListener('click', () => UI.switchView('view-guide', 'Avitèdex'));
         document.getElementById('guide-search').addEventListener('input', renderGuide);
 
         // --- Modal Custom Species ---
@@ -1090,15 +1188,70 @@
             reader.readAsText(file);
         });
 
+        const excelDate = value => {
+            if (value instanceof Date && !isNaN(value)) return `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}`;
+            if (typeof value === 'number' && window.XLSX) {
+                const d = XLSX.SSF.parse_date_code(value);
+                if (d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+            }
+            const text = String(value || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0,10);
+            const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            return match ? `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}` : '';
+        };
+        document.getElementById('input-excel').addEventListener('change', async e => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+                if (!state.user) throw new Error('Inicia sessió abans d’importar.');
+                if (!window.XLSX) throw new Error('No s’ha pogut carregar el lector d’Excel.');
+                const bytes = await file.arrayBuffer();
+                const workbook = XLSX.read(bytes, {type:'array',cellDates:true,cellStyles:true});
+                const obsSheet = workbook.Sheets['LLISTA AVIFAUNA'];
+                const catalogSheet = workbook.Sheets['BASE DE DADES'];
+                if (!obsSheet || !catalogSheet) throw new Error('Calen les pestanyes «LLISTA AVIFAUNA» i «BASE DE DADES».');
+                const rows = XLSX.utils.sheet_to_json(obsSheet,{defval:'',raw:true});
+                const catalogRows = XLSX.utils.sheet_to_json(catalogSheet,{defval:'',raw:true});
+                const expected = ['Ordre','Nom comú','Nom científic','Data','Mida de la mostra','Horari','Ubicació','Observació'];
+                if (!expected.every(key => Object.hasOwn(rows[0] || {}, key))) throw new Error(`Falten columnes: ${expected.filter(key => !Object.hasOwn(rows[0] || {},key)).join(', ')}`);
+                const invalid = rows.map((r,i) => (!r['Nom comú'] || !excelDate(r.Data) || !r.Ubicació ? i+2 : null)).filter(Boolean);
+                if (invalid.length) throw new Error(`Files incompletes o amb data no reconeguda: ${invalid.slice(0,8).join(', ')}${invalid.length > 8 ? '…' : ''}`);
+                const catalogCount = new Set([...catalogRows, ...rows].map(r => norm(r['Nom comú'])).filter(Boolean)).size;
+                const summary = `${rows.length} observacions. El catàleg públic conté ${catalogCount} espècies. Les observacions s’afegiran al teu compte de Firebase. Si ja hi són per una altra via, podrien aparèixer duplicades. Vols continuar?`;
+                if (!confirm(summary)) return;
+                UI.loading.classList.remove('hidden');
+                document.getElementById('loading-text').textContent = 'Important Excel…';
+                const digest = await crypto.subtle.digest('SHA-256', bytes);
+                const hash = Array.from(new Uint8Array(digest)).slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join('');
+                const uid = state.user.uid;
+                const writes = [];
+                rows.forEach((r,i) => {
+                    const id = `excel-${hash}-${i+2}`;
+                    const rawType = String(r.Observació || '').trim();
+                    const isBimbo = obsSheet[`D${i+2}`]?.s?.fgColor?.rgb === 'FFD966';
+                    const obs = {id, species:String(r['Nom comú']).trim(), scientificName:String(r['Nom científic'] || '').trim(), order:String(r.Ordre || '').trim(), family:'', date:excelDate(r.Data), sampleSize:String(r['Mida de la mostra'] || '').trim(), timeOfDay:String(r.Horari || '').trim(), location:String(r.Ubicació || '').trim(), type:norm(rawType) === 'sentit' ? 'auditiva' : norm(rawType) === 'vist' ? 'visual' : '', observationLabel:rawType, isBimbo, count:1, source:'excel', sourceRow:i+2, checklistId:null, createdAt:new Date().toISOString()};
+                    writes.push([doc(db,'artifacts',appId,'users',uid,'bird_observations',id),obs]);
+                });
+                for (let i=0;i<writes.length;i+=400) {
+                    const batch = writeBatch(db);
+                    writes.slice(i,i+400).forEach(([ref,data]) => batch.set(ref,data));
+                    await batch.commit();
+                    document.getElementById('loading-text').textContent = `Importats ${Math.min(i+400,writes.length)} de ${writes.length} registres…`;
+                }
+                UI.showToast(`Excel importat: ${rows.length} observacions.`);
+            } catch (err) { alert(`No s’ha pogut importar l’Excel: ${err.message}`); }
+            finally { UI.loading.classList.add('hidden'); e.target.value = ''; }
+        });
+
 
         // --- Estadístiques ---
         const updateStats = () => {
-            const totalObs = state.observations.reduce((acc, curr) => acc + parseInt(curr.count || 1), 0);
+            const totalObs = state.observations.length;
             const speciesSet = new Set(state.observations.map(o => o.species));
             
             // Top espècie
             const speciesCount = {};
-            state.observations.forEach(o => { speciesCount[o.species] = (speciesCount[o.species] || 0) + parseInt(o.count || 1); });
+            state.observations.forEach(o => { speciesCount[o.species] = (speciesCount[o.species] || 0) + 1; });
             let topSpecies = '-'; let maxCount = 0;
             for (const [sp, count] of Object.entries(speciesCount)) { if (count > maxCount) { maxCount = count; topSpecies = `${sp} (${count})`; } }
             
@@ -1197,18 +1350,26 @@
                 family: document.getElementById('input-family').value,
                 order: document.getElementById('input-order').value,
                 count: parseInt(document.getElementById('input-count').value || 1),
+                sampleSize: document.getElementById('input-sample-size').value,
+                timeOfDay: document.getElementById('input-time').value,
                 date: document.getElementById('input-date').value,
                 location: document.getElementById('input-location').value,
                 hide: document.getElementById('input-hide').checked,
                 type: document.querySelector('input[name="input-type"]:checked').value,
                 notes: document.getElementById('input-notes').value,
             };
+            if (state.gps) {
+                obs.latitude = state.gps.latitude;
+                obs.longitude = state.gps.longitude;
+                obs.gpsAccuracy = state.gps.accuracy;
+            }
             
             if(state.currentPhotoB64) obs.photo = state.currentPhotoB64; 
             if(!isEdit) {
                 obs.id = id;
                 obs.checklistId = null;
                 obs.createdAt = new Date().toISOString();
+                obs.isBimbo = !hasObservedBird({commonName:obs.species,scientificName:obs.scientificName});
                 if(!obs.photo) obs.photo = null;
             }
 
@@ -1227,7 +1388,7 @@
             } catch (err) {
                 console.error("Error saving:", err);
                 if (err.code === 'permission-denied') {
-                    alert("⚠️ PERMISOS DENEGATS:\n\nFirebase bloqueja l'escriptura per defecte.\nVes a Firebase > Firestore Database > pestanya 'Rules' i canvia-ho per:\n\nmatch /{document=**} {\n  allow read, write: if true;\n}");
+                    alert("Firebase ha denegat l'accés. Revisa que les regles de Firestore permetin a cada usuari accedir només a les seves dades.");
                 } else {
                     alert("Error al guardar l'observació.");
                 }
@@ -1242,6 +1403,8 @@
             document.getElementById('form-new-obs').reset();
             document.getElementById('input-date').valueAsDate = new Date();
             selectedSpeciesForObs = null;
+            state.gps = null;
+            document.getElementById('gps-status').textContent = 'Sense coordenades';
             state.editingObsId = null;
             removePhoto();
             document.getElementById('new-obs-title').innerText = "Nova Observació";
@@ -1267,7 +1430,11 @@
             document.getElementById('input-family').value = obs.family || '';
             document.getElementById('input-order').value = obs.order || '';
             document.getElementById('input-count').value = obs.count;
+            document.getElementById('input-sample-size').value = obs.sampleSize || '';
+            document.getElementById('input-time').value = obs.timeOfDay || '';
             document.getElementById('input-date').value = obs.date;
+            state.gps = obs.latitude != null && obs.longitude != null ? {latitude: obs.latitude, longitude: obs.longitude, accuracy: obs.gpsAccuracy || null} : null;
+            document.getElementById('gps-status').textContent = state.gps ? `${Number(state.gps.latitude).toFixed(5)}, ${Number(state.gps.longitude).toFixed(5)}` : 'Sense coordenades';
             document.getElementById('input-location').value = obs.location || '';
             document.getElementById('input-hide').checked = obs.hide;
             document.getElementById('input-notes').value = obs.notes || '';
@@ -1291,7 +1458,7 @@
 
             const newId = generateUUID();
             const today = new Date().toISOString().split('T')[0];
-            const duplicat = { ...original, id: newId, date: today, checklistId: null, createdAt: new Date().toISOString() };
+            const duplicat = { ...original, id: newId, date: today, checklistId: null, isBimbo: false, createdAt: new Date().toISOString() };
             
             try {
                 await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', newId), duplicat);
@@ -1612,7 +1779,7 @@
             } catch (err) {
                 console.error("Error saving checklist:", err);
                 if (err.code === 'permission-denied') {
-                    alert("⚠️ PERMISOS DENEGATS:\n\nFirebase bloqueja l'escriptura per defecte.\nVes a Firebase > Firestore Database > pestanya 'Rules' i canvia-ho per:\n\nmatch /{document=**} {\n  allow read, write: if true;\n}");
+                    alert("Firebase ha denegat l'accés. Revisa que les regles de Firestore permetin a cada usuari accedir només a les seves dades.");
                 } else {
                     alert("Error al processar la llista.");
                 }
@@ -1650,11 +1817,55 @@
             return new Date(dateStr).toLocaleDateString('ca-ES', { day: 'numeric', month: 'long', year: 'numeric' });
         };
 
+        let map = null;
+        let mapLayer = null;
+        const renderMap = () => {
+            if (!window.L) {
+                document.getElementById('map-summary').textContent = 'No s’ha pogut carregar el mapa. Comprova la connexió.';
+                return;
+            }
+            if (!map) {
+                map = L.map('observations-map').setView([42.5063, 1.5218], 9);
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(map);
+                mapLayer = L.layerGroup().addTo(map);
+            }
+            map.invalidateSize();
+            mapLayer.clearLayers();
+            const positioned = state.observations.filter(o => Number.isFinite(Number(o.latitude)) && Number.isFinite(Number(o.longitude)) && o.latitude != null && o.longitude != null);
+            positioned.forEach(o => {
+                const popup = document.createElement('div');
+                const title = document.createElement('strong');
+                title.textContent = o.species || 'Observació';
+                popup.append(title, document.createElement('br'), document.createTextNode(`${o.date || ''} · ${o.location || ''}`));
+                L.marker([Number(o.latitude), Number(o.longitude)]).bindPopup(popup).addTo(mapLayer);
+            });
+            document.getElementById('map-summary').textContent = `${positioned.length} observacions amb GPS · ${state.observations.length - positioned.length} sense coordenades exactes`;
+        };
+        const getGps = () => new Promise((resolve,reject) => {
+            if (!navigator.geolocation) return reject(new Error('Aquest dispositiu no ofereix GPS.'));
+            navigator.geolocation.getCurrentPosition(p => resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy}), reject, {enableHighAccuracy:true,timeout:15000,maximumAge:0});
+        });
+        document.getElementById('btn-capture-gps').addEventListener('click', async () => {
+            document.getElementById('gps-status').textContent = 'Cercant posició…';
+            try {
+                state.gps = await getGps();
+                document.getElementById('gps-status').textContent = `${state.gps.latitude.toFixed(5)}, ${state.gps.longitude.toFixed(5)} · precisió ±${Math.round(state.gps.accuracy)} m`;
+            } catch (err) { document.getElementById('gps-status').textContent = `No s’ha obtingut la posició: ${err.message}`; }
+        });
+        document.getElementById('btn-map-gps').addEventListener('click', async () => {
+            try {
+                const gps = await getGps();
+                renderMap();
+                map.setView([gps.latitude,gps.longitude], 15);
+                L.circle([gps.latitude,gps.longitude], {radius:gps.accuracy,color:'#059669'}).addTo(mapLayer).bindPopup('La teva posició actual');
+            } catch (err) { UI.showToast(`GPS: ${err.message}`); }
+        });
+
         // NAV & INICI
         UI.navItems.forEach(btn => {
             btn.addEventListener('click', () => {
                 const target = btn.dataset.target;
-                const titles = { 'view-registry': 'Registre', 'view-new-obs': 'Nova Observació', 'view-checklists': 'Sortides', 'view-guide': "Base dades" };
+                const titles = { 'view-registry': 'Registre', 'view-new-obs': 'Nova Observació', 'view-checklists': 'Sortides', 'view-guide': 'Avitèdex', 'view-map': 'Mapa' };
                 UI.switchView(target, titles[target]);
             });
         });
@@ -1666,6 +1877,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             if(window.lucide) lucide.createIcons();
+            loadCatalog();
             initFirebase();
         });
 
