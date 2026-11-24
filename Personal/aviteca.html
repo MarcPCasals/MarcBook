@@ -540,7 +540,16 @@
         };
         const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-        const speciesKey = (bird) => norm(bird.scientificName || bird.species || bird.commonName);
+        const commonNameKey = bird => norm(bird.commonName || bird.species);
+        const scientificNameKey = bird => norm(bird.scientificName).replace(/\s+/g, ' ');
+
+        const observationCount = observation => {
+            const count = Number(observation.count);
+            if (!Number.isInteger(count) || count < 1) return null;
+            // La primera versió de l'importador posava 1 a totes les files.
+            if (observation.source === 'excel' && count === 1 && !observation.countConfirmed) return null;
+            return count;
+        };
 
         // ==========================================
         // 1. BASE DE DADES D'OCELLS (INCRUSTADA)
@@ -575,11 +584,51 @@
 
         let birdDb = [];
         let guideFilter = 'all';
+        let birdsBySpeciesKey = new Map();
+        let catalogKeysByName = new Map();
+        let observedKeysByName = new Map();
+
+        const speciesKey = bird => {
+            const name = commonNameKey(bird);
+            const science = scientificNameKey(bird);
+            const scientificKey = science ? `scientific:${science}` : '';
+
+            // El nom comú també permet enllaçar registres antics amb la fitxa actual.
+            if (birdsBySpeciesKey.has(scientificKey)) return scientificKey;
+            return catalogKeysByName.get(name) || scientificKey ||
+                observedKeysByName.get(name) || (name ? `common:${name}` : '');
+        };
+
+        const indexObservedNames = () => {
+            observedKeysByName = new Map();
+            for (const observation of state.observations) {
+                const name = commonNameKey(observation);
+                if (!name || !scientificNameKey(observation)) continue;
+                const key = speciesKey(observation);
+                if (!observedKeysByName.has(name)) observedKeysByName.set(name, key);
+                else if (observedKeysByName.get(name) !== key) observedKeysByName.set(name, null);
+            }
+        };
+
+        const observedSpeciesKeys = observations => new Set(observations.map(speciesKey).filter(Boolean));
 
         const loadBirds = () => {
-            const merged = new Map();
-            [...(state.catalog.length ? state.catalog : birdDbBase), ...customBirds].forEach(b => merged.set(norm(b.commonName), b));
-            birdDb = [...merged.values()].sort((a, b) => a.commonName.localeCompare(b.commonName, 'ca'));
+            const birdsByName = new Map();
+            for (const bird of [...(state.catalog.length ? state.catalog : birdDbBase), ...customBirds]) {
+                const name = commonNameKey(bird);
+                const previous = birdsByName.get(name);
+                birdsByName.set(name, {...previous, ...bird, scientificName: bird.scientificName || previous?.scientificName || ''});
+            }
+            birdsBySpeciesKey = new Map();
+            catalogKeysByName = new Map();
+            for (const [name, bird] of birdsByName) {
+                const science = scientificNameKey(bird);
+                const key = science ? `scientific:${science}` : `common:${name}`;
+                catalogKeysByName.set(name, key);
+                if (!birdsBySpeciesKey.has(key)) birdsBySpeciesKey.set(key, bird);
+            }
+            birdDb = [...birdsBySpeciesKey.values()].sort((a, b) => a.commonName.localeCompare(b.commonName, 'ca'));
+            indexObservedNames();
             if(document.getElementById('guide-list').innerHTML !== '') renderGuide();
         };
         const loadCatalog = async () => {
@@ -589,6 +638,9 @@
                 state.catalog = await response.json();
                 loadBirds();
                 renderGuide();
+                renderObservations();
+                updateStats();
+                if (!UI.views['view-bird-detail'].classList.contains('hidden')) renderBirdDetail();
             } catch (err) { console.warn('No s’ha pogut carregar el catàleg complet:', err); }
         };
 
@@ -616,6 +668,7 @@
             observations: [],
             checklists: [],
             catalog: [],
+            selectedBird: null,
             gps: null,
             currentPhotoB64: null,
             editingObsId: null, // Per saber si estem editant
@@ -821,6 +874,7 @@
             const obsRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_observations');
             const unsubObs = onSnapshot(obsRef, (snap) => {
                 state.observations = snap.docs.map(d => d.data());
+                indexObservedNames();
                 renderObservations();
                 updateStats();
                 renderGuide();
@@ -885,7 +939,10 @@
                 locationSelect.replaceChildren(new Option('Totes les ubicacions',''), ...locations.map(v => new Option(v,v)));
                 locationSelect.value = locations.includes(fLocation) ? fLocation : '';
             }
-            document.getElementById('location-summary').textContent = `${filtered.length} observacions · ${new Set(filtered.map(speciesKey)).size} espècies${fLocation ? ' en aquesta ubicació' : ''}`;
+            const speciesCount = observedSpeciesKeys(filtered).size;
+            const observationLabel = filtered.length === 1 ? 'observació' : 'observacions';
+            const speciesLabel = speciesCount === 1 ? 'espècie' : 'espècies';
+            document.getElementById('location-summary').textContent = `${filtered.length} ${observationLabel} · ${speciesCount} ${speciesLabel}${fLocation ? ' en aquesta ubicació' : ''}`;
             
             filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -913,6 +970,8 @@
                         const isVisual = obs.type === 'visual';
                         const typeIcon = !obs.type ? 'circle-help' : isVisual ? 'eye' : 'ear';
                         const famColor = getFamilyColorClass(obs.family);
+                        const count = observationCount(obs);
+                        const sizeBadge = escapeHtml(obs.sampleSize || count);
 
                         htmlStr += `
                         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 relative overflow-hidden flex flex-col gap-3 card-hover group">
@@ -927,9 +986,9 @@
                                             </h3>
                                             <p class="text-xs italic opacity-90 truncate">${escapeHtml(obs.scientificName)}</p>
                                         </div>
-                                        <div class="bg-emerald-500/90 font-bold px-3 py-1 rounded-full text-sm shadow-lg backdrop-blur-sm shrink-0">
-                                            ${obs.sampleSize ? escapeHtml(obs.sampleSize) : Number(obs.count || 1)}
-                                        </div>
+                                        ${sizeBadge ? `<div class="bg-emerald-500/90 font-bold px-3 py-1 rounded-full text-sm shadow-lg backdrop-blur-sm shrink-0">
+                                            ${sizeBadge}
+                                        </div>` : ''}
                                     </div>
                                     <div class="absolute top-3 right-3 flex gap-1">
                                         <div class="bg-black/50 p-1.5 rounded-full backdrop-blur-sm text-white/90">
@@ -948,9 +1007,9 @@
                                         </h3>
                                         <p class="text-sm italic text-gray-500 truncate">${escapeHtml(obs.scientificName)}</p>
                                     </div>
-                                    <div class="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full text-sm shrink-0">
-                                        ${obs.sampleSize ? escapeHtml(obs.sampleSize) : Number(obs.count || 1)}
-                                    </div>
+                                    ${sizeBadge ? `<div class="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full text-sm shrink-0">
+                                        ${sizeBadge}
+                                    </div>` : ''}
                                 </div>
                             `}
                             
@@ -959,6 +1018,7 @@
                                 ${obs.order ? `<span class="flex items-center gap-1 border border-transparent px-1 rounded bg-gray-100">${escapeHtml(obs.order)}</span>` : ''}
                                 ${obs.family ? `<span class="flex items-center gap-1 border border-transparent px-1 rounded ${famColor}">${escapeHtml(obs.family)}</span>` : ''}
                                 ${obs.sampleSize ? `<span class="bg-amber-50 px-2 py-1 rounded" title="Mida de la mostra">Mostra: ${escapeHtml(obs.sampleSize)}</span>` : ''}
+                                ${!sizeBadge ? '<span class="bg-gray-100 px-2 py-1 rounded">Mida no indicada</span>' : ''}
                                 ${obs.isBimbo ? '<span class="bg-yellow-100 text-yellow-900 px-2 py-1 rounded font-bold">★ BIMBO</span>' : ''}
                                 ${obs.timeOfDay ? `<span class="bg-sky-50 px-2 py-1 rounded">${obs.timeOfDay === 'M' ? 'Matí' : obs.timeOfDay === 'T' ? 'Tarda' : escapeHtml(obs.timeOfDay)}</span>` : ''}
                                 ${obs.latitude != null && obs.longitude != null ? `<span class="text-emerald-700">GPS</span>` : ''}
@@ -1036,31 +1096,31 @@
             }
         };
 
-        const seenSpecies = () => new Set(state.observations.map(o => norm(o.species)));
-        const hasObservedBird = bird => state.observations.some(o => norm(o.species) === norm(bird.commonName) || (o.scientificName && bird.scientificName && norm(o.scientificName) === norm(bird.scientificName)));
         const renderGuide = () => {
-            const seen = seenSpecies();
+            const seen = observedSpeciesKeys(state.observations);
+            const discovered = birdDb.filter(bird => seen.has(speciesKey(bird))).length;
             const search = norm(document.getElementById('guide-search').value);
             const filtered = birdDb.filter(b => {
-                const isSeen = hasObservedBird(b);
+                const isSeen = seen.has(speciesKey(b));
                 return (guideFilter === 'all' || (guideFilter === 'seen' ? isSeen : !isSeen)) &&
                     [b.commonName, b.scientificName, b.order].some(x => norm(x).includes(search));
             });
             const milestones = [10,25,50,100,200];
-            const earned = milestones.filter(n => seen.size >= n);
-            const next = milestones.find(n => seen.size < n);
-            const progress = birdDb.length ? Math.min(100, Math.round(seen.size / birdDb.length * 100)) : 0;
-            document.getElementById('dex-progress').innerHTML = `<div class="font-bold">Avitèdex: ${seen.size} de ${birdDb.length} espècies descobertes</div><div class="h-2 bg-white rounded-full mt-2 overflow-hidden"><div class="h-full bg-emerald-600" style="width:${progress}%"></div></div><div class="mt-2 text-xs">${earned.length ? `Insígnies: ${earned.map(n => `${n} espècies`).join(' · ')}` : 'La primera insígnia arriba amb 10 espècies.'}${next ? ` · Següent objectiu: ${next}` : ''}</div>`;
-            document.getElementById('guide-count-label').textContent = `Mostrant ${filtered.length} espècies`;
+            const earned = milestones.filter(n => discovered >= n);
+            const next = milestones.find(n => discovered < n);
+            const progress = birdDb.length ? Math.round(discovered / birdDb.length * 100) : 0;
+            document.getElementById('dex-progress').innerHTML = `<div class="font-bold">Avitèdex: ${discovered} de ${birdDb.length} espècies descobertes</div><div class="h-2 bg-white rounded-full mt-2 overflow-hidden"><div class="h-full bg-emerald-600" style="width:${progress}%"></div></div><div class="mt-2 text-xs">${earned.length ? `Insígnies: ${earned.map(n => `${n} espècies`).join(' · ')}` : 'La primera insígnia arriba amb 10 espècies.'}${next ? ` · Següent objectiu: ${next}` : ''}</div>`;
+            const speciesLabel = filtered.length === 1 ? 'espècie' : 'espècies';
+            document.getElementById('guide-count-label').textContent = `Mostrant ${filtered.length} ${speciesLabel}`;
             document.getElementById('guide-list').innerHTML = filtered.map((b) => {
                 const index = birdDb.indexOf(b);
-                const isSeen = hasObservedBird(b);
+                const isSeen = seen.has(speciesKey(b));
                 return `<button type="button" data-bird-index="${index}" class="bird-card w-full text-left rounded-xl border p-3 flex items-center gap-3 ${isSeen ? 'bg-white border-emerald-200' : 'bg-gray-100 border-gray-200'}">
                     <div class="w-14 h-14 rounded-lg flex items-center justify-center ${isSeen ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-400'}"><i data-lucide="${isSeen ? 'bird' : 'lock-keyhole'}" class="w-7 h-7"></i></div>
                     <div class="min-w-0 flex-1"><div class="font-bold truncate">#${String(index + 1).padStart(3,'0')} ${escapeHtml(b.commonName)}</div><div class="text-xs italic text-gray-500 truncate">${escapeHtml(b.scientificName || 'Nom científic pendent')}</div><div class="text-xs mt-1">${escapeHtml(b.order || 'Ordre pendent')} · ${isSeen ? 'Vista' : 'Pendent'}</div></div></button>`;
             }).join('');
             document.querySelectorAll('.bird-card').forEach(el => el.addEventListener('click', () => {
-                state.selectedBirdIndex = Number(el.dataset.birdIndex);
+                state.selectedBird = birdDb[Number(el.dataset.birdIndex)];
                 renderBirdDetail();
                 UI.switchView('view-bird-detail', 'Fitxa de l’ocell');
             }));
@@ -1068,11 +1128,41 @@
         };
 
         const renderBirdDetail = () => {
-            const bird = birdDb[state.selectedBirdIndex];
-            if (!bird) return;
-            const entries = state.observations.filter(o => norm(o.species) === norm(bird.commonName) || (o.scientificName && bird.scientificName && norm(o.scientificName) === norm(bird.scientificName))).sort((a,b) => String(b.date).localeCompare(String(a.date)));
+            if (!state.selectedBird) return;
+            const key = speciesKey(state.selectedBird);
+            const bird = birdsBySpeciesKey.get(key) || state.selectedBird;
+            const entries = state.observations.filter(o => speciesKey(o) === key)
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
             const places = new Set(entries.map(o => norm(o.location)).filter(Boolean));
-            document.getElementById('bird-detail').innerHTML = `<div class="bg-white border rounded-2xl p-5 mb-4"><div class="w-24 h-24 rounded-xl bg-emerald-50 border border-dashed border-emerald-200 flex items-center justify-center text-emerald-600 mb-4"><i data-lucide="${entries.length ? 'bird' : 'lock-keyhole'}" class="w-12 h-12"></i></div><h2 class="text-2xl font-bold">${escapeHtml(bird.commonName)}</h2><p class="italic text-gray-500">${escapeHtml(bird.scientificName || '')}</p><p class="text-sm mt-2">${escapeHtml(bird.order || 'Ordre pendent')}</p><div class="grid grid-cols-3 gap-2 mt-5 text-center text-sm"><div class="bg-emerald-50 rounded-lg p-2"><b>${entries.length}</b><br>observacions</div><div class="bg-emerald-50 rounded-lg p-2"><b>${places.size}</b><br>llocs</div><div class="bg-emerald-50 rounded-lg p-2"><b>${new Set(entries.map(o=>o.date)).size}</b><br>dies</div></div></div><h3 class="font-bold mb-2">Historial</h3>${entries.length ? entries.map(o => `<div class="bg-white border rounded-xl p-3 mb-2 text-sm"><b>${escapeHtml(o.date)}</b> · ${escapeHtml(o.location || 'Lloc no indicat')} ${o.isBimbo ? '<b class="text-amber-700">★ BIMBO</b>' : ''}<div class="text-gray-600 mt-1">${o.sampleSize ? `Mostra ${escapeHtml(o.sampleSize)}` : `${Number(o.count || 1)} individus`} · ${o.timeOfDay === 'M' ? 'Matí' : o.timeOfDay === 'T' ? 'Tarda' : 'Horari no indicat'} · ${o.type === 'auditiva' ? 'Sentit' : o.type === 'visual' ? 'Vist' : 'No indicat'}${o.latitude != null ? ' · GPS' : ''}</div></div>`).join('') : '<p class="text-sm text-gray-500">Encara no hi ha observacions.</p>'}`;
+            const history = entries.map(o => {
+                const count = observationCount(o);
+                let size = 'Mida no indicada';
+                if (o.sampleSize) size = `Mostra ${escapeHtml(o.sampleSize)}`;
+                else if (count !== null) size = `${count} ${count === 1 ? 'individu' : 'individus'}`;
+                const time = o.timeOfDay === 'M' ? 'Matí' : o.timeOfDay === 'T' ? 'Tarda' : 'Horari no indicat';
+                const type = o.type === 'auditiva' ? 'Sentit' : o.type === 'visual' ? 'Vist' : 'No indicat';
+                return `<div class="bg-white border rounded-xl p-3 mb-2 text-sm">
+                    <b>${escapeHtml(o.date)}</b> · ${escapeHtml(o.location || 'Lloc no indicat')}
+                    ${o.isBimbo ? '<b class="text-amber-700">★ BIMBO</b>' : ''}
+                    <div class="text-gray-600 mt-1">${size} · ${time} · ${type}${o.latitude != null ? ' · GPS' : ''}</div>
+                </div>`;
+            }).join('');
+            document.getElementById('bird-detail').innerHTML = `
+                <div class="bg-white border rounded-2xl p-5 mb-4">
+                    <div class="w-24 h-24 rounded-xl bg-emerald-50 border border-dashed border-emerald-200 flex items-center justify-center text-emerald-600 mb-4">
+                        <i data-lucide="${entries.length ? 'bird' : 'lock-keyhole'}" class="w-12 h-12"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold">${escapeHtml(bird.commonName)}</h2>
+                    <p class="italic text-gray-500">${escapeHtml(bird.scientificName || '')}</p>
+                    <p class="text-sm mt-2">${escapeHtml(bird.order || 'Ordre pendent')}</p>
+                    <div class="grid grid-cols-3 gap-2 mt-5 text-center text-sm">
+                        <div class="bg-emerald-50 rounded-lg p-2"><b>${entries.length}</b><br>observacions</div>
+                        <div class="bg-emerald-50 rounded-lg p-2"><b>${places.size}</b><br>llocs</div>
+                        <div class="bg-emerald-50 rounded-lg p-2"><b>${new Set(entries.map(o => o.date)).size}</b><br>dies</div>
+                    </div>
+                </div>
+                <h3 class="font-bold mb-2">Historial</h3>
+                ${history || '<p class="text-sm text-gray-500">Encara no hi ha observacions.</p>'}`;
             if(window.lucide) lucide.createIcons();
         };
         ['all','seen','unseen'].forEach(value => document.getElementById(`guide-filter-${value}`).addEventListener('click', () => {
@@ -1104,8 +1194,9 @@
                 localStorage.setItem('aviteca_custom_birds', JSON.stringify(customBirds));
             } catch(e) { /* Silenci si l'iframe bloqueja l'escriptura */ }
 
-            birdDb.push(nou);
-            birdDb.sort((a,b)=>a.commonName.localeCompare(b.commonName));
+            loadBirds();
+            updateStats();
+            renderObservations();
             
             document.getElementById('form-custom-species').reset();
             document.getElementById('modal-custom-species').classList.add('hidden');
@@ -1211,13 +1302,11 @@
                 const catalogSheet = workbook.Sheets['BASE DE DADES'];
                 if (!obsSheet || !catalogSheet) throw new Error('Calen les pestanyes «LLISTA AVIFAUNA» i «BASE DE DADES».');
                 const rows = XLSX.utils.sheet_to_json(obsSheet,{defval:'',raw:true});
-                const catalogRows = XLSX.utils.sheet_to_json(catalogSheet,{defval:'',raw:true});
                 const expected = ['Ordre','Nom comú','Nom científic','Data','Mida de la mostra','Horari','Ubicació','Observació'];
                 if (!expected.every(key => Object.hasOwn(rows[0] || {}, key))) throw new Error(`Falten columnes: ${expected.filter(key => !Object.hasOwn(rows[0] || {},key)).join(', ')}`);
                 const invalid = rows.map((r,i) => (!r['Nom comú'] || !excelDate(r.Data) || !r.Ubicació ? i+2 : null)).filter(Boolean);
                 if (invalid.length) throw new Error(`Files incompletes o amb data no reconeguda: ${invalid.slice(0,8).join(', ')}${invalid.length > 8 ? '…' : ''}`);
-                const catalogCount = new Set([...catalogRows, ...rows].map(r => norm(r['Nom científic']) || norm(r['Nom comú'])).filter(Boolean)).size;
-                const summary = `${rows.length} observacions. El catàleg públic conté ${catalogCount} espècies. Les observacions s’afegiran al teu compte de Firebase. Si ja hi són per una altra via, podrien aparèixer duplicades. Vols continuar?`;
+                const summary = `${rows.length} observacions s’afegiran al teu compte de Firebase. Si ja hi són per una altra via, podrien aparèixer duplicades. Vols continuar?`;
                 if (!confirm(summary)) return;
                 UI.loading.classList.remove('hidden');
                 document.getElementById('loading-text').textContent = 'Important Excel…';
@@ -1229,7 +1318,7 @@
                     const id = `excel-${hash}-${i+2}`;
                     const rawType = String(r.Observació || '').trim();
                     const isBimbo = obsSheet[`D${i+2}`]?.s?.fgColor?.rgb === 'FFD966';
-                    const obs = {id, species:String(r['Nom comú']).trim(), scientificName:String(r['Nom científic'] || '').trim(), order:String(r.Ordre || '').trim(), family:'', date:excelDate(r.Data), sampleSize:String(r['Mida de la mostra'] || '').trim(), timeOfDay:String(r.Horari || '').trim(), location:String(r.Ubicació || '').trim(), type:norm(rawType) === 'sentit' ? 'auditiva' : norm(rawType) === 'vist' ? 'visual' : '', observationLabel:rawType, isBimbo, count:1, source:'excel', sourceRow:i+2, checklistId:null, createdAt:new Date().toISOString()};
+                    const obs = {id, species:String(r['Nom comú']).trim(), scientificName:String(r['Nom científic'] || '').trim(), order:String(r.Ordre || '').trim(), family:'', date:excelDate(r.Data), sampleSize:String(r['Mida de la mostra'] || '').trim(), timeOfDay:String(r.Horari || '').trim(), location:String(r.Ubicació || '').trim(), type:norm(rawType) === 'sentit' ? 'auditiva' : norm(rawType) === 'vist' ? 'visual' : '', observationLabel:rawType, isBimbo, count:null, source:'excel', sourceRow:i+2, checklistId:null, createdAt:new Date().toISOString()};
                     writes.push([doc(db,'artifacts',appId,'users',uid,'bird_observations',id),obs]);
                 });
                 for (let i=0;i<writes.length;i+=400) {
@@ -1247,32 +1336,46 @@
         // --- Estadístiques ---
         const updateStats = () => {
             const totalObs = state.observations.length;
-            const speciesSet = new Set(state.observations.map(o => o.species));
-            
-            // Top espècie
-            const speciesCount = {};
-            state.observations.forEach(o => { speciesCount[o.species] = (speciesCount[o.species] || 0) + 1; });
-            let topSpecies = '-'; let maxCount = 0;
-            for (const [sp, count] of Object.entries(speciesCount)) { if (count > maxCount) { maxCount = count; topSpecies = `${sp} (${count})`; } }
-            
-            // Lloc amb més varietat d'espècies
-            const locSpecies = {}; // { lloc: Set() }
-            state.observations.forEach(o => {
-                if(o.location) {
-                    if(!locSpecies[o.location]) locSpecies[o.location] = new Set();
-                    locSpecies[o.location].add(o.species);
+            const speciesCounts = new Map();
+            const speciesByLocation = new Map();
+            for (const observation of state.observations) {
+                const key = speciesKey(observation);
+                if (!key) continue;
+                if (!speciesCounts.has(key)) {
+                    const name = birdsBySpeciesKey.get(key)?.commonName || observation.species;
+                    speciesCounts.set(key, {name, count: 0});
                 }
-            });
-            let topLoc = '-'; let maxLocVariety = 0;
-            for (const [loc, sSet] of Object.entries(locSpecies)) { 
-                if (sSet.size > maxLocVariety) { maxLocVariety = sSet.size; topLoc = loc; } 
+                speciesCounts.get(key).count++;
+                if (observation.location) {
+                    if (!speciesByLocation.has(observation.location)) speciesByLocation.set(observation.location, new Set());
+                    speciesByLocation.get(observation.location).add(key);
+                }
+            }
+
+            let topSpecies = '-';
+            let maxCount = 0;
+            for (const {name, count} of speciesCounts.values()) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    topSpecies = `${name} (${count})`;
+                }
+            }
+
+            let topLoc = '-';
+            let maxLocVariety = 0;
+            for (const [location, species] of speciesByLocation) {
+                if (species.size > maxLocVariety) {
+                    maxLocVariety = species.size;
+                    topLoc = location;
+                }
             }
 
             document.getElementById('stat-total-obs').innerText = totalObs;
-            document.getElementById('stat-diff-species').innerText = speciesSet.size;
+            document.getElementById('stat-diff-species').innerText = speciesCounts.size;
             document.getElementById('stat-top-species').innerText = topSpecies;
             document.getElementById('stat-top-location').innerText = topLoc;
-            document.getElementById('stat-top-location-sub').innerText = maxLocVariety > 0 ? `${maxLocVariety} espècies diferents` : '';
+            const varietyLabel = maxLocVariety === 1 ? '1 espècie' : `${maxLocVariety} espècies diferents`;
+            document.getElementById('stat-top-location-sub').innerText = maxLocVariety > 0 ? varietyLabel : '';
         };
 
         // ==========================================
@@ -1337,8 +1440,8 @@
             if (!state.user || !selectedSpeciesForObs) return;
 
             const btn = document.getElementById('btn-save-obs');
-            const origText = document.getElementById('text-save-obs').innerText;
-            btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div>`;
+            const saveLabel = document.getElementById('text-save-obs');
+            saveLabel.textContent = 'Desant…';
             btn.disabled = true;
 
             const isEdit = !!state.editingObsId;
@@ -1349,7 +1452,7 @@
                 scientificName: document.getElementById('input-scientific').value,
                 family: document.getElementById('input-family').value,
                 order: document.getElementById('input-order').value,
-                count: parseInt(document.getElementById('input-count').value || 1),
+                count: document.getElementById('input-count').valueAsNumber || null,
                 sampleSize: document.getElementById('input-sample-size').value,
                 timeOfDay: document.getElementById('input-time').value,
                 date: document.getElementById('input-date').value,
@@ -1369,8 +1472,10 @@
                 obs.id = id;
                 obs.checklistId = null;
                 obs.createdAt = new Date().toISOString();
-                obs.isBimbo = !hasObservedBird({commonName:obs.species,scientificName:obs.scientificName});
+                obs.isBimbo = !observedSpeciesKeys(state.observations).has(speciesKey(obs));
                 if(!obs.photo) obs.photo = null;
+            } else if (state.observations.find(o => o.id === id)?.source === 'excel') {
+                obs.countConfirmed = obs.count !== null;
             }
 
             try {
@@ -1393,8 +1498,7 @@
                     alert("Error al guardar l'observació.");
                 }
             } finally {
-                btn.innerHTML = `<i data-lucide="save" class="w-5 h-5"></i><span id="text-save-obs">${origText}</span>`;
-                if(window.lucide) lucide.createIcons();
+                saveLabel.textContent = state.editingObsId ? 'Actualitzar' : 'Guardar Observació';
                 btn.disabled = false;
             }
         });
@@ -1429,7 +1533,7 @@
             document.getElementById('input-scientific').value = obs.scientificName || '';
             document.getElementById('input-family').value = obs.family || '';
             document.getElementById('input-order').value = obs.order || '';
-            document.getElementById('input-count').value = obs.count;
+            document.getElementById('input-count').value = observationCount(obs) ?? '';
             document.getElementById('input-sample-size').value = obs.sampleSize || '';
             document.getElementById('input-time').value = obs.timeOfDay || '';
             document.getElementById('input-date').value = obs.date;
