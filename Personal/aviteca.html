@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=2">
+    <link rel="stylesheet" href="./aviteca.css?v=3">
 </head>
 <body class="overflow-hidden">
 
@@ -361,7 +361,7 @@
                 <div class="guide-tools">
                     <label class="search-field">
                         <i data-lucide="search" aria-hidden="true"></i>
-                        <input type="search" id="guide-search" placeholder="Cerca al catàleg..." aria-label="Cerca al catàleg">
+                        <input type="search" id="guide-search" placeholder="Cerca pel nom de l’ocell…" aria-label="Cerca pel nom català, castellà, anglès o científic">
                     </label>
                     <button id="btn-open-custom-species" class="action icon-button" aria-label="Afegeix una espècie" title="Afegeix una espècie">
                         <i data-lucide="plus" aria-hidden="true"></i><span class="header-action-label">Afegeix espècie</span>
@@ -550,7 +550,9 @@
         let guideFilter = 'all';
         let birdsBySpeciesKey = new Map();
         let catalogKeysByName = new Map();
+        let previousScienceByName = new Map();
         let observedKeysByName = new Map();
+        const displayScience = bird => bird.scientificName || bird.guideScientificName || '';
 
         const speciesKey = bird => {
             const name = commonNameKey(bird);
@@ -558,6 +560,7 @@
             const scientificKey = science ? `scientific:${science}` : '';
 
             // El nom comú també permet enllaçar registres antics amb la fitxa actual.
+            if (science && previousScienceByName.get(name) === science) return catalogKeysByName.get(name);
             if (birdsBySpeciesKey.has(scientificKey)) return scientificKey;
             return catalogKeysByName.get(name) || scientificKey ||
                 observedKeysByName.get(name) || (name ? `common:${name}` : '');
@@ -577,11 +580,28 @@
         const observedSpeciesKeys = observations => new Set(observations.map(speciesKey).filter(Boolean));
 
         const loadBirds = () => {
-            const birdsByName = new Map();
-            for (const bird of [...(state.catalog.length ? state.catalog : birdDbBase), ...customBirds]) {
+            const catalog = state.catalog.length ? state.catalog : birdDbBase;
+            const catalogByName = new Map(catalog.map(b => [commonNameKey(b), b]));
+            const birdsByName = new Map(catalogByName);
+            const guidesByAlias = new Map();
+            previousScienceByName = new Map();
+            for (const bird of catalog) {
+                for (const alias of bird.guideAliases || []) guidesByAlias.set(norm(alias), bird);
+                if (bird.previousScientificName) previousScienceByName.set(commonNameKey(bird), norm(bird.previousScientificName));
+            }
+            for (const bird of customBirds) {
                 const name = commonNameKey(bird);
                 const previous = birdsByName.get(name);
-                birdsByName.set(name, {...previous, ...bird, scientificName: bird.scientificName || previous?.scientificName || ''});
+                const official = catalogByName.get(name);
+                const alias = guidesByAlias.get(name);
+                const matchesAlias = alias && (!bird.scientificName || scientificNameKey(alias) === scientificNameKey(bird));
+                // Els noms locals poden consultar la guia sense fusionar els seus historials.
+                birdsByName.set(name, {
+                    ...previous, ...bird,
+                    scientificName: official?.guide ? official.scientificName : (bird.scientificName || previous?.scientificName || ''),
+                    guide: official?.guide || (matchesAlias ? alias.guide : undefined),
+                    guideScientificName: matchesAlias ? alias.scientificName : ''
+                });
             }
             birdsBySpeciesKey = new Map();
             catalogKeysByName = new Map();
@@ -1090,7 +1110,7 @@
             const filtered = birdDb.map((bird, index) => ({bird, index})).filter(({bird}) => {
                 const isSeen = seen.has(speciesKey(bird));
                 return (guideFilter === 'all' || (guideFilter === 'seen' ? isSeen : !isSeen)) &&
-                    [bird.commonName, bird.scientificName, bird.order].some(text => norm(text).includes(search));
+                    [bird.commonName, displayScience(bird), bird.guide?.spanishName, bird.guide?.englishName, bird.order].some(text => norm(text).includes(search));
             });
             const milestones = [10,25,50,100,200];
             const earned = milestones.filter(n => discovered >= n);
@@ -1118,7 +1138,7 @@
                     ${birdArtwork(bird, isSeen, index + 1)}
                     <div class="bird-card-copy">
                         <div class="bird-card-name">${escapeHtml(bird.commonName)}</div>
-                        <div class="bird-card-science">${escapeHtml(bird.scientificName || 'Nom científic pendent')}</div>
+                        <div class="bird-card-science">${escapeHtml(displayScience(bird) || 'Nom científic pendent')}</div>
                     </div>
                 </button>`;
             }).join('') || '<p class="empty-state text-center">No hi ha cap espècie amb aquests filtres.</p>';
@@ -1134,6 +1154,7 @@
             if (!state.selectedBird) return;
             const key = speciesKey(state.selectedBird);
             const bird = birdsBySpeciesKey.get(key) || state.selectedBird;
+            const guide = bird.guide;
             const entries = state.observations.filter(o => speciesKey(o) === key)
                 .sort((a, b) => String(b.date).localeCompare(String(a.date)));
             const places = new Set(entries.map(o => norm(o.location)).filter(Boolean));
@@ -1155,7 +1176,11 @@
                     ${birdArtwork(bird, entries.length > 0, birdDb.indexOf(bird) + 1)}
                     <div class="bird-detail-info">
                         <h2>${escapeHtml(bird.commonName)}</h2>
-                        <p class="italic">${escapeHtml(bird.scientificName || 'Nom científic pendent')}</p>
+                        <p class="italic" lang="la">${escapeHtml(displayScience(bird) || 'Nom científic pendent')}</p>
+                        ${guide ? `<dl class="bird-names">
+                            <div><dt>Castellà</dt><dd lang="es">${escapeHtml(guide.spanishName)}</dd></div>
+                            <div><dt>Anglès</dt><dd lang="en">${escapeHtml(guide.englishName)}</dd></div>
+                        </dl>` : ''}
                         <p class="text-sm mt-2">${escapeHtml(bird.order || 'Ordre pendent')}</p>
                         <dl class="bird-detail-stats">
                             <div class="stat-tile"><dt>Observacions</dt><dd>${entries.length}</dd></div>
@@ -1164,6 +1189,28 @@
                         </dl>
                     </div>
                 </div>
+                ${guide ? `<section class="field-guide panel" aria-labelledby="guide-identification">
+                    <h3 id="guide-identification">Com reconèixer l’ocell</h3>
+                    <p class="field-description">${escapeHtml(guide.description)}</p>
+                    <div class="field-photos">${guide.photos.map(photo => {
+                        const file = `./aviteca-fotos/${encodeURIComponent(photo.file)}`;
+                        const alt = `${bird.commonName} · ${photo.caption}`;
+                        return `<figure>
+                            <a class="field-photo-link" href="${file}" target="_blank" rel="noopener" aria-label="Amplia la fotografia de ${escapeHtml(alt)}">
+                                <img src="${file}" width="${photo.width}" height="${photo.height}" alt="${escapeHtml(alt)}" decoding="async">
+                                <span class="photo-enlarge" aria-hidden="true"><i data-lucide="maximize-2"></i></span>
+                            </a>
+                            <figcaption><strong>${escapeHtml(photo.caption)}</strong>
+                                <span><a href="${escapeHtml(photo.source)}" target="_blank" rel="noopener">${escapeHtml(photo.author || 'Wikimedia Commons')}</a>
+                                · <a href="${escapeHtml(photo.licenseUrl)}" target="_blank" rel="noopener">${escapeHtml(photo.license === 'Public domain' ? 'Domini públic' : photo.license)}</a></span>
+                            </figcaption>
+                        </figure>`;
+                    }).join('')}</div>
+                    <p class="guide-sources">Per saber-ne més · ${guide.sources.map(source =>
+                        `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">${escapeHtml(source.name)}</a>`
+                    ).join(' · ')}</p>
+                    <p class="photo-format">Fotografies reduïdes i convertides a WebP. Els crèdits enllacen amb els originals.</p>
+                </section>` : ''}
                 <h3 class="font-bold mb-2">Historial</h3>
                 ${history || '<p class="text-sm text-gray-500">Encara no hi ha observacions.</p>'}`;
             if(window.lucide) lucide.createIcons();
