@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=5">
+    <link rel="stylesheet" href="./aviteca.css?v=6">
 </head>
 <body class="overflow-hidden">
 
@@ -392,7 +392,7 @@
                 </div>
             </div>
 
-            <div id="view-bird-detail" class="app-view narrow-view hidden fade-in">
+            <div id="view-bird-detail" class="app-view hidden fade-in">
                 <button id="btn-back-guide" class="action mb-4"><i data-lucide="arrow-left" aria-hidden="true"></i> Torna a l’Avitèdex</button>
                 <div id="bird-detail"></div>
             </div>
@@ -600,6 +600,7 @@
                     ...previous, ...bird,
                     scientificName: official?.guide ? official.scientificName : (bird.scientificName || previous?.scientificName || ''),
                     sprite: official?.sprite || (matchesAlias ? alias.sprite : bird.sprite),
+                    family: official?.family || (matchesAlias ? alias.family : bird.family),
                     guide: official?.guide || (matchesAlias ? alias.guide : undefined),
                     guideScientificName: matchesAlias ? alias.scientificName : ''
                 });
@@ -618,7 +619,7 @@
         };
         const loadCatalog = async () => {
             try {
-                const response = await fetch('./aviteca-catalog.json?v=6');
+                const response = await fetch('./aviteca-catalog.json?v=7');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 state.catalog = await response.json();
                 loadBirds();
@@ -1173,38 +1174,74 @@
                     <div class="text-gray-600 mt-1">${size} · ${time} · ${type}${o.latitude != null ? ' · GPS' : ''}</div>
                 </div>`;
             }).join('');
+            const ecology = guide?.ecology;
+            const seen = observedSpeciesKeys(state.observations);
+            const monthNames = ['Gener', 'Febrer', 'Març', 'Abril', 'Maig', 'Juny', 'Juliol', 'Agost', 'Setembre', 'Octubre', 'Novembre', 'Desembre'];
+            const monthlyCounts = Array(12).fill(0);
+            for (const entry of entries) {
+                const month = String(entry.date || '').match(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/);
+                if (month) monthlyCounts[Number(month[1]) - 1]++;
+            }
+            const maxCount = Math.max(1, ...monthlyCounts);
+            const seasonLabels = { primavera: 'Primavera', estiu: 'Estiu', tardor: 'Tardor', hivern: 'Hivern', resident: 'Resident · tot l’any' };
+            const seasonTags = ecology ? ecology.seasons.filter(season => seasonLabels[season]).map(season =>
+                `<span class="season-tag season-${season}">${seasonLabels[season]}</span>`
+            ).join('') + (ecology.presenceLabel ? `<span class="season-tag season-irregular">${escapeHtml(ecology.presenceLabel)}</span>` : '') : '';
+            const sameGenus = candidate => displayScience(candidate).split(' ')[0] === displayScience(bird).split(' ')[0];
+            const familyMatches = birdDb.filter(candidate => speciesKey(candidate) !== key && candidate.family && candidate.family === bird.family);
+            const related = (familyMatches.length ? familyMatches : birdDb.filter(candidate =>
+                speciesKey(candidate) !== key && candidate.order && candidate.order === bird.order
+            )).sort((a, b) => Number(sameGenus(b)) - Number(sameGenus(a)) || a.commonName.localeCompare(b.commonName, 'ca')).slice(0, 8);
+            const relatedCards = related.map(candidate => {
+                const index = birdDb.indexOf(candidate);
+                const isSeen = seen.has(speciesKey(candidate));
+                return `<button type="button" data-related-index="${index}" class="bird-card ${isSeen ? 'is-seen' : 'is-pending'}">
+                    ${birdArtwork(candidate, isSeen, index + 1)}
+                    <div class="bird-card-copy"><div class="bird-card-name">${escapeHtml(candidate.commonName)}</div>
+                    <div class="bird-card-science" lang="la">${escapeHtml(displayScience(candidate))}</div></div>
+                </button>`;
+            }).join('');
             document.getElementById('bird-detail').innerHTML = `
-                <div class="bird-detail-panel panel">
-                    ${birdArtwork(bird, entries.length > 0, birdDb.indexOf(bird) + 1, true)}
+                <section class="bird-detail-panel bird-profile">
                     <div class="bird-detail-info">
+                        <p class="profile-status">${entries.length ? 'Descoberta' : 'Per descobrir'} · #${String(birdDb.indexOf(bird) + 1).padStart(3, '0')}</p>
                         <h2>${escapeHtml(bird.commonName)}</h2>
-                        <p class="italic" lang="la">${escapeHtml(displayScience(bird) || 'Nom científic pendent')}</p>
+                        <p class="profile-science" lang="la">${escapeHtml(displayScience(bird) || 'Nom científic pendent')}</p>
                         ${guide ? `<dl class="bird-names">
                             <div><dt>Castellà</dt><dd lang="es">${escapeHtml(guide.spanishName)}</dd></div>
                             <div><dt>Anglès</dt><dd lang="en">${escapeHtml(guide.englishName)}</dd></div>
                         </dl>` : ''}
-                        <p class="text-sm mt-2">${escapeHtml(bird.order || 'Ordre pendent')}</p>
-                        <dl class="bird-detail-stats">
-                            <div class="stat-tile"><dt>Observacions</dt><dd>${entries.length}</dd></div>
-                            <div class="stat-tile"><dt>Llocs</dt><dd>${places.size}</dd></div>
-                            <div class="stat-tile"><dt>Dies</dt><dd>${new Set(entries.map(o => o.date)).size}</dd></div>
-                        </dl>
+                        <p class="profile-taxonomy">${escapeHtml(bird.family || bird.order || 'Classificació pendent')}</p>
                     </div>
-                </div>
+                    <figure class="profile-calendar" aria-labelledby="profile-calendar-title">
+                        ${birdArtwork(bird, entries.length > 0, birdDb.indexOf(bird) + 1, true)}
+                        <div class="monthly-chart" role="img" aria-label="${escapeHtml(monthNames.map((month, index) => month + ': ' + monthlyCounts[index] + (monthlyCounts[index] === 1 ? ' observació' : ' observacions')).join('. '))}">
+                            ${monthlyCounts.map((count, index) => `<div class="month-column" title="${monthNames[index]} · ${count} ${count === 1 ? 'observació' : 'observacions'}">
+                                <div class="month-track"><span class="month-bar ${count ? 'has-observations' : ''}" style="height:${count ? Math.max(8, count / maxCount * 100) : 0}%"></span></div>
+                                <span class="month-label">${monthNames[index].slice(0, 3)}</span>
+                            </div>`).join('')}
+                        </div>
+                        <figcaption id="profile-calendar-title">Les vostres observacions per mes · tots els anys</figcaption>
+                        ${entries.length ? '' : '<p class="calendar-empty">Encara no hi heu registrat observacions.</p>'}
+                    </figure>
+                    <aside class="profile-introduction">
+                        <h3>Com reconèixer-lo</h3>
+                        <p class="field-description">${escapeHtml(guide?.description || 'Encara no hi ha una descripció per a aquesta espècie.')}</p>
+                    </aside>
+                </section>
+                <dl class="bird-detail-stats profile-facts">
+                    <div class="stat-tile"><dt>Observacions</dt><dd>${entries.length}</dd></div>
+                    <div class="stat-tile"><dt>Llocs on l’heu vist</dt><dd>${places.size}</dd></div>
+                    ${ecology?.wingspanCm ? `<div class="stat-tile"><dt>Envergadura</dt><dd>${escapeHtml(ecology.wingspanCm)} <span>cm</span></dd></div>` : `<div class="stat-tile"><dt>Dies amb observacions</dt><dd>${new Set(entries.map(o => o.date)).size}</dd></div>`}
+                    ${ecology ? `<div class="stat-tile"><dt>Longitud del cos</dt><dd>${escapeHtml(ecology.lengthCm)} <span>cm</span></dd></div>
+                    <div class="stat-tile profile-seasons"><dt>Quan el pots veure</dt><dd class="season-tags">${seasonTags}</dd></div>` : ''}
+                </dl>
+                ${ecology ? `<dl class="bird-ecology profile-ecology">
+                    <div><dt>Hàbitat habitual</dt><dd>${escapeHtml(ecology.habitat)}</dd></div>
+                    <div class="bird-phenology"><dt>Presència a Catalunya i Andorra</dt><dd><p class="phenology-note">${escapeHtml(ecology.seasonNote)}</p></dd></div>
+                </dl>` : ''}
                 ${guide ? `<section class="field-guide panel" aria-labelledby="guide-identification">
-                    <h3 id="guide-identification">Com reconèixer l’ocell</h3>
-                    <p class="field-description">${escapeHtml(guide.description)}</p>
-                    ${guide.ecology ? `<dl class="bird-ecology">
-                        <div><dt>Mida · longitud del cos</dt><dd>${escapeHtml(guide.ecology.lengthCm)} cm</dd></div>
-                        <div><dt>Hàbitat habitual</dt><dd>${escapeHtml(guide.ecology.habitat)}</dd></div>
-                        <div class="bird-phenology"><dt>Quan el pots veure · Catalunya i Andorra</dt><dd>
-                            <div class="season-tags">${guide.ecology.seasons.map(season => {
-                                const labels = { primavera: 'Primavera', estiu: 'Estiu', tardor: 'Tardor', hivern: 'Hivern', resident: 'Resident · tot l’any' };
-                                return labels[season] ? `<span class="season-tag season-${season}">${labels[season]}</span>` : '';
-                            }).join('')}${guide.ecology.presenceLabel ? `<span class="season-tag season-irregular">${escapeHtml(guide.ecology.presenceLabel)}</span>` : ''}</div>
-                            <p class="phenology-note">${escapeHtml(guide.ecology.seasonNote)}</p>
-                        </dd></div>
-                    </dl>` : ''}
+                    <h3 id="guide-identification">Fotografies d’identificació</h3>
                     <div class="field-photos">${guide.photos.map(photo => {
                         const file = `./aviteca-fotos/${encodeURIComponent(photo.file)}`;
                         const alt = `${bird.commonName} · ${photo.caption}`;
@@ -1224,8 +1261,18 @@
                     ).join(' · ')}</p>
                     <p class="photo-format">Fotografies reduïdes i convertides a WebP. Els crèdits enllacen amb els originals.</p>
                 </section>` : ''}
-                <h3 class="font-bold mb-2">Historial</h3>
+                ${related.length ? `<section class="profile-related" aria-labelledby="related-title">
+                    <div class="related-heading"><h3 id="related-title">Espècies relacionades</h3>
+                    <p>${familyMatches.length ? 'De la família ' + escapeHtml(bird.family) : 'Del mateix ordre'}</p></div>
+                    <div class="related-grid">${relatedCards}</div>
+                </section>` : ''}
+                <h3 class="font-bold mb-2">Les vostres observacions</h3>
                 ${history || '<p class="text-sm text-gray-500">Encara no hi ha observacions.</p>'}`;
+            document.querySelectorAll('[data-related-index]').forEach(button => button.addEventListener('click', () => {
+                state.selectedBird = birdDb[Number(button.dataset.relatedIndex)];
+                renderBirdDetail();
+                document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' });
+            }));
             if(window.lucide) lucide.createIcons();
         };
         const guideFilters = ['all', 'seen', 'unseen'];
