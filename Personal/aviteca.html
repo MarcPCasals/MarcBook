@@ -2,11 +2,11 @@
 <html lang="ca">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Aviteca - Registre Ornitològic</title>
     
     <!-- Meta tags per a PWA / Mòbil -->
-    <meta name="theme-color" content="#059669">
+    <meta name="theme-color" content="#18392b">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Aviteca">
@@ -19,132 +19,104 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #f3f4f6; 
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        /* Ocultar scrollbars per un disseny més net tipus App */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* Animacions suaus */
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Nav inferior actiu */
-        .nav-item.active { color: #059669; }
-        .nav-item.active .icon-container { background-color: #d1fae5; border-radius: 9999px; padding: 0.25rem 1rem; }
-
-        /* Loader */
-        .loader {
-            border: 3px solid #f3f3f3; border-top: 3px solid #059669;
-            border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* Toast personalitzat */
-        #toast-container { transition: all 0.3s ease; }
-        .toast-show { transform: translateY(0); opacity: 1; }
-        .toast-hide { transform: translateY(100%); opacity: 0; }
-        #observations-map { height: min(65vh, 540px); min-height: 320px; border-radius: 16px; z-index: 0; }
-        .leaflet-container { font-family: 'Inter', sans-serif; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+    <link rel="stylesheet" href="./aviteca.css">
 </head>
-<body class="text-gray-800 h-screen flex flex-col overflow-hidden bg-gray-50">
+<body class="overflow-hidden">
 
     <!-- PANTALLA DE CÀRREGA (Inicial) -->
-    <div id="loading-screen" class="fixed inset-0 bg-emerald-600 flex flex-col items-center justify-center z-50 text-white">
-        <i data-lucide="bird" class="w-16 h-16 mb-4 animate-bounce"></i>
+    <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center z-50 text-white" role="status">
+        <span class="brand-mark mb-4" aria-hidden="true"><i data-lucide="binoculars"></i></span>
         <h1 class="text-3xl font-bold tracking-wider mb-2">Aviteca</h1>
-        <div class="loader mt-4"></div>
-        <p id="loading-text" class="mt-4 text-emerald-200 text-sm font-medium">Carregant dades...</p>
+        <div class="loader mt-4" aria-hidden="true"></div>
+        <p id="loading-text" class="mt-4 text-sm font-medium">Carregant dades…</p>
     </div>
 
     <!-- PANTALLA D'AUTENTICACIÓ -->
-    <div id="auth-screen" class="hidden fixed inset-0 bg-white z-40 overflow-y-auto pb-20">
-        <div class="max-w-md mx-auto p-6 flex flex-col min-h-screen justify-center">
-            <div class="text-center mb-10">
-                <div class="inline-flex items-center justify-center w-20 h-20 bg-emerald-100 rounded-full mb-4 text-emerald-600">
-                    <i data-lucide="bird" class="w-10 h-10"></i>
-                </div>
-                <h2 class="text-2xl font-bold text-gray-900">Benvingut a Aviteca</h2>
-                <p class="text-gray-500 mt-2">El teu quadern de camp al núvol</p>
+    <div id="auth-screen" class="hidden fixed inset-0 z-40 overflow-y-auto">
+        <div class="auth-layout">
+            <div class="auth-brand field-scene">
+                <span class="brand-mark" aria-hidden="true"><i data-lucide="binoculars"></i></span>
+                <div class="auth-wordmark" aria-hidden="true">Aviteca<span>.</span></div>
+                <p>El teu quadern de camp</p>
             </div>
-            
+            <div class="auth-card">
+                <h2>Benvingut a Aviteca</h2>
             <form id="auth-form" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Correu electrònic</label>
-                    <input type="email" id="auth-email" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                    <label for="auth-email" class="block text-sm font-medium text-gray-700 mb-1">Correu electrònic</label>
+                    <input type="email" id="auth-email" autocomplete="username" required class="w-full p-3">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Contrasenya</label>
-                    <input type="password" id="auth-password" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                    <label for="auth-password" class="block text-sm font-medium text-gray-700 mb-1">Contrasenya</label>
+                    <input type="password" id="auth-password" autocomplete="current-password" required class="w-full p-3">
                 </div>
                 
-                <div id="auth-error" class="text-red-500 text-sm hidden font-medium text-center"></div>
+                <div id="auth-error" class="text-red-700 text-sm hidden font-medium text-center" role="alert"></div>
                 
-                <button type="submit" id="auth-submit-btn" class="w-full bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-emerald-700 transition-colors flex justify-center items-center">
-                    <span>Inicia Sessió</span>
+                <button type="submit" id="auth-submit-btn" class="action action-primary w-full">
+                    <span>Inicia sessió</span>
                 </button>
             </form>
             
             <div class="mt-6 text-center">
-                <button type="button" id="auth-google-btn" class="w-full bg-white text-gray-800 font-bold py-3 px-4 rounded-xl border border-gray-300 shadow-sm hover:bg-gray-50 mb-5">Continua amb Google</button>
+                <button type="button" id="auth-google-btn" class="action w-full mb-5">Continua amb Google</button>
                 <p class="text-sm text-gray-600">
                     <span id="auth-toggle-text">No tens compte?</span> 
                     <button type="button" id="auth-toggle-btn" class="text-emerald-600 font-bold hover:underline">Registra't aquí</button>
                 </p>
             </div>
+            </div>
         </div>
     </div>
 
     <!-- APLICACIÓ PRINCIPAL -->
-    <div id="app-screen" class="hidden flex-col h-full w-full max-w-md mx-auto bg-white shadow-xl relative">
+    <div id="app-screen" class="hidden">
         
         <!-- HEADER -->
-        <header class="bg-emerald-600 text-white p-4 shadow-md flex justify-between items-center z-10">
-            <div class="flex items-center gap-2">
-                <i data-lucide="bird" class="w-6 h-6"></i>
-                <h1 id="header-title" class="font-bold text-lg tracking-wide">Registre</h1>
+        <header class="app-header">
+            <div class="header-heading">
+                <span class="mobile-brand brand-mark" aria-hidden="true"><i data-lucide="binoculars"></i></span>
+                <h1 id="header-title" tabindex="-1">Registre de camp</h1>
             </div>
-            <div class="flex items-center gap-3">
-                <button id="btn-link-google" class="hidden text-xs bg-white/20 px-2 py-1 rounded-lg" title="Vincula aquest compte amb Google">Vincula Google</button>
-                <button id="btn-stats" class="p-2 hover:bg-emerald-700 rounded-full transition-colors">
-                    <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+            <div class="header-actions">
+                <button id="btn-link-google" class="action hidden" title="Vincula aquest compte amb Google">Vincula Google</button>
+                <button id="btn-stats" class="action icon-button" aria-label="Estadístiques" title="Estadístiques">
+                    <i data-lucide="chart-no-axes-column" aria-hidden="true"></i>
+                    <span class="header-action-label">Estadístiques</span>
                 </button>
-                <button id="btn-logout" class="p-2 hover:bg-emerald-700 rounded-full transition-colors">
-                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                <button id="btn-logout" class="action icon-button" aria-label="Tanca la sessió" title="Tanca la sessió">
+                    <i data-lucide="log-out" aria-hidden="true"></i>
                 </button>
             </div>
         </header>
 
         <!-- CONTINGUT PRINCIPAL (Vistes) -->
-        <main class="flex-1 overflow-y-auto bg-gray-50 pb-24 no-scrollbar relative" id="main-content">
+        <main id="main-content">
             
             <!-- VISTA: REGISTRE (OBSERVACIONS) -->
-            <div id="view-registry" class="p-4 space-y-4 fade-in">
-                
-                <!-- Cercador i Filtres -->
-                <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4 sticky top-0 z-10">
-                    <div class="flex gap-2">
-                        <div class="relative flex-1">
-                            <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
-                            <input type="text" id="filter-text" placeholder="Cerca per espècie o lloc..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
-                        </div>
-                        <button id="btn-toggle-filters" class="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 border border-gray-200 transition-colors">
-                            <i data-lucide="filter" class="w-5 h-5"></i>
+            <div id="view-registry" class="app-view fade-in">
+                <section class="registry-overview field-scene" aria-label="Resum del registre">
+                    <dl class="overview-totals">
+                        <div><dt>Observacions</dt><dd id="registry-total">—</dd></div>
+                        <div><dt>Espècies</dt><dd id="registry-species">—</dd></div>
+                    </dl>
+                </section>
+
+                <div class="registry-tools panel">
+                    <div class="registry-fields">
+                        <label class="search-field">
+                            <i data-lucide="search" aria-hidden="true"></i>
+                            <input type="search" id="filter-text" placeholder="Cerca per espècie o lloc..." aria-label="Cerca per espècie o lloc">
+                        </label>
+                        <select id="filter-location" aria-label="Ubicació"><option value="">Totes les ubicacions</option></select>
+                        <button id="btn-toggle-filters" class="action icon-button" aria-expanded="false" aria-controls="advanced-filters" aria-label="Filtres avançats">
+                            <i data-lucide="sliders-horizontal" aria-hidden="true"></i>
+                            <span class="header-action-label">Filtres</span>
                         </button>
                     </div>
-                    <div class="mt-2"><select id="filter-location" class="w-full p-2 bg-gray-50 border rounded-lg text-sm"><option value="">Totes les ubicacions</option></select><div id="location-summary" class="text-xs text-emerald-800 mt-1"></div></div>
 
                     <!-- Filtres avançats ocults per defecte -->
                     <div id="advanced-filters" class="hidden mt-3 pt-3 border-t border-gray-100 space-y-3">
@@ -154,11 +126,11 @@
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <div>
-                                <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Data inici</label>
+                                <label for="filter-date-start" class="text-xs text-gray-600 font-bold">Data d’inici</label>
                                 <input type="date" id="filter-date-start" class="w-full p-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none">
                             </div>
                             <div>
-                                <label class="text-[10px] text-gray-500 uppercase font-bold ml-1">Data fi</label>
+                                <label for="filter-date-end" class="text-xs text-gray-600 font-bold">Data final</label>
                                 <input type="date" id="filter-date-end" class="w-full p-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none">
                             </div>
                         </div>
@@ -166,31 +138,32 @@
                     </div>
                 </div>
 
-                <div id="observations-list" class="space-y-6">
+                <div id="location-summary" class="result-count" role="status"></div>
+                <div id="observations-list">
                     <!-- Targetes d'observació generades via JS -->
                 </div>
                 
-                <div id="empty-state-registry" class="hidden flex-col items-center justify-center py-10 text-gray-400 text-center">
-                    <i data-lucide="feather" class="w-16 h-16 mb-3 opacity-50"></i>
-                    <p class="text-lg font-medium">Cap observació registrada.</p>
-                    <p class="text-sm mt-1">Vés a l'apartat de "Nova" per començar.</p>
+                <div id="empty-state-registry" class="empty-state hidden flex-col items-center text-center">
+                    <i data-lucide="binoculars" aria-hidden="true"></i>
+                    <p id="empty-registry-title" class="text-lg font-bold">Cap observació registrada.</p>
+                    <p id="empty-registry-hint" class="text-sm">Toca «Nova» per registrar-ne una.</p>
                 </div>
             </div>
 
             <!-- VISTA: NOVA OBSERVACIÓ (I EDITAR) -->
-            <div id="view-new-obs" class="hidden p-4 fade-in">
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-                    <h2 id="new-obs-title" class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Nova Observació</h2>
+            <div id="view-new-obs" class="app-view narrow-view hidden fade-in">
+                <div class="panel form-panel">
+                    <h2 id="new-obs-title" class="sr-only">Nova observació</h2>
                     
                     <form id="form-new-obs" class="space-y-4">
                         
                         <!-- Tipus d'observació -->
                         <div class="flex gap-2">
-                            <label class="flex items-center justify-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-xl border border-gray-200 flex-1 hover:bg-emerald-50 transition-colors">
+                            <label class="choice-field">
                                 <input type="radio" name="input-type" value="visual" checked class="w-4 h-4 text-emerald-600 accent-emerald-600">
                                 <i data-lucide="eye" class="w-4 h-4 text-gray-600"></i> <span class="text-sm font-medium text-gray-700">Visual</span>
                             </label>
-                            <label class="flex items-center justify-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-xl border border-gray-200 flex-1 hover:bg-emerald-50 transition-colors">
+                            <label class="choice-field">
                                 <input type="radio" name="input-type" value="auditiva" class="w-4 h-4 text-emerald-600 accent-emerald-600">
                                 <i data-lucide="ear" class="w-4 h-4 text-gray-600"></i> <span class="text-sm font-medium text-gray-700">Auditiva</span>
                             </label>
@@ -198,7 +171,7 @@
 
                         <!-- Autocomplet d'Espècie -->
                         <div class="relative">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Espècie *</label>
+                            <label for="input-species" class="block text-sm font-bold text-gray-700 mb-1">Espècie *</label>
                             <input type="text" id="input-species" required placeholder="Escriu per cercar..." autocomplete="off" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
                             
                             <!-- Dropdown Resultats -->
@@ -214,27 +187,30 @@
 
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Quantitat</label>
+                                <label for="input-count" class="block text-sm font-medium text-gray-700 mb-1">Quantitat</label>
                                 <input type="number" id="input-count" min="1" value="1" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+                                <label for="input-date" class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
                                 <input type="date" id="input-date" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-medium text-gray-700 mb-1">Mida de la mostra</label><select id="input-sample-size" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"><option value="">Sense categoria</option><option value="*">* · 0–5</option><option value="**">** · 5–10</option><option value="***">*** · més de 10</option><option value="ND">ND · no comptat</option></select></div>
-                            <div><label class="block text-sm font-medium text-gray-700 mb-1">Horari</label><select id="input-time" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"><option value="">No indicat</option><option value="M">Matí</option><option value="T">Tarda</option></select></div>
+                            <div><label for="input-sample-size" class="block text-sm font-medium text-gray-700 mb-1">Mida de la mostra</label><select id="input-sample-size" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"><option value="">Sense categoria</option><option value="*">* · 0–5</option><option value="**">** · 5–10</option><option value="***">*** · més de 10</option><option value="ND">ND · no comptat</option></select></div>
+                            <div><label for="input-time" class="block text-sm font-medium text-gray-700 mb-1">Horari</label><select id="input-time" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl"><option value="">No indicat</option><option value="M">Matí</option><option value="T">Tarda</option></select></div>
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Ubicació</label>
+                            <label for="input-location" class="block text-sm font-medium text-gray-700 mb-1">Ubicació</label>
                             <div class="relative">
                                 <i data-lucide="map-pin" class="absolute left-3 top-3.5 text-gray-400 w-4 h-4"></i>
                                 <input type="text" id="input-location" placeholder="Ex: PN Aiguamolls..." class="w-full pl-9 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
                             </div>
-                            <button type="button" id="btn-capture-gps" class="mt-2 text-sm font-bold text-emerald-700">📍 Desa la posició GPS exacta</button><span id="gps-status" class="block text-xs text-gray-500 mt-1">Sense coordenades</span>
+                            <div class="flex flex-wrap items-center gap-2 mt-2">
+                                <button type="button" id="btn-capture-gps" class="action"><i data-lucide="locate-fixed" aria-hidden="true"></i> Afegeix la posició GPS</button>
+                                <span id="gps-status" class="text-sm text-gray-600" role="status">Sense coordenades</span>
+                            </div>
                         </div>
 
                         <div class="flex items-center gap-2 mt-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
@@ -243,7 +219,7 @@
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Notes addicionals</label>
+                            <label for="input-notes" class="block text-sm font-medium text-gray-700 mb-1">Notes addicionals</label>
                             <textarea id="input-notes" rows="2" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"></textarea>
                         </div>
 
@@ -265,11 +241,11 @@
                             </div>
                         </div>
 
-                        <button type="submit" id="btn-save-obs" class="w-full bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2 mt-6">
+                        <button type="submit" id="btn-save-obs" class="action action-primary w-full mt-6">
                             <i data-lucide="save" class="w-5 h-5"></i>
                             <span id="text-save-obs">Guardar Observació</span>
                         </button>
-                        <button type="button" id="btn-cancel-edit" class="hidden w-full bg-gray-200 text-gray-800 font-bold py-3.5 px-4 rounded-xl hover:bg-gray-300 transition-colors mt-2">
+                        <button type="button" id="btn-cancel-edit" class="action hidden w-full mt-2">
                             Cancel·lar Edició
                         </button>
                     </form>
@@ -277,45 +253,45 @@
             </div>
 
             <!-- VISTA: SORTIDES (CHECKLISTS) -->
-            <div id="view-checklists" class="hidden p-4 fade-in">
-                <button id="btn-new-checklist" class="w-full mb-6 bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2">
+            <div id="view-checklists" class="app-view hidden fade-in">
+                <button id="btn-new-checklist" class="action action-primary mb-5">
                     <i data-lucide="plus-circle" class="w-5 h-5"></i>
                     Nova Sortida de Camp
                 </button>
 
-                <div id="checklists-list" class="space-y-4">
+                <div id="checklists-list" class="observation-grid">
                     <!-- Targetes de sortides generades via JS -->
                 </div>
                 
-                <div id="empty-state-checklists" class="hidden flex-col items-center justify-center py-10 text-gray-400 text-center">
-                    <i data-lucide="list-checks" class="w-16 h-16 mb-3 opacity-50"></i>
+                <div id="empty-state-checklists" class="empty-state hidden flex-col items-center text-center">
+                    <i data-lucide="list-checks" aria-hidden="true"></i>
                     <p class="text-lg font-medium">Cap sortida registrada.</p>
                 </div>
             </div>
 
             <!-- VISTA: FORMULARI NOVA SORTIDA -->
-            <div id="view-new-checklist" class="hidden p-4 fade-in">
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div id="view-new-checklist" class="app-view narrow-view hidden fade-in">
+                <div class="panel form-panel">
                     <div class="flex items-center gap-3 mb-4 border-b pb-3">
-                        <button id="btn-back-checklists" class="p-2 bg-gray-100 rounded-full hover:bg-gray-200 text-gray-700">
+                        <button id="btn-back-checklists" class="action icon-button" aria-label="Torna a sortides">
                             <i data-lucide="arrow-left" class="w-5 h-5"></i>
                         </button>
-                        <h2 class="text-xl font-bold text-gray-800">Nova Sortida (Checklist)</h2>
+                        <h2 class="text-xl font-bold">Llista de camp</h2>
                     </div>
 
                     <form id="form-new-checklist" class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Nom de la Sortida *</label>
+                            <label for="check-name" class="block text-sm font-medium text-gray-700 mb-1">Nom de la sortida *</label>
                             <input type="text" id="check-name" required placeholder="Ex: Cens d'hivern al Delta" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+                                <label for="check-date" class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
                                 <input type="date" id="check-date" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Lloc</label>
+                                <label for="check-location" class="block text-sm font-medium text-gray-700 mb-1">Lloc</label>
                                 <input type="text" id="check-location" placeholder="Ex: Delta de l'Ebre" autocomplete="off" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
                             </div>
                         </div>
@@ -368,7 +344,7 @@
                             </div>
                         </div>
 
-                        <button type="submit" id="btn-save-checklist" class="w-full bg-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2 mt-4">
+                        <button type="submit" id="btn-save-checklist" class="action action-primary w-full mt-4">
                             <i data-lucide="save" class="w-5 h-5"></i>
                             Guardar Sortida i Observacions
                         </button>
@@ -377,131 +353,116 @@
             </div>
 
             <!-- VISTA: BASE DADES (GUIA D'AUS) -->
-            <div id="view-guide" class="hidden p-4 fade-in">
-                <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4 sticky top-0 z-10">
-                    <div class="flex gap-2">
-                        <div class="relative flex-1">
-                            <i data-lucide="search" class="absolute left-3 top-3 text-gray-400 w-5 h-5"></i>
-                            <input type="text" id="guide-search" placeholder="Cerca al catàleg..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-emerald-500 transition-colors">
+            <div id="view-guide" class="app-view hidden fade-in">
+                <section id="dex-progress" class="dex-overview field-scene" aria-label="Progrés de l’Avitèdex"></section>
+                <div class="guide-tools">
+                    <label class="search-field">
+                        <i data-lucide="search" aria-hidden="true"></i>
+                        <input type="search" id="guide-search" placeholder="Cerca al catàleg..." aria-label="Cerca al catàleg">
+                    </label>
+                    <button id="btn-open-custom-species" class="action icon-button" aria-label="Afegeix una espècie" title="Afegeix una espècie">
+                        <i data-lucide="plus" aria-hidden="true"></i><span class="header-action-label">Afegeix espècie</span>
+                    </button>
+                    <details class="data-menu">
+                        <summary class="action icon-button" aria-label="Dades del quadern" title="Dades del quadern">
+                            <i data-lucide="folder-open" aria-hidden="true"></i><span class="header-action-label">Dades</span>
+                        </summary>
+                        <div class="data-menu-items panel">
+                            <button id="btn-import-excel" class="action"><i data-lucide="file-spreadsheet" aria-hidden="true"></i> Importar Excel d’avifauna</button>
+                            <button id="btn-import-backup" class="action"><i data-lucide="upload" aria-hidden="true"></i> Importa una còpia JSON</button>
+                            <button id="btn-export" class="action"><i data-lucide="download" aria-hidden="true"></i> Descarrega una còpia JSON</button>
                         </div>
-                        <button id="btn-open-custom-species" class="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700 transition-colors" title="Afegir espècie manual">
-                            <i data-lucide="plus" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    
-                    <!-- BOTONS IMPORTAR / EXPORTAR -->
-                    <div class="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-                        <button id="btn-export" class="flex-1 bg-emerald-50 text-emerald-700 font-bold py-2 rounded-xl text-sm border border-emerald-100 hover:bg-emerald-100 transition-colors flex justify-center items-center gap-2">
-                            <i data-lucide="download" class="w-4 h-4"></i> Descarregar
-                        </button>
-                        <label for="input-import" class="flex-1 bg-gray-50 text-gray-700 font-bold py-2 rounded-xl text-sm border border-gray-200 hover:bg-gray-100 transition-colors flex justify-center items-center gap-2 cursor-pointer">
-                            <i data-lucide="upload" class="w-4 h-4"></i> Importar
-                        </label>
-                        <input type="file" id="input-import" accept=".json" class="hidden">
-                    </div>
-                    <label for="input-excel" class="block mt-3 bg-amber-50 text-amber-900 font-bold py-2 rounded-xl text-sm border border-amber-200 text-center cursor-pointer">Importar Excel d’avifauna</label>
+                    </details>
+                    <input type="file" id="input-import" accept=".json" class="hidden">
                     <input type="file" id="input-excel" accept=".xlsx,.xls" class="hidden">
                 </div>
-                <div id="dex-progress" class="mb-3 rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm text-emerald-900"></div>
-                <div class="flex gap-2 mb-3"><button id="guide-filter-all" class="flex-1 p-2 rounded-lg bg-emerald-600 text-white text-sm">Totes</button><button id="guide-filter-seen" class="flex-1 p-2 rounded-lg bg-white border text-sm">Vistes</button><button id="guide-filter-unseen" class="flex-1 p-2 rounded-lg bg-white border text-sm">Pendents</button></div>
-                
-                <div class="text-sm text-gray-500 mb-3 px-1 font-medium" id="guide-count-label"></div>
-                
-                <div id="guide-list" class="space-y-3">
+                <div class="guide-filter-bar">
+                    <div class="segmented-control" role="group" aria-label="Filtra per descobriment">
+                        <button id="guide-filter-all" aria-pressed="true">Totes</button>
+                        <button id="guide-filter-seen" aria-pressed="false">Vistes</button>
+                        <button id="guide-filter-unseen" aria-pressed="false">Pendents</button>
+                    </div>
+                    <div id="guide-count-label" class="result-count" role="status"></div>
+                </div>
+                <div id="guide-list" class="bird-grid">
                     <!-- Base de dades renderitzada aquí -->
                 </div>
             </div>
 
-            <div id="view-bird-detail" class="hidden p-4 fade-in"><button id="btn-back-guide" class="mb-4 text-emerald-700 font-bold">← Torna a l’Avitèdex</button><div id="bird-detail"></div></div>
-
-            <div id="view-map" class="hidden p-4 fade-in"><div class="bg-white p-3 rounded-xl border mb-3"><button id="btn-map-gps" class="bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-bold">Mostra la meva ubicació</button><p class="text-xs text-gray-500 mt-2">El mapa mostra els punts GPS de les teves observacions. Els llocs importats de l’Excel no tenen coordenades exactes.</p></div><div id="observations-map"></div><div id="map-summary" class="mt-3 text-sm text-gray-700"></div></div>
-
-            <!-- MODAL ESTADÍSTIQUES -->
-            <div id="modal-stats" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all fade-in">
-                    <div class="bg-emerald-600 p-4 text-white flex justify-between items-center">
-                        <h3 class="font-bold text-lg flex items-center gap-2"><i data-lucide="pie-chart"></i> Estadístiques</h3>
-                        <button id="btn-close-stats" class="text-white/80 hover:text-white p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
-                    </div>
-                    <div class="p-5 space-y-4">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
-                                <p class="text-[10px] text-emerald-800 font-bold uppercase tracking-wide">Obs. Totals</p>
-                                <p class="text-2xl font-black text-emerald-600" id="stat-total-obs">0</p>
-                            </div>
-                            <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center relative overflow-hidden">
-                                <div class="absolute -right-2 -top-2 opacity-10"><i data-lucide="award" class="w-12 h-12"></i></div>
-                                <p class="text-[10px] text-blue-800 font-bold uppercase tracking-wide relative z-10">Life List (Espècies)</p>
-                                <p class="text-2xl font-black text-blue-600 relative z-10" id="stat-diff-species">0</p>
-                            </div>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 flex justify-between items-center">
-                            <div>
-                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1">Més observada</p>
-                                <p class="font-bold text-gray-800 text-sm" id="stat-top-species">-</p>
-                            </div>
-                            <i data-lucide="trending-up" class="w-6 h-6 text-emerald-400"></i>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded-xl border border-gray-200">
-                            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wide mb-1">Millor ubicació (varietat)</p>
-                            <p class="font-bold text-gray-800 text-sm" id="stat-top-location">-</p>
-                            <p class="text-xs text-gray-500" id="stat-top-location-sub"></p>
-                        </div>
-                    </div>
-                </div>
+            <div id="view-bird-detail" class="app-view narrow-view hidden fade-in">
+                <button id="btn-back-guide" class="action mb-4"><i data-lucide="arrow-left" aria-hidden="true"></i> Torna a l’Avitèdex</button>
+                <div id="bird-detail"></div>
             </div>
 
-            <!-- MODAL AFEGIR ESPÈCIE MANUAL -->
-            <div id="modal-custom-species" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all fade-in p-5">
-                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-                        <h3 class="font-bold text-lg text-gray-800">Afegir Espècie Nova</h3>
-                        <button id="btn-close-custom-species" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
-                    </div>
-                    <form id="form-custom-species" class="space-y-3">
-                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Nom Comú *</label><input type="text" id="custom-common" required class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
-                        <div><label class="block text-xs font-bold text-gray-600 mb-1">Nom Científic</label><input type="text" id="custom-scientific" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-xs font-bold text-gray-600 mb-1">Família</label><input type="text" id="custom-family" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
-                            <div><label class="block text-xs font-bold text-gray-600 mb-1">Ordre</label><input type="text" id="custom-order" class="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none"></div>
-                        </div>
-                        <button type="submit" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-emerald-700 mt-2">Guardar a la Base de Dades</button>
-                    </form>
+            <div id="view-map" class="app-view hidden fade-in">
+                <div class="map-tools">
+                    <p id="map-summary" class="result-count" role="status"></p>
+                    <button id="btn-map-gps" class="action action-primary"><i data-lucide="locate-fixed" aria-hidden="true"></i> Mostra la meva ubicació</button>
                 </div>
+                <div id="observations-map"></div>
+                <p class="text-sm text-gray-600 mt-3">Al mapa hi apareixen les observacions amb coordenades GPS.</p>
             </div>
 
+            <dialog id="modal-stats" class="app-dialog" aria-labelledby="stats-title">
+                <div class="dialog-header">
+                    <h2 id="stats-title">Estadístiques</h2>
+                    <button id="btn-close-stats" class="action icon-button" aria-label="Tanca les estadístiques"><i data-lucide="x" aria-hidden="true"></i></button>
+                </div>
+                <div class="dialog-body space-y-4">
+                    <dl class="grid grid-cols-2 gap-3">
+                        <div class="stat-tile"><dt>Observacions</dt><dd id="stat-total-obs">0</dd></div>
+                        <div class="stat-tile"><dt>Espècies</dt><dd id="stat-diff-species">0</dd></div>
+                    </dl>
+                    <div class="info-tile"><h3>Espècie més observada</h3><p id="stat-top-species">—</p></div>
+                    <div class="info-tile"><h3>Lloc amb més espècies</h3><p id="stat-top-location">—</p><p id="stat-top-location-sub" class="text-sm"></p></div>
+                </div>
+            </dialog>
+
+            <dialog id="modal-custom-species" class="app-dialog" aria-labelledby="custom-species-title">
+                <div class="dialog-header">
+                    <h2 id="custom-species-title">Afegeix una espècie</h2>
+                    <button id="btn-close-custom-species" class="action icon-button" aria-label="Tanca el formulari"><i data-lucide="x" aria-hidden="true"></i></button>
+                </div>
+                <form id="form-custom-species" class="dialog-body space-y-3">
+                    <div><label for="custom-common">Nom comú *</label><input type="text" id="custom-common" required class="w-full p-2"></div>
+                    <div><label for="custom-scientific">Nom científic</label><input type="text" id="custom-scientific" class="w-full p-2"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label for="custom-family">Família</label><input type="text" id="custom-family" class="w-full p-2"></div>
+                        <div><label for="custom-order">Ordre</label><input type="text" id="custom-order" class="w-full p-2"></div>
+                    </div>
+                    <button type="submit" class="action action-primary w-full mt-2">Desa l’espècie</button>
+                </form>
+            </dialog>
         </main>
 
-        <!-- NAVEGACIÓ INFERIOR -->
-        <nav class="bg-white border-t border-gray-200 flex justify-around items-center p-2 pb-4 pt-3 fixed bottom-0 w-full max-w-md shadow-[0_-5px_15px_-10px_rgba(0,0,0,0.1)] z-20">
-            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors active" data-target="view-registry">
-                <div class="icon-container"><i data-lucide="list" class="w-6 h-6"></i></div>
-                <span class="text-[10px] font-medium mt-1">Registre</span>
-            </button>
-            
-            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-new-obs">
-                <div class="icon-container bg-emerald-600 text-white rounded-full p-3 -mt-6 shadow-lg shadow-emerald-200 border-4 border-white hover:bg-emerald-700 transform transition-transform hover:scale-105 active:scale-95">
-                    <i data-lucide="plus" class="w-6 h-6"></i>
-                </div>
-                <span class="text-[10px] font-medium mt-1">Nova</span>
-            </button>
-            
-            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-checklists">
-                <div class="icon-container"><i data-lucide="clipboard-list" class="w-6 h-6"></i></div>
-                <span class="text-[10px] font-medium mt-1">Sortides</span>
-            </button>
-            
-            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-guide">
-                <div class="icon-container"><i data-lucide="book-open" class="w-6 h-6"></i></div>
-                <span class="text-[10px] font-medium mt-1">Avitèdex</span>
-            </button>
-            <button class="nav-item flex flex-col items-center text-gray-400 transition-colors" data-target="view-map"><div class="icon-container"><i data-lucide="map" class="w-6 h-6"></i></div><span class="text-[10px] font-medium mt-1">Mapa</span></button>
+        <nav class="app-nav" aria-label="Navegació principal">
+            <div class="rail-brand" aria-hidden="true">
+                <span class="brand-mark"><i data-lucide="binoculars"></i></span>
+                <span class="rail-wordmark">Aviteca<span>.</span></span>
+            </div>
+            <div class="nav-items">
+                <button class="nav-item" data-target="view-registry" aria-current="page">
+                    <i data-lucide="notebook-pen" aria-hidden="true"></i><span>Registre</span>
+                </button>
+                <button class="nav-item" data-target="view-guide">
+                    <i data-lucide="grid-2x2" aria-hidden="true"></i><span>Avitèdex</span>
+                </button>
+                <button class="nav-item nav-primary" data-target="view-new-obs" aria-label="Nova observació">
+                    <span class="nav-plus"><i data-lucide="plus" aria-hidden="true"></i></span>
+                    <span class="nav-label-mobile">Nova</span><span class="nav-label-desktop">Nova observació</span>
+                </button>
+                <button class="nav-item" data-target="view-checklists">
+                    <i data-lucide="clipboard-list" aria-hidden="true"></i><span>Sortides</span>
+                </button>
+                <button class="nav-item" data-target="view-map">
+                    <i data-lucide="map" aria-hidden="true"></i><span>Mapa</span>
+                </button>
+            </div>
         </nav>
-        
-        <!-- Toast de notificacions -->
-        <div id="toast-container" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-full text-sm font-medium shadow-xl flex items-center gap-2 z-50 toast-hide pointer-events-none">
-            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
-            <span id="toast-message">Operació completada</span>
+
+        <div id="toast-container" class="toast-hide" role="status" aria-atomic="true">
+            <i data-lucide="info" aria-hidden="true"></i>
+            <span id="toast-message"></span>
         </div>
 
     </div>
@@ -697,21 +658,25 @@
                 'view-new-obs': document.getElementById('view-new-obs'),
                 'view-checklists': document.getElementById('view-checklists'),
                 'view-new-checklist': document.getElementById('view-new-checklist'),
-                'view-guide': document.getElementById('view-guide')
-                ,'view-bird-detail': document.getElementById('view-bird-detail')
-                ,'view-map': document.getElementById('view-map')
+                'view-guide': document.getElementById('view-guide'),
+                'view-bird-detail': document.getElementById('view-bird-detail'),
+                'view-map': document.getElementById('view-map')
             },
             navItems: document.querySelectorAll('.nav-item'),
             headerTitle: document.getElementById('header-title'),
+            main: document.getElementById('main-content'),
+            toastTimer: null,
             
             showToast(msg) {
                 const toast = document.getElementById('toast-container');
                 document.getElementById('toast-message').innerText = msg;
                 toast.classList.remove('toast-hide');
                 toast.classList.add('toast-show');
-                setTimeout(() => {
+                clearTimeout(UI.toastTimer);
+                UI.toastTimer = setTimeout(() => {
                     toast.classList.remove('toast-show');
                     toast.classList.add('toast-hide');
+                    document.getElementById('toast-message').textContent = '';
                 }, 3000);
             },
             
@@ -719,20 +684,22 @@
                 Object.values(UI.views).forEach(el => el.classList.add('hidden'));
                 if(UI.views[viewId]) UI.views[viewId].classList.remove('hidden');
                 
+                const parentView = { 'view-new-checklist': 'view-checklists', 'view-bird-detail': 'view-guide' };
                 UI.navItems.forEach(btn => {
-                    if(btn.dataset.target === viewId || (viewId === 'view-new-checklist' && btn.dataset.target === 'view-checklists')) {
-                        btn.classList.add('active');
-                    } else {
-                        btn.classList.remove('active');
-                    }
+                    if (btn.dataset.target === (parentView[viewId] || viewId)) btn.setAttribute('aria-current', 'page');
+                    else btn.removeAttribute('aria-current');
                 });
-                if(title) UI.headerTitle.innerText = title;
+                if (title) {
+                    UI.headerTitle.textContent = title === 'Registre' ? 'Registre de camp' : title;
+                    UI.headerTitle.focus({preventScroll: true});
+                }
                 if(viewId === 'view-map') setTimeout(renderMap, 60);
                 
                 // Netejar estat edició si sortim
                 if(viewId !== 'view-new-obs' && state.editingObsId) resetObservationForm();
                 
-                window.scrollTo(0, 0);
+                UI.main.scrollTop = 0;
+                document.querySelector('.data-menu').open = false;
             }
         };
 
@@ -908,9 +875,8 @@
         const btnToggleFilters = document.getElementById('btn-toggle-filters');
         const panelFilters = document.getElementById('advanced-filters');
         btnToggleFilters.addEventListener('click', () => {
-            panelFilters.classList.toggle('hidden');
-            btnToggleFilters.classList.toggle('bg-emerald-100');
-            btnToggleFilters.classList.toggle('text-emerald-700');
+            const hidden = panelFilters.classList.toggle('hidden');
+            btnToggleFilters.setAttribute('aria-expanded', String(!hidden));
         });
 
         const renderObservations = () => {
@@ -948,6 +914,11 @@
 
             if(filtered.length === 0) {
                 list.innerHTML = '';
+                const hasObservations = state.observations.length > 0;
+                document.getElementById('empty-registry-title').textContent = hasObservations
+                    ? 'Cap observació coincideix amb els filtres.' : 'Cap observació registrada.';
+                document.getElementById('empty-registry-hint').textContent = hasObservations
+                    ? 'Prova una altra cerca o neteja els filtres.' : 'Toca «Nova» per registrar-ne una.';
                 empty.classList.remove('hidden');
                 empty.classList.add('flex');
             } else {
@@ -963,8 +934,8 @@
 
                 let htmlStr = '';
                 for (const [dateStr, obsArr] of Object.entries(grouped).sort((a,b)=>new Date(b[0])-new Date(a[0]))) {
-                    htmlStr += `<div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 mt-4 px-1 border-b border-gray-200 pb-1 flex items-center gap-1"><i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> ${formatDate(dateStr)}</div>`;
-                    htmlStr += `<div class="space-y-3">`;
+                    htmlStr += `<h2 class="observation-day"><i data-lucide="calendar-days" aria-hidden="true"></i> ${formatDate(dateStr)}</h2>`;
+                    htmlStr += `<div class="observation-grid">`;
                     
                     obsArr.forEach(obs => {
                         const isVisual = obs.type === 'visual';
@@ -974,14 +945,14 @@
                         const sizeBadge = escapeHtml(obs.sampleSize || count);
 
                         htmlStr += `
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 relative overflow-hidden flex flex-col gap-3 card-hover group">
+                        <article class="observation-card panel">
                             ${obs.photo ? `
                                 <div class="relative h-44 -mx-4 -mt-4 mb-1">
                                     <img src="${escapeHtml(obs.photo)}" class="w-full h-full object-cover rounded-t-xl" alt="Foto">
                                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                                     <div class="absolute bottom-3 left-4 right-4 flex justify-between items-end text-white">
                                         <div class="flex-1 min-w-0 pr-2">
-                                            <h3 class="font-bold text-lg leading-tight flex items-center gap-2 truncate">
+                                            <h3 class="flex items-center gap-2">
                                                 ${escapeHtml(obs.species)}
                                             </h3>
                                             <p class="text-xs italic opacity-90 truncate">${escapeHtml(obs.scientificName)}</p>
@@ -1000,7 +971,7 @@
                             ` : `
                                 <div class="flex justify-between items-start">
                                     <div class="flex-1 min-w-0 pr-2">
-                                        <h3 class="font-bold text-gray-800 text-lg leading-tight flex items-center gap-2 truncate">
+                                        <h3 class="flex items-center gap-2">
                                             ${escapeHtml(obs.species)}
                                             <i data-lucide="${typeIcon}" class="w-4 h-4 text-emerald-600" title="${!obs.type ? 'No indicat' : isVisual ? 'Visual' : 'Auditiva'}"></i>
                                             ${obs.hide ? `<i data-lucide="eye-off" class="w-4 h-4 text-emerald-600" title="Des d'aguait"></i>` : ''}
@@ -1019,7 +990,7 @@
                                 ${obs.family ? `<span class="flex items-center gap-1 border border-transparent px-1 rounded ${famColor}">${escapeHtml(obs.family)}</span>` : ''}
                                 ${obs.sampleSize ? `<span class="bg-amber-50 px-2 py-1 rounded" title="Mida de la mostra">Mostra: ${escapeHtml(obs.sampleSize)}</span>` : ''}
                                 ${!sizeBadge ? '<span class="bg-gray-100 px-2 py-1 rounded">Mida no indicada</span>' : ''}
-                                ${obs.isBimbo ? '<span class="bg-yellow-100 text-yellow-900 px-2 py-1 rounded font-bold">★ BIMBO</span>' : ''}
+                                ${obs.isBimbo ? '<span class="bimbo-mark">★ BIMBO</span>' : ''}
                                 ${obs.timeOfDay ? `<span class="bg-sky-50 px-2 py-1 rounded">${obs.timeOfDay === 'M' ? 'Matí' : obs.timeOfDay === 'T' ? 'Tarda' : escapeHtml(obs.timeOfDay)}</span>` : ''}
                                 ${obs.latitude != null && obs.longitude != null ? `<span class="text-emerald-700">GPS</span>` : ''}
                             </div>
@@ -1027,7 +998,7 @@
                             ${obs.notes ? `<div class="text-xs bg-orange-50/50 p-2 rounded-lg text-gray-600 italic border border-orange-100">"${escapeHtml(obs.notes)}"</div>` : ''}
                             
                             <!-- Botons Acció ràpida (Edit/Duplicate/Delete) -->
-                            <div class="mt-1 pt-2 border-t border-gray-50 flex justify-end items-center gap-2">
+                            <div class="observation-card-actions">
                                 <button onclick="duplicateObservation('${obs.id}')" class="text-gray-400 hover:text-blue-600 p-1.5 rounded bg-gray-50 hover:bg-blue-50 transition-colors" title="Duplicar">
                                     <i data-lucide="copy" class="w-4 h-4"></i>
                                 </button>
@@ -1038,7 +1009,7 @@
                                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 </button>
                             </div>
-                        </div>`;
+                        </article>`;
                     });
                     htmlStr += `</div>`;
                 }
@@ -1077,16 +1048,16 @@
                 list.innerHTML = sorted.map(chk => {
                     const obsCount = state.observations.filter(o => o.checklistId === chk.id).length;
                     return `
-                    <div class="bg-white rounded-xl shadow-sm border border-emerald-100 p-4 border-l-4 border-l-emerald-500">
+                    <div class="panel observation-card">
                         <div class="flex justify-between items-start mb-2">
-                            <h3 class="font-bold text-gray-800 text-lg">${chk.name}</h3>
-                            <button onclick="deleteChecklist('${chk.id}')" class="text-red-400 hover:text-red-600">
+                            <h3>${escapeHtml(chk.name)}</h3>
+                            <button onclick="deleteChecklist('${chk.id}')" class="action icon-button text-red-700" aria-label="Esborra la sortida">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                         </div>
                         <div class="flex flex-col gap-1 text-sm text-gray-600 mb-3">
                             <span class="flex items-center gap-1.5"><i data-lucide="calendar" class="w-4 h-4"></i> ${formatDate(chk.date)}</span>
-                            ${chk.location ? `<span class="flex items-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4"></i> ${chk.location}</span>` : ''}
+                            ${chk.location ? `<span class="flex items-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4"></i> ${escapeHtml(chk.location)}</span>` : ''}
                         </div>
                         <div class="bg-emerald-50 text-emerald-800 text-xs font-medium py-1.5 px-3 rounded-lg inline-flex items-center gap-2 border border-emerald-100">
                             <i data-lucide="bird" class="w-4 h-4"></i> ${obsCount} espècies registrades
@@ -1096,29 +1067,53 @@
             }
         };
 
+        const birdArtwork = (bird, isSeen, number) => {
+            const spriteFile = /^[a-z0-9_-]+\.(png|webp)$/i.test(bird.sprite || '') ? bird.sprite : '';
+            const drawing = spriteFile
+                ? `<img src="./aviteca-sprites/${spriteFile}" loading="lazy" decoding="async" alt="">`
+                : `<i data-lucide="${isSeen ? 'bird' : 'lock-keyhole'}" aria-hidden="true"></i>`;
+            return `<div class="sprite-stage ${isSeen ? 'is-seen' : 'is-pending'}">
+                <span class="species-number">#${String(number).padStart(3, '0')}</span>
+                ${drawing}
+                <span class="species-state">${isSeen ? 'Vista' : 'Pendent'}</span>
+            </div>`;
+        };
+
         const renderGuide = () => {
             const seen = observedSpeciesKeys(state.observations);
             const discovered = birdDb.filter(bird => seen.has(speciesKey(bird))).length;
             const search = norm(document.getElementById('guide-search').value);
-            const filtered = birdDb.filter(b => {
-                const isSeen = seen.has(speciesKey(b));
+            const filtered = birdDb.map((bird, index) => ({bird, index})).filter(({bird}) => {
+                const isSeen = seen.has(speciesKey(bird));
                 return (guideFilter === 'all' || (guideFilter === 'seen' ? isSeen : !isSeen)) &&
-                    [b.commonName, b.scientificName, b.order].some(x => norm(x).includes(search));
+                    [bird.commonName, bird.scientificName, bird.order].some(text => norm(text).includes(search));
             });
             const milestones = [10,25,50,100,200];
             const earned = milestones.filter(n => discovered >= n);
             const next = milestones.find(n => discovered < n);
             const progress = birdDb.length ? Math.round(discovered / birdDb.length * 100) : 0;
-            document.getElementById('dex-progress').innerHTML = `<div class="font-bold">Avitèdex: ${discovered} de ${birdDb.length} espècies descobertes</div><div class="h-2 bg-white rounded-full mt-2 overflow-hidden"><div class="h-full bg-emerald-600" style="width:${progress}%"></div></div><div class="mt-2 text-xs">${earned.length ? `Insígnies: ${earned.map(n => `${n} espècies`).join(' · ')}` : 'La primera insígnia arriba amb 10 espècies.'}${next ? ` · Següent objectiu: ${next}` : ''}</div>`;
+            document.getElementById('dex-progress').innerHTML = `
+                <p class="dex-progress-label">Espècies descobertes</p>
+                <div class="dex-progress-number">${discovered}<span> / ${birdDb.length}</span></div>
+                <div class="dex-progress-track" role="progressbar" aria-label="Espècies descobertes" aria-valuenow="${discovered}" aria-valuemax="${Math.max(1, birdDb.length)}">
+                    <span style="width:${progress}%"></span>
+                </div>
+                <div class="dex-milestones">
+                    ${earned.length ? `<strong>Insígnies</strong><span>${earned.join(' · ')}</span>` : ''}
+                    ${next ? `<span>${earned.length ? ' · ' : ''}Següent insígnia amb <strong>${next}</strong> espècies</span>` : ''}
+                </div>`;
             const speciesLabel = filtered.length === 1 ? 'espècie' : 'espècies';
             document.getElementById('guide-count-label').textContent = `Mostrant ${filtered.length} ${speciesLabel}`;
-            document.getElementById('guide-list').innerHTML = filtered.map((b) => {
-                const index = birdDb.indexOf(b);
-                const isSeen = seen.has(speciesKey(b));
-                return `<button type="button" data-bird-index="${index}" class="bird-card w-full text-left rounded-xl border p-3 flex items-center gap-3 ${isSeen ? 'bg-white border-emerald-200' : 'bg-gray-100 border-gray-200'}">
-                    <div class="w-14 h-14 rounded-lg flex items-center justify-center ${isSeen ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-400'}"><i data-lucide="${isSeen ? 'bird' : 'lock-keyhole'}" class="w-7 h-7"></i></div>
-                    <div class="min-w-0 flex-1"><div class="font-bold truncate">#${String(index + 1).padStart(3,'0')} ${escapeHtml(b.commonName)}</div><div class="text-xs italic text-gray-500 truncate">${escapeHtml(b.scientificName || 'Nom científic pendent')}</div><div class="text-xs mt-1">${escapeHtml(b.order || 'Ordre pendent')} · ${isSeen ? 'Vista' : 'Pendent'}</div></div></button>`;
-            }).join('');
+            document.getElementById('guide-list').innerHTML = filtered.map(({bird, index}) => {
+                const isSeen = seen.has(speciesKey(bird));
+                return `<button type="button" data-bird-index="${index}" class="bird-card ${isSeen ? 'is-seen' : 'is-pending'}">
+                    ${birdArtwork(bird, isSeen, index + 1)}
+                    <div class="bird-card-copy">
+                        <div class="bird-card-name">${escapeHtml(bird.commonName)}</div>
+                        <div class="bird-card-science">${escapeHtml(bird.scientificName || 'Nom científic pendent')}</div>
+                    </div>
+                </button>`;
+            }).join('') || '<p class="empty-state text-center">No hi ha cap espècie amb aquests filtres.</p>';
             document.querySelectorAll('.bird-card').forEach(el => el.addEventListener('click', () => {
                 state.selectedBird = birdDb[Number(el.dataset.birdIndex)];
                 renderBirdDetail();
@@ -1141,33 +1136,34 @@
                 else if (count !== null) size = `${count} ${count === 1 ? 'individu' : 'individus'}`;
                 const time = o.timeOfDay === 'M' ? 'Matí' : o.timeOfDay === 'T' ? 'Tarda' : 'Horari no indicat';
                 const type = o.type === 'auditiva' ? 'Sentit' : o.type === 'visual' ? 'Vist' : 'No indicat';
-                return `<div class="bg-white border rounded-xl p-3 mb-2 text-sm">
+                return `<div class="history-row panel text-sm">
                     <b>${escapeHtml(o.date)}</b> · ${escapeHtml(o.location || 'Lloc no indicat')}
-                    ${o.isBimbo ? '<b class="text-amber-700">★ BIMBO</b>' : ''}
+                    ${o.isBimbo ? '<b class="bimbo-mark">★ BIMBO</b>' : ''}
                     <div class="text-gray-600 mt-1">${size} · ${time} · ${type}${o.latitude != null ? ' · GPS' : ''}</div>
                 </div>`;
             }).join('');
             document.getElementById('bird-detail').innerHTML = `
-                <div class="bg-white border rounded-2xl p-5 mb-4">
-                    <div class="w-24 h-24 rounded-xl bg-emerald-50 border border-dashed border-emerald-200 flex items-center justify-center text-emerald-600 mb-4">
-                        <i data-lucide="${entries.length ? 'bird' : 'lock-keyhole'}" class="w-12 h-12"></i>
-                    </div>
-                    <h2 class="text-2xl font-bold">${escapeHtml(bird.commonName)}</h2>
-                    <p class="italic text-gray-500">${escapeHtml(bird.scientificName || '')}</p>
-                    <p class="text-sm mt-2">${escapeHtml(bird.order || 'Ordre pendent')}</p>
-                    <div class="grid grid-cols-3 gap-2 mt-5 text-center text-sm">
-                        <div class="bg-emerald-50 rounded-lg p-2"><b>${entries.length}</b><br>observacions</div>
-                        <div class="bg-emerald-50 rounded-lg p-2"><b>${places.size}</b><br>llocs</div>
-                        <div class="bg-emerald-50 rounded-lg p-2"><b>${new Set(entries.map(o => o.date)).size}</b><br>dies</div>
+                <div class="bird-detail-panel panel">
+                    ${birdArtwork(bird, entries.length > 0, birdDb.indexOf(bird) + 1)}
+                    <div class="bird-detail-info">
+                        <h2>${escapeHtml(bird.commonName)}</h2>
+                        <p class="italic">${escapeHtml(bird.scientificName || 'Nom científic pendent')}</p>
+                        <p class="text-sm mt-2">${escapeHtml(bird.order || 'Ordre pendent')}</p>
+                        <dl class="bird-detail-stats">
+                            <div class="stat-tile"><dt>Observacions</dt><dd>${entries.length}</dd></div>
+                            <div class="stat-tile"><dt>Llocs</dt><dd>${places.size}</dd></div>
+                            <div class="stat-tile"><dt>Dies</dt><dd>${new Set(entries.map(o => o.date)).size}</dd></div>
+                        </dl>
                     </div>
                 </div>
                 <h3 class="font-bold mb-2">Historial</h3>
                 ${history || '<p class="text-sm text-gray-500">Encara no hi ha observacions.</p>'}`;
             if(window.lucide) lucide.createIcons();
         };
-        ['all','seen','unseen'].forEach(value => document.getElementById(`guide-filter-${value}`).addEventListener('click', () => {
+        const guideFilters = ['all', 'seen', 'unseen'];
+        guideFilters.forEach(value => document.getElementById(`guide-filter-${value}`).addEventListener('click', () => {
             guideFilter = value;
-            ['all','seen','unseen'].forEach(v => document.getElementById(`guide-filter-${v}`).className = `flex-1 p-2 rounded-lg text-sm ${v === value ? 'bg-emerald-600 text-white' : 'bg-white border'}`);
+            guideFilters.forEach(filter => document.getElementById(`guide-filter-${filter}`).setAttribute('aria-pressed', String(filter === value)));
             renderGuide();
         }));
         document.getElementById('btn-back-guide').addEventListener('click', () => UI.switchView('view-guide', 'Avitèdex'));
@@ -1175,10 +1171,11 @@
 
         // --- Modal Custom Species ---
         document.getElementById('btn-open-custom-species').addEventListener('click', () => {
-            document.getElementById('modal-custom-species').classList.remove('hidden');
+            document.getElementById('modal-custom-species').showModal();
+            document.getElementById('custom-common').focus();
         });
         document.getElementById('btn-close-custom-species').addEventListener('click', () => {
-            document.getElementById('modal-custom-species').classList.add('hidden');
+            document.getElementById('modal-custom-species').close();
         });
         document.getElementById('form-custom-species').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -1199,7 +1196,7 @@
             renderObservations();
             
             document.getElementById('form-custom-species').reset();
-            document.getElementById('modal-custom-species').classList.add('hidden');
+            document.getElementById('modal-custom-species').close();
             UI.showToast("Espècie afegida correctament!");
             renderGuide();
         });
@@ -1372,6 +1369,8 @@
 
             document.getElementById('stat-total-obs').innerText = totalObs;
             document.getElementById('stat-diff-species').innerText = speciesCounts.size;
+            document.getElementById('registry-total').textContent = totalObs.toLocaleString('ca');
+            document.getElementById('registry-species').textContent = speciesCounts.size.toLocaleString('ca');
             document.getElementById('stat-top-species').innerText = topSpecies;
             document.getElementById('stat-top-location').innerText = topLoc;
             const varietyLabel = maxLocVariety === 1 ? '1 espècie' : `${maxLocVariety} espècies diferents`;
@@ -1552,7 +1551,7 @@
             document.getElementById('text-save-obs').innerText = "Actualitzar";
             document.getElementById('btn-cancel-edit').classList.remove('hidden');
             
-            UI.switchView('view-new-obs', 'Editar');
+            UI.switchView('view-new-obs', 'Edita l’observació');
         };
 
         window.duplicateObservation = async (id) => {
@@ -1943,7 +1942,8 @@
                 popup.append(title, document.createElement('br'), document.createTextNode(`${o.date || ''} · ${o.location || ''}`));
                 L.marker([Number(o.latitude), Number(o.longitude)]).bindPopup(popup).addTo(mapLayer);
             });
-            document.getElementById('map-summary').textContent = `${positioned.length} observacions amb GPS · ${state.observations.length - positioned.length} sense coordenades exactes`;
+            const label = positioned.length === 1 ? 'observació' : 'observacions';
+            document.getElementById('map-summary').textContent = `${positioned.length} ${label} amb GPS · ${state.observations.length - positioned.length} sense coordenades exactes`;
         };
         const getGps = () => new Promise((resolve,reject) => {
             if (!navigator.geolocation) return reject(new Error('Aquest dispositiu no ofereix GPS.'));
@@ -1961,7 +1961,7 @@
                 const gps = await getGps();
                 renderMap();
                 map.setView([gps.latitude,gps.longitude], 15);
-                L.circle([gps.latitude,gps.longitude], {radius:gps.accuracy,color:'#059669'}).addTo(mapLayer).bindPopup('La teva posició actual');
+                L.circle([gps.latitude,gps.longitude], {radius:gps.accuracy,color:'#356449'}).addTo(mapLayer).bindPopup('La teva posició actual');
             } catch (err) { UI.showToast(`GPS: ${err.message}`); }
         });
 
@@ -1969,15 +1969,35 @@
         UI.navItems.forEach(btn => {
             btn.addEventListener('click', () => {
                 const target = btn.dataset.target;
-                const titles = { 'view-registry': 'Registre', 'view-new-obs': 'Nova Observació', 'view-checklists': 'Sortides', 'view-guide': 'Avitèdex', 'view-map': 'Mapa' };
+                const titles = { 'view-registry': 'Registre', 'view-new-obs': 'Nova observació', 'view-checklists': 'Sortides', 'view-guide': 'Avitèdex', 'view-map': 'Mapa' };
                 UI.switchView(target, titles[target]);
             });
         });
 
-        document.getElementById('btn-new-checklist').addEventListener('click', () => UI.switchView('view-new-checklist', 'Nova Sortida'));
+        document.getElementById('btn-new-checklist').addEventListener('click', () => UI.switchView('view-new-checklist', 'Nova sortida'));
         document.getElementById('btn-back-checklists').addEventListener('click', () => UI.switchView('view-checklists', 'Sortides'));
-        document.getElementById('btn-stats').addEventListener('click', () => { updateStats(); document.getElementById('modal-stats').classList.remove('hidden'); });
-        document.getElementById('btn-close-stats').addEventListener('click', () => document.getElementById('modal-stats').classList.add('hidden'));
+        const statsDialog = document.getElementById('modal-stats');
+        document.getElementById('btn-stats').addEventListener('click', () => {
+            updateStats();
+            statsDialog.showModal();
+        });
+        document.getElementById('btn-close-stats').addEventListener('click', () => statsDialog.close());
+
+        const dataMenu = document.querySelector('.data-menu');
+        document.getElementById('btn-import-excel').addEventListener('click', () => document.getElementById('input-excel').click());
+        document.getElementById('btn-import-backup').addEventListener('click', () => document.getElementById('input-import').click());
+        document.addEventListener('click', event => {
+            if (!dataMenu.open) return;
+            const choseAction = event.target.closest('.data-menu-items button');
+            if (!dataMenu.contains(event.target) || choseAction) dataMenu.open = false;
+            if (choseAction) dataMenu.querySelector('summary').focus();
+        });
+        dataMenu.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && dataMenu.open) {
+                dataMenu.open = false;
+                dataMenu.querySelector('summary').focus();
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', () => {
             if(window.lucide) lucide.createIcons();
