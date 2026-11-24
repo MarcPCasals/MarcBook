@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=7">
+    <link rel="stylesheet" href="./aviteca.css?v=8">
 </head>
 <body class="overflow-hidden">
 
@@ -619,7 +619,7 @@
         };
         const loadCatalog = async () => {
             try {
-                const response = await fetch('./aviteca-catalog.json?v=7');
+                const response = await fetch('./aviteca-catalog.json?v=8');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 state.catalog = await response.json();
                 loadBirds();
@@ -1092,6 +1092,15 @@
             }
         };
 
+        const rarityLabels = {
+            common: 'Comú', uncommon: 'Poc comú', rare: 'Rar', epic: 'Èpic', legendary: 'Llegendari'
+        };
+        const rarityBadge = bird => {
+            const category = bird.guide?.rarity?.category;
+            return Object.hasOwn(rarityLabels, category)
+                ? `<span class="rarity-badge rarity-${category}">${rarityLabels[category]}</span>`
+                : '';
+        };
         const birdArtwork = (bird, isSeen, number, detail = false) => {
             const spriteFile = /^[a-z0-9_-]+\.(png|webp)$/i.test(bird.sprite || '') ? bird.sprite : '';
             const drawing = spriteFile
@@ -1138,6 +1147,7 @@
             document.getElementById('guide-list').innerHTML = filtered.map(({bird, index}) => {
                 const isSeen = seen.has(speciesKey(bird));
                 return `<button type="button" data-bird-index="${index}" class="bird-card ${isSeen ? 'is-seen' : 'is-pending'}">
+                    ${rarityBadge(bird)}
                     ${birdArtwork(bird, isSeen, index + 1)}
                     <div class="bird-card-copy">
                         <div class="bird-card-name">${escapeHtml(bird.commonName)}</div>
@@ -1145,7 +1155,7 @@
                     </div>
                 </button>`;
             }).join('') || '<p class="empty-state text-center">No hi ha cap espècie amb aquests filtres.</p>';
-            document.querySelectorAll('.bird-card').forEach(el => el.addEventListener('click', () => {
+            document.querySelectorAll('#guide-list .bird-card').forEach(el => el.addEventListener('click', () => {
                 state.selectedBird = birdDb[Number(el.dataset.birdIndex)];
                 renderBirdDetail();
                 UI.switchView('view-bird-detail', 'Fitxa de l’ocell');
@@ -1196,6 +1206,7 @@
                 const index = birdDb.indexOf(candidate);
                 const isSeen = seen.has(speciesKey(candidate));
                 return `<button type="button" data-related-index="${index}" class="bird-card ${isSeen ? 'is-seen' : 'is-pending'}">
+                    ${rarityBadge(candidate)}
                     ${birdArtwork(candidate, isSeen, index + 1)}
                     <div class="bird-card-copy"><div class="bird-card-name">${escapeHtml(candidate.commonName)}</div>
                     <div class="bird-card-science" lang="la">${escapeHtml(displayScience(candidate))}</div></div>
@@ -1204,6 +1215,7 @@
             document.getElementById('bird-detail').innerHTML = `
                 <section class="bird-detail-panel bird-profile">
                     <div class="bird-detail-info">
+                        ${rarityBadge(bird)}
                         <p class="profile-status">${entries.length ? 'Descoberta' : 'Per descobrir'} · #${String(birdDb.indexOf(bird) + 1).padStart(3, '0')}</p>
                         <h2>${escapeHtml(bird.commonName)}</h2>
                         <p class="profile-science" lang="la">${escapeHtml(displayScience(bird) || 'Nom científic pendent')}</p>
@@ -1225,8 +1237,13 @@
                         ${entries.length ? '' : '<p class="calendar-empty">Encara no hi heu registrat observacions.</p>'}
                     </figure>
                     <aside class="profile-introduction">
-                        <h3>Com reconèixer-lo</h3>
-                        <p class="field-description">${escapeHtml(guide?.description || 'Encara no hi ha una descripció per a aquesta espècie.')}</p>
+                        ${guide?.rarity && Object.hasOwn(rarityLabels, guide.rarity.category) ? `<section class="rarity-report" aria-labelledby="rarity-title">
+                            <h3 id="rarity-title">Per què és ${rarityLabels[guide.rarity.category].toLocaleLowerCase('ca')}?</h3>
+                            <p>${escapeHtml(guide.rarity.reason)}</p>
+                            <p class="rarity-scope">Escala orientativa de l’Aviteca · Catalunya i Andorra</p>
+                        </section>` : ''}
+                        ${!guide?.rarity ? `<h3>Com reconèixer-lo</h3>
+                        <p class="field-description">${escapeHtml(guide?.description || 'Encara no hi ha una descripció per a aquesta espècie.')}</p>` : ''}
                     </aside>
                 </section>
                 <dl class="bird-detail-stats profile-facts">
@@ -1241,7 +1258,8 @@
                     <div class="bird-phenology"><dt>Presència a Catalunya i Andorra</dt><dd><p class="phenology-note">${escapeHtml(ecology.seasonNote)}</p></dd></div>
                 </dl>` : ''}
                 ${guide ? `<section class="field-guide panel" aria-labelledby="guide-identification">
-                    <h3 id="guide-identification">Fotografies d’identificació</h3>
+                    <h3 id="guide-identification">Com reconèixer l’ocell</h3>
+                    ${guide.rarity ? `<p class="field-description">${escapeHtml(guide.description)}</p>` : ''}
                     <div class="field-photos">${guide.photos.map(photo => {
                         const file = `./aviteca-fotos/${encodeURIComponent(photo.file)}`;
                         const alt = `${bird.commonName} · ${photo.caption}`;
