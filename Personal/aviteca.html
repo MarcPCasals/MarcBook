@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=20">
+    <link rel="stylesheet" href="./aviteca.css?v=21">
 </head>
 <body class="overflow-hidden">
 
@@ -248,6 +248,7 @@
                             </div>
                             <div class="flex flex-wrap items-center gap-2 mt-2">
                                 <button type="button" id="btn-capture-gps" class="action"><i data-lucide="locate-fixed" aria-hidden="true"></i> Afegeix la posició GPS</button>
+                                <button type="button" id="btn-pick-observation-point" class="action"><i data-lucide="map-pin" aria-hidden="true"></i> Marca al mapa</button>
                                 <span id="gps-status" class="text-sm text-gray-600" role="status">Sense coordenades</span>
                             </div>
                         </div>
@@ -598,6 +599,21 @@
                 <p class="text-sm text-gray-600 mt-3">Al mapa hi apareixen les observacions amb coordenades GPS.</p>
             </div>
 
+            <dialog id="modal-observation-point" class="app-dialog" aria-labelledby="observation-point-title">
+                <div class="dialog-header">
+                    <h2 id="observation-point-title">Punt de l’observació</h2>
+                    <button type="button" id="btn-close-observation-point" class="action icon-button" aria-label="Tanca el mapa"><i data-lucide="x" aria-hidden="true"></i></button>
+                </div>
+                <form id="form-observation-point" class="dialog-body space-y-3">
+                    <p>Toca el mapa o escriu les coordenades.</p>
+                    <div id="observation-point-map" aria-label="Mapa per marcar el punt de l’observació"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label>Latitud<input id="observation-latitude" type="number" min="-90" max="90" step="any" required class="w-full p-2"></label>
+                        <label>Longitud<input id="observation-longitude" type="number" min="-180" max="180" step="any" required class="w-full p-2"></label>
+                    </div>
+                    <button type="submit" class="action action-primary w-full">Fes servir aquest punt</button>
+                </form>
+            </dialog>
             <dialog id="modal-quick-sighting" class="app-dialog" aria-labelledby="quick-sighting-title">
                 <div class="dialog-header">
                     <h2 id="quick-sighting-title">Ja l’he vist</h2>
@@ -727,8 +743,8 @@
             collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch, waitForPendingWrites, getDocsFromServer
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
-        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=6';
+        import { gpsFields, groupLocations, pointMapUrl, sightingPoint } from './aviteca-location.js?v=2';
+        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=7';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=6';
         import { outingHabitats, outingPlaces, outingSeason, normalizeOutingPlace, outingLocationKey, suggestOutingBirds } from './aviteca-outings.js?v=6';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
@@ -1527,6 +1543,13 @@
         };
         const clearDataListeners = () => { state.unsubs.forEach(fn => fn()); state.unsubs = []; };
 
+        const sightingPointLink = observation => {
+            const point = sightingPoint(observation);
+            if (!point) return '';
+            const label = point.kind === 'site' ? `Obre el lloc · ${point.label}` : 'Obre el punt al mapa';
+            return `<a class="sighting-map-link" href="${escapeHtml(pointMapUrl(point))}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+        };
+
         // ==========================================
         // RENDERITZAT DE VISTES I FILTRES
         // ==========================================
@@ -1660,7 +1683,7 @@
                                 ${obs.timeOfDay ? `<span class="bg-sky-50 px-2 py-1 rounded">${obs.timeOfDay === 'M' ? 'Matí' : obs.timeOfDay === 'T' ? 'Tarda' : escapeHtml(obs.timeOfDay)}</span>` : ''}
                                 ${obs.hide && obs.hideName ? `<span class="bg-emerald-50 px-2 py-1 rounded">Aguait · ${escapeHtml(obs.hideName)}</span>` : ''}
                                 ${obs.subspecies ? `<span class="bg-gray-100 px-2 py-1 rounded">Subespècie <i lang="la">${escapeHtml(obs.subspecies)}</i></span>` : ''}
-                                ${obs.latitude != null && obs.longitude != null ? `<span class="text-emerald-700">GPS</span>` : ''}
+                                ${sightingPointLink(obs)}
                             </div>
                             
                             ${obs.notes ? `<div class="text-xs bg-orange-50/50 p-2 rounded-lg text-gray-600 italic border border-orange-100">"${escapeHtml(obs.notes)}"</div>` : ''}
@@ -1891,7 +1914,8 @@
                 return `<div class="history-row panel text-sm">
                     <b>${formatDate(o.date) || 'Data no indicada'}</b> · ${escapeHtml(o.location || 'Lloc no indicat')}
                     ${o.isBimbo ? '<b class="bimbo-mark">★ BIMBO</b>' : ''}
-                    <div class="text-gray-600 mt-1">${size} · ${time} · ${type}${o.hide ? ` · ${escapeHtml(o.hideName || 'Des d’un aguait')}` : ''}${o.latitude != null ? ' · GPS' : ''}</div>
+                    <div class="text-gray-600 mt-1">${size} · ${time} · ${type}${o.hide ? ` · ${escapeHtml(o.hideName || 'Des d’un aguait')}` : ''}</div>
+                    ${sightingPointLink(o)}
                     ${o.subspecies ? `<div class="text-gray-600">Subespècie <i lang="la">${escapeHtml(o.subspecies)}</i></div>` : ''}
                 </div>`;
             }).join('');
@@ -2426,9 +2450,10 @@
                 notes: document.getElementById('input-notes').value,
             };
             if (state.gps) {
-                obs.latitude = state.gps.latitude;
-                obs.longitude = state.gps.longitude;
-                obs.gpsAccuracy = state.gps.accuracy;
+                Object.assign(obs, gpsFields(state.gps), {
+                    gpsAccuracy:state.gps.accuracy ?? null,
+                    positionSource:state.gps.source || 'gps'
+                });
             }
             
             if(state.currentPhotoB64) obs.photo = state.currentPhotoB64; 
@@ -2472,6 +2497,7 @@
             document.getElementById('input-type-unknown').classList.add('hidden');
             selectedSpeciesForObs = null;
             state.gps = null;
+            document.getElementById('modal-observation-point').close();
             document.getElementById('gps-status').textContent = 'Sense coordenades';
             state.editingObsId = null;
             removePhoto();
@@ -2501,8 +2527,11 @@
             document.getElementById('input-sample-size').value = obs.sampleSize || '';
             document.getElementById('input-time').value = obs.timeOfDay || '';
             setObservationDateField(obs.date || '', !hasExactDate(obs.date));
-            state.gps = obs.latitude != null && obs.longitude != null ? {latitude: obs.latitude, longitude: obs.longitude, accuracy: obs.gpsAccuracy || null} : null;
-            document.getElementById('gps-status').textContent = state.gps ? `${Number(state.gps.latitude).toFixed(5)}, ${Number(state.gps.longitude).toFixed(5)}` : 'Sense coordenades';
+            const coordinates = gpsFields(obs);
+            state.gps = coordinates.latitude == null ? null : {
+                ...coordinates, accuracy:coordinates.gpsAccuracy, source:obs.positionSource || 'gps'
+            };
+            renderObservationPosition();
             document.getElementById('input-location').value = obs.location || '';
             const destinationSelect = document.getElementById('input-destination');
             const destination = obs.destination || '';
@@ -3453,6 +3482,80 @@
             if (!navigator.geolocation) return reject(new Error('Aquest dispositiu no ofereix GPS.'));
             navigator.geolocation.getCurrentPosition(p => resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy}), reject, {enableHighAccuracy:true,timeout:15000,maximumAge:0});
         });
+        const renderObservationPosition = () => {
+            const position = state.gps;
+            const status = document.getElementById('gps-status');
+            if (!position) {
+                status.textContent = 'Sense coordenades desades';
+                return;
+            }
+            const label = position.source === 'manual' ? 'Punt marcat' : 'GPS';
+            const accuracy = Number.isFinite(position.accuracy) ? ` · precisió ±${Math.round(position.accuracy)} m` : '';
+            status.textContent = `${label} · ${position.latitude.toFixed(5)}, ${position.longitude.toFixed(5)}${accuracy}`;
+        };
+        const pointDialog = document.getElementById('modal-observation-point');
+        const pointMapNode = document.getElementById('observation-point-map');
+        const pointLatitude = document.getElementById('observation-latitude');
+        const pointLongitude = document.getElementById('observation-longitude');
+        let pointMap, pointMarker;
+        const readPointFields = () => gpsFields({latitude:pointLatitude.valueAsNumber, longitude:pointLongitude.valueAsNumber});
+        const setPointFields = point => {
+            pointLatitude.value = point?.latitude ?? '';
+            pointLongitude.value = point?.longitude ?? '';
+        };
+        const showPointPreview = ({latitude, longitude}) => {
+            if (!pointMap) return;
+            pointMarker?.remove();
+            pointMarker = latitude == null ? null : L.circleMarker([latitude, longitude], {
+                radius:8, color:'#fffdf4', fillColor:'#17392b', fillOpacity:1
+            }).addTo(pointMap);
+        };
+        document.getElementById('btn-pick-observation-point').addEventListener('click', () => {
+            const editing = state.observations.find(observation => observation.id === state.editingObsId);
+            const initial = state.gps || (editing && sightingPoint(editing));
+            setPointFields(initial);
+            pointDialog.showModal();
+            pointMapNode.hidden = !window.L;
+            if (!window.L) return;
+            if (!pointMap) {
+                pointMap = L.map(pointMapNode, {scrollWheelZoom:false});
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom:19, keepBuffer:1
+                }).addTo(pointMap);
+                pointMap.attributionControl.setPrefix(false);
+                pointMap.on('click', ({latlng}) => {
+                    const {lat, lng} = latlng.wrap();
+                    setPointFields({latitude:Number(lat.toFixed(6)), longitude:Number(lng.toFixed(6))});
+                    showPointPreview(readPointFields());
+                });
+            }
+            const regionId = destinations.identify({
+                ...editing,
+                destination:document.getElementById('input-destination').value,
+                location:document.getElementById('input-location').value
+            });
+            const region = destinations.list().find(destination => destination.id === regionId);
+            pointMap.invalidateSize();
+            pointMap.setView(initial ? [initial.latitude, initial.longitude] : region?.point || [42.1, 1.7],
+                initial ? 16 : region?.zoom || 7, {animate:false});
+            showPointPreview(readPointFields());
+        });
+        document.getElementById('btn-close-observation-point').addEventListener('click', () => pointDialog.close());
+        document.getElementById('form-observation-point').addEventListener('change', event => {
+            if (!event.target.matches('input')) return;
+            const point = readPointFields();
+            showPointPreview(point);
+            if (pointMap && point.latitude != null) pointMap.panTo([point.latitude, point.longitude]);
+        });
+        document.getElementById('form-observation-point').addEventListener('submit', event => {
+            event.preventDefault();
+            const point = readPointFields();
+            if (point.latitude == null) return;
+            state.gps = {...point, source:'manual'};
+            renderObservationPosition();
+            pointDialog.close();
+        });
         document.getElementById('btn-checklist-gps').addEventListener('click', async () => {
             const button = document.getElementById('btn-checklist-gps');
             const status = document.getElementById('check-gps-status');
@@ -3473,11 +3576,10 @@
         document.getElementById('btn-capture-gps').addEventListener('click', async () => {
             const button = document.getElementById('btn-capture-gps');
             button.disabled = true;
-            state.gps = null;
             document.getElementById('gps-status').textContent = 'Cercant posició…';
             try {
                 state.gps = await getGps();
-                document.getElementById('gps-status').textContent = `${state.gps.latitude.toFixed(5)}, ${state.gps.longitude.toFixed(5)} · precisió ±${Math.round(state.gps.accuracy)} m`;
+                renderObservationPosition();
             } catch (err) { document.getElementById('gps-status').textContent = `No s’ha obtingut la posició: ${err.message}`; }
             finally { button.disabled = false; }
         });

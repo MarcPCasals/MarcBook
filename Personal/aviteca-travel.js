@@ -1,4 +1,4 @@
-import { groupLocations } from './aviteca-location.js?v=1';
+import { groupSightingPoints, pointMapUrl, sightingPoint } from './aviteca-location.js?v=2';
 
 const regionalDestinations = [
     ['ES-CT', 'Catalunya', 41.82, 1.90, 7,
@@ -144,6 +144,8 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
     let selectedId = '';
     let map;
     let pins;
+    let worldLayer;
+    let localTiles;
 
     const birdName = (group, key) => birdForKey(key)?.commonName || group.species.get(key);
     const artwork = group => {
@@ -183,6 +185,14 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
                 <summary>Mostra ${otherCount === 1 ? 'l’altra espècie' : `${otherCount} espècies més`}</summary>
                 <ul>${exclusive.slice(5).map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>
             </details>` : '';
+        const missing = new Map();
+        for (const observation of group.observations) {
+            if (sightingPoint(observation)) continue;
+            const name = observation.location || 'Lloc no indicat';
+            missing.set(name, (missing.get(name) || 0) + 1);
+        }
+        const missingList = [...missing].sort(([a], [b]) => a.localeCompare(b, 'ca')).map(([name,count]) =>
+            `<li>${escapeHtml(name)} · ${countLabel(count, 'observació', 'observacions')}</li>`).join('');
         detail.innerHTML = `
             <h2>${escapeHtml(group.name)}</h2>
             <p>${countLabel(group.species.size, 'espècie', 'espècies')} · ${countLabel(group.observations.length, 'observació', 'observacions')}</p>
@@ -190,6 +200,11 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             <p class="travel-exclusive"><strong>${exclusive.length ? countLabel(exclusive.length, 'espècie que només heu registrat aquí', 'espècies que només heu registrat aquí') : 'Cap espècie registrada només aquí'}</strong>
                 ${examples ? `<span>${examples}</span>` : ''}</p>
             ${more}
+            ${missingList ? `<details class="travel-exclusive-more">
+                <summary>${countLabel([...missing.values()].reduce((total, count) => total + count, 0),
+                    'observació sense punt exacte', 'observacions sense punt exacte')}</summary>
+                <ul>${missingList}</ul>
+            </details>` : ''}
             <div class="travel-actions">
                 <button type="button" data-travel-action="guide" class="action action-primary">Veure a l’Avitèdex</button>
                 <button type="button" data-travel-action="history" class="action">Veure a l’historial</button>
@@ -211,14 +226,23 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
         if (!map) return;
         pins.clearLayers();
         const selected = groups.get(selectedId);
+        const showTiles = selected && map.getZoom() >= 10;
+        if (showTiles && !map.hasLayer(localTiles)) {
+            worldLayer.remove();
+            localTiles.addTo(map);
+        } else if (!showTiles && map.hasLayer(localTiles)) {
+            localTiles.remove();
+            worldLayer.addTo(map);
+        }
         if (selected) {
-            const exact = groupLocations(selected.observations);
-            if (!exact.length) addPin(selected.point, selected.name, 'destination', selected.species.size);
-            for (const point of exact) {
-                const names = [...new Set(point.observations.map(obs => obs.location).filter(Boolean))];
-                const label = names[0] || selected.name;
-                const marker = addPin([point.latitude, point.longitude], label, 'gps', point.observations.length);
-                marker.bindPopup(`<strong>${escapeHtml(label)}</strong><br>${countLabel(point.observations.length, 'observació', 'observacions')}`);
+            for (const point of groupSightingPoints(selected.observations)) {
+                const marker = addPin([point.latitude, point.longitude], point.label, point.kind, point.observations.length);
+                const species = [...new Set(point.observations.map(observation => observation.species).filter(Boolean))];
+                const type = {site:'Punt del lloc anotat', manual:'Punt marcat al quadern', gps:'Posició GPS'}[point.kind];
+                marker.bindPopup(`<strong>${escapeHtml(point.label)}</strong><br>${type}
+                    <ul>${species.map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>
+                    <a href="${escapeHtml(pointMapUrl(point))}" target="_blank" rel="noopener">Obre el punt al mapa</a>
+                    ${point.reference ? ` · <a href="${escapeHtml(point.reference)}" target="_blank" rel="noopener">Font</a>` : ''}`);
             }
             return;
         }
@@ -250,8 +274,8 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             map.fitBounds(worldBounds, {animate:false});
             return;
         }
-        const exact = groupLocations(group.observations);
-        if (exact.length) map.fitBounds(exact.map(point => [point.latitude, point.longitude]), {maxZoom:11, padding:[34,34], animate:false});
+        const points = groupSightingPoints(group.observations);
+        if (points.length) map.fitBounds(points.map(point => [point.latitude, point.longitude]), {maxZoom:15, padding:[40,40], animate:false});
         else map.setView(group.point, group.zoom, {animate:false});
     }
 
@@ -259,8 +283,8 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
         const group = groups.get(selectedId);
         notice.textContent = !map ? world() === undefined ? 'Carregant el mapa…' : 'Mapa no disponible. Pots consultar les destinacions amb els segells.'
             : !group ? 'Els pins indiquen destinacions aproximades. Amplia el mapa o toca un segell.'
-            : groupLocations(group.observations).length ? 'Els punts verds mostren les observacions amb GPS.'
-            : 'Ubicació aproximada. Aquesta destinació no té cap observació amb GPS.';
+            : groupSightingPoints(group.observations).length ? 'Verd · punts amb coordenades desades. Blau · llocs identificats pel nom.'
+            : 'Les observacions d’aquesta destinació encara no tenen un punt exacte.';
     }
 
     function select(id) {
@@ -301,8 +325,13 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             const outlines = world();
             if (!map && window.L && outlines) {
                 mapNode.classList.remove('hidden');
-                map = L.map(mapNode, {minZoom:0, maxZoom:12, zoomSnap:0.25, scrollWheelZoom:false, attributionControl:false});
-                L.geoJSON(outlines, {interactive:false, style:{color:'#92a68d', weight:0.75, fillColor:'#c5d5b9', fillOpacity:1}}).addTo(map);
+                map = L.map(mapNode, {minZoom:0, maxZoom:19, zoomSnap:0.25, scrollWheelZoom:false});
+                worldLayer = L.geoJSON(outlines, {interactive:false, style:{color:'#92a68d', weight:0.75, fillColor:'#c5d5b9', fillOpacity:1}}).addTo(map);
+                localTiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom:19, keepBuffer:1
+                });
+                map.attributionControl.setPrefix(false);
                 pins = L.layerGroup().addTo(map);
                 map.on('zoomend', renderPins);
                 open = true;
@@ -319,6 +348,10 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
         reset() {
             groups = new Map();
             selectedId = '';
+            if (map?.hasLayer(localTiles)) {
+                localTiles.remove();
+                worldLayer.addTo(map);
+            }
             pins?.clearLayers();
             detail.replaceChildren();
             stamps.replaceChildren();
