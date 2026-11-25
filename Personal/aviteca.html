@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=19">
+    <link rel="stylesheet" href="./aviteca.css?v=20">
 </head>
 <body class="overflow-hidden">
 
@@ -382,6 +382,13 @@
                                 <div id="helper-dropdown" class="outing-matches hidden"></div>
                                 <output id="checklist-feedback" class="text-sm" role="status"></output>
                             </div>
+                            <section id="outing-objectives" class="outing-counted" aria-labelledby="outing-objectives-title" hidden>
+                                <div class="outing-section-title">
+                                    <h3 id="outing-objectives-title">Objectius de la sortida</h3>
+                                    <span id="outing-objectives-progress" role="status"></span>
+                                </div>
+                                <div id="outing-objective-birds"></div>
+                            </section>
                             <section id="field-outing" class="outing-counted" aria-labelledby="field-outing-title" hidden>
                                 <div class="outing-section-title"><h3 id="field-outing-title">Ocells per buscar</h3></div>
                                 <p id="field-outing-scope" class="outing-match-label"></p>
@@ -690,6 +697,10 @@
             </div>
         </nav>
 
+        <div class="sighting-celebration">
+            <div id="celebration-confetti" aria-hidden="true"></div>
+            <p id="celebration-message" role="status" aria-atomic="true"></p>
+        </div>
         <div id="toast-container" class="toast-hide" role="status" aria-atomic="true">
             <i data-lucide="info" aria-hidden="true"></i>
             <span id="toast-message"></span>
@@ -1177,6 +1188,32 @@
             return writeLocally(ref, () => edit ? updateDoc(ref, payload) : setDoc(ref, payload), snap => snap.exists() && snap.data()._localWriteId === revision);
         };
         const savedMessage = text => UI.showToast(text + (state.durableCache && (state.syncWaiting || state.pendingObs || state.pendingLists) ? ' · Desat al dispositiu; pendent de sincronitzar.' : ''));
+        const celebrationMessage = document.getElementById('celebration-message');
+        const confetti = document.getElementById('celebration-confetti');
+        let celebrationTimer;
+        const celebrateSighting = ({found = false, bimbo = false}) => {
+            if (!found && !bimbo) return;
+            celebrationMessage.textContent = [found ? 'Trobat!' : '', bimbo ? 'Bimbo!' : ''].filter(Boolean).join(' · ');
+            confetti.replaceChildren();
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                const pieces = document.createDocumentFragment();
+                for (let i = 0; i < 44; i++) {
+                    const piece = document.createElement('span');
+                    piece.style.setProperty('--x', `${Math.round((Math.random() - .5) * 108)}vw`);
+                    piece.style.setProperty('--y', `${18 + Math.round(Math.random() * 55)}vh`);
+                    piece.style.setProperty('--lift', `-${5 + Math.round(Math.random() * 29)}vh`);
+                    piece.style.setProperty('--spin', `${(i % 2 ? -1 : 1) * (180 + Math.round(Math.random() * 360))}deg`);
+                    piece.style.setProperty('--time', `${800 + Math.round(Math.random() * 500)}ms`);
+                    pieces.append(piece);
+                }
+                confetti.append(pieces);
+            }
+            clearTimeout(celebrationTimer);
+            celebrationTimer = setTimeout(() => {
+                celebrationMessage.textContent = '';
+                confetti.replaceChildren();
+            }, 2200);
+        };
         window.addEventListener('online', updateFieldStatus);
         window.addEventListener('offline', updateFieldStatus);
 
@@ -2030,18 +2067,20 @@
             saveQuickSighting.disabled = true;
             quickSightingError.textContent = '';
             const id = generateUUID();
+            const isBimbo = !observedSpeciesKeys(state.observations).has(speciesKey(bird));
             try {
                 await saveLocally(doc(db, 'artifacts', appId, 'users', user.uid, 'bird_observations', id), {
                     id, species:bird.commonName, scientificName:displayScience(bird) || '',
                     family:bird.family || '', order:bird.order || '', count:null,
                     date:quickSightingDate.value, location:document.getElementById('quick-sighting-place').value.trim(),
                     destination:document.getElementById('quick-sighting-destination').value,
-                    type:'visual', isBimbo:!observedSpeciesKeys(state.observations).has(speciesKey(bird)),
+                    type:'visual', isBimbo,
                     checklistId:null, createdAt:new Date().toISOString(), photo:null
                 });
                 if (state.user?.uid === user.uid) {
                     quickSighting.close();
                     savedMessage('Observació desada');
+                    celebrateSighting({bimbo:isBimbo});
                 }
             } catch {
                 quickSightingError.textContent = 'No s’ha pogut desar l’observació. Torna-ho a provar.';
@@ -2325,9 +2364,11 @@
         // Form Submit (Crear o Actualitzar)
         document.getElementById('form-new-obs').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!state.user || !selectedSpeciesForObs) return;
+            const user = state.user;
+            if (!user || !selectedSpeciesForObs) return;
 
             const btn = document.getElementById('btn-save-obs');
+            if (btn.disabled) return;
             const saveLabel = document.getElementById('text-save-obs');
             saveLabel.textContent = 'Desant…';
             btn.disabled = true;
@@ -2369,14 +2410,11 @@
             }
 
             try {
-                const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id);
-                if (isEdit) {
-                    await saveLocally(docRef, obs, true);
-                    savedMessage("Observació actualitzada!");
-                } else {
-                    await saveLocally(docRef, obs);
-                    savedMessage("Observació desada!");
-                }
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'bird_observations', id);
+                await saveLocally(docRef, obs, isEdit);
+                if (state.user?.uid !== user.uid) return;
+                savedMessage(isEdit ? 'Observació actualitzada!' : 'Observació desada!');
+                if (!isEdit) celebrateSighting({bimbo:obs.isBimbo});
                 
                 resetObservationForm();
                 if (isEdit) UI.switchView('view-history', 'Historial');
@@ -2523,6 +2561,9 @@
         const planMore = document.getElementById('btn-plan-more');
         const fieldOuting = document.getElementById('field-outing');
         const fieldBirds = document.getElementById('field-outing-birds');
+        const objectiveSection = document.getElementById('outing-objectives');
+        const objectiveRows = document.getElementById('outing-objective-birds');
+        const objectiveProgress = document.getElementById('outing-objectives-progress');
         const fieldMore = document.getElementById('btn-field-birds-more');
         const pageSize = 8;
         let planLimit = pageSize;
@@ -2530,6 +2571,7 @@
         let currentPlanId = '';
         let planTargets = new Set();
         let fieldMatches = [];
+        let objectiveBirds = [];
         const seasonLabels = {primavera:'Primavera', estiu:'Estiu', tardor:'Tardor', hivern:'Hivern'};
 
         const planPlaces = document.getElementById('plan-places');
@@ -2700,12 +2742,14 @@
             else startPlannedOuting(plan);
         });
 
-        const outingBirdRow = (bird, index, source, {target = false, seenCount = 0, count} = {}) => {
+        const outingBirdRow = (bird, index, source, {objective = false, seenCount = 0, count} = {}) => {
             const name = escapeHtml(bird.commonName);
+            const achieved = objective && count > 0;
             return `<div class="outing-bird-row" data-${source}-bird="${index}">
                 <div class="outing-bird-identity">
                     <div class="outing-bird-name">
-                        ${target ? '<span class="target-star" aria-label="Objectiu">★</span> ' : ''}${name}
+                        ${name}
+                        ${objective ? `<small class="outing-objective-status${achieved ? ' is-achieved' : ''}">${achieved ? '✓ Assolit' : 'Pendent'}</small>` : ''}
                         ${seenCount ? `<small class="field-encounter">${seenCount} ${seenCount === 1 ? 'registre' : 'registres'} en aquest aguait</small>` : ''}
                     </div>
                     <button type="button" class="outing-info" data-outing-info aria-label="Fitxa de ${name}">?</button>
@@ -2713,6 +2757,31 @@
                 <button type="button" class="outing-record" aria-label="Afegeix ${name}">${count ? `Anotats ${count}` : 'Anota'}</button>
             </div>`;
         };
+        const renderOutingObjectives = () => {
+            const targets = state.activeOuting?.targets || [];
+            const counts = new Map();
+            for (const item of state.checklistVisualItems) {
+                const key = speciesKey(item);
+                counts.set(key, (counts.get(key) || 0) + item.count);
+            }
+            objectiveBirds = targets.map(key => birdsBySpeciesKey.get(key)).filter(Boolean)
+                .sort((a,b) => Number(counts.has(speciesKey(a))) - Number(counts.has(speciesKey(b))));
+            objectiveSection.hidden = !objectiveBirds.length;
+            const achieved = objectiveBirds.filter(bird => counts.has(speciesKey(bird))).length;
+            const pending = objectiveBirds.length - achieved;
+            const progress = pending ? `${pending} per trobar` : `${achieved} de ${objectiveBirds.length} assolits`;
+            if (objectiveProgress.textContent !== progress) objectiveProgress.textContent = progress;
+            objectiveRows.innerHTML = objectiveBirds.map((bird,index) =>
+                outingBirdRow(bird,index,'objective',{objective:true,count:counts.get(speciesKey(bird))})).join('');
+        };
+        const activateOutingBirdRow = (event,bird) => {
+            if (event.target.closest('[data-outing-info]')) openBirdDetail(bird, true);
+            else openOutingBird(bird);
+        };
+        objectiveRows.addEventListener('click', event => {
+            const row = event.target.closest('[data-objective-bird]');
+            if (row) activateOutingBirdRow(event,objectiveBirds[Number(row.dataset.objectiveBird)]);
+        });
         const renderFieldOuting = (hideRecords = recordedHidesAtOuting()) => {
             const place = currentChecklistLocation();
             const hide = currentOutingHide();
@@ -2738,8 +2807,8 @@
                     history.set(key, (history.get(key) || 0) + 1);
                 }
             }
-            fieldMatches = outingSuggestions(plan).sort((a,b) =>
-                (history.get(b.key) || 0) - (history.get(a.key) || 0) || Number(targets.has(b.key)) - Number(targets.has(a.key)));
+            fieldMatches = outingSuggestions(plan).filter(({key}) => !targets.has(key))
+                .sort((a,b) => (history.get(b.key) || 0) - (history.get(a.key) || 0));
             const counts = new Map();
             for (const item of state.checklistVisualItems) {
                 if (hide.hide && outingHideKey(item) !== hideKey) continue;
@@ -2752,7 +2821,7 @@
             fieldBirds.innerHTML = fieldMatches.length ? emptyHistory + fieldMatches.slice(0,fieldLimit).map(({bird,key},index) => {
                 const group = knownCount && (index === 0 || index === knownCount)
                     ? `<h4 class="outing-section-title">${index === 0 ? 'Vistos en aquest aguait' : 'Altres ocells possibles'}</h4>` : '';
-                return group + outingBirdRow(bird, index, 'field', {target:targets.has(key), seenCount:history.get(key), count:counts.get(key)});
+                return group + outingBirdRow(bird, index, 'field', {seenCount:history.get(key), count:counts.get(key)});
             }).join('') : '<p class="outing-match-label">Cap suggeriment per a aquesta sortida. Podeu anotar qualsevol espècie amb el cercador.</p>';
             fieldMore.hidden = fieldMatches.length <= fieldLimit;
         };
@@ -2762,16 +2831,14 @@
         });
         fieldBirds.addEventListener('click', event => {
             const row = event.target.closest('[data-field-bird]');
-            if (!row) return;
-            const bird = fieldMatches[Number(row.dataset.fieldBird)]?.bird;
-            if (event.target.closest('[data-outing-info]')) openBirdDetail(bird, true);
-            else openOutingBird(bird);
+            if (row) activateOutingBirdRow(event,fieldMatches[Number(row.dataset.fieldBird)]?.bird);
         });
 
         const renderChecklistSuggestions = () => {
             const query = helperSpecies.value.trim();
             const hideRecords = recordedHidesAtOuting();
             renderFieldHidePicker(hideRecords);
+            renderOutingObjectives();
             renderFieldOuting(hideRecords);
             if (!fieldOuting.hidden && !query) {
                 checklistMatches = [];
@@ -2917,15 +2984,21 @@
                 species:bird.commonName || bird.species, scientificName:displayScience(bird) || '',
                 family:bird.family || '', order:bird.order || '', count, ...hideDetails
             };
-            const existing = state.checklistVisualItems.find(item => item !== editing
-                && speciesKey(item) === speciesKey(next) && outingHideKey(item) === outingHideKey(next));
+            const key = speciesKey(next);
+            const rowsForSpecies = state.checklistVisualItems.filter(item => speciesKey(item) === key);
+            const existing = rowsForSpecies.find(item => item !== editing && outingHideKey(item) === outingHideKey(next));
             if (existing && !Number.isSafeInteger(existing.count + count)) return null;
             if (existing) {
                 existing.count += count;
                 if (editing) state.checklistVisualItems.splice(state.checklistVisualItems.indexOf(editing), 1);
             } else if (editing) Object.assign(editing, next);
             else state.checklistVisualItems.unshift(next);
-            return existing?.count ?? count;
+            const firstCount = !rowsForSpecies.length;
+            return {
+                count:existing?.count ?? count,
+                found:firstCount && Boolean(state.activeOuting?.targets.includes(key)),
+                bimbo:firstCount && !observedSpeciesKeys(state.observations).has(key)
+            };
         };
 
         const outingBirdDialog = document.getElementById('modal-outing-bird');
@@ -3074,8 +3147,8 @@
             const hide = outingBirdHide.checked;
             const hideDetails = {hide, hideName:hide ? outingBirdHideName.value.trim() : ''};
             const name = currentOutingBird.commonName || currentOutingBird.species;
-            const savedCount = addChecklistBird(currentOutingBird, count, hideDetails, editingOutingBird);
-            if (savedCount === null) {
+            const result = addChecklistBird(currentOutingBird, count, hideDetails, editingOutingBird);
+            if (!result) {
                 outingBirdCount.setCustomValidity('El recompte és massa gran.');
                 outingBirdCount.reportValidity();
                 return;
@@ -3083,8 +3156,10 @@
             if (!editingOutingBird) setCurrentOutingHide(hideDetails);
             outingBirdDialog.close();
             helperSpecies.value = '';
+            const savedCount = result.count;
             checklistFeedback.textContent = `${name} · ${savedCount} ${savedCount === 1 ? 'individu' : 'individus'}`;
             renderVisualChecklist();
+            celebrateSighting(result);
         });
         outingBirdCount.addEventListener('input', () => outingBirdCount.setCustomValidity(''));
         outingBirdDialog.addEventListener('close', () => {
@@ -3102,10 +3177,7 @@
         });
         helperDropdown.addEventListener('click', event => {
             const row = event.target.closest('[data-check-bird]');
-            if (!row) return;
-            const bird = checklistMatches[Number(row.dataset.checkBird)];
-            if (event.target.closest('[data-outing-info]')) openBirdDetail(bird, true);
-            else openOutingBird(bird);
+            if (row) activateOutingBirdRow(event,checklistMatches[Number(row.dataset.checkBird)]);
         });
         checklistItems.addEventListener('keydown', event => {
             if (event.key !== 'Enter' || !event.target.matches('[data-count-index]')) return;
@@ -3153,6 +3225,7 @@
             const input = document.getElementById('check-multiline');
             const remaining = [];
             let added = 0;
+            const achievements = {found:false, bimbo:false};
             for (const line of input.value.split('\n')) {
                 const text = line.trim();
                 if (!text) continue;
@@ -3163,16 +3236,20 @@
                     remaining.push(line);
                     continue;
                 }
-                if (addChecklistBird(bird, count, currentOutingHide()) === null) {
+                const result = addChecklistBird(bird, count, currentOutingHide());
+                if (!result) {
                     remaining.push(line);
                     continue;
                 }
+                achievements.found ||= result.found;
+                achievements.bimbo ||= result.bimbo;
                 added++;
             }
             input.value = remaining.join('\n');
             if (!remaining.length && added) document.getElementById('checklist-paste').open = false;
             renderVisualChecklist();
             UI.showToast(added ? `${added} línies afegides${remaining.length ? '. Revisa les línies que queden.' : '.'}` : 'No s’ha trobat cap espècie.');
+            celebrateSighting(achievements);
         });
 
         // Guardar Sortida Final
@@ -3202,13 +3279,18 @@
                 const checklistRef = doc(db, 'artifacts', appId, 'users', user.uid, 'bird_checklists', checklistId);
                 const batch = writeBatch(db);
                 batch.set(checklistRef, {...checklistObj, _localWriteId:revision});
-                for (const item of state.checklistVisualItems) {
+                const seen = observedSpeciesKeys(state.observations.filter(observation => observation.checklistId !== checklistId));
+                // Els recomptes nous apareixen els primers a la pantalla. Desa’ls en l’ordre en què s’han anotat.
+                for (const item of [...state.checklistVisualItems].reverse()) {
                     const obsId = item.id;
+                    const key = speciesKey(item);
+                    const isBimbo = !seen.has(key);
+                    seen.add(key);
                     batch.set(doc(db, 'artifacts', appId, 'users', user.uid, 'bird_observations', obsId), {
                         id: obsId, species: item.species, scientificName: item.scientificName,
                         family: item.family, order: item.order, count: item.count,
                         date, location, destination, ...gpsFields(state.checklistGps), hide: item.hide, hideName: item.hideName, type: 'visual', notes: "", photo: null,
-                        checklistId, createdAt: new Date().toISOString()
+                        isBimbo, checklistId, createdAt: new Date().toISOString()
                     });
                 }
 

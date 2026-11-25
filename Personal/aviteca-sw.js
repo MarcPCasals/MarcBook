@@ -4,7 +4,7 @@ const root = new URL('./', self.location.href);
 const url = path => new URL(path, root).href;
 const marker = url('./aviteca-offline-ready');
 const core = [
-    './aviteca.html', './aviteca.css?v=19', './aviteca-catalog.json?v=14',
+    './aviteca.html', './aviteca.css?v=20', './aviteca-catalog.json?v=14',
     './aviteca-location.js?v=1', './aviteca-offline.js?v=1', './aviteca-compare.js?v=6', './aviteca-offline-assets.json',
     './aviteca-travel.js?v=4', './aviteca-world.json?v=1', './aviteca-outings.js?v=5',
     './aviteca-marca/telescopi.svg?v=3', './aviteca-marca/telescopi-180.png?v=3',
