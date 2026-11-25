@@ -65,6 +65,8 @@ export function createDestinations() {
         for (const group of groups.values()) {
             group.dateRange = [...group.dates].sort();
             group.exclusive = [...group.species.keys()].filter(key => locationsBySpecies.get(key).size === 1);
+            group.shared = [...group.species.keys()].filter(key =>
+                [...locationsBySpecies.get(key)].some(id => id !== group.id && id !== UNPLACED));
         }
         return groups;
     };

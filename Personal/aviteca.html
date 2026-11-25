@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=15">
+    <link rel="stylesheet" href="./aviteca.css?v=16">
 </head>
 <body class="overflow-hidden">
 
@@ -616,7 +616,7 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
-        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=2';
+        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=3';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=3';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
@@ -1603,9 +1603,9 @@
             const discovered = birdDb.filter(bird => seen.has(speciesKey(bird))).length;
             const remaining = birdDb.length - discovered;
             const search = norm(document.getElementById('guide-search').value);
-            const filtered = birdDb.map((bird, index) => ({bird, index})).filter(({bird}) => {
-                const isSeen = seen.has(speciesKey(bird));
-                const inScope = destination ? destination.species.has(speciesKey(bird))
+            const filtered = birdDb.map((bird, index) => ({bird, index, key: speciesKey(bird)})).filter(({bird, key}) => {
+                const isSeen = seen.has(key);
+                const inScope = destination ? destination.species.has(key)
                     : guideFilter === 'all' || (guideFilter === 'seen' ? isSeen : !isSeen);
                 return inScope &&
                     [bird.commonName, displayScience(bird), bird.guide?.spanishName, bird.guide?.englishName, bird.order].some(text => norm(text).includes(search));
@@ -1634,8 +1634,8 @@
                 </div>`;
             const speciesLabel = filtered.length === 1 ? 'espècie' : 'espècies';
             document.getElementById('guide-count-label').textContent = `Mostrant ${filtered.length} ${speciesLabel}`;
-            document.getElementById('guide-list').innerHTML = filtered.map(({bird, index}) => {
-                const isSeen = seen.has(speciesKey(bird));
+            const renderCards = entries => entries.map(({bird, index, key}) => {
+                const isSeen = seen.has(key);
                 return `<button type="button" data-bird-index="${index}" class="bird-card ${isSeen ? 'is-seen' : 'is-pending'}">
                     ${rarityBadge(bird)}
                     ${birdArtwork(bird, isSeen, index + 1)}
@@ -1644,7 +1644,27 @@
                         <div class="bird-card-science">${escapeHtml(displayScience(bird) || 'Nom científic pendent')}</div>
                     </div>
                 </button>`;
-            }).join('') || '<p class="empty-state text-center">No hi ha cap espècie amb aquests filtres.</p>';
+            }).join('');
+            let cards;
+            if (destination) {
+                const exclusive = new Set(destination.exclusive);
+                const shared = new Set(destination.shared);
+                const groups = [
+                    {title: 'Només registrades aquí', entries: []},
+                    {title: 'També registrades en altres llocs', entries: []},
+                    {title: 'Amb observacions per situar', entries: []}
+                ];
+                for (const entry of filtered) {
+                    groups[exclusive.has(entry.key) ? 0 : shared.has(entry.key) ? 1 : 2].entries.push(entry);
+                }
+                cards = groups.filter(group => group.entries.length).map(({title, entries}) => `
+                    <h2 class="guide-region-heading">${title}<span class="result-count">${entries.length}</span></h2>
+                    ${renderCards(entries)}
+                `).join('');
+            } else {
+                cards = renderCards(filtered);
+            }
+            document.getElementById('guide-list').innerHTML = cards || '<p class="empty-state text-center">No hi ha cap espècie amb aquests filtres.</p>';
             document.querySelectorAll('#guide-list .bird-card').forEach(el => el.addEventListener('click', () => {
                 state.selectedBird = birdDb[Number(el.dataset.birdIndex)];
                 renderBirdDetail();
