@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=18">
+    <link rel="stylesheet" href="./aviteca.css?v=19">
 </head>
 <body class="overflow-hidden">
 
@@ -298,7 +298,7 @@
             <!-- VISTA: SORTIDES (CHECKLISTS) -->
             <div id="view-checklists" class="app-view hidden fade-in">
                 <div class="outings-tools">
-                    <button id="btn-new-checklist" class="action action-primary"><i data-lucide="plus-circle" aria-hidden="true"></i> Nova sortida</button>
+                    <button id="btn-new-checklist" class="action action-primary"><i data-lucide="plus-circle" aria-hidden="true"></i> <span id="new-checklist-label">Nova sortida</span></button>
                     <button id="btn-plan-outing" class="action"><i data-lucide="calendar-days" aria-hidden="true"></i> Prepara una sortida</button>
                     <button id="btn-outings-map" class="action"><i data-lucide="map" aria-hidden="true"></i> Mapa de les sortides</button>
                 </div>
@@ -363,8 +363,22 @@
                     <form id="form-new-checklist" class="space-y-3">
                         <fieldset id="checklist-fields" class="space-y-3">
                             <div class="outing-search">
+                                <label for="field-hide">Aguait actual</label>
+                                <div class="field-hide-controls">
+                                    <select id="field-hide" class="w-full p-3"></select>
+                                    <button type="button" class="action" id="btn-new-field-hide" aria-label="Nou aguait" aria-controls="field-hide-entry" aria-expanded="false">Nou</button>
+                                </div>
+                                <div id="field-hide-entry" class="mt-2" hidden>
+                                    <label for="field-hide-name">Nom de l’aguait</label>
+                                    <div class="field-hide-controls">
+                                        <input type="text" id="field-hide-name" maxlength="100" class="w-full p-3">
+                                        <button type="button" class="action" id="btn-use-field-hide">Fes-lo servir</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="outing-search">
                                 <label for="helper-species">Afegeix un ocell</label>
-                                <input type="search" id="helper-species" placeholder="Escriu el nom de l’ocell…" autocomplete="off" spellcheck="false" aria-controls="helper-dropdown" class="w-full p-3">
+                                <input type="search" id="helper-species" placeholder="Cerca a tot l’Avitèdex…" autocomplete="off" spellcheck="false" aria-controls="helper-dropdown" class="w-full p-3">
                                 <div id="helper-dropdown" class="outing-matches hidden"></div>
                                 <output id="checklist-feedback" class="text-sm" role="status"></output>
                             </div>
@@ -413,6 +427,7 @@
                                 <i data-lucide="save" aria-hidden="true"></i> Desa la sortida
                             </button>
                         </div>
+                        <button type="button" class="action w-full" id="btn-abandon-checklist">Abandona la sortida</button>
                     </form>
                 </div>
             </div>
@@ -699,7 +714,7 @@
         import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
         import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=4';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=6';
-        import { outingHabitats, outingPlaces, outingSeason, normalizeOutingPlace, outingLocationKey, suggestOutingBirds } from './aviteca-outings.js?v=4';
+        import { outingHabitats, outingPlaces, outingSeason, normalizeOutingPlace, outingLocationKey, suggestOutingBirds } from './aviteca-outings.js?v=5';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
         // ==========================================
@@ -909,6 +924,7 @@
             editingObsId: null, // Per saber si estem editant
             checklistVisualItems: [],
             activeOuting: null,
+            checklistDraftId: '',
             unsubs: [],
             pendingObs: 0, pendingLists: 0, obsCached: true, listsCached: true,
             syncWaiting: false, syncError: '', durableCache: false
@@ -949,6 +965,8 @@
             toastTimer: null,
             currentView: 'view-registry',
             guideScroll: 0,
+            outingScroll: 0,
+            birdFromOuting: false,
             
             showToast(msg) {
                 const toast = document.getElementById('toast-container');
@@ -966,12 +984,15 @@
             switchView(viewId, title) {
                 const previous = UI.currentView;
                 if (previous === 'view-guide' && viewId !== 'view-guide') UI.guideScroll = UI.main.scrollTop;
+                if (previous === 'view-new-checklist' && viewId !== 'view-new-checklist' && state.checklistDraftId) UI.outingScroll = UI.main.scrollTop;
                 UI.currentView = viewId;
                 const hasGuideBack = viewId === 'view-bird-detail' || viewId === 'view-compare';
+                if (!hasGuideBack) UI.birdFromOuting = false;
                 const hasBack = hasGuideBack || ['view-new-checklist','view-plan-outing','view-history'].includes(viewId);
                 const back = document.getElementById('btn-header-back');
                 back.classList.toggle('hidden', !hasBack);
-                back.title = hasGuideBack ? 'Torna a l’Avitèdex' : viewId === 'view-history' ? 'Torna al Registre' : 'Torna a Sortides';
+                back.title = hasGuideBack ? (UI.birdFromOuting ? 'Torna a la sortida' : 'Torna a l’Avitèdex')
+                    : viewId === 'view-history' ? 'Torna al Registre' : 'Torna a Sortides';
                 back.setAttribute('aria-label', back.title);
                 document.querySelector('.app-header').classList.toggle('has-back', hasBack);
                 Object.values(UI.views).forEach(el => el.classList.add('hidden'));
@@ -992,7 +1013,6 @@
                 // Netejar estat edició si sortim
                 if(viewId !== 'view-new-obs' && state.editingObsId) resetObservationForm();
                 
-                UI.main.scrollTop = viewId === 'view-guide' && (previous === 'view-bird-detail' || previous === 'view-compare') ? UI.guideScroll : 0;
                 if (viewId === 'view-registry' && UI.app.classList.contains('flex')) travelView.render(travelGroups, true);
                 if (viewId === 'view-history') renderObservations();
                 if (viewId === 'view-checklists') {
@@ -1001,6 +1021,8 @@
                 }
                 if (viewId === 'view-plan-outing') renderPlanSuggestions();
                 if (viewId === 'view-new-checklist') renderChecklistSuggestions();
+                UI.main.scrollTop = viewId === 'view-new-checklist' ? UI.outingScroll
+                    : viewId === 'view-guide' && (previous === 'view-bird-detail' || previous === 'view-compare') ? UI.guideScroll : 0;
                 document.querySelector('.data-menu').open = false;
             }
         };
@@ -1209,7 +1231,8 @@
                 onAuthStateChanged(auth, (user) => {
                     clearDataListeners();
                     state.user = user;
-                    if (state.activeUid !== (user?.uid || null)) {
+                    const accountChanged = state.activeUid !== (user?.uid || null);
+                    if (accountChanged) {
                         state.observations = [];
                         state.checklists = [];
                         state.activeUid = user?.uid || null;
@@ -1217,13 +1240,9 @@
                         state.selectedBird = null;
                         state.birdHistoryFilter = '';
                         UI.guideScroll = 0;
-                        state.checklistVisualItems = [];
-                        state.activeOuting = null;
-                        lastOutingHide = {hide:false, hideName:''};
-                        lastOutingPlace = '';
                         outingBirdDialog.close();
                         resetOutingPlanForm();
-                        state.checklistGps = null;
+                        resetChecklist();
                         state.mapChecklistId = '';
                         state.mapFitPending = true;
                         clearRegistryFilters();
@@ -1231,11 +1250,6 @@
                         document.getElementById('guide-search').value = '';
                         travelView.reset();
                         resetObservationForm();
-                        document.getElementById('form-new-checklist').reset();
-                        document.getElementById('check-gps-status').textContent = 'Sense coordenades.';
-                        document.getElementById('checklist-details').open = false;
-                        document.getElementById('checklist-paste').open = false;
-                        document.getElementById('checklist-feedback').textContent = '';
                         quickSighting.close();
                         document.getElementById('form-catalog-password').reset();
                         document.getElementById('form-catalog-maida').reset();
@@ -1266,6 +1280,7 @@
                         renderObservations();
                         renderChecklists();
                         updateStats();
+                        if (accountChanged && restoreOutingDraft()) continueOuting();
                         document.getElementById('auth-password').value = '';
                     } else {
                         UI.app.classList.add('hidden');
@@ -1456,6 +1471,10 @@
                 state.listsCached = snap.metadata.fromCache;
                 trackSynchronization();
                 state.checklists = snap.docs.map(d => d.data());
+                if (state.checklistDraftId && !checklistFields.disabled && state.checklists.some(checklist => checklist.id === state.checklistDraftId)) {
+                    removeOutingDraft();
+                    if (UI.currentView === 'view-new-checklist') UI.switchView('view-checklists', 'Sortides');
+                }
                 renderChecklists();
                 if (!UI.views['view-map'].classList.contains('hidden')) renderMap();
             }, reportSyncError);
@@ -1463,7 +1482,7 @@
             state.unsubs.push(unsubObs, unsubChk);
             
             document.getElementById('input-date').valueAsDate = new Date();
-            document.getElementById('check-date').value = todayDate();
+            if (!state.checklistDraftId) document.getElementById('check-date').value = todayDate();
         };
         const clearDataListeners = () => { state.unsubs.forEach(fn => fn()); state.unsubs = []; };
 
@@ -1708,6 +1727,15 @@
             </div>`;
         };
 
+        const openBirdDetail = (bird, fromOuting = false) => {
+            if (!bird) return;
+            state.selectedBird = bird;
+            state.birdHistoryFilter = '';
+            UI.birdFromOuting = fromOuting;
+            renderBirdDetail();
+            UI.switchView('view-bird-detail', 'Fitxa de l’ocell');
+        };
+
         const renderGuide = () => {
             const collection = selectedGuideCollection();
             const destination = travelGroups.get(guideDestination.value);
@@ -1783,12 +1811,8 @@
                 cards = renderCards(filtered);
             }
             document.getElementById('guide-list').innerHTML = cards || '<p class="empty-state text-center">No hi ha cap espècie amb aquests filtres.</p>';
-            document.querySelectorAll('#guide-list .bird-card').forEach(el => el.addEventListener('click', () => {
-                state.selectedBird = birdDb[Number(el.dataset.birdIndex)];
-                state.birdHistoryFilter = '';
-                renderBirdDetail();
-                UI.switchView('view-bird-detail', 'Fitxa de l’ocell');
-            }));
+            document.querySelectorAll('#guide-list .bird-card').forEach(el => el.addEventListener('click', () =>
+                openBirdDetail(birdDb[Number(el.dataset.birdIndex)])));
             if(window.lucide) lucide.createIcons();
         };
 
@@ -1799,7 +1823,7 @@
             const guide = bird.guide;
             const entries = state.observations.filter(o => speciesKey(o) === key)
                 .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-            const collection = selectedGuideCollection();
+            const collection = UI.birdFromOuting ? null : selectedGuideCollection();
             const collectionBird = collection && bird.regions?.includes(collection.region);
             const discovered = collectionBird ? !!travelGroups.get(collection.region)?.species.has(key) : entries.length > 0;
             document.getElementById('btn-quick-sighting').classList.toggle('hidden', discovered);
@@ -1958,7 +1982,8 @@
             renderGuide();
         }));
         document.getElementById('btn-header-back').addEventListener('click', () => {
-            if (['view-new-checklist','view-plan-outing'].includes(UI.currentView)) UI.switchView('view-checklists', 'Sortides');
+            if (UI.birdFromOuting && state.checklistDraftId) continueOuting();
+            else if (['view-new-checklist','view-plan-outing'].includes(UI.currentView)) UI.switchView('view-checklists', 'Sortides');
             else if (UI.currentView === 'view-history') UI.switchView('view-registry', 'Registre');
             else UI.switchView('view-guide', 'Avitèdex');
         });
@@ -2484,6 +2509,9 @@
         const helperDropdown = document.getElementById('helper-dropdown');
         const checklistFeedback = document.getElementById('checklist-feedback');
         const checklistItems = document.getElementById('visual-checklist-items');
+        const checklistForm = document.getElementById('form-new-checklist');
+        const checklistFields = document.getElementById('checklist-fields');
+        const checklistInfoFields = ['check-name','check-date','check-location','check-destination'].map(id => document.getElementById(id));
         let checklistMatches = [];
         let lastOutingHide = {hide:false, hideName:''};
         const planForm = document.getElementById('form-plan-outing');
@@ -2599,25 +2627,19 @@
             UI.switchView('view-plan-outing', 'Prepara una sortida');
         };
         const startPlannedOuting = plan => {
-            if (state.checklistVisualItems.length && state.activeOuting?.id !== plan.id) {
-                UI.showToast('Desa la sortida en curs abans de començar-ne una altra.');
+            if (state.checklistDraftId) {
+                if (state.activeOuting?.id === plan.id) continueOuting();
+                else UI.showToast('Ja teniu una sortida en curs. Podeu continuar-la des de Sortides.');
                 return;
             }
-            if (state.activeOuting?.id !== plan.id || !state.checklistVisualItems.length) {
-                state.checklistGps = null;
-                document.getElementById('check-gps-status').textContent = 'Sense coordenades.';
-                document.getElementById('check-name').value = '';
-                document.getElementById('check-location').value = plan.location;
-                document.getElementById('check-date').value = plan.date;
-                document.getElementById('check-destination').value = plan.destination;
-                lastOutingHide = {hide:false, hideName:''};
-                lastOutingPlace = '';
-            }
+            resetChecklist();
+            document.getElementById('check-location').value = plan.location;
+            document.getElementById('check-date').value = plan.date;
+            document.getElementById('check-destination').value = plan.destination;
             state.activeOuting = plan;
-            fieldLimit = pageSize;
-            helperSpecies.value = '';
-            checklistFeedback.textContent = '';
-            UI.switchView('view-new-checklist', 'Nova sortida');
+            state.checklistDraftId = generateUUID();
+            saveOutingDraft();
+            continueOuting();
         };
 
         planForm.addEventListener('change', event => {
@@ -2678,30 +2700,60 @@
             else startPlannedOuting(plan);
         });
 
-        const renderFieldOuting = () => {
-            fieldOuting.hidden = !state.activeOuting || !!helperSpecies.value.trim();
+        const outingBirdRow = (bird, index, source, {target = false, seenCount = 0, count} = {}) => {
+            const name = escapeHtml(bird.commonName);
+            return `<div class="outing-bird-row" data-${source}-bird="${index}">
+                <div class="outing-bird-identity">
+                    <div class="outing-bird-name">
+                        ${target ? '<span class="target-star" aria-label="Objectiu">★</span> ' : ''}${name}
+                        ${seenCount ? `<small class="field-encounter">${seenCount} ${seenCount === 1 ? 'registre' : 'registres'} en aquest aguait</small>` : ''}
+                    </div>
+                    <button type="button" class="outing-info" data-outing-info aria-label="Fitxa de ${name}">?</button>
+                </div>
+                <button type="button" class="outing-record" aria-label="Afegeix ${name}">${count ? `Anotats ${count}` : 'Anota'}</button>
+            </div>`;
+        };
+        const renderFieldOuting = (hideRecords = recordedHidesAtOuting()) => {
+            const place = currentChecklistLocation();
+            const hide = currentOutingHide();
+            fieldOuting.hidden = (!state.activeOuting && !(hide.hide && place.location.trim())) || !!helperSpecies.value.trim();
             if (fieldOuting.hidden) return;
             const plan = {...state.activeOuting,
                 date:document.getElementById('check-date').value,
-                location:document.getElementById('check-location').value,
-                destination:document.getElementById('check-destination').value || destinations.identify({location:document.getElementById('check-location').value})
+                location:place.location,
+                destination:destinations.identify(place),
+                habitats:state.activeOuting?.habitats || []
             };
             const region = destinations.list().find(item => item.id === plan.destination);
             const scope = [plan.location.trim() || region?.name, seasonLabels[outingSeason(plan.date)], ...outingHabitats
                 .filter(habitat => plan.habitats.includes(habitat.id)).map(habitat => habitat.label)];
             document.getElementById('field-outing-scope').textContent = scope.filter(Boolean).join(' · ');
             const targets = new Set(plan.targets);
-            fieldMatches = outingSuggestions(plan).sort((a,b) => Number(targets.has(b.key)) - Number(targets.has(a.key)));
+            const hideKey = outingHideKey(hide);
+            const history = new Map();
+            if (normalizeOutingPlace(hide.hideName)) {
+                for (const observation of hideRecords) {
+                    if (outingHideKey(observation) !== hideKey) continue;
+                    const key = speciesKey(observation);
+                    history.set(key, (history.get(key) || 0) + 1);
+                }
+            }
+            fieldMatches = outingSuggestions(plan).sort((a,b) =>
+                (history.get(b.key) || 0) - (history.get(a.key) || 0) || Number(targets.has(b.key)) - Number(targets.has(a.key)));
             const counts = new Map();
             for (const item of state.checklistVisualItems) {
+                if (hide.hide && outingHideKey(item) !== hideKey) continue;
                 const key = speciesKey(item);
                 counts.set(key, (counts.get(key) || 0) + item.count);
             }
-            fieldBirds.innerHTML = fieldMatches.length ? fieldMatches.slice(0,fieldLimit).map(({bird,key},index) => `
-                <button type="button" class="outing-match" data-field-bird="${index}">
-                    <span>${targets.has(key) ? '<span class="target-star" aria-label="Objectiu">★</span> ' : ''}${escapeHtml(bird.commonName)}</span>
-                    <span>${counts.has(key) ? `Anotats ${counts.get(key)}` : 'Anota'}</span>
-                </button>`).join('') : '<p class="outing-match-label">Cap suggeriment per a aquesta sortida. Podeu anotar qualsevol espècie amb el cercador.</p>';
+            const knownCount = fieldMatches.filter(({key}) => history.has(key)).length;
+            const emptyHistory = hide.hideName && !knownCount
+                ? '<p class="outing-match-label">Cap registre d’aquest aguait coincideix amb els filtres actuals.</p>' : '';
+            fieldBirds.innerHTML = fieldMatches.length ? emptyHistory + fieldMatches.slice(0,fieldLimit).map(({bird,key},index) => {
+                const group = knownCount && (index === 0 || index === knownCount)
+                    ? `<h4 class="outing-section-title">${index === 0 ? 'Vistos en aquest aguait' : 'Altres ocells possibles'}</h4>` : '';
+                return group + outingBirdRow(bird, index, 'field', {target:targets.has(key), seenCount:history.get(key), count:counts.get(key)});
+            }).join('') : '<p class="outing-match-label">Cap suggeriment per a aquesta sortida. Podeu anotar qualsevol espècie amb el cercador.</p>';
             fieldMore.hidden = fieldMatches.length <= fieldLimit;
         };
         fieldMore.addEventListener('click', () => {
@@ -2709,14 +2761,19 @@
             renderFieldOuting();
         });
         fieldBirds.addEventListener('click', event => {
-            const button = event.target.closest('[data-field-bird]');
-            if (button) openOutingBird(fieldMatches[Number(button.dataset.fieldBird)]?.bird);
+            const row = event.target.closest('[data-field-bird]');
+            if (!row) return;
+            const bird = fieldMatches[Number(row.dataset.fieldBird)]?.bird;
+            if (event.target.closest('[data-outing-info]')) openBirdDetail(bird, true);
+            else openOutingBird(bird);
         });
 
         const renderChecklistSuggestions = () => {
             const query = helperSpecies.value.trim();
-            renderFieldOuting();
-            if (state.activeOuting && !query) {
+            const hideRecords = recordedHidesAtOuting();
+            renderFieldHidePicker(hideRecords);
+            renderFieldOuting(hideRecords);
+            if (!fieldOuting.hidden && !query) {
                 checklistMatches = [];
                 helperDropdown.classList.add('hidden');
                 return;
@@ -2748,10 +2805,7 @@
             helperDropdown.classList.toggle('hidden', !query && !checklistMatches.length);
             helperDropdown.innerHTML = checklistMatches.length ? `
                 <p class="outing-match-label">${heading}</p>
-                ${checklistMatches.map((bird, index) => `
-                    <button type="button" class="outing-match" data-check-bird="${index}" aria-label="Afegeix ${escapeHtml(bird.commonName)}">
-                        <span>${escapeHtml(bird.commonName)}</span><span aria-hidden="true">Anota</span>
-                    </button>`).join('')}`
+                ${checklistMatches.map((bird, index) => outingBirdRow(bird, index, 'check')).join('')}`
                 : '<p class="outing-match-label">No s’ha trobat cap espècie.</p>';
         };
 
@@ -2774,11 +2828,92 @@
                     <button type="button" class="outing-remove" data-item="${index}" aria-label="Treu ${escapeHtml(item.species)} de la llista">×</button>
                 </div>`).join('') : '<p class="outing-match-label">Encara no hi ha ocells anotats.</p>';
             renderChecklistSuggestions();
+            saveOutingDraft();
         };
+
+        const checklistDraftKey = () => `aviteca_outing_draft:${state.user.uid}`;
+        const updateOutingNavigation = () => {
+            const active = Boolean(state.checklistDraftId);
+            const nav = document.querySelector('[data-target="view-checklists"]');
+            nav.dataset.outingActive = String(active);
+            nav.title = active ? 'Continua la sortida en curs' : 'Sortides';
+            document.getElementById('new-checklist-label').textContent = active ? 'Continua la sortida' : 'Nova sortida';
+        };
+        const resetChecklist = () => {
+            state.checklistDraftId = '';
+            state.activeOuting = null;
+            state.checklistVisualItems = [];
+            state.checklistGps = null;
+            fieldLimit = pageSize;
+            UI.outingScroll = 0;
+            UI.birdFromOuting = false;
+            lastOutingHide = {hide:false, hideName:''};
+            lastOutingPlace = '';
+            checklistForm.reset();
+            document.getElementById('check-date').value = todayDate();
+            document.getElementById('check-gps-status').textContent = 'Sense coordenades.';
+            document.getElementById('checklist-details').open = false;
+            document.getElementById('checklist-paste').open = false;
+            checklistFeedback.textContent = '';
+            setFieldHideEntry(false);
+            updateOutingNavigation();
+        };
+        const saveOutingDraft = () => {
+            if (!state.user || !state.checklistDraftId) return;
+            localWrite(checklistDraftKey(), JSON.stringify({
+                id:state.checklistDraftId,
+                plan:state.activeOuting,
+                items:state.checklistVisualItems,
+                values:Object.fromEntries(checklistInfoFields.map(field => [field.id,field.value])),
+                gps:state.checklistGps,
+                hide:currentOutingHide()
+            }));
+        };
+        const restoreOutingDraft = () => {
+            let draft;
+            try { draft = JSON.parse(localRead(checklistDraftKey())); }
+            catch { return false; }
+            if (!draft?.id || !Array.isArray(draft.items) || !draft.values) return false;
+            state.checklistDraftId = draft.id;
+            state.activeOuting = draft.plan;
+            state.checklistVisualItems = draft.items;
+            for (const field of checklistInfoFields) {
+                const value = draft.values[field.id] || '';
+                if (field.tagName === 'SELECT' && value && !Array.from(field.options).some(option => option.value === value)) {
+                    field.add(new Option(value,value));
+                }
+                field.value = value;
+            }
+            state.checklistGps = draft.gps || null;
+            if (state.checklistGps) {
+                document.getElementById('check-gps-status').textContent = `${state.checklistGps.latitude.toFixed(5)}, ${state.checklistGps.longitude.toFixed(5)}`;
+            }
+            if (draft.hide) setCurrentOutingHide(draft.hide);
+            renderVisualChecklist();
+            return true;
+        };
+        const removeOutingDraft = () => {
+            if (state.user) {
+                try { localStorage.removeItem(checklistDraftKey()); } catch { /* Storage may be unavailable. */ }
+            }
+            resetChecklist();
+            renderVisualChecklist();
+        };
+        const continueOuting = () => {
+            updateOutingNavigation();
+            if (UI.currentView !== 'view-new-checklist') UI.switchView('view-new-checklist', 'Sortida en curs');
+        };
+        document.getElementById('btn-abandon-checklist').addEventListener('click', () => {
+            if (checklistFields.disabled || !confirm('Vols abandonar la sortida? Es perdran els recomptes pendents de desar.')) return;
+            removeOutingDraft();
+            UI.switchView('view-checklists', 'Sortides');
+        });
+        for (const field of checklistInfoFields) field.addEventListener('input', saveOutingDraft);
 
         const outingHideKey = item => item.hide ? `hide:${normalizeOutingPlace(item.hideName)}` : '';
         const addChecklistBird = (bird, count, hideDetails = {hide:false, hideName:''}, editing = null) => {
             const next = {
+                id:editing?.id || generateUUID(),
                 species:bird.commonName || bird.species, scientificName:displayScience(bird) || '',
                 family:bird.family || '', order:bird.order || '', count, ...hideDetails
             };
@@ -2800,9 +2935,14 @@
         const outingBirdHideName = document.getElementById('outing-bird-hide-name');
         const outingKnownHides = document.getElementById('outing-known-hides');
         const outingHideHistory = document.getElementById('outing-hide-history');
+        const fieldHideSelect = document.getElementById('field-hide');
+        const fieldHideEntry = document.getElementById('field-hide-entry');
+        const fieldHideName = document.getElementById('field-hide-name');
+        const newFieldHide = document.getElementById('btn-new-field-hide');
         let currentOutingBird = null;
         let editingOutingBird = null;
         let lastOutingPlace = '';
+        let fieldHideOptions = new Map();
 
         const currentChecklistLocation = () => ({
             location:document.getElementById('check-location').value,
@@ -2816,6 +2956,65 @@
             const place = outingPlaceKey(currentChecklistLocation());
             return place ? state.observations.filter(observation => observation.hide && outingPlaceKey(observation) === place) : [];
         };
+        const currentOutingHide = () => lastOutingPlace === outingPlaceKey(currentChecklistLocation())
+            ? lastOutingHide : {hide:false, hideName:''};
+        const setCurrentOutingHide = hide => {
+            if (outingHideKey(hide) !== outingHideKey(currentOutingHide())) fieldLimit = pageSize;
+            lastOutingHide = hide;
+            lastOutingPlace = outingPlaceKey(currentChecklistLocation());
+        };
+        const knownOutingHides = records => {
+            const hides = new Map();
+            for (const entry of [...records, ...state.checklistVisualItems, currentOutingHide()]) {
+                if (entry.hide && entry.hideName) hides.set(outingHideKey(entry), {hide:true, hideName:entry.hideName});
+            }
+            return hides;
+        };
+        const renderFieldHidePicker = records => {
+            const current = currentOutingHide();
+            const key = outingHideKey(current);
+            fieldHideOptions = knownOutingHides(records);
+            if (current.hide && !current.hideName) fieldHideOptions.set(key, current);
+            const options = [...fieldHideOptions].sort(([,a],[,b]) => a.hideName.localeCompare(b.hideName,'ca'));
+            fieldHideSelect.replaceChildren(new Option('Sense aguait',''),
+                ...options.map(([id,hide]) => new Option(hide.hideName || 'Aguait sense nom', id)));
+            fieldHideSelect.value = key;
+        };
+        const setFieldHideEntry = show => {
+            fieldHideEntry.hidden = !show;
+            newFieldHide.setAttribute('aria-expanded', String(show));
+            if (!show) fieldHideName.value = '';
+        };
+        const chooseFieldHide = hide => {
+            setCurrentOutingHide(hide);
+            setFieldHideEntry(false);
+            helperSpecies.value = '';
+            checklistFeedback.textContent = '';
+            renderChecklistSuggestions();
+            saveOutingDraft();
+        };
+        fieldHideSelect.addEventListener('change', () => {
+            chooseFieldHide(fieldHideOptions.get(fieldHideSelect.value) || {hide:false, hideName:''});
+        });
+        newFieldHide.addEventListener('click', () => {
+            setFieldHideEntry(fieldHideEntry.hidden);
+            if (!fieldHideEntry.hidden) fieldHideName.focus();
+        });
+        const useNamedFieldHide = () => {
+            const hide = {hide:true, hideName:fieldHideName.value.trim()};
+            if (!normalizeOutingPlace(hide.hideName)) {
+                fieldHideName.focus();
+                return;
+            }
+            chooseFieldHide(fieldHideOptions.get(outingHideKey(hide)) || hide);
+            fieldHideSelect.focus({preventScroll:true});
+        };
+        document.getElementById('btn-use-field-hide').addEventListener('click', useNamedFieldHide);
+        fieldHideName.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' || event.isComposing) return;
+            event.preventDefault();
+            useNamedFieldHide();
+        });
         const renderOutingHideHistory = () => {
             for (const button of outingKnownHides.querySelectorAll('[data-hide-name]')) {
                 button.setAttribute('aria-pressed', String(outingBirdHide.checked && normalizeOutingPlace(button.dataset.hideName) === normalizeOutingPlace(outingBirdHideName.value)));
@@ -2831,20 +3030,17 @@
         };
         const renderOutingHide = () => {
             document.getElementById('outing-bird-hide-details').hidden = !outingBirdHide.checked;
-            const names = new Map();
-            for (const {hideName} of [...recordedHidesAtOuting(), ...state.checklistVisualItems.filter(item => item.hide)]) {
-                if (hideName) names.set(normalizeOutingPlace(hideName), hideName);
-            }
-            outingKnownHides.innerHTML = [...names.values()].sort((a,b) => a.localeCompare(b,'ca')).map(name =>
+            const names = [...knownOutingHides(recordedHidesAtOuting()).values()].map(hide => hide.hideName);
+            outingKnownHides.innerHTML = names.sort((a,b) => a.localeCompare(b,'ca')).map(name =>
                 `<button type="button" data-hide-name="${escapeHtml(name)}" aria-pressed="false">${escapeHtml(name)}</button>`).join('');
-            document.getElementById('outing-hide-suggestions').hidden = !names.size;
+            document.getElementById('outing-hide-suggestions').hidden = !names.length;
             renderOutingHideHistory();
         };
         const openOutingBird = (bird, editing = false) => {
             if (!bird) return;
             currentOutingBird = bird;
             editingOutingBird = editing ? bird : null;
-            const hideDetails = editing ? bird : lastOutingPlace === outingPlaceKey(currentChecklistLocation()) ? lastOutingHide : {};
+            const hideDetails = editing ? bird : currentOutingHide();
             document.getElementById('outing-bird-title').textContent = bird.commonName || bird.species;
             document.getElementById('btn-save-outing-bird').textContent = editing ? 'Desa el recompte' : 'Afegeix a la sortida';
             outingBirdCount.value = editing ? bird.count : 1;
@@ -2884,8 +3080,7 @@
                 outingBirdCount.reportValidity();
                 return;
             }
-            lastOutingHide = hideDetails;
-            lastOutingPlace = outingPlaceKey(currentChecklistLocation());
+            if (!editingOutingBird) setCurrentOutingHide(hideDetails);
             outingBirdDialog.close();
             helperSpecies.value = '';
             checklistFeedback.textContent = `${name} · ${savedCount} ${savedCount === 1 ? 'individu' : 'individus'}`;
@@ -2906,9 +3101,11 @@
             if (helperSpecies.value.trim() && checklistMatches.length === 1) openOutingBird(checklistMatches[0]);
         });
         helperDropdown.addEventListener('click', event => {
-            const button = event.target.closest('[data-check-bird]');
-            if (!button) return;
-            openOutingBird(checklistMatches[Number(button.dataset.checkBird)]);
+            const row = event.target.closest('[data-check-bird]');
+            if (!row) return;
+            const bird = checklistMatches[Number(row.dataset.checkBird)];
+            if (event.target.closest('[data-outing-info]')) openBirdDetail(bird, true);
+            else openOutingBird(bird);
         });
         checklistItems.addEventListener('keydown', event => {
             if (event.key !== 'Enter' || !event.target.matches('[data-count-index]')) return;
@@ -2925,6 +3122,7 @@
             if (Number.isSafeInteger(count) && count >= 1) item.count = count;
             input.value = item.count;
             checklistItems.querySelector(`[data-item="${index}"][data-delta="-1"]`).disabled = item.count <= 1;
+            saveOutingDraft();
         });
         checklistItems.addEventListener('click', event => {
             const edit = event.target.closest('[data-edit-outing-bird]');
@@ -2965,7 +3163,7 @@
                     remaining.push(line);
                     continue;
                 }
-                if (addChecklistBird(bird, count) === null) {
+                if (addChecklistBird(bird, count, currentOutingHide()) === null) {
                     remaining.push(line);
                     continue;
                 }
@@ -2978,18 +3176,17 @@
         });
 
         // Guardar Sortida Final
-        document.getElementById('form-new-checklist').addEventListener('submit', async (e) => {
+        checklistForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const user = state.user;
-            const fields = document.getElementById('checklist-fields');
-            if (!user || fields.disabled || !state.checklistVisualItems.length) return;
-            fields.disabled = true;
+            if (!user || checklistFields.disabled || !state.checklistDraftId || !state.checklistVisualItems.length) return;
+            checklistFields.disabled = true;
 
             const btn = document.getElementById('btn-save-checklist');
             btn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white border-top-transparent"></div> Processant...`;
             btn.disabled = true;
 
-            const checklistId = generateUUID();
+            const checklistId = state.checklistDraftId;
             const date = document.getElementById('check-date').value;
             const location = document.getElementById('check-location').value;
             const destination = document.getElementById('check-destination').value;
@@ -3006,7 +3203,7 @@
                 const batch = writeBatch(db);
                 batch.set(checklistRef, {...checklistObj, _localWriteId:revision});
                 for (const item of state.checklistVisualItems) {
-                    const obsId = generateUUID();
+                    const obsId = item.id;
                     batch.set(doc(db, 'artifacts', appId, 'users', user.uid, 'bird_observations', obsId), {
                         id: obsId, species: item.species, scientificName: item.scientificName,
                         family: item.family, order: item.order, count: item.count,
@@ -3018,18 +3215,7 @@
                 await writeLocally(checklistRef, () => batch.commit(), snap => snap.exists() && snap.data()._localWriteId === revision);
                 if (state.user?.uid !== user.uid) return;
                 savedMessage('Sortida desada');
-                document.getElementById('form-new-checklist').reset();
-                document.getElementById('check-date').value = todayDate();
-                state.checklistVisualItems = [];
-                state.activeOuting = null;
-                lastOutingHide = {hide:false, hideName:''};
-                lastOutingPlace = '';
-                state.checklistGps = null;
-                document.getElementById('check-gps-status').textContent = 'Sense coordenades.';
-                document.getElementById('checklist-details').open = false;
-                document.getElementById('checklist-paste').open = false;
-                checklistFeedback.textContent = '';
-                renderVisualChecklist();
+                removeOutingDraft();
                 UI.switchView('view-checklists', 'Sortides');
             } catch (err) {
                 console.error("Error saving checklist:", err);
@@ -3039,7 +3225,7 @@
                     alert("Error al processar la llista.");
                 }
             } finally {
-                fields.disabled = false;
+                checklistFields.disabled = false;
                 btn.innerHTML = `<i data-lucide="save" aria-hidden="true"></i> Desa la sortida`;
                 renderVisualChecklist();
                 if(window.lucide) lucide.createIcons();
@@ -3134,13 +3320,18 @@
         document.getElementById('btn-checklist-gps').addEventListener('click', async () => {
             const button = document.getElementById('btn-checklist-gps');
             const status = document.getElementById('check-gps-status');
+            const draftId = state.checklistDraftId;
             button.disabled = true;
-            state.checklistGps = null;
             status.textContent = 'Cercant la posició GPS…';
             try {
-                state.checklistGps = await getGps();
-                status.textContent = `${state.checklistGps.latitude.toFixed(5)}, ${state.checklistGps.longitude.toFixed(5)} · precisió ±${Math.round(state.checklistGps.accuracy)} m`;
-            } catch (error) { status.textContent = 'No s’ha obtingut la posició: ' + error.message; }
+                const gps = await getGps();
+                if (state.checklistDraftId !== draftId) return;
+                state.checklistGps = gps;
+                saveOutingDraft();
+                status.textContent = `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)} · precisió ±${Math.round(gps.accuracy)} m`;
+            } catch (error) {
+                if (state.checklistDraftId === draftId) status.textContent = 'No s’ha obtingut la posició: ' + error.message;
+            }
             finally { button.disabled = false; }
         });
         document.getElementById('btn-capture-gps').addEventListener('click', async () => {
@@ -3170,6 +3361,10 @@
         UI.navItems.forEach(btn => {
             btn.addEventListener('click', () => {
                 const target = btn.dataset.target;
+                if (target === 'view-checklists' && state.checklistDraftId) {
+                    continueOuting();
+                    return;
+                }
                 const titles = { 'view-registry': 'Registre', 'view-new-obs': 'Nova observació', 'view-checklists': 'Sortides', 'view-guide': 'Avitèdex', 'view-map': 'Mapa de sortides', 'view-profile': 'Perfil' };
                 UI.switchView(target, titles[target]);
             });
@@ -3192,7 +3387,14 @@
         });
         document.getElementById('btn-back-outings').addEventListener('click', () => UI.switchView('view-checklists', 'Sortides'));
         document.getElementById('btn-profile-export').addEventListener('click', () => document.getElementById('btn-export').click());
-        document.getElementById('btn-new-checklist').addEventListener('click', () => UI.switchView('view-new-checklist', 'Nova sortida'));
+        document.getElementById('btn-new-checklist').addEventListener('click', () => {
+            if (!state.checklistDraftId) {
+                resetChecklist();
+                state.checklistDraftId = generateUUID();
+                saveOutingDraft();
+            }
+            continueOuting();
+        });
         const statsDialog = document.getElementById('modal-stats');
         document.getElementById('btn-stats').addEventListener('click', () => {
             updateStats();

@@ -50,8 +50,9 @@ export function suggestOutingBirds({birds, observations, speciesKey, identify, p
         if (identify(observation) !== plan.destination) continue;
         const key = speciesKey(observation);
         const entry = history.get(key) || {seenHere:false, seenInSeason:false};
-        entry.seenHere ||= Boolean(place && place === outingLocationKey(observation.location));
-        entry.seenInSeason ||= outingSeason(observation.date) === season;
+        const local = Boolean(place && place === outingLocationKey(observation.location));
+        entry.seenHere ||= local;
+        entry.seenInSeason ||= (!place || local) && outingSeason(observation.date) === season;
         history.set(key, entry);
     }
 
