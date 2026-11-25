@@ -3,8 +3,8 @@ const root = new URL('./', self.location.href);
 const url = path => new URL(path, root).href;
 const marker = url('./aviteca-offline-ready');
 const core = [
-    './aviteca.html', './aviteca.css?v=9', './aviteca-catalog.json?v=9',
-    './aviteca-offline.js?v=1', './aviteca-compare.js?v=1', './aviteca-offline-assets.json',
+    './aviteca.html', './aviteca.css?v=10', './aviteca-catalog.json?v=9',
+    './aviteca-offline.js?v=1', './aviteca-compare.js?v=2', './aviteca-offline-assets.json',
     './aviteca-marca/telescopi.svg?v=3', './aviteca-marca/telescopi-180.png?v=3',
     './aviteca-marca/inicial.woff2', './aviteca-marca/pit-roig.png',
     'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js',
