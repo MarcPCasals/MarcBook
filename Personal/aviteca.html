@@ -617,7 +617,7 @@
 
         import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
         import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=4';
-        import { createComparator, searchBirds } from './aviteca-compare.js?v=5';
+        import { createComparator, searchBirds } from './aviteca-compare.js?v=6';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
         // ==========================================
@@ -709,6 +709,7 @@
         let guideFilter = 'all';
         let birdsBySpeciesKey = new Map();
         let catalogKeysByName = new Map();
+        let sharedSpeciesCount = 0;
         let previousScienceByName = new Map();
         let observedKeysByName = new Map();
         const displayScience = bird => bird.scientificName || bird.guideScientificName || '';
@@ -772,6 +773,7 @@
                 catalogKeysByName.set(name, key);
                 if (!birdsBySpeciesKey.has(key)) birdsBySpeciesKey.set(key, bird);
             }
+            sharedSpeciesCount = new Set(catalog.map(speciesKey).filter(Boolean)).size;
             birdDb = [...birdsBySpeciesKey.values()].sort((a, b) => a.commonName.localeCompare(b.commonName, 'ca'));
             indexObservedNames();
             refreshTravel();
@@ -779,7 +781,7 @@
         };
         const loadCatalog = async () => {
             try {
-                const response = await fetch('./aviteca-catalog.json?v=13');
+                const response = await fetch('./aviteca-catalog.json?v=14');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 state.catalog = await response.json();
                 loadBirds();
@@ -1612,6 +1614,8 @@
                 : observedSpeciesKeys(state.observations);
             const discovered = scope.filter(({key}) => seen.has(key)).length;
             const remaining = scope.length - discovered;
+            const scopeName = collection?.name || 'Avitèdex complet';
+            const customCount = collection || destination ? 0 : scope.length - sharedSpeciesCount;
             const search = norm(document.getElementById('guide-search').value);
             const filtered = scope.filter(({bird, key}) => {
                 const isSeen = seen.has(key);
@@ -1632,12 +1636,13 @@
                 <div class="dex-progress-number">${destination.species.size}</div>
                 <p class="dex-remaining">${escapeHtml(destination.name)}</p>` : `
                 <span class="field-perch" aria-hidden="true"><img src="./aviteca-marca/pit-roig.png" alt="" width="20" height="17"></span>
-                <p class="dex-progress-label">${collection ? `Espècies descobertes · ${collection.name}` : 'Espècies descobertes'}</p>
+                <p class="dex-progress-label">Espècies descobertes · ${scopeName}</p>
                 <div class="dex-progress-number">${discovered}<span> / ${scope.length}</span></div>
-                <div class="dex-progress-track" role="progressbar" aria-label="Espècies descobertes" aria-valuenow="${discovered}" aria-valuemax="${Math.max(1, scope.length)}">
+                <div class="dex-progress-track" role="progressbar" aria-label="Espècies descobertes · ${scopeName}" aria-valuenow="${discovered}" aria-valuemax="${Math.max(1, scope.length)}">
                     <span style="width:${progress}%"></span>
                 </div>
                 <p class="dex-remaining">${remainingText}${collection ? ` a ${collection.name}` : ''}</p>
+                ${customCount > 0 ? `<p class="dex-milestones mb-1">${sharedSpeciesCount} fitxes compartides · ${customCount === 1 ? '1 espècie afegida' : `${customCount} espècies afegides`} en aquest dispositiu</p>` : ''}
                 ${collection ? '' : `<div class="dex-milestones">
                     ${earned.length ? `<strong>Insígnies</strong><span>${earned.join(' · ')}</span>` : ''}
                     ${next ? `<span>${earned.length ? ' · ' : ''}Següent insígnia amb <strong>${next}</strong> espècies</span>` : ''}
