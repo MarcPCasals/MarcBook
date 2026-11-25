@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=8">
+    <link rel="stylesheet" href="./aviteca.css?v=9">
 </head>
 <body class="overflow-hidden">
 
@@ -96,6 +96,13 @@
         </header>
 
         <!-- CONTINGUT PRINCIPAL (Vistes) -->
+        <div id="field-connection" class="field-connection">
+            <p id="field-sync-status" role="status" aria-live="polite">Connectant el quadern…</p>
+            <div class="field-download">
+                <span id="field-download-status" role="status">Prepara el mode de camp amb cobertura</span>
+                <button id="btn-field-download" class="action" disabled>Descarrega per al camp</button>
+            </div>
+        </div>
         <main id="main-content">
             
             <!-- VISTA: REGISTRE (OBSERVACIONS) -->
@@ -363,6 +370,7 @@
                         <i data-lucide="search" aria-hidden="true"></i>
                         <input type="search" id="guide-search" placeholder="Cerca pel nom de l’ocell…" aria-label="Cerca pel nom català, castellà, anglès o científic">
                     </label>
+                    <button id="btn-open-compare" class="action"><i data-lucide="columns-2" aria-hidden="true"></i> Compara ocells</button>
                     <button id="btn-open-custom-species" class="action icon-button" aria-label="Afegeix una espècie" title="Afegeix una espècie">
                         <i data-lucide="plus" aria-hidden="true"></i><span class="header-action-label">Afegeix espècie</span>
                     </button>
@@ -393,11 +401,25 @@
             </div>
 
             <div id="view-bird-detail" class="app-view hidden fade-in">
-                <button id="btn-back-guide" class="action mb-4"><i data-lucide="arrow-left" aria-hidden="true"></i> Torna a l’Avitèdex</button>
+                <div class="bird-detail-toolbar">
+                    <button id="btn-back-guide" class="action"><i data-lucide="arrow-left" aria-hidden="true"></i> Torna a l’Avitèdex</button>
+                    <button id="btn-compare-bird" class="action"><i data-lucide="columns-2" aria-hidden="true"></i> Compara amb un altre ocell</button>
+                </div>
                 <div id="bird-detail"></div>
             </div>
 
+            <div id="view-compare" class="app-view hidden fade-in">
+                <button id="btn-back-compare" class="action"><i data-lucide="arrow-left" aria-hidden="true"></i> Torna a l’Avitèdex</button>
+                <p class="text-sm mt-4">Tria dos ocells i fixa’t en el plomatge, el bec i la silueta. Les fotografies mostren també diferències de sexe o d’edat quan n’hi ha de disponibles.</p>
+                <div class="compare-selectors">
+                    <label for="compare-left">Primer ocell<select id="compare-left"></select></label>
+                    <label for="compare-right">Segon ocell<select id="compare-right"></select></label>
+                </div>
+                <div id="comparison-content"></div>
+            </div>
+
             <div id="view-map" class="app-view hidden fade-in">
+                <p id="map-offline-note" class="info-tile hidden" role="status">El fons del mapa necessita connexió. Pots continuar registrant observacions i afegir-hi la posició GPS si el dispositiu la proporciona.</p>
                 <div class="map-tools">
                     <p id="map-summary" class="result-count" role="status"></p>
                     <button id="btn-map-gps" class="action action-primary"><i data-lucide="locate-fixed" aria-hidden="true"></i> Mostra la meva ubicació</button>
@@ -478,8 +500,12 @@
             signInWithEmailAndPassword, createUserWithEmailAndPassword 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
-            getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch
+            initializeFirestore, persistentLocalCache, persistentMultipleTabManager, CACHE_SIZE_UNLIMITED,
+            collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch, waitForPendingWrites
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        import { createComparator } from './aviteca-compare.js?v=1';
+        import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
         // ==========================================
         // 0. GESTIÓ SEGURA DE LOCALSTORAGE I UTILS
@@ -619,7 +645,7 @@
         };
         const loadCatalog = async () => {
             try {
-                const response = await fetch('./aviteca-catalog.json?v=8');
+                const response = await fetch('./aviteca-catalog.json?v=9');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 state.catalog = await response.json();
                 loadBirds();
@@ -627,6 +653,7 @@
                 renderObservations();
                 updateStats();
                 if (!UI.views['view-bird-detail'].classList.contains('hidden')) renderBirdDetail();
+                if (!UI.views['view-compare'].classList.contains('hidden')) comparator.render();
             } catch (err) { console.warn('No s’ha pogut carregar el catàleg complet:', err); }
         };
 
@@ -659,7 +686,9 @@
             currentPhotoB64: null,
             editingObsId: null, // Per saber si estem editant
             checklistVisualItems: [], // Llista d'objectes {species, scientificName, count, family, order}
-            unsubs: [] 
+            unsubs: [],
+            pendingObs: 0, pendingLists: 0, obsCached: true, listsCached: true,
+            syncWaiting: false, syncError: '', durableCache: false
         };
 
         // Helpers de colors per famílies (disseny)
@@ -685,7 +714,8 @@
                 'view-new-checklist': document.getElementById('view-new-checklist'),
                 'view-guide': document.getElementById('view-guide'),
                 'view-bird-detail': document.getElementById('view-bird-detail'),
-                'view-map': document.getElementById('view-map')
+                'view-map': document.getElementById('view-map'),
+                'view-compare': document.getElementById('view-compare')
             },
             navItems: document.querySelectorAll('.nav-item'),
             headerTitle: document.getElementById('header-title'),
@@ -709,7 +739,7 @@
                 Object.values(UI.views).forEach(el => el.classList.add('hidden'));
                 if(UI.views[viewId]) UI.views[viewId].classList.remove('hidden');
                 
-                const parentView = { 'view-new-checklist': 'view-checklists', 'view-bird-detail': 'view-guide' };
+                const parentView = { 'view-new-checklist': 'view-checklists', 'view-bird-detail': 'view-guide', 'view-compare': 'view-guide' };
                 UI.navItems.forEach(btn => {
                     if (btn.dataset.target === (parentView[viewId] || viewId)) btn.setAttribute('aria-current', 'page');
                     else btn.removeAttribute('aria-current');
@@ -727,6 +757,58 @@
                 document.querySelector('.data-menu').open = false;
             }
         };
+
+        let syncGeneration = 0;
+        const updateFieldStatus = () => {
+            const status = document.getElementById('field-sync-status');
+            const pending = state.pendingObs + state.pendingLists;
+            document.getElementById('field-connection').classList.toggle('is-offline', !navigator.onLine);
+            document.getElementById('map-offline-note').classList.toggle('hidden', navigator.onLine);
+            status.classList.toggle('is-error', !!state.syncError || !state.durableCache);
+            if (state.syncError) status.textContent = state.syncError;
+            else if (!state.durableCache) status.textContent = 'El navegador no permet desar sense connexió. No tanquis l’app amb canvis pendents.';
+            else if (!navigator.onLine) status.textContent = (pending || state.syncWaiting) ? 'Sense connexió · Canvis desats al dispositiu, pendents de sincronitzar' : 'Sense connexió · Treballant amb el quadern del dispositiu';
+            else if (pending || state.syncWaiting) status.textContent = 'Sincronitzant els canvis desats al dispositiu…';
+            else if (state.obsCached || state.listsCached) status.textContent = 'Connectant · Consultant el quadern del dispositiu';
+            else status.textContent = 'Quadern sincronitzat';
+        };
+        const reportSyncError = error => {
+            console.error('Sincronització:', error);
+            state.syncError = 'No s’ha pogut sincronitzar: ' + (error.code === 'permission-denied' ? 'Firebase ha denegat l’accés. Revisa la sessió i els permisos.' : 'comprova la connexió i recarrega l’app.');
+            updateFieldStatus();
+            UI.showToast(state.syncError);
+        };
+        const trackSynchronization = () => {
+            const generation = ++syncGeneration;
+            state.syncWaiting = true;
+            updateFieldStatus();
+            waitForPendingWrites(db).then(() => {
+                if (generation !== syncGeneration) return;
+                state.syncWaiting = false;
+                updateFieldStatus();
+            }).catch(error => { if (generation === syncGeneration && error.code !== 'cancelled') reportSyncError(error); });
+        };
+        const writeLocally = async (ref, start, matches) => {
+            if (!state.durableCache) {
+                if (!navigator.onLine) throw new Error('Aquest navegador no permet conservar observacions sense connexió.');
+                await start(); // With blocked storage, confirm the server before clearing the form.
+                trackSynchronization();
+                return;
+            }
+            await acknowledgeLocalWrite({
+                subscribe: (next, error) => onSnapshot(ref, {includeMetadataChanges:true}, next, error),
+                start, matches, onRejected: reportSyncError
+            });
+            trackSynchronization();
+        };
+        const saveLocally = (ref, data, edit = false) => {
+            const revision = generateUUID();
+            const payload = {...data, _localWriteId: revision};
+            return writeLocally(ref, () => edit ? updateDoc(ref, payload) : setDoc(ref, payload), snap => snap.exists() && snap.data()._localWriteId === revision);
+        };
+        const savedMessage = text => UI.showToast(text + (state.durableCache && (state.syncWaiting || state.pendingObs || state.pendingLists) ? ' · Desat al dispositiu; pendent de sincronitzar.' : ''));
+        window.addEventListener('online', updateFieldStatus);
+        window.addEventListener('offline', updateFieldStatus);
 
         // INICIALITZAR FIREBASE
         const initFirebase = async () => {
@@ -757,7 +839,11 @@
                     .catch(() => { /* Silenciós per no empipar */ });
 
                 auth = getAuth(app);
-                db = getFirestore(app);
+                state.durableCache = await checkLocalStorage();
+                db = initializeFirestore(app, {localCache: persistentLocalCache({
+                    tabManager: persistentMultipleTabManager(), cacheSizeBytes: CACHE_SIZE_UNLIMITED
+                })});
+                updateFieldStatus();
 
                 // El token de l'entorn s'accepta si existeix. La sessió normal resta manual.
                 try {
@@ -776,6 +862,12 @@
                         state.observations = [];
                         state.checklists = [];
                         state.activeUid = user?.uid || null;
+                        state.pendingObs = state.pendingLists = 0;
+                        state.obsCached = state.listsCached = true;
+                        state.syncWaiting = false;
+                        state.syncError = '';
+                        syncGeneration++;
+                        updateFieldStatus();
                         loadBirds();
                     }
                     state.user = user;
@@ -855,7 +947,7 @@
             } catch (err) { UI.showToast(`No s’ha pogut vincular Google: ${err.code || err.message}`); }
         });
 
-        document.getElementById('btn-logout').addEventListener('click', () => { if(confirm("Vols tancar la sessió?")) signOut(auth); });
+        document.getElementById('btn-logout').addEventListener('click', () => { if(confirm(state.pendingObs || state.pendingLists || state.syncWaiting ? "Hi ha canvis pendents de sincronitzar. Es conserven en aquest navegador per a aquest compte. Vols tancar la sessió?" : "Vols tancar la sessió?")) signOut(auth); });
 
         // LÒGICA DE DADES FIRESTORE
         const setupDataListeners = () => {
@@ -864,7 +956,10 @@
             
             // IMPORTANT: Aquestes rutes compleixen la normativa de seguretat
             const obsRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_observations');
-            const unsubObs = onSnapshot(obsRef, (snap) => {
+            const unsubObs = onSnapshot(obsRef, {includeMetadataChanges: true}, (snap) => {
+                state.pendingObs = snap.docs.filter(d => d.metadata.hasPendingWrites).length;
+                state.obsCached = snap.metadata.fromCache;
+                trackSynchronization();
                 state.observations = snap.docs.map(d => d.data());
                 indexObservedNames();
                 renderObservations();
@@ -872,18 +967,19 @@
                 renderGuide();
                 if (!UI.views['view-bird-detail'].classList.contains('hidden')) renderBirdDetail();
                 if (!UI.views['view-map'].classList.contains('hidden')) renderMap();
+                if (!UI.views['view-compare'].classList.contains('hidden')) comparator.render();
             }, (err) => {
-                console.error(err);
-                if (err.code === 'permission-denied') UI.showToast("⚠️ Firebase: Accés denegat. Cal actualitzar les Rules de Firestore.");
+                reportSyncError(err);
             });
             
             const chkRef = collection(db, 'artifacts', appId, 'users', uid, 'bird_checklists');
-            const unsubChk = onSnapshot(chkRef, (snap) => {
+            const unsubChk = onSnapshot(chkRef, {includeMetadataChanges: true}, (snap) => {
+                state.pendingLists = snap.docs.filter(d => d.metadata.hasPendingWrites).length;
+                state.listsCached = snap.metadata.fromCache;
+                trackSynchronization();
                 state.checklists = snap.docs.map(d => d.data());
                 renderChecklists();
-            }, (err) => {
-                console.error(err);
-            });
+            }, reportSyncError);
 
             state.unsubs.push(unsubObs, unsubChk);
             
@@ -1301,6 +1397,18 @@
         }));
         document.getElementById('btn-back-guide').addEventListener('click', () => UI.switchView('view-guide', 'Avitèdex'));
         document.getElementById('guide-search').addEventListener('input', renderGuide);
+        const comparator = createComparator({
+            birds: () => birdDb, speciesKey, rarityBadge, escapeHtml,
+            artwork: bird => birdArtwork(bird, observedSpeciesKeys(state.observations).has(speciesKey(bird)), birdDb.indexOf(bird), true)
+        });
+        const openComparison = bird => {
+            comparator.open(bird);
+            UI.switchView('view-compare', 'Compara ocells');
+            if (window.lucide) lucide.createIcons();
+        };
+        document.getElementById('btn-open-compare').addEventListener('click', () => openComparison());
+        document.getElementById('btn-compare-bird').addEventListener('click', () => openComparison(state.selectedBird));
+        document.getElementById('btn-back-compare').addEventListener('click', () => UI.switchView('view-guide', 'Avitèdex'));
 
         // --- Modal Custom Species ---
         document.getElementById('btn-open-custom-species').addEventListener('click', () => {
@@ -1613,11 +1721,11 @@
             try {
                 const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id);
                 if (isEdit) {
-                    await updateDoc(docRef, obs);
-                    UI.showToast("Observació actualitzada!");
+                    await saveLocally(docRef, obs, true);
+                    savedMessage("Observació actualitzada!");
                 } else {
-                    await setDoc(docRef, obs);
-                    UI.showToast("Observació desada!");
+                    await saveLocally(docRef, obs);
+                    savedMessage("Observació desada!");
                 }
                 
                 resetObservationForm();
@@ -1627,7 +1735,7 @@
                 if (err.code === 'permission-denied') {
                     alert("Firebase ha denegat l'accés. Revisa que les regles de Firestore permetin a cada usuari accedir només a les seves dades.");
                 } else {
-                    alert("Error al guardar l'observació.");
+                    alert("No s’ha pogut desar l’observació. " + err.message);
                 }
             } finally {
                 saveLabel.textContent = state.editingObsId ? 'Actualitzar' : 'Guardar Observació';
@@ -1989,11 +2097,14 @@
             };
 
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', checklistId), checklistObj);
-                
+                if (state.checklistVisualItems.length > 499) throw new Error('La sortida admet fins a 499 espècies.');
+                const revision = generateUUID();
+                const checklistRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', checklistId);
+                const batch = writeBatch(db);
+                batch.set(checklistRef, {...checklistObj, _localWriteId:revision});
                 for (const item of state.checklistVisualItems) {
                     const obsId = generateUUID();
-                    await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obsId), {
+                    batch.set(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obsId), {
                         id: obsId, species: item.species, scientificName: item.scientificName,
                         family: item.family, order: item.order, count: item.count,
                         date, location, hide: false, type: 'visual', notes: "", photo: null,
@@ -2001,7 +2112,8 @@
                     });
                 }
 
-                UI.showToast(`Sortida guardada amb ${state.checklistVisualItems.length} espècies.`);
+                await writeLocally(checklistRef, () => batch.commit(), snap => snap.exists() && snap.data()._localWriteId === revision);
+                savedMessage(`Sortida guardada amb ${state.checklistVisualItems.length} espècies.`);
                 document.getElementById('form-new-checklist').reset();
                 document.getElementById('check-date').valueAsDate = new Date();
                 state.checklistVisualItems = [];
@@ -2028,23 +2140,33 @@
 
         window.deleteObservation = async (id) => {
             if (!state.user || !confirm("Vols esborrar aquesta observació?")) return;
-            try { await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id)); UI.showToast("Observació esborrada"); } 
+            try {
+                const ref = doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', id);
+                let started = false;
+                await writeLocally(ref, () => { started = true; return deleteDoc(ref); }, snap => started && !snap.exists());
+                savedMessage("Observació esborrada");
+            }
             catch (err) { 
                 console.error(err); 
-                if (err.code === 'permission-denied') alert("Error de permisos a Firestore (Rules)."); 
+                alert(err.code === 'permission-denied' ? "Error de permisos a Firestore (Rules)." : "No s’ha pogut esborrar. " + err.message);
             }
         };
 
         window.deleteChecklist = async (id) => {
             if (!state.user || !confirm("Esborrar aquesta sortida i TOTES les observacions associades?")) return;
             try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', id));
+                const ref = doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', id);
                 const toDelete = state.observations.filter(o => o.checklistId === id);
-                for (const obs of toDelete) await deleteDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id));
-                UI.showToast("Sortida i dades esborrades");
+                if (toDelete.length > 499) throw new Error('Hi ha massa observacions per esborrar la sortida d’un sol cop.');
+                const batch = writeBatch(db);
+                batch.delete(ref);
+                for (const obs of toDelete) batch.delete(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id));
+                let started = false;
+                await writeLocally(ref, () => { started = true; return batch.commit(); }, snap => started && !snap.exists());
+                savedMessage("Sortida i dades esborrades");
             } catch (err) { 
                 console.error(err); 
-                if (err.code === 'permission-denied') alert("Error de permisos a Firestore (Rules)."); 
+                alert(err.code === 'permission-denied' ? "Error de permisos a Firestore (Rules)." : "No s’ha pogut esborrar. " + err.message);
             }
         };
 
@@ -2117,8 +2239,8 @@
         document.getElementById('btn-close-stats').addEventListener('click', () => statsDialog.close());
 
         const dataMenu = document.querySelector('.data-menu');
-        document.getElementById('btn-import-excel').addEventListener('click', () => document.getElementById('input-excel').click());
-        document.getElementById('btn-import-backup').addEventListener('click', () => document.getElementById('input-import').click());
+        document.getElementById('btn-import-excel').addEventListener('click', () => navigator.onLine ? document.getElementById('input-excel').click() : UI.showToast('Connecta’t a internet per importar un Excel.'));
+        document.getElementById('btn-import-backup').addEventListener('click', () => navigator.onLine ? document.getElementById('input-import').click() : UI.showToast('Connecta’t a internet per importar una còpia.'));
         document.addEventListener('click', event => {
             if (!dataMenu.open) return;
             const choseAction = event.target.closest('.data-menu-items button');
@@ -2134,6 +2256,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             if(window.lucide) lucide.createIcons();
+            startFieldMode();
             loadCatalog();
             initFirebase();
         });
