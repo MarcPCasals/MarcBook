@@ -55,7 +55,7 @@ export function createDestinations() {
             }
             const group = groups.get(id);
             group.observations.push(observation);
-            if (/^\d{4}-\d{2}-\d{2}$/.test(observation.date)) group.dates.add(observation.date);
+            if (/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(observation.date)) group.dates.add(observation.date);
             const key = speciesKey(observation);
             if (!key) continue;
             group.species.set(key, observation.species || observation.scientificName || '');

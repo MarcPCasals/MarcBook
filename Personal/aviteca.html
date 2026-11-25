@@ -201,6 +201,10 @@
                                 <input type="radio" name="input-type" value="auditiva" class="w-4 h-4 text-emerald-600 accent-emerald-600">
                                 <i data-lucide="ear" class="w-4 h-4 text-gray-600"></i> <span class="text-sm font-medium text-gray-700">Auditiva</span>
                             </label>
+                            <label id="input-type-unknown" class="choice-field hidden">
+                                <input type="radio" name="input-type" value="">
+                                <span class="text-sm font-medium">No indicat</span>
+                            </label>
                         </div>
 
                         <!-- Autocomplet d'Espècie -->
@@ -225,8 +229,9 @@
                                 <input type="number" id="input-count" min="1" value="1" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
                             </div>
                             <div>
-                                <label for="input-date" class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+                                <label id="input-date-label" for="input-date" class="block text-sm font-medium text-gray-700 mb-1">Data *</label>
                                 <input type="date" id="input-date" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm">
+                                <p id="input-date-help" class="text-xs mt-1 hidden">Escriu l’any (AAAA), el mes (AAAA-MM) o la data completa (AAAA-MM-DD).</p>
                             </div>
                         </div>
 
@@ -719,13 +724,13 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             initializeFirestore, persistentLocalCache, persistentMultipleTabManager, CACHE_SIZE_UNLIMITED,
-            collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch, waitForPendingWrites
+            collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch, waitForPendingWrites, getDocsFromServer
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
-        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=4';
+        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=5';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=6';
-        import { outingHabitats, outingPlaces, outingSeason, normalizeOutingPlace, outingLocationKey, suggestOutingBirds } from './aviteca-outings.js?v=5';
+        import { outingHabitats, outingPlaces, outingSeason, normalizeOutingPlace, outingLocationKey, suggestOutingBirds } from './aviteca-outings.js?v=6';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
         // ==========================================
@@ -889,7 +894,7 @@
         };
         const loadCatalog = async () => {
             try {
-                const response = await fetch('./aviteca-catalog.json?v=14');
+                const response = await fetch('./aviteca-catalog.json?v=15');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 state.catalog = await response.json();
                 loadBirds();
@@ -1518,7 +1523,6 @@
 
             state.unsubs.push(unsubObs, unsubChk);
             
-            document.getElementById('input-date').valueAsDate = new Date();
             if (!state.checklistDraftId) document.getElementById('check-date').value = todayDate();
         };
         const clearDataListeners = () => { state.unsubs.forEach(fn => fn()); state.unsubs = []; };
@@ -1560,9 +1564,8 @@
                 const textMatch = norm(o.species).includes(fText) || norm(o.location).includes(fText);
                 const famMatch = !fFam || (o.family && o.family.toLowerCase().includes(fFam));
                 const ordMatch = !fOrd || (o.order && o.order.toLowerCase().includes(fOrd));
-                const dateStartMatch = !fDStart || new Date(o.date) >= new Date(fDStart);
-                const dateEndMatch = !fDEnd || new Date(o.date) <= new Date(fDEnd);
-                return textMatch && famMatch && ordMatch && dateStartMatch && dateEndMatch && (!fLocation || o.location === fLocation);
+                const dateMatch = observationInDateRange(o.date || '', fDStart, fDEnd);
+                return textMatch && famMatch && ordMatch && dateMatch && (!fLocation || o.location === fLocation);
             });
             const speciesCount = observedSpeciesKeys(filtered).size;
             const observationLabel = filtered.length === 1 ? 'observació' : 'observacions';
@@ -1572,7 +1575,7 @@
             document.getElementById('location-summary').textContent = `${count} ${observationLabel} · ${speciesCount} ${speciesLabel}`;
             document.getElementById('btn-more-observations').classList.toggle('hidden', !more);
             
-            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+            filtered.sort(compareObservationDates);
 
             if(filtered.length === 0) {
                 list.innerHTML = '';
@@ -1590,13 +1593,14 @@
                 // Agrupar per dates
                 const grouped = {};
                 filtered.slice(0, historyLimit).forEach(o => {
-                    if(!grouped[o.date]) grouped[o.date] = [];
-                    grouped[o.date].push(o);
+                    const date = o.date || '';
+                    if(!grouped[date]) grouped[date] = [];
+                    grouped[date].push(o);
                 });
 
                 let htmlStr = '';
-                for (const [dateStr, obsArr] of Object.entries(grouped).sort((a,b)=>new Date(b[0])-new Date(a[0]))) {
-                    htmlStr += `<h2 class="observation-day"><i data-lucide="calendar-days" aria-hidden="true"></i> ${formatDate(dateStr)}</h2>`;
+                for (const [dateStr, obsArr] of Object.entries(grouped).sort(([a],[b])=>b.localeCompare(a))) {
+                    htmlStr += `<h2 class="observation-day"><i data-lucide="calendar-days" aria-hidden="true"></i> ${formatDate(dateStr) || 'Data no indicada'}</h2>`;
                     htmlStr += `<div class="observation-grid">`;
                     
                     obsArr.forEach(obs => {
@@ -1655,6 +1659,7 @@
                                 ${obs.isBimbo ? '<span class="bimbo-mark">★ BIMBO</span>' : ''}
                                 ${obs.timeOfDay ? `<span class="bg-sky-50 px-2 py-1 rounded">${obs.timeOfDay === 'M' ? 'Matí' : obs.timeOfDay === 'T' ? 'Tarda' : escapeHtml(obs.timeOfDay)}</span>` : ''}
                                 ${obs.hide && obs.hideName ? `<span class="bg-emerald-50 px-2 py-1 rounded">Aguait · ${escapeHtml(obs.hideName)}</span>` : ''}
+                                ${obs.subspecies ? `<span class="bg-gray-100 px-2 py-1 rounded">Subespècie <i lang="la">${escapeHtml(obs.subspecies)}</i></span>` : ''}
                                 ${obs.latitude != null && obs.longitude != null ? `<span class="text-emerald-700">GPS</span>` : ''}
                             </div>
                             
@@ -1859,7 +1864,7 @@
             const bird = birdsBySpeciesKey.get(key) || state.selectedBird;
             const guide = bird.guide;
             const entries = state.observations.filter(o => speciesKey(o) === key)
-                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+                .sort(compareObservationDates);
             const collection = UI.birdFromOuting ? null : selectedGuideCollection();
             const collectionBird = collection && bird.regions?.includes(collection.region);
             const discovered = collectionBird ? !!travelGroups.get(collection.region)?.species.has(key) : entries.length > 0;
@@ -1884,9 +1889,10 @@
                 const time = o.timeOfDay === 'M' ? 'Matí' : o.timeOfDay === 'T' ? 'Tarda' : 'Horari no indicat';
                 const type = o.type === 'auditiva' ? 'Sentit' : o.type === 'visual' ? 'Vist' : 'No indicat';
                 return `<div class="history-row panel text-sm">
-                    <b>${escapeHtml(o.date)}</b> · ${escapeHtml(o.location || 'Lloc no indicat')}
+                    <b>${formatDate(o.date) || 'Data no indicada'}</b> · ${escapeHtml(o.location || 'Lloc no indicat')}
                     ${o.isBimbo ? '<b class="bimbo-mark">★ BIMBO</b>' : ''}
                     <div class="text-gray-600 mt-1">${size} · ${time} · ${type}${o.hide ? ` · ${escapeHtml(o.hideName || 'Des d’un aguait')}` : ''}${o.latitude != null ? ' · GPS' : ''}</div>
+                    ${o.subspecies ? `<div class="text-gray-600">Subespècie <i lang="la">${escapeHtml(o.subspecies)}</i></div>` : ''}
                 </div>`;
             }).join('');
             const ecology = guide?.ecology;
@@ -1894,7 +1900,7 @@
             const monthNames = ['Gener', 'Febrer', 'Març', 'Abril', 'Maig', 'Juny', 'Juliol', 'Agost', 'Setembre', 'Octubre', 'Novembre', 'Desembre'];
             const monthlyCounts = Array(12).fill(0);
             for (const entry of entries) {
-                const month = String(entry.date || '').match(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/);
+                const month = String(entry.date || '').match(/^\d{4}-(0[1-9]|1[0-2])(?:-\d{2})?$/);
                 if (month) monthlyCounts[Number(month[1]) - 1]++;
             }
             const maxCount = Math.max(1, ...monthlyCounts);
@@ -1954,7 +1960,7 @@
                 <dl class="bird-detail-stats profile-facts">
                     <div class="stat-tile"><dt>Observacions</dt><dd>${entries.length}</dd></div>
                     <div class="stat-tile"><dt>Llocs on l’heu vist</dt><dd>${places.size}</dd></div>
-                    ${ecology?.wingspanCm ? `<div class="stat-tile"><dt>Envergadura</dt><dd>${escapeHtml(ecology.wingspanCm)} <span>cm</span></dd></div>` : `<div class="stat-tile"><dt>Dies amb observacions</dt><dd>${new Set(entries.map(o => o.date)).size}</dd></div>`}
+                    ${ecology?.wingspanCm ? `<div class="stat-tile"><dt>Envergadura</dt><dd>${escapeHtml(ecology.wingspanCm)} <span>cm</span></dd></div>` : `<div class="stat-tile"><dt>Dies amb observacions</dt><dd>${countDatedDays(entries)}</dd></div>`}
                     ${ecology ? `<div class="stat-tile"><dt>Longitud del cos</dt><dd>${escapeHtml(ecology.lengthCm)} <span>cm</span></dd></div>
                     <div class="stat-tile profile-seasons"><dt>Quan el pots veure</dt><dd class="season-tags">${seasonTags}</dd></div>` : ''}
                 </dl>
@@ -1963,7 +1969,7 @@
                     <div class="bird-phenology"><dt>Presència i època de l’any</dt><dd><p class="phenology-note">${escapeHtml(ecology.seasonNote)}</p></dd></div>
                 </dl>` : ''}
                 ${guide ? `<section class="field-guide panel" aria-labelledby="guide-identification">
-                    <h3 id="guide-identification">Com reconèixer l’ocell</h3>
+                    <h3 id="guide-identification">${guide.description || guide.photos.length ? 'Com reconèixer l’ocell' : 'Fonts de la fitxa'}</h3>
                     ${guide.rarity ? `<p class="field-description">${escapeHtml(guide.description)}</p>` : ''}
                     <div class="field-photos">${guide.photos.map(photo => {
                         const file = `./aviteca-fotos/${encodeURIComponent(photo.file)}`;
@@ -1982,7 +1988,7 @@
                     <p class="guide-sources">Per saber-ne més · ${guide.sources.map(source =>
                         `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">${escapeHtml(source.name)}</a>`
                     ).join(' · ')}</p>
-                    <p class="photo-format">Fotografies reduïdes i convertides a WebP. Els crèdits enllacen amb els originals.</p>
+                    ${guide.photos.length ? '<p class="photo-format">Fotografies reduïdes i convertides a WebP. Els crèdits enllacen amb els originals.</p>' : ''}
                 </section>` : ''}
                 ${related.length ? `<section class="profile-related" aria-labelledby="related-title">
                     <div class="related-heading"><h3 id="related-title">Espècies relacionades</h3>
@@ -2139,59 +2145,70 @@
             UI.showToast("Dades exportades correctament!");
         });
 
-        document.getElementById('input-import').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if(!file) return;
-            
-            if(!confirm("Això importarà les dades de l'arxiu al teu compte de Firebase. Vols continuar?")) {
-                e.target.value = '';
-                return;
+        const importMaidaObservations = async (data, user) => {
+            const email = norm(user.email);
+            if (!email || email !== norm(localRead('aviteca_catalog_email:maida')) || email === norm(localRead('aviteca_catalog_email:bernarc'))) {
+                throw new Error('Entra amb el botó Catàleg Maida per importar aquest fitxer.');
             }
+            const {observations} = data;
+            if (!Array.isArray(observations) || observations.length > 400 ||
+                new Set(observations.map(obs => obs.id)).size !== observations.length ||
+                observations.some(obs => !/^maida-excel-[a-f0-9]{16}-[0-9]+$/.test(obs.id) ||
+                    typeof obs.date !== 'string' || !validObservationDate(obs.date) || obs.source !== 'maida-excel')) {
+                throw new Error('El fitxer d’observacions de Maida no té el format esperat.');
+            }
+            if (!confirm(`Importa ${observations.length} observacions al Catàleg Maida (${user.email})?`)) return;
+            const target = collection(db, 'artifacts', appId, 'users', user.uid, 'bird_observations');
+            const existing = await getDocsFromServer(target);
+            if (state.user?.uid !== user.uid) throw new Error('El compte ha canviat durant la importació.');
+            const ids = new Set(existing.docs.map(observation => observation.id));
+            const newObservations = observations.filter(obs => !ids.has(obs.id));
+            if (newObservations.length) {
+                const batch = writeBatch(db);
+                for (const obs of newObservations) batch.set(doc(target, obs.id), obs);
+                await batch.commit();
+            }
+            UI.showToast(`Maida: ${newObservations.length} observacions importades · ${observations.length - newObservations.length} ja presents.`);
+        };
 
-            UI.loading.classList.remove('hidden');
-            document.getElementById('loading-text').innerText = "Important dades al núvol...";
-            document.getElementById('loading-text').classList.remove('hidden');
-
-            const reader = new FileReader();
-            reader.onload = async (ev) => {
-                try {
-                    const data = JSON.parse(ev.target.result);
-                    
-                    // Importar ocells custom
-                    if (data.customBirds && Array.isArray(data.customBirds)) {
-                        customBirds = data.customBirds;
-                        try { localWrite('aviteca_custom_birds:' + state.user.uid, JSON.stringify(customBirds)); } catch(e) {}
-                        loadBirds(); 
-                    }
-
-                    let imports = 0;
-                    
-                    // Importar Checklists
-                    if (data.checklists && state.user) {
-                        for (const chk of data.checklists) {
-                            await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_checklists', chk.id), chk);
-                            imports++;
-                        }
-                    }
-                    
-                    // Importar Observacions
-                    if (data.observations && state.user) {
-                        for (const obs of data.observations) {
-                            await setDoc(doc(db, 'artifacts', appId, 'users', state.user.uid, 'bird_observations', obs.id), obs);
-                            imports++;
-                        }
-                    }
-
-                    UI.showToast(`Importació completada (${imports} documents).`);
-                } catch (err) {
-                    alert("Error en llegir o importar l'arxiu: " + err.message);
-                } finally {
-                    UI.loading.classList.add('hidden');
-                    document.getElementById('loading-text').classList.add('hidden');
+        document.getElementById('input-import').addEventListener('change', async e => {
+            const file = e.target.files[0];
+            const user = state.user;
+            if (!file || !user) return;
+            const loadingText = document.getElementById('loading-text');
+            try {
+                const data = JSON.parse(await file.text());
+                if (state.user?.uid !== user.uid) throw new Error('El compte ha canviat durant la importació.');
+                if (data.format !== 'aviteca-maida-observations-v1' &&
+                    !confirm("Això importarà les dades de l'arxiu al teu compte de Firebase. Vols continuar?")) return;
+                loadingText.textContent = 'Important dades al núvol…';
+                loadingText.classList.remove('hidden');
+                UI.loading.classList.remove('hidden');
+                if (data.format === 'aviteca-maida-observations-v1') {
+                    await importMaidaObservations(data, user);
+                    return;
                 }
-                e.target.value = ''; // Reset input
-            };
-            reader.readAsText(file);
+                if (Array.isArray(data.customBirds)) {
+                    customBirds = data.customBirds;
+                    localWrite('aviteca_custom_birds:' + user.uid, JSON.stringify(customBirds));
+                    loadBirds();
+                }
+                let imports = 0;
+                for (const [name, records] of [['bird_checklists', data.checklists], ['bird_observations', data.observations]]) {
+                    for (const record of records || []) {
+                        if (state.user?.uid !== user.uid) throw new Error('El compte ha canviat durant la importació.');
+                        await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, name, record.id), record);
+                        imports++;
+                    }
+                }
+                UI.showToast(`Importació completada (${imports} documents).`);
+            } catch (err) {
+                alert("Error en llegir o importar l'arxiu: " + err.message);
+            } finally {
+                UI.loading.classList.add('hidden');
+                loadingText.classList.add('hidden');
+                e.target.value = '';
+            }
         });
 
         const excelDate = value => {
@@ -2289,7 +2306,7 @@
             document.getElementById('stat-diff-species').innerText = speciesCounts.size;
             document.getElementById('profile-observations').textContent = totalObs.toLocaleString('ca');
             document.getElementById('profile-species').textContent = speciesCounts.size.toLocaleString('ca');
-            document.getElementById('profile-days').textContent = new Set(state.observations.map(o => o.date).filter(Boolean)).size.toLocaleString('ca');
+            document.getElementById('profile-days').textContent = countDatedDays(state.observations).toLocaleString('ca');
             document.getElementById('registry-total').textContent = totalObs.toLocaleString('ca');
             document.getElementById('registry-species').textContent = speciesCounts.size.toLocaleString('ca');
             document.getElementById('stat-top-species').innerText = topSpecies;
@@ -2303,6 +2320,16 @@
         // ==========================================
         
         const inputSpecies = document.getElementById('input-species');
+        const inputObservationDate = document.getElementById('input-date');
+        const setObservationDateField = (value, partial) => {
+            inputObservationDate.type = partial ? 'text' : 'date';
+            inputObservationDate.required = !partial;
+            inputObservationDate.value = value;
+            inputObservationDate.setCustomValidity('');
+            document.getElementById('input-date-label').textContent = partial ? 'Data' : 'Data *';
+            document.getElementById('input-date-help').classList.toggle('hidden', !partial);
+        };
+        inputObservationDate.addEventListener('input', () => inputObservationDate.setCustomValidity(''));
         const dropSpecies = document.getElementById('autocomplete-dropdown');
         let selectedSpeciesForObs = null;
 
@@ -2366,6 +2393,12 @@
             e.preventDefault();
             const user = state.user;
             if (!user || !selectedSpeciesForObs) return;
+            const date = inputObservationDate.value.trim();
+            if (!validObservationDate(date)) {
+                inputObservationDate.setCustomValidity('Introdueix una data vàlida.');
+                inputObservationDate.reportValidity();
+                return;
+            }
 
             const btn = document.getElementById('btn-save-obs');
             if (btn.disabled) return;
@@ -2384,7 +2417,7 @@
                 count: document.getElementById('input-count').valueAsNumber || null,
                 sampleSize: document.getElementById('input-sample-size').value,
                 timeOfDay: document.getElementById('input-time').value,
-                date: document.getElementById('input-date').value,
+                date,
                 location: document.getElementById('input-location').value,
                 destination: document.getElementById('input-destination').value,
                 hide: observationHide.checked,
@@ -2435,7 +2468,8 @@
         const resetObservationForm = () => {
             document.getElementById('form-new-obs').reset();
             renderObservationHide();
-            document.getElementById('input-date').valueAsDate = new Date();
+            setObservationDateField(todayDate(), false);
+            document.getElementById('input-type-unknown').classList.add('hidden');
             selectedSpeciesForObs = null;
             state.gps = null;
             document.getElementById('gps-status').textContent = 'Sense coordenades';
@@ -2466,7 +2500,7 @@
             document.getElementById('input-count').value = observationCount(obs) ?? '';
             document.getElementById('input-sample-size').value = obs.sampleSize || '';
             document.getElementById('input-time').value = obs.timeOfDay || '';
-            document.getElementById('input-date').value = obs.date;
+            setObservationDateField(obs.date || '', !hasExactDate(obs.date));
             state.gps = obs.latitude != null && obs.longitude != null ? {latitude: obs.latitude, longitude: obs.longitude, accuracy: obs.gpsAccuracy || null} : null;
             document.getElementById('gps-status').textContent = state.gps ? `${Number(state.gps.latitude).toFixed(5)}, ${Number(state.gps.longitude).toFixed(5)}` : 'Sense coordenades';
             document.getElementById('input-location').value = obs.location || '';
@@ -2482,8 +2516,9 @@
             document.getElementById('input-notes').value = obs.notes || '';
             
             const types = document.getElementsByName('input-type');
+            document.getElementById('input-type-unknown').classList.toggle('hidden', Boolean(obs.type));
             for(let i=0; i<types.length; i++) {
-                if(types[i].value === (obs.type || 'visual')) types[i].checked = true;
+                if(types[i].value === (obs.type || '')) types[i].checked = true;
             }
 
             document.getElementById('new-obs-title').innerText = "Editar Observació";
@@ -3346,9 +3381,28 @@
             }
         };
 
-        const formatDate = (dateStr) => {
-            if(!dateStr) return '';
-            return new Date(dateStr).toLocaleDateString('ca-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+        const hasExactDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value);
+        const validObservationDate = value => {
+            if (!value) return true;
+            if (!/^[1-9]\d{3}(?:-(?:0[1-9]|1[0-2])(?:-\d{2})?)?$/.test(value)) return false;
+            if (!hasExactDate(value)) return true;
+            const date = new Date(value + 'T00:00:00Z');
+            return !isNaN(date) && date.toISOString().slice(0, 10) === value;
+        };
+        const compareObservationDates = (a,b) => (b.date || '').localeCompare(a.date || '');
+        const countDatedDays = observations => new Set(observations.map(obs => obs.date).filter(hasExactDate)).size;
+        const observationInDateRange = (date, start, end) => {
+            if (!start && !end) return true;
+            return Boolean(date) && (!start || date >= start.slice(0,date.length))
+                && (!end || date <= end.slice(0,date.length));
+        };
+        const formatDate = date => {
+            if (!date || !validObservationDate(date)) return '';
+            if (date.length === 4) return date;
+            const utc = new Date((date.length === 7 ? date + '-01' : date) + 'T00:00:00Z');
+            const options = {month:'long', year:'numeric', timeZone:'UTC'};
+            if (hasExactDate(date)) options.day = 'numeric';
+            return utc.toLocaleDateString('ca-ES', options);
         };
 
         let map = null;
@@ -3381,7 +3435,7 @@
                 const list = document.createElement('ul');
                 for (const observation of group.observations) {
                     const item = document.createElement('li');
-                    item.textContent = `${observation.species || 'Observació'} · ${observation.date || ''}`;
+                    item.textContent = `${observation.species || 'Observació'} · ${formatDate(observation.date) || 'Data no indicada'}`;
                     list.append(item);
                 }
                 popup.append(list);

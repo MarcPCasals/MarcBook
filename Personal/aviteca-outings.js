@@ -35,7 +35,7 @@ export function outingLocationKey(location) {
 
 const seasonsByMonth = ['hivern','hivern','primavera','primavera','primavera','estiu','estiu','estiu','tardor','tardor','tardor','hivern'];
 export function outingSeason(date) {
-    const month = /^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.exec(date)?.[1];
+    const month = /^\d{4}-(0[1-9]|1[0-2])(?:-\d{2})?$/.exec(date)?.[1];
     return month ? seasonsByMonth[Number(month) - 1] : '';
 }
 
