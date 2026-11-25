@@ -1,7 +1,19 @@
 export const outingPlaces = [
-    {name:'Parc Natural dels Aiguamolls de l’Empordà', destination:'ES-CT', aliases:['Aiguamolls de l’Empordà']},
-    {name:'Parc Natural del Delta de l’Ebre', destination:'ES-CT', aliases:['Delta de l’Ebre']},
-    {name:'Andorra', destination:'AD', aliases:[]}
+    {
+        name:'Parc Natural dels Aiguamolls de l’Empordà', destination:'ES-CT', aliases:['Aiguamolls de l’Empordà'],
+        habitats:['wetland','coast','river'],
+        habitatNote:'Llacunes, canyissars, prats inundables, rius i dunes.'
+    },
+    {
+        name:'Parc Natural del Delta de l’Ebre', destination:'ES-CT', aliases:['Delta de l’Ebre'],
+        habitats:['wetland','coast','river'],
+        habitatNote:'Llacunes, arrossars, desembocadura, badies i platges.'
+    },
+    {
+        name:'Andorra', destination:'AD', aliases:[],
+        habitats:['forest','mountain','open','river'],
+        habitatNote:'Boscos, prats i matollars de muntanya, rius i estanys.'
+    }
 ];
 
 export const outingHabitats = [

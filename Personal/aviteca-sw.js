@@ -6,7 +6,7 @@ const marker = url('./aviteca-offline-ready');
 const core = [
     './aviteca.html', './aviteca.css?v=18', './aviteca-catalog.json?v=14',
     './aviteca-location.js?v=1', './aviteca-offline.js?v=1', './aviteca-compare.js?v=6', './aviteca-offline-assets.json',
-    './aviteca-travel.js?v=4', './aviteca-world.json?v=1', './aviteca-outings.js?v=2',
+    './aviteca-travel.js?v=4', './aviteca-world.json?v=1', './aviteca-outings.js?v=3',
     './aviteca-marca/telescopi.svg?v=3', './aviteca-marca/telescopi-180.png?v=3',
     './aviteca-marca/cataleg-alat.png', './aviteca-marca/inicial.woff2', './aviteca-marca/pit-roig.png',
     'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js',
