@@ -3,8 +3,8 @@ const root = new URL('./', self.location.href);
 const url = path => new URL(path, root).href;
 const marker = url('./aviteca-offline-ready');
 const core = [
-    './aviteca.html', './aviteca.css?v=10', './aviteca-catalog.json?v=9',
-    './aviteca-offline.js?v=1', './aviteca-compare.js?v=2', './aviteca-offline-assets.json',
+    './aviteca.html', './aviteca.css?v=11', './aviteca-catalog.json?v=9',
+    './aviteca-location.js?v=1', './aviteca-offline.js?v=1', './aviteca-compare.js?v=3', './aviteca-offline-assets.json',
     './aviteca-marca/telescopi.svg?v=3', './aviteca-marca/telescopi-180.png?v=3',
     './aviteca-marca/inicial.woff2', './aviteca-marca/pit-roig.png',
     'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js',
@@ -16,7 +16,7 @@ const core = [
 ].map(url);
 const isAsset = target => target.origin === root.origin &&
     (target.pathname === url('./aviteca.html').slice(root.origin.length) ||
-     /^aviteca(?:-compare\.js|-offline\.js|-catalog\.json|-offline-assets\.json|\.css)$/.test(target.pathname.slice(root.pathname.length)) ||
+     /^aviteca(?:-location\.js|-compare\.js|-offline\.js|-catalog\.json|-offline-assets\.json|\.css)$/.test(target.pathname.slice(root.pathname.length)) ||
      /^aviteca-(?:marca|sprites|fotos)\//.test(target.pathname.slice(root.pathname.length)));
 const isExternal = target =>
     (target.origin === 'https://www.gstatic.com' && target.pathname.startsWith('/firebasejs/11.6.1/')) ||
@@ -59,7 +59,7 @@ self.addEventListener('fetch', event => {
     if (!isAsset(target) && !isExternal(target)) return;
     const navigation = target.origin === root.origin && target.pathname === new URL('./aviteca.html', root).pathname;
     const key = navigation ? url('./aviteca.html') : event.request.url;
-    const networkFirst = navigation || /aviteca(?:\.css|-catalog\.json|-compare\.js|-offline\.js|-offline-assets\.json)$/.test(target.pathname);
+    const networkFirst = navigation || /aviteca(?:\.css|-catalog\.json|-location\.js|-compare\.js|-offline\.js|-offline-assets\.json)$/.test(target.pathname);
     event.respondWith((async () => {
         const cache = await caches.open(CACHE);
         const cached = await cache.match(key);

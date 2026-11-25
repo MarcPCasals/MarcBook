@@ -460,10 +460,18 @@ export function createComparator({ birds, speciesKey, artwork, rarityBadge, esca
         document.getElementById('compare-similar-title').textContent = 'Semblants a: ' + anchor.commonName;
         anchorButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.compareAnchor === anchorSide)));
         const related = findSimilarBirds(anchor, birds());
+        document.querySelector('.mobile-swipe-hint').hidden = related.length < 3;
         suggestions.innerHTML = related.length ? related.map(({bird, reason}, index) => `<button type="button" class="compare-similar-card" data-similar="${index}" aria-pressed="${speciesKey(bird) === speciesKey(other)}" aria-label="Compara ${escapeHtml(anchor.commonName)} amb ${escapeHtml(bird.commonName)}">
             ${artwork(bird)}<strong>${escapeHtml(bird.commonName)}</strong><small>${escapeHtml(reason)}</small>
         </button>`).join('') : '<p class="compare-no-results">No hi ha altres espècies properes en aquest catàleg. Pots cercar qualsevol ocell als camps de dalt.</p>';
-        suggestions.querySelectorAll('[data-similar]').forEach(button => button.addEventListener('click', () => choose(anchorSide === 'left' ? 'right' : 'left', related[Number(button.dataset.similar)].bird)));
+        suggestions.querySelectorAll('[data-similar]').forEach(button => button.addEventListener('click', () => {
+            choose(anchorSide === 'left' ? 'right' : 'left', related[Number(button.dataset.similar)].bird);
+            if (window.matchMedia('(max-width:649px)').matches) {
+                const main = target.closest('main');
+                const top = main.scrollTop + target.getBoundingClientRect().top - main.getBoundingClientRect().top;
+                main.scrollTo({top, behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches ? 'instant' : 'smooth'});
+            }
+        }));
     }
     anchorButtons.forEach(button => button.addEventListener('click', () => { anchorSide = button.dataset.compareAnchor; render(); }));
     const text = value => escapeHtml(value || 'Dada pendent');
