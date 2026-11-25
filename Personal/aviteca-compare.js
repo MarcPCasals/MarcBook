@@ -3,6 +3,14 @@ const scientific = bird => normalize(bird.scientificName || bird.guideScientific
 // Symmetric visual comparison groups. Taxonomic fallback is labelled separately in the UI.
 // These are editorial suggestions, not a numerical measure of biological similarity.
 const visualGroups = [
+  ["Circus cyaneus", "Circus pygargus"],
+  ["Falco eleonorae", "Falco subbuteo"],
+  ["Gulosus aristotelis", "Phalacrocorax carbo"],
+  ["Sterna hirundo", "Thalasseus sandvicensis"],
+  ["Curruca iberiae", "Curruca melanocephala", "Curruca communis"],
+  ["Curruca hortensis", "Sylvia atricapilla", "Curruca melanocephala"],
+  ["Calidris minuta", "Calidris temminckii"],
+  ["Calidris canutus", "Calidris ferruginea"],
   ["Pernis apivorus", "Buteo buteo"],
   ["Circus pygargus", "Circus aeruginosus"],
   ["Fringilla montifringilla", "Fringilla coelebs"],
