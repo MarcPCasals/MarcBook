@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=16">
+    <link rel="stylesheet" href="./aviteca.css?v=17">
 </head>
 <body class="overflow-hidden">
 
@@ -389,7 +389,7 @@
                     <input type="file" id="input-excel" accept=".xlsx,.xls" class="hidden">
                 </div>
                 <div class="guide-filter-bar">
-                    <select id="guide-destination" class="hidden" aria-label="Destinació de l’Avitèdex"><option value="">Tot el món</option></select>
+                    <select id="guide-destination" class="hidden" aria-label="Col·lecció o destinació de l’Avitèdex"><option value="">Catàleg complet</option></select>
                     <div id="guide-discovery-filters" class="segmented-control" role="group" aria-label="Filtra per descobriment">
                         <button id="guide-filter-all" aria-pressed="true">Totes</button>
                         <button id="guide-filter-seen" aria-pressed="false">Vistes</button>
@@ -616,7 +616,7 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
-        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=3';
+        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=4';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=3';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
@@ -779,7 +779,7 @@
         };
         const loadCatalog = async () => {
             try {
-                const response = await fetch('./aviteca-catalog.json?v=9');
+                const response = await fetch('./aviteca-catalog.json?v=10');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 state.catalog = await response.json();
                 loadBirds();
@@ -917,6 +917,11 @@
         let travelGroups = new Map();
         const registryDestination = document.getElementById('filter-destination');
         const guideDestination = document.getElementById('guide-destination');
+        const guideCollections = [
+            {id:'collection-ES-CT', region:'ES-CT', name:'Catalunya'},
+            {id:'collection-AD', region:'AD', name:'Andorra'},
+        ];
+        const selectedGuideCollection = () => guideCollections.find(collection => collection.id === guideDestination.value);
         const historyBatchSize = 24;
         let historyLimit = historyBatchSize;
         const registryFilters = ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end', 'filter-location', 'filter-destination'];
@@ -944,9 +949,10 @@
             travelGroups = destinations.summarize(state.observations, speciesKey);
             const mapped = [...travelGroups.values()].filter(group => group.id !== UNPLACED);
             setDestinationOptions(registryDestination, mapped, 'Totes les destinacions', {unplaced:travelGroups.has(UNPLACED)});
-            setDestinationOptions(guideDestination, mapped, 'Tot el món');
+            const collections = guideCollections.filter(collection => birdDb.some(bird => bird.regions?.includes(collection.region)));
+            setDestinationOptions(guideDestination, mapped, 'Catàleg complet', {collections});
             registryDestination.classList.toggle('hidden', !travelGroups.size);
-            guideDestination.classList.toggle('hidden', !mapped.length);
+            guideDestination.classList.toggle('hidden', !mapped.length && !collections.length);
             document.getElementById('travel-destination-count').textContent = `${mapped.length} ${mapped.length === 1 ? 'destinació' : 'destinacions'}`;
             if (UI.currentView === 'view-registry' && UI.app.classList.contains('flex')) travelView.render(travelGroups);
         };
@@ -1598,12 +1604,16 @@
         };
 
         const renderGuide = () => {
-            const seen = observedSpeciesKeys(state.observations);
+            const collection = selectedGuideCollection();
             const destination = travelGroups.get(guideDestination.value);
-            const discovered = birdDb.filter(bird => seen.has(speciesKey(bird))).length;
-            const remaining = birdDb.length - discovered;
+            const scope = birdDb.map((bird, index) => ({bird, index, key: speciesKey(bird)}))
+                .filter(({bird}) => !collection || bird.regions?.includes(collection.region));
+            const seen = collection ? travelGroups.get(collection.region)?.species || new Set()
+                : observedSpeciesKeys(state.observations);
+            const discovered = scope.filter(({key}) => seen.has(key)).length;
+            const remaining = scope.length - discovered;
             const search = norm(document.getElementById('guide-search').value);
-            const filtered = birdDb.map((bird, index) => ({bird, index, key: speciesKey(bird)})).filter(({bird, key}) => {
+            const filtered = scope.filter(({bird, key}) => {
                 const isSeen = seen.has(key);
                 const inScope = destination ? destination.species.has(key)
                     : guideFilter === 'all' || (guideFilter === 'seen' ? isSeen : !isSeen);
@@ -1613,7 +1623,7 @@
             const milestones = [10,25,50,100,200];
             const earned = milestones.filter(n => discovered >= n);
             const next = milestones.find(n => discovered < n);
-            const progress = birdDb.length ? Math.round(discovered / birdDb.length * 100) : 0;
+            const progress = scope.length ? Math.round(discovered / scope.length * 100) : 0;
             const remainingText = remaining === 1 ? 'Us queda 1 espècie per veure' : `Us queden ${remaining} espècies per veure`;
             document.getElementById('guide-pending-count').textContent = `(${remaining})`;
             document.getElementById('guide-discovery-filters').classList.toggle('hidden', !!destination);
@@ -1622,16 +1632,16 @@
                 <div class="dex-progress-number">${destination.species.size}</div>
                 <p class="dex-remaining">${escapeHtml(destination.name)}</p>` : `
                 <span class="field-perch" aria-hidden="true"><img src="./aviteca-marca/pit-roig.png" alt="" width="20" height="17"></span>
-                <p class="dex-progress-label">Espècies descobertes</p>
-                <div class="dex-progress-number">${discovered}<span> / ${birdDb.length}</span></div>
-                <div class="dex-progress-track" role="progressbar" aria-label="Espècies descobertes" aria-valuenow="${discovered}" aria-valuemax="${Math.max(1, birdDb.length)}">
+                <p class="dex-progress-label">${collection ? `Espècies descobertes · ${collection.name}` : 'Espècies descobertes'}</p>
+                <div class="dex-progress-number">${discovered}<span> / ${scope.length}</span></div>
+                <div class="dex-progress-track" role="progressbar" aria-label="Espècies descobertes" aria-valuenow="${discovered}" aria-valuemax="${Math.max(1, scope.length)}">
                     <span style="width:${progress}%"></span>
                 </div>
-                <p class="dex-remaining">${remainingText}</p>
-                <div class="dex-milestones">
+                <p class="dex-remaining">${remainingText}${collection ? ` a ${collection.name}` : ''}</p>
+                ${collection ? '' : `<div class="dex-milestones">
                     ${earned.length ? `<strong>Insígnies</strong><span>${earned.join(' · ')}</span>` : ''}
                     ${next ? `<span>${earned.length ? ' · ' : ''}Següent insígnia amb <strong>${next}</strong> espècies</span>` : ''}
-                </div>`;
+                </div>`}`;
             const speciesLabel = filtered.length === 1 ? 'espècie' : 'espècies';
             document.getElementById('guide-count-label').textContent = `Mostrant ${filtered.length} ${speciesLabel}`;
             const renderCards = entries => entries.map(({bird, index, key}) => {
@@ -1680,7 +1690,10 @@
             const guide = bird.guide;
             const entries = state.observations.filter(o => speciesKey(o) === key)
                 .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-            document.getElementById('btn-quick-sighting').classList.toggle('hidden', entries.length > 0);
+            const collection = selectedGuideCollection();
+            const collectionBird = collection && bird.regions?.includes(collection.region);
+            const discovered = collectionBird ? !!travelGroups.get(collection.region)?.species.has(key) : entries.length > 0;
+            document.getElementById('btn-quick-sighting').classList.toggle('hidden', discovered);
             const places = new Set(entries.map(o => norm(o.location)).filter(Boolean));
             const history = entries.map(o => {
                 const count = observationCount(o);
@@ -1727,7 +1740,7 @@
                 <section class="bird-detail-panel bird-profile">
                     <div class="bird-detail-info">
                         ${rarityBadge(bird)}
-                        <p class="profile-status">${entries.length ? 'Descoberta' : 'Per descobrir'} · #${String(birdDb.indexOf(bird) + 1).padStart(3, '0')}</p>
+                        <p class="profile-status">${discovered ? 'Descoberta' : 'Per descobrir'}${collectionBird ? ` a ${collection.name}` : ''} · #${String(birdDb.indexOf(bird) + 1).padStart(3, '0')}</p>
                         <h2>${escapeHtml(bird.commonName)}</h2>
                         <p class="profile-science" lang="la">${escapeHtml(displayScience(bird) || 'Nom científic pendent')}</p>
                         ${guide ? `<dl class="bird-names">
@@ -1737,7 +1750,7 @@
                         <p class="profile-taxonomy">${escapeHtml(bird.family || bird.order || 'Classificació pendent')}</p>
                     </div>
                     <figure class="profile-calendar" aria-labelledby="profile-calendar-title">
-                        ${birdArtwork(bird, entries.length > 0, birdDb.indexOf(bird) + 1, true)}
+                        ${birdArtwork(bird, discovered, birdDb.indexOf(bird) + 1, true)}
                         <div class="monthly-chart" role="img" aria-label="${escapeHtml(monthNames.map((month, index) => month + ': ' + monthlyCounts[index] + (monthlyCounts[index] === 1 ? ' observació' : ' observacions')).join('. '))}">
                             ${monthlyCounts.map((count, index) => `<div class="month-column" title="${monthNames[index]} · ${count} ${count === 1 ? 'observació' : 'observacions'}">
                                 <div class="month-track"><span class="month-bar ${count ? 'has-observations' : ''}" style="height:${count ? Math.max(8, count / maxCount * 100) : 0}%"></span></div>
@@ -1840,6 +1853,10 @@
         document.getElementById('btn-quick-sighting').addEventListener('click', () => {
             if (!state.selectedBird) return;
             quickSightingForm.reset();
+            const collection = selectedGuideCollection();
+            if (collection && state.selectedBird.regions?.includes(collection.region)) {
+                document.getElementById('quick-sighting-destination').value = collection.region;
+            }
             quickSightingDate.max = quickSightingDate.value = todayDate();
             quickSightingError.textContent = '';
             document.getElementById('quick-sighting-bird').textContent = state.selectedBird.commonName;

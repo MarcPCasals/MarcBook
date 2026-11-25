@@ -1,11 +1,12 @@
 const CACHE = 'aviteca-field-v1';
+const OFFLINE_REVISION = 'camp-2';
 const root = new URL('./', self.location.href);
 const url = path => new URL(path, root).href;
 const marker = url('./aviteca-offline-ready');
 const core = [
-    './aviteca.html', './aviteca.css?v=16', './aviteca-catalog.json?v=9',
+    './aviteca.html', './aviteca.css?v=17', './aviteca-catalog.json?v=10',
     './aviteca-location.js?v=1', './aviteca-offline.js?v=1', './aviteca-compare.js?v=3', './aviteca-offline-assets.json',
-    './aviteca-travel.js?v=3', './aviteca-world.json?v=1',
+    './aviteca-travel.js?v=4', './aviteca-world.json?v=1',
     './aviteca-marca/telescopi.svg?v=3', './aviteca-marca/telescopi-180.png?v=3',
     './aviteca-marca/cataleg-alat.png', './aviteca-marca/inicial.woff2', './aviteca-marca/pit-roig.png',
     'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js',
@@ -86,7 +87,9 @@ self.addEventListener('message', event => {
     event.waitUntil((async () => {
         const cache = await caches.open(CACHE);
         if (event.data.type === 'STATUS') {
-            port.postMessage({type:'STATUS', ready:!!await cache.match(marker)});
+            const downloaded = await cache.match(marker);
+            const status = await downloaded?.json().catch(() => null);
+            port.postMessage({type:'STATUS', ready:status?.revision === OFFLINE_REVISION});
             return;
         }
         try {

@@ -77,7 +77,7 @@ export function createDestinations() {
     };
 }
 
-export function setDestinationOptions(select, items, placeholder, {unplaced = false, countries = false} = {}) {
+export function setDestinationOptions(select, items, placeholder, {unplaced = false, countries = false, collections = []} = {}) {
     const current = select.value;
     const options = [new Option(placeholder, '', true)];
     if (countries) {
@@ -90,11 +90,25 @@ export function setDestinationOptions(select, items, placeholder, {unplaced = fa
             if (group.children.length) options.push(group);
         }
     } else {
-        options.push(...[...items].filter(item => item.id !== UNPLACED).sort(compareNames).map(({id, name}) => new Option(name, id)));
+        const collectionNames = new Set(collections.map(collection => collection.name));
+        const destinations = [...items].filter(item => item.id !== UNPLACED).sort(compareNames)
+            .map(({id, name}) => new Option(collectionNames.has(name) ? `${name} · observades` : name, id));
+        if (collections.length) {
+            for (const [label, children] of [
+                ['Col·leccions territorials', collections.map(({id, name}) => new Option(name, id))],
+                ['Destinacions observades', destinations]
+            ]) {
+                if (!children.length) continue;
+                const group = document.createElement('optgroup');
+                group.label = label;
+                group.append(...children);
+                options.push(group);
+            }
+        } else options.push(...destinations);
     }
     if (unplaced) options.push(new Option('Per situar', UNPLACED));
-    if (!countries && options.length === select.options.length &&
-        options.every((option, index) => option.value === select.options[index].value && option.text === select.options[index].text)) return;
+    if (!countries && options.length === select.children.length &&
+        options.every((option, index) => option.isEqualNode(select.children[index]))) return;
     select.replaceChildren(...options);
     if ([...select.options].some(option => option.value === current)) select.value = current;
 }
