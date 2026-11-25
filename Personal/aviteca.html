@@ -33,7 +33,7 @@
         <img class="brand-mark mb-4" src="./aviteca-marca/telescopi.svg?v=3" alt="" width="42" height="42">
         <h1 class="text-3xl font-bold tracking-wider mb-2">Aviteca</h1>
         <div class="loader mt-4" aria-hidden="true"></div>
-        <p id="loading-text" class="mt-4 text-sm font-medium">Carregant dades…</p>
+        <p id="loading-text" class="mt-4 text-sm font-medium">Recuperant la sessió…</p>
     </div>
 
     <!-- PANTALLA D'AUTENTICACIÓ -->
@@ -682,8 +682,9 @@
     <script type="module">
         import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
-            getAuth, signInWithCustomToken, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup,
+            signInWithCustomToken, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, linkWithPopup,
             signInWithEmailAndPassword, createUserWithEmailAndPassword, initializeAuth, inMemoryPersistence,
+            browserLocalPersistence, indexedDBLocalPersistence, browserPopupRedirectResolver,
             updatePassword, reauthenticateWithPopup
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
@@ -1181,22 +1182,24 @@
                     .then(({ getAnalytics }) => { analytics = getAnalytics(app); })
                     .catch(() => { /* Silenciós per no empipar */ });
 
-                auth = getAuth(app);
+                // Firebase pot recuperar una sessió anterior d’IndexedDB i traslladar-la a localStorage.
+                auth = initializeAuth(app, {
+                    persistence: [browserLocalPersistence, indexedDBLocalPersistence],
+                    popupRedirectResolver: browserPopupRedirectResolver
+                });
                 state.durableCache = await checkLocalStorage();
                 db = initializeFirestore(app, {localCache: persistentLocalCache({
                     tabManager: persistentMultipleTabManager(), cacheSizeBytes: CACHE_SIZE_UNLIMITED
                 })});
                 updateFieldStatus();
 
-                // El token de l'entorn s'accepta si existeix. La sessió normal resta manual.
+                await auth.authStateReady();
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    if (!auth.currentUser && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(auth, __initial_auth_token);
                     }
                 } catch(errAuth) {
-                    console.warn("L'accés silenciós està desactivat. S'utilitzarà el formulari per iniciar sessió.");
-                    // L'error de admin-restricted-operation és normal aquí si l'accés anònim no està habilitat al teu Firebase.
-                    // El codi continuarà cap avall i et mostrarà la pantalla per fer login manualment.
+                    console.warn('No s’ha pogut iniciar la sessió de l’entorn:', errAuth.code);
                 }
                 
                 onAuthStateChanged(auth, (user) => {
