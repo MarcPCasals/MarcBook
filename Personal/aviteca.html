@@ -320,6 +320,10 @@
 
             <div id="view-plan-outing" class="app-view narrow-view hidden fade-in">
                 <form id="form-plan-outing" class="panel form-panel space-y-3">
+                    <fieldset>
+                        <legend class="plan-legend">Llocs habituals</legend>
+                        <div id="plan-places" class="plan-habitats"></div>
+                    </fieldset>
                     <div class="outing-search">
                         <label for="plan-location">Lloc</label>
                         <input id="plan-location" required maxlength="160" placeholder="Ex. Delta de l’Ebre" class="w-full p-3">
@@ -695,7 +699,7 @@
         import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
         import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=4';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=6';
-        import { outingHabitats, outingSeason, normalizeOutingPlace, suggestOutingBirds } from './aviteca-outings.js?v=1';
+        import { outingHabitats, outingPlaces, outingSeason, normalizeOutingPlace, outingLocationKey, suggestOutingBirds } from './aviteca-outings.js?v=2';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
         // ==========================================
@@ -2500,6 +2504,10 @@
         let fieldMatches = [];
         const seasonLabels = {primavera:'Primavera', estiu:'Estiu', tardor:'Tardor', hivern:'Hivern'};
 
+        const planPlaces = document.getElementById('plan-places');
+        planPlaces.innerHTML = outingPlaces.map(({name}, index) =>
+            `<button type="button" data-plan-place="${index}" aria-pressed="false">${escapeHtml(name)}</button>`).join('');
+        const planPlaceButtons = [...planPlaces.querySelectorAll('[data-plan-place]')];
         document.getElementById('plan-habitats').innerHTML = outingHabitats.map(({id,label}) =>
             `<label><input type="checkbox" name="habitat" value="${id}"><span>${label}</span></label>`).join('');
         const habitatInputs = [...planForm.querySelectorAll('[name="habitat"]')];
@@ -2564,6 +2572,11 @@
         }
         const renderPlanSuggestions = () => {
             const plan = readPlanForm();
+            const location = outingLocationKey(plan.location);
+            for (const [index, button] of planPlaceButtons.entries()) {
+                const place = outingPlaces[index];
+                button.setAttribute('aria-pressed', String(place.destination === plan.destination && outingLocationKey(place.name) === location));
+            }
             const pendingOnly = document.getElementById('plan-pending').checked;
             const matches = outingSuggestions(plan).filter(suggestion => !pendingOnly || !suggestion.seenInRegion);
             const empty = !plan.destination ? 'Tria el territori per veure suggeriments.'
@@ -2613,6 +2626,15 @@
                 const region = destinations.identify({location:planLocation.value});
                 if (region !== UNPLACED && [...planDestination.options].some(option => option.value === region)) planDestination.value = region;
             }
+            planLimit = pageSize;
+            renderPlanSuggestions();
+        });
+        planPlaces.addEventListener('click', event => {
+            const button = event.target.closest('[data-plan-place]');
+            if (!button) return;
+            const place = outingPlaces[Number(button.dataset.planPlace)];
+            planLocation.value = place.name;
+            planDestination.value = place.destination;
             planLimit = pageSize;
             renderPlanSuggestions();
         });
@@ -2787,7 +2809,7 @@
             destination:document.getElementById('check-destination').value
         });
         const outingPlaceKey = observation => {
-            const location = normalizeOutingPlace(observation.location);
+            const location = outingLocationKey(observation.location);
             return location && JSON.stringify([destinations.identify(observation),location]);
         };
         const recordedHidesAtOuting = () => {

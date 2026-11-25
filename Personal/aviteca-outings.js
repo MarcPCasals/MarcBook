@@ -1,3 +1,9 @@
+export const outingPlaces = [
+    {name:'Parc Natural dels Aiguamolls de l’Empordà', destination:'ES-CT', aliases:['Aiguamolls de l’Empordà']},
+    {name:'Parc Natural del Delta de l’Ebre', destination:'ES-CT', aliases:['Delta de l’Ebre']},
+    {name:'Andorra', destination:'AD', aliases:[]}
+];
+
 export const outingHabitats = [
     {id:'wetland', label:'Aiguamolls', pattern:/\b(aiguamolls?|canyissars?|maresmes?|salines?|arrossars?|llacunes?|fangars?|estuaris?|prats? (?:humits?|inundats?))\b/},
     {id:'coast', label:'Costa i mar', pattern:/\b(mar|mari(?:ns?|nes?)|costes?|costa|costaners?|costaneres?|litorals?|platges?|badies?|esculleres?)\b/},
@@ -11,6 +17,13 @@ export const outingHabitats = [
 export const normalizeOutingPlace = text => String(text ?? '').normalize('NFD').replace(/\p{M}+/gu, '')
     .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
+const outingPlaceAliases = new Map(outingPlaces.flatMap(({name, aliases}) =>
+    aliases.map(alias => [normalizeOutingPlace(alias), normalizeOutingPlace(name)])));
+export function outingLocationKey(location) {
+    const normalized = normalizeOutingPlace(location);
+    return outingPlaceAliases.get(normalized) || normalized;
+}
+
 const seasonsByMonth = ['hivern','hivern','primavera','primavera','primavera','estiu','estiu','estiu','tardor','tardor','tardor','hivern'];
 export function outingSeason(date) {
     const month = /^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.exec(date)?.[1];
@@ -21,14 +34,14 @@ export function suggestOutingBirds({birds, observations, speciesKey, identify, p
     const season = outingSeason(plan.date);
     if (!season || !plan.destination) return [];
 
-    const place = normalizeOutingPlace(plan.location);
+    const place = outingLocationKey(plan.location);
     const habitats = outingHabitats.filter(habitat => plan.habitats.includes(habitat.id));
     const history = new Map();
     for (const observation of observations) {
         if (identify(observation) !== plan.destination) continue;
         const key = speciesKey(observation);
         const entry = history.get(key) || {seenHere:false, seenInSeason:false};
-        entry.seenHere ||= Boolean(place && place === normalizeOutingPlace(observation.location));
+        entry.seenHere ||= Boolean(place && place === outingLocationKey(observation.location));
         entry.seenInSeason ||= outingSeason(observation.date) === season;
         history.set(key, entry);
     }
