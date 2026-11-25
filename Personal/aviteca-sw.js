@@ -1,10 +1,10 @@
 const CACHE = 'aviteca-field-v1';
-const OFFLINE_REVISION = 'camp-2';
+const OFFLINE_REVISION = 'camp-3';
 const root = new URL('./', self.location.href);
 const url = path => new URL(path, root).href;
 const marker = url('./aviteca-offline-ready');
 const core = [
-    './aviteca.html', './aviteca.css?v=17', './aviteca-catalog.json?v=10',
+    './aviteca.html', './aviteca.css?v=17', './aviteca-catalog.json?v=11',
     './aviteca-location.js?v=1', './aviteca-offline.js?v=1', './aviteca-compare.js?v=3', './aviteca-offline-assets.json',
     './aviteca-travel.js?v=4', './aviteca-world.json?v=1',
     './aviteca-marca/telescopi.svg?v=3', './aviteca-marca/telescopi-180.png?v=3',
