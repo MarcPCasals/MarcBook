@@ -100,7 +100,7 @@ export function setDestinationOptions(select, items, placeholder, {unplaced = fa
 const countLabel = (count, singular, plural) => `${count} ${count === 1 ? singular : plural}`;
 const worldBounds = [[-59, -179], [81, 179]];
 
-export function createTravelView({world, formatDate, birdForKey, escapeHtml, openGuide, openRegistry}) {
+export function createTravelView({world, formatDate, birdForKey, escapeHtml, openGuide, openHistory}) {
     const mapNode = document.getElementById('travel-map');
     const notice = document.getElementById('travel-map-note');
     const stamps = document.getElementById('travel-stamps');
@@ -157,7 +157,7 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             ${more}
             <div class="travel-actions">
                 <button type="button" data-travel-action="guide" class="action action-primary">Veure a l’Avitèdex</button>
-                <button type="button" data-travel-action="registry" class="action">Veure al Registre</button>
+                <button type="button" data-travel-action="history" class="action">Veure a l’historial</button>
             </div>`;
     }
 
@@ -222,7 +222,7 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
 
     function updateNotice() {
         const group = groups.get(selectedId);
-        notice.textContent = !map ? 'Mapa no disponible. Pots consultar les destinacions amb els segells.'
+        notice.textContent = !map ? world() === undefined ? 'Carregant el mapa…' : 'Mapa no disponible. Pots consultar les destinacions amb els segells.'
             : !group ? 'Els pins indiquen destinacions aproximades. Amplia el mapa o toca un segell.'
             : groupLocations(group.observations).length ? 'Els punts verds mostren les observacions amb GPS.'
             : 'Ubicació aproximada. Aquesta destinació no té cap observació amb GPS.';
@@ -251,9 +251,9 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
     detail.addEventListener('click', event => {
         const action = event.target.closest('[data-travel-action]')?.dataset.travelAction;
         if (action === 'guide') openGuide(selectedId);
-        if (action === 'registry') openRegistry(selectedId);
+        if (action === 'history') openHistory(selectedId);
     });
-    document.getElementById('travel-unplaced').addEventListener('click', () => openRegistry(UNPLACED));
+    document.getElementById('travel-unplaced').addEventListener('click', () => openHistory(UNPLACED));
     document.getElementById('travel-world-reset').addEventListener('click', () => select(''));
 
     return {

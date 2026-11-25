@@ -8,7 +8,7 @@
     <!-- Meta tags per a PWA / Mòbil -->
     <meta name="theme-color" content="#18392b">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Aviteca">
     <link rel="icon" type="image/svg+xml" sizes="any" href="./aviteca-marca/telescopi.svg?v=3">
     <link rel="apple-touch-icon" sizes="180x180" href="./aviteca-marca/telescopi-180.png?v=3">
@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=14">
+    <link rel="stylesheet" href="./aviteca.css?v=15">
 </head>
 <body class="overflow-hidden">
 
@@ -98,7 +98,7 @@
         </header>
         <main id="main-content">
             
-            <!-- VISTA: REGISTRE (OBSERVACIONS) -->
+            <!-- VISTA: REGISTRE (MAPA I RESUM) -->
             <div id="view-registry" class="app-view fade-in">
                 <section class="registry-overview field-scene" aria-label="Resum del registre">
                     <span class="field-perch" aria-hidden="true"><img src="./aviteca-marca/pit-roig.png" alt="" width="20" height="17"></span>
@@ -108,12 +108,34 @@
                     </dl>
                 </section>
 
-                <button id="btn-open-travel" type="button" class="travel-entry panel">
-                    <span class="travel-entry-icon"><i data-lucide="earth" aria-hidden="true"></i></span>
-                    <span><strong>Mapa de viatges</strong><small id="travel-entry-count">—</small></span>
-                    <i data-lucide="chevron-right" aria-hidden="true"></i>
-                </button>
+                <section class="travel-map-panel panel" aria-labelledby="travel-map-title">
+                    <div class="registry-map-header">
+                        <div>
+                            <h2 id="travel-map-title">Mapa de viatges</h2>
+                            <p id="travel-destination-count"></p>
+                        </div>
+                        <button id="btn-open-history" type="button" class="action">
+                            <i data-lucide="list" aria-hidden="true"></i> Historial
+                        </button>
+                    </div>
+                    <div id="travel-map" class="hidden" aria-label="Mapa interactiu de les destinacions"></div>
+                    <div class="travel-map-footer">
+                        <p id="travel-map-note" role="status"></p>
+                        <button id="travel-world-reset" type="button" class="action hidden">Tot el món</button>
+                    </div>
+                    <a class="travel-map-credit" href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Cartografia de Natural Earth</a>
+                </section>
+                <section class="travel-passport" aria-labelledby="travel-passport-title">
+                    <h2 id="travel-passport-title">Segells de viatge</h2>
+                    <div id="travel-stamps"></div>
+                    <p id="travel-empty" class="empty-state">Quan deseu una observació amb una destinació, aquí hi apareixerà el seu segell.</p>
+                    <button id="travel-unplaced" type="button" class="action hidden"></button>
+                    <article id="travel-destination-detail" class="travel-destination-detail panel hidden" tabindex="-1"></article>
+                </section>
+            </div>
 
+            <!-- VISTA: HISTORIAL D’OBSERVACIONS -->
+            <div id="view-history" class="app-view hidden fade-in">
                 <div class="registry-tools panel">
                     <div class="registry-fields">
                         <label class="search-field">
@@ -153,29 +175,13 @@
                     <!-- Targetes d'observació generades via JS -->
                 </div>
                 
+                <button id="btn-more-observations" type="button" class="action hidden">Mostra més observacions</button>
+
                 <div id="empty-state-registry" class="empty-state hidden flex-col items-center text-center">
                     <i data-lucide="binoculars" aria-hidden="true"></i>
                     <p id="empty-registry-title" class="text-lg font-bold">Cap observació registrada.</p>
                     <p id="empty-registry-hint" class="text-sm">Toca «Nova» per registrar-ne una.</p>
                 </div>
-            </div>
-
-            <div id="view-travel" class="app-view hidden fade-in">
-                <section class="travel-map-panel panel" aria-label="Mapa del món">
-                    <div id="travel-map" class="hidden" aria-label="Mapa interactiu de les destinacions"></div>
-                    <div class="travel-map-footer">
-                        <p id="travel-map-note" role="status"></p>
-                        <button id="travel-world-reset" type="button" class="action hidden">Tot el món</button>
-                    </div>
-                    <a class="travel-map-credit" href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Cartografia de Natural Earth</a>
-                </section>
-                <section class="travel-passport" aria-labelledby="travel-passport-title">
-                    <h2 id="travel-passport-title">Segells de viatge</h2>
-                    <div id="travel-stamps"></div>
-                    <p id="travel-empty" class="empty-state">Quan deseu una observació amb una destinació, aquí hi apareixerà el seu segell.</p>
-                    <button id="travel-unplaced" type="button" class="action hidden"></button>
-                    <article id="travel-destination-detail" class="travel-destination-detail panel hidden" tabindex="-1"></article>
-                </section>
             </div>
 
             <!-- VISTA: NOVA OBSERVACIÓ (I EDITAR) -->
@@ -610,7 +616,7 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         import { gpsFields, groupLocations } from './aviteca-location.js?v=1';
-        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=1';
+        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=2';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=3';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
 
@@ -839,7 +845,7 @@
             app: document.getElementById('app-screen'),
             views: {
                 'view-registry': document.getElementById('view-registry'),
-                'view-travel': document.getElementById('view-travel'),
+                'view-history': document.getElementById('view-history'),
                 'view-new-obs': document.getElementById('view-new-obs'),
                 'view-checklists': document.getElementById('view-checklists'),
                 'view-new-checklist': document.getElementById('view-new-checklist'),
@@ -874,16 +880,16 @@
                 if (previous === 'view-guide' && viewId !== 'view-guide') UI.guideScroll = UI.main.scrollTop;
                 UI.currentView = viewId;
                 const hasGuideBack = viewId === 'view-bird-detail' || viewId === 'view-compare';
-                const hasBack = hasGuideBack || viewId === 'view-new-checklist' || viewId === 'view-travel';
+                const hasBack = hasGuideBack || viewId === 'view-new-checklist' || viewId === 'view-history';
                 const back = document.getElementById('btn-header-back');
                 back.classList.toggle('hidden', !hasBack);
-                back.title = hasGuideBack ? 'Torna a l’Avitèdex' : viewId === 'view-travel' ? 'Torna al Registre' : 'Torna a Sortides';
+                back.title = hasGuideBack ? 'Torna a l’Avitèdex' : viewId === 'view-history' ? 'Torna al Registre' : 'Torna a Sortides';
                 back.setAttribute('aria-label', back.title);
                 document.querySelector('.app-header').classList.toggle('has-back', hasBack);
                 Object.values(UI.views).forEach(el => el.classList.add('hidden'));
                 if(UI.views[viewId]) UI.views[viewId].classList.remove('hidden');
                 
-                const parentView = { 'view-new-checklist': 'view-checklists', 'view-bird-detail': 'view-guide', 'view-compare': 'view-guide', 'view-map': 'view-checklists', 'view-travel': 'view-registry' };
+                const parentView = { 'view-new-checklist': 'view-checklists', 'view-bird-detail': 'view-guide', 'view-compare': 'view-guide', 'view-map': 'view-checklists', 'view-history': 'view-registry' };
                 UI.navItems.forEach(btn => {
                     if (btn.dataset.target === (parentView[viewId] || viewId)) btn.setAttribute('aria-current', 'page');
                     else btn.removeAttribute('aria-current');
@@ -899,7 +905,8 @@
                 if(viewId !== 'view-new-obs' && state.editingObsId) resetObservationForm();
                 
                 UI.main.scrollTop = viewId === 'view-guide' && (previous === 'view-bird-detail' || previous === 'view-compare') ? UI.guideScroll : 0;
-                if (viewId === 'view-travel') travelView.render(travelGroups, true);
+                if (viewId === 'view-registry' && UI.app.classList.contains('flex')) travelView.render(travelGroups, true);
+                if (viewId === 'view-history') renderObservations();
                 if (viewId === 'view-new-checklist') renderChecklistSuggestions();
                 document.querySelector('.data-menu').open = false;
             }
@@ -910,8 +917,16 @@
         let travelGroups = new Map();
         const registryDestination = document.getElementById('filter-destination');
         const guideDestination = document.getElementById('guide-destination');
+        const historyBatchSize = 24;
+        let historyLimit = historyBatchSize;
         const registryFilters = ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end', 'filter-location', 'filter-destination'];
         const clearRegistryFilters = () => registryFilters.forEach(id => { document.getElementById(id).value = ''; });
+        const openHistory = (destination = '') => {
+            clearRegistryFilters();
+            registryDestination.value = destination;
+            historyLimit = historyBatchSize;
+            UI.switchView('view-history', 'Historial');
+        };
         const travelView = createTravelView({
             world: () => travelWorld,
             formatDate: date => formatDate(date),
@@ -923,12 +938,7 @@
                 renderGuide();
                 UI.switchView('view-guide', 'Avitèdex');
             },
-            openRegistry(id) {
-                clearRegistryFilters();
-                registryDestination.value = id;
-                renderObservations();
-                UI.switchView('view-registry', 'Registre');
-            }
+            openHistory
         });
         const refreshTravel = () => {
             travelGroups = destinations.summarize(state.observations, speciesKey);
@@ -937,10 +947,8 @@
             setDestinationOptions(guideDestination, mapped, 'Tot el món');
             registryDestination.classList.toggle('hidden', !travelGroups.size);
             guideDestination.classList.toggle('hidden', !mapped.length);
-            document.getElementById('travel-entry-count').textContent = mapped.length
-                ? `${mapped.length} ${mapped.length === 1 ? 'destinació' : 'destinacions'}`
-                : 'Les vostres observacions al món';
-            if (UI.currentView === 'view-travel') travelView.render(travelGroups);
+            document.getElementById('travel-destination-count').textContent = `${mapped.length} ${mapped.length === 1 ? 'destinació' : 'destinacions'}`;
+            if (UI.currentView === 'view-registry' && UI.app.classList.contains('flex')) travelView.render(travelGroups);
         };
         const updateDestinationForms = () => {
             const items = destinations.list();
@@ -960,9 +968,13 @@
                 refreshTravel();
                 renderObservations();
                 renderGuide();
-            } catch (error) { console.warn('No s’ha pogut carregar la cartografia:', error); }
+            } catch (error) {
+                travelWorld = null;
+                if (UI.currentView === 'view-registry' && UI.app.classList.contains('flex')) travelView.render(travelGroups);
+                console.warn('No s’ha pogut carregar la cartografia:', error);
+            }
         };
-        document.getElementById('btn-open-travel').addEventListener('click', () => UI.switchView('view-travel', 'Mapa de viatges'));
+        document.getElementById('btn-open-history').addEventListener('click', () => openHistory());
 
         const hasProvider = (user, id) => !!user?.providerData.some(provider => provider.providerId === id);
         const renderProfile = () => {
@@ -1358,6 +1370,7 @@
         });
 
         const renderObservations = () => {
+            if (UI.currentView !== 'view-history') return;
             const list = document.getElementById('observations-list');
             const empty = document.getElementById('empty-state-registry');
             
@@ -1377,7 +1390,7 @@
                 locationSelect.value = fLocation;
             }
             
-            let filtered = destinationObservations.filter(o => {
+            const filtered = destinationObservations.filter(o => {
                 const textMatch = norm(o.species).includes(fText) || norm(o.location).includes(fText);
                 const famMatch = !fFam || (o.family && o.family.toLowerCase().includes(fFam));
                 const ordMatch = !fOrd || (o.order && o.order.toLowerCase().includes(fOrd));
@@ -1388,7 +1401,10 @@
             const speciesCount = observedSpeciesKeys(filtered).size;
             const observationLabel = filtered.length === 1 ? 'observació' : 'observacions';
             const speciesLabel = speciesCount === 1 ? 'espècie' : 'espècies';
-            document.getElementById('location-summary').textContent = `${filtered.length} ${observationLabel} · ${speciesCount} ${speciesLabel}${fLocation ? ' en aquesta ubicació' : ''}`;
+            const more = filtered.length > historyLimit;
+            const count = more ? `${historyLimit} de ${filtered.length}` : filtered.length;
+            document.getElementById('location-summary').textContent = `${count} ${observationLabel} · ${speciesCount} ${speciesLabel}`;
+            document.getElementById('btn-more-observations').classList.toggle('hidden', !more);
             
             filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -1407,7 +1423,7 @@
                 
                 // Agrupar per dates
                 const grouped = {};
-                filtered.forEach(o => {
+                filtered.slice(0, historyLimit).forEach(o => {
                     if(!grouped[o.date]) grouped[o.date] = [];
                     grouped[o.date].push(o);
                 });
@@ -1428,7 +1444,7 @@
                         <article class="observation-card panel">
                             ${obs.photo ? `
                                 <div class="relative h-44 -mx-4 -mt-4 mb-1">
-                                    <img src="${escapeHtml(obs.photo)}" class="w-full h-full object-cover rounded-t-xl" alt="Foto">
+                                    <img src="${escapeHtml(obs.photo)}" class="w-full h-full object-cover rounded-t-xl" loading="lazy" alt="Foto">
                                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                                     <div class="absolute bottom-3 left-4 right-4 flex justify-between items-end text-white">
                                         <div class="flex-1 min-w-0 pr-2">
@@ -1500,11 +1516,27 @@
 
         document.getElementById('btn-clear-filters').addEventListener('click', () => {
             clearRegistryFilters();
+            historyLimit = historyBatchSize;
             renderObservations();
         });
 
         registryFilters.forEach(id => {
-            document.getElementById(id).addEventListener('input', renderObservations);
+            document.getElementById(id).addEventListener('input', () => {
+                historyLimit = historyBatchSize;
+                renderObservations();
+                UI.main.scrollTop = 0;
+            });
+        });
+        document.getElementById('btn-more-observations').addEventListener('click', () => {
+            const firstNewIndex = historyLimit;
+            historyLimit += historyBatchSize;
+            renderObservations();
+            const firstNew = document.querySelectorAll('#observations-list .observation-card')[firstNewIndex];
+            if (firstNew) {
+                firstNew.tabIndex = -1;
+                firstNew.focus({preventScroll: true});
+                firstNew.scrollIntoView({block: 'center'});
+            }
         });
 
         // --- Sortides i Guia ---
@@ -1760,7 +1792,7 @@
         }));
         document.getElementById('btn-header-back').addEventListener('click', () => {
             if (UI.currentView === 'view-new-checklist') UI.switchView('view-checklists', 'Sortides');
-            else if (UI.currentView === 'view-travel') UI.switchView('view-registry', 'Registre');
+            else if (UI.currentView === 'view-history') UI.switchView('view-registry', 'Registre');
             else UI.switchView('view-guide', 'Avitèdex');
         });
         guideDestination.addEventListener('change', renderGuide);
@@ -2143,7 +2175,8 @@
                 }
                 
                 resetObservationForm();
-                UI.switchView('view-registry', 'Registre');
+                if (isEdit) UI.switchView('view-history', 'Historial');
+                else openHistory();
             } catch (err) {
                 console.error("Error saving:", err);
                 if (err.code === 'permission-denied') {
@@ -2172,7 +2205,7 @@
 
         document.getElementById('btn-cancel-edit').addEventListener('click', () => {
             resetObservationForm();
-            UI.switchView('view-registry', 'Registre');
+            UI.switchView('view-history', 'Historial');
         });
 
         // Funcions globals window
