@@ -1,12 +1,23 @@
 import { groupLocations } from './aviteca-location.js?v=1';
 
 const regionalDestinations = [
-    ['ES-CT', 'Catalunya', 41.82, 1.90, 7, "Catalunya|Cataluña|Barcelona|Girona|Gerona|Lleida|Lérida|Tarragona|Empordà|Besòs|Delta de l’Ebre"],
-    ['AD', 'Andorra', 42.54, 1.56, 10, 'Andorra|Ordino|Canillo|Encamp|La Massana|Escaldes-Engordany'],
+    ['ES-CT', 'Catalunya', 41.82, 1.90, 7,
+        'Catalunya|Cataluña|Barcelona|Girona|Gerona|Lleida|Lérida|Tarragona|Empordà|Besòs|Delta de l’Ebre' +
+        '|Belianes|Bellcaire Urgell|Bellcaire d’Urgell|Buseu|Cadí Moixeró|Cala Montgó|Cambrils|Cap de Creus|Castelló d’Empúries' +
+        '|Cinc Claus|Delta del Llobregat|Deltebre|El Matà|Platja Matà|Estany d’Ivars|Ivars d’Urgell|L’Escala|La Seu d’Urgell' +
+        '|Montsonís|Monsonís|Pla de Gates|Pla de les Gates|Remolar-Filipines|Riumors|Secans Balaguer|Sobreestany|Santa Coloma de Cervelló|Sta. Coloma Cervelló|Utxesa'],
+    ['AD', 'Andorra', 42.54, 1.56, 10,
+        'Andorra|Ordino|Canillo|Encamp|La Massana|Escaldes-Engordany|Coll de la Botella|Sispony|Engolasters' +
+        '|Mas d’Alins|Pessons|Rec de l’Obac|Setúria|Sorteny'],
     ['ES-PV', 'País Basc', 43.02, -2.66, 7, 'País Basc|País Vasco|Euskadi|Bilbao|Donostia|Vitòria-Gasteiz|Bizkaia|Gipuzkoa|Àlaba'],
     ['ES-NC', 'Navarra', 42.68, -1.67, 7, 'Navarra|Nafarroa|Pamplona|Iruña'],
     ['ES-IB', 'Illes Balears', 39.59, 2.97, 8, 'Illes Balears|Islas Baleares|Mallorca|Menorca|Eivissa|Ibiza|Formentera'],
+    ['ES-AR', 'Aragó', 41.38, -0.91, 7, 'Aragó|Aragón|Zaragoza|Saragossa|Bujaraloz|Belchite|El Planerón'],
+    ['ES-CB', 'Cantàbria', 43.25, -3.94, 8, 'Cantàbria|Santander|Santoña|Colindres'],
+    ['ES-CN', 'Illes Canàries', 28.28, -15.98, 7,
+        'Canàries|Canarias|Canary Islands|El Hierro|Gran Canaria|Gran Canària|Tenerife|Fuerteventura|Lanzarote|La Gomera'],
     ['ES', 'Espanya', 40.29, -3.71, 6, 'Espanya|España|Spain'],
+    ['IE', 'Irlanda', 53.38, -8.11, 7, 'Dalkey|Saltee|Saltees|Kilmore Quay|Wexford'],
     ['FR', 'França', 46.63, 2.58, 6, 'França|Francia|France|Camarga|Camargue'],
     ['DE', 'Alemanya', 51.08, 10.45, 6, 'Alemanya|Alemania|Germany|Deutschland|Heidelberg'],
     ['JP', 'Japó', 36.42, 138.44, 5, 'Japó|Japón|Japan|Tokyo|Tòquio|Tokio|Kyoto|Kioto']
@@ -15,6 +26,11 @@ const regionalDestinations = [
 const normalizePlace = text => String(text ?? '').normalize('NFD').replace(/\p{M}+/gu, '')
     .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const aliases = regionalDestinations.map(([code, , , , , names]) => [code, names.split('|').map(normalizePlace)]);
+// These short names are ambiguous outside the Maida workbook.
+const maidaPlaceDestinations = new Map([
+    ['aiguamolls', 'ES-CT'], ['gallinera', 'ES-CT'], ['la gallinera', 'ES-CT'],
+    ['parc dels estanys', 'ES-CT'], ['port cabus', 'AD'], ['bridgetown', 'IE']
+]);
 const regionNames = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['ca'], {type:'region'}) : null;
 const compareNames = (a, b) => a.name.localeCompare(b.name, 'ca');
 
@@ -36,8 +52,11 @@ export function createDestinations() {
     const identify = observation => {
         if (observation.destination === UNPLACED || items.has(observation.destination)) return observation.destination;
         const location = String(observation.location ?? '');
+        const normalized = normalizePlace(location);
+        const maidaDestination = observation.source === 'maida-excel' && maidaPlaceDestinations.get(normalized);
+        if (maidaDestination) return maidaDestination;
         // City and regional hints in imported place names. An explicit choice always wins.
-        const words = ` ${normalizePlace(location)} `;
+        const words = ` ${normalized} `;
         for (const [id, placeNames] of aliases) {
             if (placeNames.some(name => words.includes(` ${name} `))) return id;
         }
