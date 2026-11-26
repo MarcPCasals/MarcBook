@@ -1,16 +1,17 @@
-import { groupSightingPlaces, normalizePlace, pointMapUrl } from './aviteca-location.js?v=3';
+import { groupSightingPlaces, normalizePlace, pointMapUrl } from './aviteca-location.js?v=4';
 
 const regionalDestinations = [
     ['ES-CT', 'Catalunya', 41.82, 1.90, 7,
         'Catalunya|Cataluña|Barcelona|Girona|Gerona|Lleida|Lérida|Tarragona|Empordà|Besòs|Delta de l’Ebre' +
         '|Belianes|Bellcaire Urgell|Bellcaire d’Urgell|Buseu|Cadí Moixeró|Cala Montgó|Cambrils|Cap de Creus|Castelló d’Empúries' +
-        '|Cinc Claus|Delta del Llobregat|Deltebre|El Matà|Platja Matà|Estany d’Ivars|Ivars d’Urgell|L’Escala|La Seu d’Urgell' +
-        '|Montsonís|Monsonís|Pla de Gates|Pla de les Gates|Remolar-Filipines|Riumors|Secans Balaguer|Sobreestany|Santa Coloma de Cervelló|Sta. Coloma Cervelló|Utxesa|Closes de la Gallinera'],
+        '|Cinc Claus|Delta del Llobregat|Deltebre|El Matà|Platja Matà|Platja del Matà|Estany d’Ivars|Ivars d’Urgell|L’Escala|La Seu d’Urgell' +
+        '|Montsonís|Monsonís|Pla de Gates|Pla de les Gates|Remolar-Filipines|Riumors|Secans Balaguer|Sobreestany|Santa Coloma de Cervelló|Sta. Coloma Cervelló|Utxesa|Closes de la Gallinera' +
+        '|Sagrada Família|Parc de la Ciutadella|Empuriabrava|Gallecs'],
     ['AD', 'Andorra', 42.54, 1.56, 10,
         'Andorra|Ordino|Canillo|Encamp|La Massana|Escaldes-Engordany|Coll de la Botella|Sispony|Engolasters' +
         '|Mas d’Alins|Pessons|Rec de l’Obac|Reg de l’Obac|Setúria|Sorteny|Port de Cabús|Port Cabús'],
     ['ES-PV', 'País Basc', 43.02, -2.66, 7, 'País Basc|País Vasco|Euskadi|Bilbao|Donostia|Vitòria-Gasteiz|Bizkaia|Gipuzkoa|Àlaba'],
-    ['ES-NC', 'Navarra', 42.68, -1.67, 7, 'Navarra|Nafarroa|Pamplona|Iruña'],
+    ['ES-NC', 'Navarra', 42.68, -1.67, 7, 'Navarra|Nafarroa|Pamplona|Iruña|Laguna de Pitillas|Bosc d’Orgi|Bosque de Orgi|Foz de Lumbier'],
     ['ES-IB', 'Illes Balears', 39.59, 2.97, 8, 'Illes Balears|Islas Baleares|Mallorca|Menorca|Eivissa|Ibiza|Formentera'],
     ['ES-AR', 'Aragó', 41.38, -0.91, 7, 'Aragó|Aragón|Zaragoza|Saragossa|Bujaraloz|Belchite|El Planerón'],
     ['ES-CB', 'Cantàbria', 43.25, -3.94, 8, 'Cantàbria|Santander|Santoña|Colindres'],
@@ -20,7 +21,7 @@ const regionalDestinations = [
     ['IE', 'Irlanda', 53.38, -8.11, 7, 'Dalkey|Saltee|Saltees|Kilmore Quay|Wexford'],
     ['FR', 'França', 46.63, 2.58, 6, 'França|Francia|France|Camarga|Camargue'],
     ['DE', 'Alemanya', 51.08, 10.45, 6, 'Alemanya|Alemania|Germany|Deutschland|Heidelberg'],
-    ['JP', 'Japó', 36.42, 138.44, 5, 'Japó|Japón|Japan|Tokyo|Tòquio|Tokio|Kyoto|Kioto']
+    ['JP', 'Japó', 36.42, 138.44, 5, 'Japó|Japón|Japan|Tokyo|Tòquio|Tokio|Kyoto|Kioto|Sumida Park|Parc de Nara|Nara Park']
 ];
 
 const aliases = regionalDestinations.map(([code, , , , , names]) => [code, names.split('|').map(normalizePlace)]);
