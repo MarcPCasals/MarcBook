@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=21">
+    <link rel="stylesheet" href="./aviteca.css?v=22">
 </head>
 <body class="overflow-hidden">
 
@@ -125,6 +125,7 @@
                     </div>
                     <a class="travel-map-credit" href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Cartografia de Natural Earth</a>
                 </section>
+                <section id="travel-site-detail" class="sighting-site-panel panel hidden" tabindex="-1" aria-label="Observacions del lloc"></section>
                 <section class="travel-passport" aria-labelledby="travel-passport-title">
                     <h2 id="travel-passport-title">Segells de viatge</h2>
                     <div id="travel-stamps"></div>
@@ -743,8 +744,8 @@
             collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, writeBatch, waitForPendingWrites, getDocsFromServer
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        import { gpsFields, groupLocations, pointMapUrl, sightingPoint } from './aviteca-location.js?v=2';
-        import { createDestinations, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=7';
+        import { gpsFields, groupSightingPlaces, pointMapUrl, sightingPoint } from './aviteca-location.js?v=3';
+        import { createDestinations, createSightingDetails, createTravelView, setDestinationOptions, UNPLACED } from './aviteca-travel.js?v=8';
         import { createComparator, searchBirds } from './aviteca-compare.js?v=6';
         import { outingHabitats, outingPlaces, outingSeason, normalizeOutingPlace, outingLocationKey, suggestOutingBirds } from './aviteca-outings.js?v=6';
         import { acknowledgeLocalWrite, startFieldMode, checkLocalStorage } from './aviteca-offline.js?v=1';
@@ -1063,6 +1064,7 @@
         let travelWorld;
         let travelGroups = new Map();
         const registryDestination = document.getElementById('filter-destination');
+        const registryLocation = document.getElementById('filter-location');
         const guideDestination = document.getElementById('guide-destination');
         const guideCollections = [
             {id:'collection-ES-CT', region:'ES-CT', name:'Catalunya'},
@@ -1073,9 +1075,21 @@
         let historyLimit = historyBatchSize;
         const registryFilters = ['filter-text', 'filter-family', 'filter-order', 'filter-date-start', 'filter-date-end', 'filter-location', 'filter-destination'];
         const clearRegistryFilters = () => registryFilters.forEach(id => { document.getElementById(id).value = ''; });
-        const openHistory = (destination = '') => {
+        const historyPlaces = () => registryDestination.value
+            ? travelGroups.get(registryDestination.value)?.places || []
+            : [...travelGroups.values()].flatMap(group => group.places).sort((a,b) => a.label.localeCompare(b.label,'ca'));
+        const updateHistoryPlaceOptions = (places, selected = registryLocation.value) => {
+            const choices = new Map(places.map(place => [place.key, place.label]));
+            if (registryLocation.options.length !== choices.size + 1 || [...choices].some(([key,label], index) =>
+                registryLocation.options[index + 1]?.value !== key || registryLocation.options[index + 1]?.text !== label)) {
+                registryLocation.replaceChildren(new Option('Totes les ubicacions',''), ...[...choices].map(([key,label]) => new Option(label,key)));
+            }
+            registryLocation.value = choices.has(selected) ? selected : '';
+        };
+        const openHistory = (destination = '', place = '') => {
             clearRegistryFilters();
             registryDestination.value = destination;
+            updateHistoryPlaceOptions(historyPlaces(), place);
             historyLimit = historyBatchSize;
             UI.switchView('view-history', 'Historial');
         };
@@ -1083,6 +1097,7 @@
             world: () => travelWorld,
             formatDate: date => formatDate(date),
             birdForKey: key => birdsBySpeciesKey.get(key),
+            speciesKey,
             escapeHtml,
             openGuide(id) {
                 guideDestination.value = id;
@@ -1546,7 +1561,7 @@
         const sightingPointLink = observation => {
             const point = sightingPoint(observation);
             if (!point) return '';
-            const label = point.kind === 'site' ? `Obre el lloc · ${point.label}` : 'Obre el punt al mapa';
+            const label = point.kind === 'site' ? `Punt de referència · ${point.label}` : 'Obre el punt al mapa';
             return `<a class="sighting-map-link" href="${escapeHtml(pointMapUrl(point))}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
         };
 
@@ -1575,20 +1590,18 @@
             const fDEnd = document.getElementById('filter-date-end').value;
             const fDestination = registryDestination.value;
             const destinationObservations = fDestination ? travelGroups.get(fDestination)?.observations || [] : state.observations;
-            const locationSelect = document.getElementById('filter-location');
-            const locations = [...new Set(destinationObservations.map(o => o.location).filter(Boolean))].sort((a,b) => a.localeCompare(b,'ca'));
-            const fLocation = locations.includes(locationSelect.value) ? locationSelect.value : '';
-            if (locationSelect.options.length !== locations.length + 1 || locations.some((v,i) => locationSelect.options[i+1]?.value !== v)) {
-                locationSelect.replaceChildren(new Option('Totes les ubicacions',''), ...locations.map(v => new Option(v,v)));
-                locationSelect.value = fLocation;
-            }
+            const places = historyPlaces();
+            updateHistoryPlaceOptions(places);
+            const locationObservations = registryLocation.value
+                ? places.filter(place => place.key === registryLocation.value).flatMap(place => place.observations)
+                : destinationObservations;
             
-            const filtered = destinationObservations.filter(o => {
+            const filtered = locationObservations.filter(o => {
                 const textMatch = norm(o.species).includes(fText) || norm(o.location).includes(fText);
                 const famMatch = !fFam || (o.family && o.family.toLowerCase().includes(fFam));
                 const ordMatch = !fOrd || (o.order && o.order.toLowerCase().includes(fOrd));
                 const dateMatch = observationInDateRange(o.date || '', fDStart, fDEnd);
-                return textMatch && famMatch && ordMatch && dateMatch && (!fLocation || o.location === fLocation);
+                return textMatch && famMatch && ordMatch && dateMatch;
             });
             const speciesCount = observedSpeciesKeys(filtered).size;
             const observationLabel = filtered.length === 1 ? 'observació' : 'observacions';
@@ -1717,6 +1730,7 @@
 
         registryFilters.forEach(id => {
             document.getElementById(id).addEventListener('input', () => {
+                if (id === 'filter-destination') registryLocation.value = '';
                 historyLimit = historyBatchSize;
                 renderObservations();
                 UI.main.scrollTop = 0;
@@ -3455,27 +3469,21 @@
             select.replaceChildren(new Option('Totes les observacions', ''), ...choices.map(checklist => new Option(`${checklist.name} · ${checklist.date || ''}`, checklist.id)));
             select.value = state.mapChecklistId;
             const observations = state.mapChecklistId ? state.observations.filter(o => o.checklistId === state.mapChecklistId) : state.observations;
-            const groups = groupLocations(observations);
-            for (const group of groups) {
-                const popup = document.createElement('div');
-                const title = document.createElement('strong');
-                title.textContent = group.observations[0].location || 'Ubicació GPS';
-                popup.append(title);
-                const list = document.createElement('ul');
-                for (const observation of group.observations) {
-                    const item = document.createElement('li');
-                    item.textContent = `${observation.species || 'Observació'} · ${formatDate(observation.date) || 'Data no indicada'}`;
-                    list.append(item);
-                }
-                popup.append(list);
-                L.marker([group.latitude,group.longitude], {title:group.observations[0].location || 'Ubicació GPS', alt:`Ubicació GPS · ${group.observations.length} observacions`}).bindPopup(popup).addTo(mapLayer);
+            const places = groupSightingPlaces(observations).filter(place => place.point);
+            for (const place of places) {
+                const {point, label} = place;
+                L.marker([point.latitude, point.longitude], {title:label, alt:label}).bindPopup(() =>
+                    createSightingDetails(place, {formatDate, speciesKey, openHistory:() => openHistory('', place.key)}),
+                    {maxHeight:Math.max(120, map.getSize().y - 56)}).addTo(mapLayer);
             }
-            const positionedCount = groups.reduce((total, group) => total + group.observations.length, 0);
-            document.getElementById('map-summary').textContent = groups.length ? `${groups.length} ${groups.length === 1 ? 'ubicació' : 'ubicacions'} · ${positionedCount} observacions amb GPS · ${observations.length - positionedCount} sense coordenades` : 'Encara no hi ha coordenades GPS. Pots afegir-les en registrar una observació o una sortida.';
+            const positionedCount = places.reduce((total, place) => total + place.observations.length, 0);
+            document.getElementById('map-summary').textContent = places.length
+                ? `${places.length} ${places.length === 1 ? 'ubicació' : 'ubicacions'} · ${positionedCount} observacions situades · ${observations.length - positionedCount} pendents de situar`
+                : 'Encara no hi ha ubicacions al mapa. Pots marcar el punt quan edites una observació.';
             if (state.mapFitPending) {
-                if (groups.length === 1) map.setView([groups[0].latitude, groups[0].longitude], 14);
-                else if (groups.length) map.fitBounds(groups.map(group => [group.latitude,group.longitude]), {padding:[24,24],maxZoom:14});
-                if (groups.length) state.mapFitPending = false;
+                if (places.length === 1) map.setView([places[0].point.latitude, places[0].point.longitude], 14);
+                else if (places.length) map.fitBounds(places.map(({point}) => [point.latitude, point.longitude]), {padding:[24,24],maxZoom:14});
+                if (places.length) state.mapFitPending = false;
             }
         };
         const getGps = () => new Promise((resolve,reject) => {

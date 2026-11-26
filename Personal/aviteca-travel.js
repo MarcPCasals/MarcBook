@@ -1,14 +1,14 @@
-import { groupSightingPoints, pointMapUrl, sightingPoint } from './aviteca-location.js?v=2';
+import { groupSightingPlaces, normalizePlace, pointMapUrl } from './aviteca-location.js?v=3';
 
 const regionalDestinations = [
     ['ES-CT', 'Catalunya', 41.82, 1.90, 7,
         'Catalunya|Cataluña|Barcelona|Girona|Gerona|Lleida|Lérida|Tarragona|Empordà|Besòs|Delta de l’Ebre' +
         '|Belianes|Bellcaire Urgell|Bellcaire d’Urgell|Buseu|Cadí Moixeró|Cala Montgó|Cambrils|Cap de Creus|Castelló d’Empúries' +
         '|Cinc Claus|Delta del Llobregat|Deltebre|El Matà|Platja Matà|Estany d’Ivars|Ivars d’Urgell|L’Escala|La Seu d’Urgell' +
-        '|Montsonís|Monsonís|Pla de Gates|Pla de les Gates|Remolar-Filipines|Riumors|Secans Balaguer|Sobreestany|Santa Coloma de Cervelló|Sta. Coloma Cervelló|Utxesa'],
+        '|Montsonís|Monsonís|Pla de Gates|Pla de les Gates|Remolar-Filipines|Riumors|Secans Balaguer|Sobreestany|Santa Coloma de Cervelló|Sta. Coloma Cervelló|Utxesa|Closes de la Gallinera'],
     ['AD', 'Andorra', 42.54, 1.56, 10,
         'Andorra|Ordino|Canillo|Encamp|La Massana|Escaldes-Engordany|Coll de la Botella|Sispony|Engolasters' +
-        '|Mas d’Alins|Pessons|Rec de l’Obac|Setúria|Sorteny'],
+        '|Mas d’Alins|Pessons|Rec de l’Obac|Reg de l’Obac|Setúria|Sorteny|Port de Cabús|Port Cabús'],
     ['ES-PV', 'País Basc', 43.02, -2.66, 7, 'País Basc|País Vasco|Euskadi|Bilbao|Donostia|Vitòria-Gasteiz|Bizkaia|Gipuzkoa|Àlaba'],
     ['ES-NC', 'Navarra', 42.68, -1.67, 7, 'Navarra|Nafarroa|Pamplona|Iruña'],
     ['ES-IB', 'Illes Balears', 39.59, 2.97, 8, 'Illes Balears|Islas Baleares|Mallorca|Menorca|Eivissa|Ibiza|Formentera'],
@@ -23,13 +23,11 @@ const regionalDestinations = [
     ['JP', 'Japó', 36.42, 138.44, 5, 'Japó|Japón|Japan|Tokyo|Tòquio|Tokio|Kyoto|Kioto']
 ];
 
-const normalizePlace = text => String(text ?? '').normalize('NFD').replace(/\p{M}+/gu, '')
-    .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const aliases = regionalDestinations.map(([code, , , , , names]) => [code, names.split('|').map(normalizePlace)]);
 // These short names are ambiguous outside the Maida workbook.
 const maidaPlaceDestinations = new Map([
     ['aiguamolls', 'ES-CT'], ['gallinera', 'ES-CT'], ['la gallinera', 'ES-CT'],
-    ['parc dels estanys', 'ES-CT'], ['port cabus', 'AD'], ['bridgetown', 'IE']
+    ['parc dels estanys', 'ES-CT'], ['bridgetown', 'IE']
 ]);
 const regionNames = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['ca'], {type:'region'}) : null;
 const compareNames = (a, b) => a.name.localeCompare(b.name, 'ca');
@@ -82,6 +80,7 @@ export function createDestinations() {
             locationsBySpecies.get(key).add(id);
         }
         for (const group of groups.values()) {
+            group.places = groupSightingPlaces(group.observations);
             group.dateRange = [...group.dates].sort();
             group.exclusive = [...group.species.keys()].filter(key => locationsBySpecies.get(key).size === 1);
             group.shared = [...group.species.keys()].filter(key =>
@@ -135,13 +134,63 @@ export function setDestinationOptions(select, items, placeholder, {unplaced = fa
 const countLabel = (count, singular, plural) => `${count} ${count === 1 ? singular : plural}`;
 const worldBounds = [[-59, -179], [81, 179]];
 
-export function createTravelView({world, formatDate, birdForKey, escapeHtml, openGuide, openHistory}) {
+export function createSightingDetails(place, {formatDate, speciesKey, openHistory}) {
+    const {point, observations} = place;
+    const card = document.createElement('div');
+    card.className = 'sighting-details';
+    const title = document.createElement('h3');
+    title.textContent = place.label;
+    const caption = document.createElement('p');
+    caption.textContent = point.kind === 'site'
+        ? ['Punt de referència', point.access].filter(Boolean).join(' · ')
+        : point.kind === 'gps' ? 'Posició GPS' : 'Punt marcat al quadern';
+    const birds = new Map();
+    for (const observation of [...observations].sort((a,b) => (b.date || '').localeCompare(a.date || ''))) {
+        const key = speciesKey(observation);
+        if (!key) continue;
+        if (!birds.has(key)) birds.set(key, {name:observation.species || observation.scientificName, date:observation.date, count:0});
+        birds.get(key).count++;
+    }
+    const stats = document.createElement('p');
+    stats.textContent = `${countLabel(birds.size, 'espècie', 'espècies')} · ${countLabel(observations.length, 'observació', 'observacions')}`;
+    const list = document.createElement('ul');
+    for (const {name, date, count} of [...birds.values()].slice(0, 6)) {
+        const entry = document.createElement('li');
+        entry.textContent = `${name} · ${countLabel(count, 'registre', 'registres')} · Darrera data: ${formatDate(date) || 'no indicada'}`;
+        list.append(entry);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'sighting-details-actions';
+    const history = document.createElement('button');
+    history.type = 'button';
+    history.className = 'action';
+    history.textContent = 'Historial del lloc';
+    history.addEventListener('click', openHistory);
+    const directions = document.createElement('a');
+    directions.href = pointMapUrl(point);
+    directions.target = '_blank';
+    directions.rel = 'noopener';
+    directions.textContent = 'Obre el punt al mapa';
+    actions.append(history, directions);
+    if (point.reference) {
+        const source = directions.cloneNode();
+        source.href = point.reference;
+        source.textContent = 'Font';
+        actions.append(source);
+    }
+    card.append(title, caption, stats, list, actions);
+    return card;
+}
+
+export function createTravelView({world, formatDate, birdForKey, speciesKey, escapeHtml, openGuide, openHistory}) {
     const mapNode = document.getElementById('travel-map');
     const notice = document.getElementById('travel-map-note');
     const stamps = document.getElementById('travel-stamps');
     const detail = document.getElementById('travel-destination-detail');
+    const siteDetails = document.getElementById('travel-site-detail');
     let groups = new Map();
     let selectedId = '';
+    let selectedPlace = '';
     let map;
     let pins;
     let worldLayer;
@@ -154,8 +203,28 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
         return bird ? `<img src="./aviteca-sprites/${bird.sprite}?v=2" alt="" loading="lazy" decoding="async">` : '<span class="travel-stamp-dot" aria-hidden="true"></span>';
     };
 
+    function renderSiteDetails(group) {
+        const place = group?.places.find(place => place.key === selectedPlace && place.point);
+        siteDetails.classList.toggle('hidden', !place);
+        if (!place) siteDetails.replaceChildren();
+        else siteDetails.replaceChildren(createSightingDetails(place, {
+            formatDate, speciesKey, openHistory:() => openHistory(group.id, place.key)
+        }));
+    }
+
+    function showPlace(group, place) {
+        if (!place.point) {
+            openHistory(group.id, place.key);
+            return;
+        }
+        selectedPlace = place.key;
+        renderSiteDetails(group);
+        siteDetails.focus({preventScroll:true});
+        siteDetails.scrollIntoView({block:'nearest'});
+    }
+
     function renderStamps() {
-        const sorted = [...groups.values()].filter(group => group.id !== UNPLACED).sort(compareNames);
+        const sorted = [...groups.values()].filter(group => group.id !== UNPLACED || group.places.some(place => place.point)).sort(compareNames);
         stamps.innerHTML = sorted.map(group => `
             <button type="button" class="travel-stamp" data-destination="${group.id}" aria-pressed="${group.id === selectedId}">
                 <span class="travel-stamp-art">${artwork(group)}</span>
@@ -185,14 +254,11 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
                 <summary>Mostra ${otherCount === 1 ? 'l’altra espècie' : `${otherCount} espècies més`}</summary>
                 <ul>${exclusive.slice(5).map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>
             </details>` : '';
-        const missing = new Map();
-        for (const observation of group.observations) {
-            if (sightingPoint(observation)) continue;
-            const name = observation.location || 'Lloc no indicat';
-            missing.set(name, (missing.get(name) || 0) + 1);
-        }
-        const missingList = [...missing].sort(([a], [b]) => a.localeCompare(b, 'ca')).map(([name,count]) =>
-            `<li>${escapeHtml(name)} · ${countLabel(count, 'observació', 'observacions')}</li>`).join('');
+        const positioned = group.places.filter(place => place.point);
+        const missing = group.places.filter(place => !place.point);
+        const placeList = places => places.map(place => `<li><button type="button" class="travel-place" data-place="${escapeHtml(place.key)}">
+            <strong>${escapeHtml(place.label)}</strong><small>${countLabel(place.observations.length, 'observació', 'observacions')}</small>
+        </button></li>`).join('');
         detail.innerHTML = `
             <h2>${escapeHtml(group.name)}</h2>
             <p>${countLabel(group.species.size, 'espècie', 'espècies')} · ${countLabel(group.observations.length, 'observació', 'observacions')}</p>
@@ -200,13 +266,18 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             <p class="travel-exclusive"><strong>${exclusive.length ? countLabel(exclusive.length, 'espècie que només heu registrat aquí', 'espècies que només heu registrat aquí') : 'Cap espècie registrada només aquí'}</strong>
                 ${examples ? `<span>${examples}</span>` : ''}</p>
             ${more}
-            ${missingList ? `<details class="travel-exclusive-more">
-                <summary>${countLabel([...missing.values()].reduce((total, count) => total + count, 0),
-                    'observació sense punt exacte', 'observacions sense punt exacte')}</summary>
-                <ul>${missingList}</ul>
+            ${positioned.length ? `<details class="travel-exclusive-more" open>
+                <summary>${countLabel(positioned.length, 'lloc al mapa', 'llocs al mapa')}</summary>
+                <ul>${placeList(positioned)}</ul>
+            </details>` : ''}
+            ${missing.length ? `<details class="travel-exclusive-more">
+                <summary>${countLabel(missing.reduce((total, place) => total + place.observations.length, 0),
+                    'observació pendent de situar', 'observacions pendents de situar')}</summary>
+                <p>Obre un lloc i edita l’observació per marcar-ne el punt al mapa.</p>
+                <ul>${placeList(missing)}</ul>
             </details>` : ''}
             <div class="travel-actions">
-                <button type="button" data-travel-action="guide" class="action action-primary">Veure a l’Avitèdex</button>
+                ${group.id !== UNPLACED ? '<button type="button" data-travel-action="guide" class="action action-primary">Veure a l’Avitèdex</button>' : ''}
                 <button type="button" data-travel-action="history" class="action">Veure a l’historial</button>
             </div>`;
     }
@@ -226,7 +297,7 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
         if (!map) return;
         pins.clearLayers();
         const selected = groups.get(selectedId);
-        const showTiles = selected && map.getZoom() >= 10;
+        const showTiles = selected && map.getZoom() >= 9;
         if (showTiles && !map.hasLayer(localTiles)) {
             worldLayer.remove();
             localTiles.addTo(map);
@@ -235,14 +306,10 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             worldLayer.addTo(map);
         }
         if (selected) {
-            for (const point of groupSightingPoints(selected.observations)) {
-                const marker = addPin([point.latitude, point.longitude], point.label, point.kind, point.observations.length);
-                const species = [...new Set(point.observations.map(observation => observation.species).filter(Boolean))];
-                const type = {site:'Punt del lloc anotat', manual:'Punt marcat al quadern', gps:'Posició GPS'}[point.kind];
-                marker.bindPopup(`<strong>${escapeHtml(point.label)}</strong><br>${type}
-                    <ul>${species.map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>
-                    <a href="${escapeHtml(pointMapUrl(point))}" target="_blank" rel="noopener">Obre el punt al mapa</a>
-                    ${point.reference ? ` · <a href="${escapeHtml(point.reference)}" target="_blank" rel="noopener">Font</a>` : ''}`);
+            for (const place of selected.places) {
+                const {point} = place;
+                if (!point) continue;
+                addPin([point.latitude, point.longitude], place.label, point.kind, place.observations.length, () => showPlace(selected, place));
             }
             return;
         }
@@ -274,26 +341,28 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             map.fitBounds(worldBounds, {animate:false});
             return;
         }
-        const points = groupSightingPoints(group.observations);
+        const points = group.places.map(place => place.point).filter(Boolean);
         if (points.length) map.fitBounds(points.map(point => [point.latitude, point.longitude]), {maxZoom:15, padding:[40,40], animate:false});
-        else map.setView(group.point, group.zoom, {animate:false});
+        else if (group.point) map.setView(group.point, group.zoom, {animate:false});
     }
 
     function updateNotice() {
         const group = groups.get(selectedId);
         notice.textContent = !map ? world() === undefined ? 'Carregant el mapa…' : 'Mapa no disponible. Pots consultar les destinacions amb els segells.'
             : !group ? 'Els pins indiquen destinacions aproximades. Amplia el mapa o toca un segell.'
-            : groupSightingPoints(group.observations).length ? 'Verd · punts amb coordenades desades. Blau · llocs identificats pel nom.'
-            : 'Les observacions d’aquesta destinació encara no tenen un punt exacte.';
+            : group.places.some(place => place.point) ? 'Toca un pin per veure els ocells del lloc. Verd · coordenades desades. Blau · punt de referència.'
+            : 'Les observacions d’aquesta destinació estan pendents de situar.';
     }
 
     function select(id) {
         selectedId = id;
+        selectedPlace = '';
         const group = groups.get(id);
         for (const stamp of stamps.querySelectorAll('[data-destination]')) {
             stamp.setAttribute('aria-pressed', String(stamp.dataset.destination === id));
         }
         renderDetail(group);
+        renderSiteDetails(group);
         positionMap(group);
         renderPins();
         updateNotice();
@@ -308,6 +377,10 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
         if (button) select(button.dataset.destination);
     });
     detail.addEventListener('click', event => {
+        const placeKey = event.target.closest('[data-place]')?.dataset.place;
+        const group = groups.get(selectedId);
+        const place = group?.places.find(candidate => candidate.key === placeKey);
+        if (place) showPlace(group, place);
         const action = event.target.closest('[data-travel-action]')?.dataset.travelAction;
         if (action === 'guide') openGuide(selectedId);
         if (action === 'history') openHistory(selectedId);
@@ -322,6 +395,7 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
             renderStamps();
             const group = groups.get(selectedId);
             renderDetail(group);
+            renderSiteDetails(group);
             const outlines = world();
             if (!map && window.L && outlines) {
                 mapNode.classList.remove('hidden');
@@ -348,6 +422,8 @@ export function createTravelView({world, formatDate, birdForKey, escapeHtml, ope
         reset() {
             groups = new Map();
             selectedId = '';
+            selectedPlace = '';
+            renderSiteDetails();
             if (map?.hasLayer(localTiles)) {
                 localTiles.remove();
                 worldLayer.addTo(map);
