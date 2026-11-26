@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
-    <link rel="stylesheet" href="./aviteca.css?v=22">
+    <link rel="stylesheet" href="./aviteca.css?v=23">
 </head>
 <body class="overflow-hidden">
 
@@ -955,6 +955,7 @@
             gps: null,
             currentPhotoB64: null,
             editingObsId: null, // Per saber si estem editant
+            observationEditReturn: null,
             checklistVisualItems: [],
             activeOuting: null,
             checklistDraftId: '',
@@ -1021,10 +1022,12 @@
                 UI.currentView = viewId;
                 const hasGuideBack = viewId === 'view-bird-detail' || viewId === 'view-compare';
                 if (!hasGuideBack) UI.birdFromOuting = false;
-                const hasBack = hasGuideBack || ['view-new-checklist','view-plan-outing','view-history'].includes(viewId);
+                const editingFromBird = viewId === 'view-new-obs' && Boolean(state.observationEditReturn);
+                const hasBack = hasGuideBack || editingFromBird || ['view-new-checklist','view-plan-outing','view-history'].includes(viewId);
                 const back = document.getElementById('btn-header-back');
                 back.classList.toggle('hidden', !hasBack);
-                back.title = hasGuideBack ? (UI.birdFromOuting ? 'Torna a la sortida' : 'Torna a l’Avitèdex')
+                back.title = editingFromBird ? 'Torna a la fitxa de l’ocell'
+                    : hasGuideBack ? (UI.birdFromOuting ? 'Torna a la sortida' : 'Torna a l’Avitèdex')
                     : viewId === 'view-history' ? 'Torna al Registre' : 'Torna a Sortides';
                 back.setAttribute('aria-label', back.title);
                 document.querySelector('.app-header').classList.toggle('has-back', hasBack);
@@ -1925,12 +1928,16 @@
                 else if (count !== null) size = `${count} ${count === 1 ? 'individu' : 'individus'}`;
                 const time = o.timeOfDay === 'M' ? 'Matí' : o.timeOfDay === 'T' ? 'Tarda' : 'Horari no indicat';
                 const type = o.type === 'auditiva' ? 'Sentit' : o.type === 'visual' ? 'Vist' : 'No indicat';
-                return `<div class="history-row panel text-sm">
+                return `<div class="history-row panel text-sm" data-observation-id="${escapeHtml(o.id)}">
                     <b>${formatDate(o.date) || 'Data no indicada'}</b> · ${escapeHtml(o.location || 'Lloc no indicat')}
                     ${o.isBimbo ? '<b class="bimbo-mark">★ BIMBO</b>' : ''}
                     <div class="text-gray-600 mt-1">${size} · ${time} · ${type}${o.hide ? ` · ${escapeHtml(o.hideName || 'Des d’un aguait')}` : ''}</div>
                     ${sightingPointLink(o)}
                     ${o.subspecies ? `<div class="text-gray-600">Subespècie <i lang="la">${escapeHtml(o.subspecies)}</i></div>` : ''}
+                    <div class="bird-history-actions">
+                        <button type="button" class="action" data-bird-observation-action="edit"><i data-lucide="pencil" aria-hidden="true"></i> Edita</button>
+                        <button type="button" class="action" data-bird-observation-action="map"><i data-lucide="map-pin" aria-hidden="true"></i> Marca al mapa</button>
+                    </div>
                 </div>`;
             }).join('');
             const ecology = guide?.ecology;
@@ -2033,7 +2040,7 @@
                     <p>${familyMatches.length ? 'De la família ' + escapeHtml(bird.family) : 'Del mateix ordre'}</p></div>
                     <div class="related-grid">${relatedCards}</div>
                 </section>` : ''}
-                <h3 class="font-bold mb-2">Les vostres observacions</h3>
+                <h3 id="bird-history-title" class="font-bold mb-2" tabindex="-1">Les vostres observacions</h3>
                 ${hideHistory.size ? `<div class="history-hide-filter outing-search">
                     <label for="bird-history-hide">Filtra per aguait</label>
                     <select id="bird-history-hide" class="w-full p-2">
@@ -2056,6 +2063,10 @@
             }));
             if(window.lucide) lucide.createIcons();
         };
+        document.getElementById('bird-detail').addEventListener('click', event => {
+            const action = event.target.closest('[data-bird-observation-action]');
+            if (action) editObservation(action.closest('[data-observation-id]').dataset.observationId, action.dataset.birdObservationAction);
+        });
         const guideFilters = ['all', 'seen', 'unseen'];
         guideFilters.forEach(value => document.getElementById(`guide-filter-${value}`).addEventListener('click', () => {
             guideFilter = value;
@@ -2063,7 +2074,8 @@
             renderGuide();
         }));
         document.getElementById('btn-header-back').addEventListener('click', () => {
-            if (UI.birdFromOuting && state.checklistDraftId) continueOuting();
+            if (UI.currentView === 'view-new-obs' && state.observationEditReturn) finishObservationEdit();
+            else if (UI.birdFromOuting && state.checklistDraftId) continueOuting();
             else if (['view-new-checklist','view-plan-outing'].includes(UI.currentView)) UI.switchView('view-checklists', 'Sortides');
             else if (UI.currentView === 'view-history') UI.switchView('view-registry', 'Registre');
             else UI.switchView('view-guide', 'Avitèdex');
@@ -2488,9 +2500,12 @@
                 savedMessage(isEdit ? 'Observació actualitzada!' : 'Observació desada!');
                 if (!isEdit) celebrateSighting({bimbo:obs.isBimbo});
                 
-                resetObservationForm();
-                if (isEdit) UI.switchView('view-history', 'Historial');
-                else openHistory();
+                if (UI.currentView !== 'view-new-obs' || state.editingObsId !== (isEdit ? id : null)) return;
+                if (isEdit) finishObservationEdit();
+                else {
+                    resetObservationForm();
+                    openHistory();
+                }
             } catch (err) {
                 console.error("Error saving:", err);
                 if (err.code === 'permission-denied') {
@@ -2514,22 +2529,37 @@
             document.getElementById('modal-observation-point').close();
             document.getElementById('gps-status').textContent = 'Sense coordenades';
             state.editingObsId = null;
+            state.observationEditReturn = null;
             removePhoto();
             document.getElementById('new-obs-title').innerText = "Nova Observació";
             document.getElementById('text-save-obs').innerText = "Guardar Observació";
             document.getElementById('btn-cancel-edit').classList.add('hidden');
         };
 
-        document.getElementById('btn-cancel-edit').addEventListener('click', () => {
+        const finishObservationEdit = () => {
+            const origin = state.observationEditReturn;
             resetObservationForm();
-            UI.switchView('view-history', 'Historial');
-        });
+            if (!origin) {
+                UI.switchView('view-history', 'Historial');
+                return;
+            }
+            UI.birdFromOuting = origin.fromOuting;
+            renderBirdDetail();
+            UI.switchView('view-bird-detail', 'Fitxa de l’ocell');
+            UI.main.scrollTop = origin.scrollTop;
+            const row = document.querySelector(`#bird-detail [data-observation-id="${CSS.escape(origin.id)}"]`);
+            const target = row?.querySelector(`[data-bird-observation-action="${origin.action}"]`) || document.getElementById('bird-history-title');
+            target?.scrollIntoView({block:'nearest'});
+            target?.focus({preventScroll:true});
+        };
+        document.getElementById('btn-cancel-edit').addEventListener('click', finishObservationEdit);
 
-        // Funcions globals window
-        window.editObservation = (id) => {
+        const editObservation = (id, action = 'edit') => {
             const obs = state.observations.find(o => o.id === id);
             if(!obs) return;
-            
+
+            state.observationEditReturn = UI.currentView === 'view-bird-detail'
+                ? {id, action, scrollTop:UI.main.scrollTop, fromOuting:UI.birdFromOuting} : null;
             state.editingObsId = id;
             selectedSpeciesForObs = birdDb.find(b => b.commonName === obs.species) || {commonName: obs.species};
             
@@ -2569,7 +2599,9 @@
             document.getElementById('btn-cancel-edit').classList.remove('hidden');
             
             UI.switchView('view-new-obs', 'Edita l’observació');
+            if (action === 'map') document.getElementById('btn-pick-observation-point').click();
         };
+        window.editObservation = editObservation;
 
         window.duplicateObservation = async (id) => {
             if (!state.user) return;
